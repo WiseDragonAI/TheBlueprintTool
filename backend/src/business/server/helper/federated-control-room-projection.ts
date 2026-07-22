@@ -145,6 +145,10 @@ export function federatedControlRoomProjection(input: {
     const projectKey = text(members[0]?.logicalProjectKey);
     const projectAuthority = projectAuthorities.get(projectKey);
     const authority = members.find((member) => member.ownerNodeId === projectAuthority?.ownerNodeId) ?? authorityMember(members);
+    const authorityIntent = authority.executionIntent && typeof authority.executionIntent === 'object' && !Array.isArray(authority.executionIntent)
+      ? authority.executionIntent as AnyRecord
+      : {};
+    const structuralExecution = ['waiting', 'queued', 'running'].includes(text(authorityIntent.state));
     const observationMembers = members.filter((member) => member.executionObservation && typeof member.executionObservation === 'object');
     const orderedObservationMembers = [...observationMembers].sort((left, right) => {
       const priority = (member: AnyRecord): number => {
@@ -157,7 +161,7 @@ export function federatedControlRoomProjection(input: {
     const executionMember = orderedObservationMembers[0];
     const observation = executionMember?.executionObservation as AnyRecord | undefined;
     const cardStatus = text(authority.cardStatus) || 'todo';
-    const status = observation
+    const status = structuralExecution || observation
       ? 'task-execution'
       : cardStatus === 'backlog'
         ? 'task-backlog'
@@ -166,7 +170,7 @@ export function federatedControlRoomProjection(input: {
           : 'task-waiting';
     const fingerprints = new Set(members.map(taskSemanticFingerprint));
     const stateConflict = fingerprints.size > 1;
-    const executionConflict = orderedObservationMembers.length > 1;
+    const executionConflict = !structuralExecution && orderedObservationMembers.length > 1;
     const conflict = stateConflict || executionConflict;
     if (stateConflict) {
       conflictDiagnostics.push({
@@ -193,22 +197,22 @@ export function federatedControlRoomProjection(input: {
     return {
       ...authority,
       status,
-      executionObservation: observation ?? null,
-      executionObservations: orderedObservationMembers.map((member) => member.executionObservation),
-      executionStatus: observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'queued' : observation?.kind === 'voice-transcription' ? 'transcribing-before-launch' : '',
-      executionSince: observation?.kind === 'codex-process' ? text(executionMember.executionSince) : '',
-      executionTime: observation?.kind === 'codex-process' ? Number(executionMember.executionTime) : Number.NaN,
-      executionOwnerCardId: observation ? text(executionMember.executionOwnerCardId) || text(observation.cardId) : '',
-      executionOwnerKind: observation ? text(executionMember.executionOwnerKind) || text(observation.ownerKind) : '',
-      codexRunId: observation?.kind === 'codex-process' || observation?.kind === 'codex-queue' ? text(executionMember.codexRunId) : text(authority.codexRunId),
-      codexPipelineRunId: observation?.kind === 'codex-process' || observation?.kind === 'codex-queue' ? text(executionMember.codexPipelineRunId) : text(authority.codexPipelineRunId),
-      codexStatus: observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'queued' : text(authority.codexStatus),
-      codexProcessing: observation?.kind === 'codex-process',
-      codexQueued: observation?.kind === 'codex-queue',
-      codexQueuePosition: observation?.kind === 'codex-queue' ? executionMember.codexQueuePosition ?? null : null,
-      transcribingBeforeLaunch: observation?.kind === 'voice-transcription',
-      executionNodeId: observation ? text(observation.nodeId) : '',
-      executionNodeLabel: observation ? text(observation.nodeLabel) : '',
+      executionObservation: structuralExecution ? null : observation ?? null,
+      executionObservations: structuralExecution ? [] : orderedObservationMembers.map((member) => member.executionObservation),
+      executionStatus: structuralExecution ? text(authority.executionStatus) : observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'queued' : observation?.kind === 'voice-transcription' ? 'transcribing-before-launch' : '',
+      executionSince: structuralExecution ? text(authority.executionSince) : observation?.kind === 'codex-process' ? text(executionMember.executionSince) : '',
+      executionTime: structuralExecution ? Number(authority.executionTime) : observation?.kind === 'codex-process' ? Number(executionMember.executionTime) : Number.NaN,
+      executionOwnerCardId: structuralExecution ? text(authority.executionOwnerCardId) : observation ? text(executionMember.executionOwnerCardId) || text(observation.cardId) : '',
+      executionOwnerKind: structuralExecution ? text(authority.executionOwnerKind) : observation ? text(executionMember.executionOwnerKind) || text(observation.ownerKind) : '',
+      codexRunId: structuralExecution ? text(authority.codexRunId) : observation?.kind === 'codex-process' || observation?.kind === 'codex-queue' ? text(executionMember.codexRunId) : text(authority.codexRunId),
+      codexPipelineRunId: structuralExecution ? text(authority.codexPipelineRunId) : observation?.kind === 'codex-process' || observation?.kind === 'codex-queue' ? text(executionMember.codexPipelineRunId) : text(authority.codexPipelineRunId),
+      codexStatus: structuralExecution ? text(authority.codexStatus) : observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'queued' : text(authority.codexStatus),
+      codexProcessing: structuralExecution ? authority.codexProcessing === true : observation?.kind === 'codex-process',
+      codexQueued: structuralExecution ? authority.codexQueued === true : observation?.kind === 'codex-queue',
+      codexQueuePosition: structuralExecution ? authority.codexQueuePosition ?? null : observation?.kind === 'codex-queue' ? executionMember.codexQueuePosition ?? null : null,
+      transcribingBeforeLaunch: structuralExecution ? authority.transcribingBeforeLaunch === true : observation?.kind === 'voice-transcription',
+      executionNodeId: structuralExecution ? '' : observation ? text(observation.nodeId) : '',
+      executionNodeLabel: structuralExecution ? '' : observation ? text(observation.nodeLabel) : '',
       conflict,
       replicaCount: members.length,
       replicas: [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId))).map((member) => ({

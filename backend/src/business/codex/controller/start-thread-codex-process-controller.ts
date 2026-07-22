@@ -29,6 +29,7 @@ import { readLedgerProjection } from '@backend/business/task-state/helper/read-l
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-process.js';
+import { projectCardExecutionIntent } from '../helper/project-card-execution-intent.js';
 import {
   attachCodexRuntimeChild as attachRuntimeRunChild,
   codexRuntimeRuns as runtimeRuns,
@@ -261,6 +262,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     codexEffort: requestedCodexEffort,
     developerInstructions: prompt.developerInstructions,
   });
+  const createdAt = new Date().toISOString();
   projectCardCodexRun({
     ledger,
     cardId,
@@ -271,7 +273,12 @@ export async function startThreadCodexProcessController(input: { action_payload?
     codexEffort: command.effort,
     ownership: 'thread',
   });
-  const createdAt = new Date().toISOString();
+  if (ledgerId === 'tasks') projectCardExecutionIntent({
+    card: source,
+    intentId: runId,
+    state: queueDispatch ? 'running' : 'queued',
+    changedAt: createdAt,
+  });
   const startedAt = queueDispatch ? createdAt : null;
   const run = {
     id: runId,

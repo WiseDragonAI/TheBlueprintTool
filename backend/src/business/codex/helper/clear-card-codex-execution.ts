@@ -7,6 +7,7 @@ import { basename, isAbsolute, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
+import { projectCardExecutionIntent } from './project-card-execution-intent.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -34,7 +35,7 @@ export async function clearCardCodexExecution(input: {
       delete card.executionRunId;
     }
     if (card.executionIntent && typeof card.executionIntent === 'object' && ['waiting', 'queued', 'running'].includes(String((card.executionIntent as AnyRecord).state ?? ''))) {
-      card.executionIntent = { ...(card.executionIntent as AnyRecord), state: input.terminalState ?? 'terminal', updatedAt: new Date().toISOString() };
+      projectCardExecutionIntent({ card, intentId: input.runId, state: input.terminalState ?? 'terminal' });
     }
     await persistLedgerProjection({
       decisionOsRoot: input.decisionOsRoot,

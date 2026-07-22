@@ -12,11 +12,25 @@ export function projectMasterTask({ card, cards = [], relationships = [], ledger
   const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
   const masterTask = labels.includes('master-task');
   const lifecycle = card?.lifecycle && typeof card.lifecycle === 'object' ? card.lifecycle : {};
-  const executionIntent = card?.executionIntent && typeof card.executionIntent === 'object' ? card.executionIntent : {};
-  const executionActive = ['waiting', 'queued', 'running'].includes(String(executionIntent.state ?? ''));
   const orderedRelationships = relationships
     .filter((entry) => String(entry?.from) === String(card?.id) && entry?.label === 'subtask')
     .sort((left, right) => Number(left.position) - Number(right.position) || String(left.id).localeCompare(String(right.id)));
+  const linkedCards = orderedRelationships.map((relationship) => cards.find((candidate) => String(candidate?.id) === String(relationship.to))).filter(Boolean);
+  const executionCandidates = [card, ...linkedCards].flatMap((candidate, index) => {
+    const intent = candidate?.executionIntent && typeof candidate.executionIntent === 'object' ? candidate.executionIntent : {};
+    const executionState = String(intent.state ?? '');
+    return ['waiting', 'queued', 'running'].includes(executionState)
+      ? [{ card: candidate, intent, executionState, ownerKind: index === 0 ? 'master-task' : 'subtask' }]
+      : [];
+  }).sort((left, right) => {
+    const priority = (candidate) => candidate.executionState === 'running' ? 0 : candidate.executionState === 'queued' ? 1 : 2;
+    return priority(left) - priority(right)
+      || Number(left.ownerKind === 'subtask') - Number(right.ownerKind === 'subtask')
+      || String(left.card?.id ?? '').localeCompare(String(right.card?.id ?? ''));
+  });
+  const execution = executionCandidates[0];
+  const executionIntent = execution?.intent ?? {};
+  const executionActive = Boolean(execution);
   const subtasks = orderedRelationships.map((relationship) => {
     const linked = cards.find((candidate) => String(candidate?.id) === String(relationship.to));
     return {
@@ -37,6 +51,8 @@ export function projectMasterTask({ card, cards = [], relationships = [], ledger
     ledger: String(ledgerTitle),
     status: executionActive ? 'task-execution' : lifecycleStatus === 'backlog' ? 'task-backlog' : lifecycleStatus === 'done' ? 'task-complete' : 'task-waiting',
     executionStatus: executionActive ? String(executionIntent.state) : '',
+    executionOwnerCardId: executionActive ? String(execution.card?.id ?? '') : '',
+    executionOwnerKind: executionActive ? execution.ownerKind : '',
     waitingSince: String(lifecycle.waitingAt ?? ''),
     completedAt: String(lifecycle.closedAt ?? ''),
     subtasks,
