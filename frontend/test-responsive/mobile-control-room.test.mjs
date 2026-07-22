@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { executionStopwatch, cardCodexRunId, projectMasterTask, waitingAge } from '../src/app/responsive/control-room.js';
+import { executionPresentation, executionStopwatch, cardCodexRunId, projectMasterTask, waitingAge } from '../src/app/responsive/control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/app/responsive/control-room-route.js';
 
 const [mobile, html, styles, bootApplication, embla, panzoom, mediaRenderer] = await Promise.all([
@@ -42,6 +42,16 @@ test('replicated execution intent is the only local task execution authority', (
   const projected = projectMasterTask(task({ card: { ...task().card, executionStatus: 'running', executionIntent: { id: 'intent-a', state: 'running', startedAt: '2026-07-10T10:30:00.000Z' } } }));
   assert.equal(projected.status, 'task-execution');
   assert.equal(projected.executionStatus, 'running');
+});
+
+test('replicated subtask execution intent projects the master into Exec', () => {
+  const current = task();
+  current.cards[1] = { ...current.cards[1], executionIntent: { id: 'run-child', state: 'running', startedAt: '2026-07-10T10:30:00.000Z' } };
+  const projected = projectMasterTask(current);
+  assert.equal(projected.status, 'task-execution');
+  assert.equal(projected.executionStatus, 'running');
+  assert.equal(projected.executionOwnerCardId, 'card-b');
+  assert.equal(projected.executionOwnerKind, 'subtask');
 });
 
 test('renders dynamic task totals in every Control Room status tab', () => {
@@ -85,7 +95,8 @@ test('reads task execution timing from replicated execution intent', () => {
 });
 
 test('renders replicated queued execution supplied by the server projection', () => {
-  assert.match(mobile, /Queued · position \$\{task\.codexQueuePosition\}/);
+  assert.match(mobile, /executionPresentation\(task\)/);
+  assert.equal(executionPresentation({ executionStatus: 'queued', executionSince: '2026-07-10T10:35:07.000Z' }, Date.parse('2026-07-10T10:37:12.000Z')).text, 'Queued · 02:05');
   assert.match(styles, /\.task-queue-position \{[^}]*white-space: nowrap/);
 });
 

@@ -8,12 +8,12 @@ import {
   derivePipelineSkillStatus,
   pipelineRuntimeRun,
   reassessPipelineAfterSkill,
-  runNextPipelineSkill,
 } from './codex-pipeline-runner.js';
 import { scheduleCodexProcesses } from './codex-process-scheduler.js';
 import { isSameCodexProcess, readCodexProcessQueue } from './codex-process-queue.js';
 import { codexExecutionTimeoutMs, reportCodexBackgroundFailure, scheduleCodexRuntime, updateCodexRuntimeRun } from './codex-runtime-run-store.js';
 import { signalCodexProcessTree } from './reconcile-terminal-codex-process.js';
+import { codexExecutionCoordinator } from './codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -61,7 +61,7 @@ function monitorAdoptedPipelineSkill(input: {
     timer.unref?.();
     monitors.set(monitorKey, timer);
   };
-  const check = (): void => {
+  const check = async (): Promise<void> => {
     try {
       const runtimeRun = pipelineRuntimeRun(input.runtime, input.skill.runId);
       if (!runtimeRun || String(runtimeRun.executionId ?? '') !== input.skill.executionId || String(runtimeRun.status ?? '') !== 'running') {
@@ -88,24 +88,30 @@ function monitorAdoptedPipelineSkill(input: {
       const current = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs.find((run) => run.id === input.pipelineRunId);
       const skill = current?.steps.flatMap((step) => step.skills).find((candidate) => candidate.runId === input.skill.runId);
       if (!skill || skill.executionId !== input.skill.executionId) return;
+      const executionCoordinator = codexExecutionCoordinator(input.runtime);
+      const canonical = executionCoordinator?.store.find(input.skill.executionId);
       const derived = derivePipelineSkillStatus({ skill, runtime: input.runtime });
+      const interrupted = Boolean(canonical && (canonical.phase === 'starting' || canonical.phase === 'running'));
       const status = runtimeRun.cancelRequestedAt
         ? 'cancelled'
-        : derived === 'complete' || derived === 'failed' || derived === 'cancelled' ? derived : 'failed';
+        : interrupted ? 'failed'
+          : derived === 'complete' || derived === 'failed' || derived === 'cancelled' ? derived : 'failed';
       const finishedAt = new Date().toISOString();
+      if (canonical && (canonical.phase === 'starting' || canonical.phase === 'running')) await executionCoordinator?.settle(input.skill.executionId, {
+        phase: runtimeRun.cancelRequestedAt ? 'cancelled' : 'interrupted',
+        result: { status: runtimeRun.cancelRequestedAt ? 'cancelled' : 'interrupted', summary: runtimeRun.cancelRequestedAt ? 'Cancelled by operator.' : 'The adopted process exited without coordinator settlement.' },
+        error: null,
+      });
       const reassessed = reassessPipelineAfterSkill({
         decisionOsRoot: input.decisionOsRoot,
         runtime: input.runtime,
         pipelineRunId: input.pipelineRunId,
         skillRunId: input.skill.runId,
         settledStatus: status,
-        error: status === 'failed' ? 'Adopted Codex process exited without a terminal event.' : '',
+        error: status === 'failed' ? 'The adopted Codex process was interrupted before coordinator settlement.' : '',
         finishedAt,
       });
       updateCodexRuntimeRun(input.runtime, input.skill.runId, { status, finishedAt, settledAt: finishedAt });
-      if (status === 'complete' && reassessed && reassessed.status === 'running') {
-        runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRunId });
-      }
       scheduleCodexRuntime(input.runtime, 'schedule-after-adopted-pipeline-settlement', { pipelineRunId: input.pipelineRunId, runId: input.skill.runId, executionId: input.skill.executionId });
     } catch (error) {
       stop();
@@ -135,6 +141,8 @@ export async function resumeCodexPipelineRuns(input: {
           continue;
         }
         if (isSameCodexProcess(Number(skill.processId ?? 0), String(skill.processStartTime ?? ''))) {
+          const executionCoordinator = codexExecutionCoordinator(input.runtime);
+          if (executionCoordinator?.store.find(skill.executionId)?.phase === 'running') await executionCoordinator.adoptRunning(skill.executionId);
           updateCodexRuntimeRun(input.runtime, skill.runId, {
             id: skill.runId,
             executionId: skill.executionId,
@@ -155,15 +163,23 @@ export async function resumeCodexPipelineRuns(input: {
           resumed.push({ pipelineRunId: run.id, runId: skill.runId, executionId: skill.executionId, adopted: true });
           continue;
         }
-        const derived = derivePipelineSkillStatus({ skill });
-        const status = derived === 'complete' || derived === 'failed' || derived === 'cancelled' ? derived : 'failed';
+        const executionCoordinator = codexExecutionCoordinator(input.runtime);
+        const canonical = executionCoordinator?.store.find(skill.executionId);
+        const derived = derivePipelineSkillStatus({ skill, runtime: input.runtime });
+        const interrupted = Boolean(canonical && (canonical.phase === 'starting' || canonical.phase === 'running'));
+        const status = interrupted ? 'failed' : derived === 'complete' || derived === 'failed' || derived === 'cancelled' ? derived : 'failed';
+        if (interrupted) await executionCoordinator?.settle(skill.executionId, {
+          phase: 'interrupted',
+          result: { status: 'interrupted', summary: 'Codex process disappeared before coordinator settlement.' },
+          error: null,
+        });
         run = reassessPipelineAfterSkill({
           decisionOsRoot,
           runtime: input.runtime,
           pipelineRunId: run.id,
           skillRunId: skill.runId,
           settledStatus: status,
-          error: status === 'failed' && derived === 'running' ? 'Codex process was interrupted before a terminal event was persisted.' : skill.error,
+          error: interrupted ? 'Codex process was interrupted before coordinator settlement.' : skill.error,
           finishedAt: new Date().toISOString(),
         }) ?? run;
       }
@@ -180,8 +196,6 @@ export async function resumeCodexPipelineRuns(input: {
             runs: current.store.runs.map((entry) => entry.id === reassessed.id ? { ...entry, resumedAt, updatedAt: resumedAt } : entry),
           },
         });
-        const launch = runNextPipelineSkill({ decisionOsRoot, runtime: input.runtime, pipelineRunId: reassessed.id });
-        if (launch.skillRun) resumed.push(launch.skillRun as AnyRecord);
       }
     }
   }

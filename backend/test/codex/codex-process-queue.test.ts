@@ -17,6 +17,8 @@ import {
 } from '../../src/business/codex/helper/codex-process-queue.js';
 import { runningCodexProcessCount, unifiedCodexQueuePosition } from '../../src/business/codex/helper/codex-process-scheduler.js';
 import { maxConcurrentCodexProcesses } from '../../src/business/codex/helper/codex-pipeline-runner.js';
+import { createCodexExecutionCoordinator } from '../../src/business/codex/helper/codex-execution-coordinator.js';
+import { installCodexExecutionCoordinator } from '../../src/business/codex/helper/codex-execution-runtime.js';
 
 test('persists mixed Codex work in FIFO order and recovers a claimed thread as a continuation', () => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-process-queue-'));
@@ -226,6 +228,60 @@ test('finds terminal output for a legacy running item without persisted process 
 
     assert.deepEqual(readCodexProcessQueue(root), []);
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('canonical execution state wins over contradictory terminal JSONL during dead-process recovery', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-canonical-process-recovery-'));
+  const runtime: Record<string, unknown> = {};
+  const coordinator = createCodexExecutionCoordinator({
+    decisionOsRoot: root,
+    projectId: 'project-a',
+    nodeId: 'workstation',
+    project: async () => undefined,
+    publish: async () => undefined,
+  });
+  installCodexExecutionCoordinator(runtime, coordinator);
+  try {
+    const stdoutFile = resolve(root, 'run-a.jsonl');
+    const stderrFile = resolve(root, 'run-a.log');
+    writeFileSync(stdoutFile, `${JSON.stringify({ type: 'turn.completed' })}\n`);
+    writeFileSync(stderrFile, '');
+    writeFileSync(resolve(root, 'state.json'), JSON.stringify({ ledgers: [{ id: 'specs', ledgerFile: '.decision-os/specs.json' }] }));
+    writeFileSync(resolve(root, 'specs.json'), JSON.stringify({ cards: [{ id: 'card-a', codexActiveRunId: 'run-a', codexActiveExecutionId: 'execution-a' }] }));
+    await coordinator.admit({ executionId: 'execution-a', sessionId: 'run-a', projectId: 'project-a', ledgerId: 'specs', taskId: 'card-a', ownerCardId: 'card-a', kind: 'thread' });
+    await coordinator.enqueue('execution-a');
+    await coordinator.claim('execution-a');
+    await coordinator.spawned('execution-a', { processId: 999_999, processStartTime: 'dead-process', stdoutFile, stderrFile });
+    writeFileSync(resolve(root, 'codex-process-queue.json'), JSON.stringify({
+      version: 1,
+      items: [{
+        id: 'run-a',
+        kind: 'thread',
+        status: 'running',
+        createdAt: '2026-07-15T08:00:00.000Z',
+        startedAt: '2026-07-15T08:00:01.000Z',
+        interruptedAt: null,
+        interruptionReason: '',
+        processId: 999_999,
+        processStartTime: 'dead-process',
+        stdoutFile,
+        stderrFile,
+        payload: { ledgerId: 'specs', cardId: 'card-a', runId: 'run-a', executionId: 'execution-a' },
+      }],
+    }));
+
+    await recoverCodexProcessQueue(root, runtime);
+
+    const [recovered] = readCodexProcessQueue(root);
+    assert.equal(recovered.status, 'pending');
+    assert.equal(recovered.kind, 'continuation');
+    assert.equal(recovered.payload.restartRecovery, true);
+    assert.equal(coordinator.store.find('execution-a')?.phase, 'queued');
+    assert.equal((runtime.codexSkillRuns as Record<string, unknown>)['run-a'], undefined);
+  } finally {
+    coordinator.dispose();
     rmSync(root, { recursive: true, force: true });
   }
 });

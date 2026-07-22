@@ -331,8 +331,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailSkillRunPoller, /function bindCancelButton\(poller: Poller\): void \{[\s\S]*void cancelRun\(poller\);[\s\S]*\}/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel\(\{ projectId: poller\.projectId, replicaNodeId: poller\.replicaNodeId, ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId, executionId \}\)/);
   assert.match(cardDetailSkillRunPoller, /setCancelButtonVisible\(element: HTMLElement, visible: boolean\)/);
-  assert.match(cardDetailSkillRunPoller, /requestAnimationFrame/);
-  assert.match(cardDetailSkillRunPoller, /now - poller\.lastClockPaintMs >= 33/);
+  assert.doesNotMatch(cardDetailSkillRunPoller, /requestAnimationFrame|lastClockPaintMs/);
+  assert.match(cardDetailSkillRunPoller, /sharedExecutionClock = setInterval\(paintSharedExecutionClock, 250\)/);
   assert.match(cardDetailSkillRunPoller, /terminalSummaries\.set\(key, summary\)/);
   assert.match(cardDetailSkillRunPoller, /export function resumeExternallyStartedCardSkillRun/);
   assert.match(cardDetailSkillRunPoller, /terminalSummaries\.delete\(key\)/);
@@ -342,7 +342,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailSkillRunPoller, /function removeTimer\(element: HTMLElement\): void \{[\s\S]*timer\.hidden = true;[\s\S]*\}/);
   assert.match(cardDetailSkillRunPoller, /if \(!summary\.ok\) \{[\s\S]*removeTimer\(poller\.element\);[\s\S]*\}/);
   assert.match(cardDetailSkillRunPoller, /if \(summary\.status === 'running' \|\| summary\.status === 'pending'\) \{[\s\S]*showTimer\(element\);[\s\S]*setCancelButtonVisible\(element, true\);[\s\S]*setContinueButtonVisible\(element, false\);[\s\S]*\}/);
-  assert.doesNotMatch(cardDetailSkillRunPoller, /setInterval/);
+  assert.match(cardDetailSkillRunPoller, /function sharedClockRequired\(\): boolean/);
   assert.match(cardDetailSkillRunPoller, /schedulePoll\(poller, 0\)/);
   assert.match(cardDetailSkillRunPoller, /summary\.status === 'running'/);
   assert.match(cardDetailSkillRunPoller, /async function continueRun\(poller: Poller\): Promise<void> \{[\s\S]*paintExternallyStartedRun\(poller\);[\s\S]*requestCardSkillRunContinue/);

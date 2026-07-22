@@ -46,7 +46,7 @@ test('desktop Shift+X navigates to Exec after durable local persistence', () => 
   assert.match(shortcut, /const launchMode = voiceLaunchModeForModifiers\(event\);/);
   assert.match(shortcut, /await executeVoiceAction\(\{[\s\S]*launchMode,[\s\S]*onDurableHandoff: \(\) => void finishQueuedVoiceSubmission\(true\)/);
   assert.doesNotMatch(shortcut, /stopVoiceRecording/);
-  assert.match(application, /executionStatus: 'waiting', codexStatus: 'waiting'/);
+  assert.match(application, /executionStatus: 'preparing', executionSince: acceptedAt, codexStatus: 'preparing'/);
   assert.match(application, /optimisticExecutionIntents\.set\(taskIdentity\(task\), waiting\)/);
   assert.match(application, /nextControlRoom\.exec = \[\{ \.\.\.task, \.\.\.intent \}, \.\.\.\(nextControlRoom\.exec \?\? \[\]\)\]/);
 });

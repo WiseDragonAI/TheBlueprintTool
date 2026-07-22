@@ -16,6 +16,8 @@ import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js'
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 import { runtimeCodexRunOwnsLiveProcess } from '../helper/runtime-codex-run-owns-live-process.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
+import { legacyCodexExecutionStatus } from '../helper/codex-execution-coordinator.js';
+import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
@@ -315,7 +317,10 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const interruptedProcess = queuedProcess?.status === 'interrupted' ? queuedProcess : null;
   const inferredTerminal = inferred === 'complete' || inferred === 'failed' || inferred === 'cancelled' ? inferred : null;
   const persistedSkillOwnsExecution = !cardExecutionId || persistedSkill?.executionId === cardExecutionId;
-  const status = inMemoryStatus
+  const canonicalExecution = (cardExecutionId ? codexExecutionCoordinator(runtime)?.dto(cardExecutionId) : null)
+    ?? codexExecutionCoordinator(runtime)?.dtoForSession(runId, cardId)
+    ?? null;
+  const status = canonicalExecution ? legacyCodexExecutionStatus(canonicalExecution.phase) : inMemoryStatus
     ?? (queuedProcess?.status === 'pending' ? 'pending' : null)
     ?? (persistedSkillOwnsExecution ? persistedSkill?.status : null)
     ?? inferredTerminal
@@ -350,7 +355,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     stdoutFile,
     stderrFile,
   });
-  const active = runtimeOwnsExecution && runtimeCodexRunOwnsLiveProcess(fencedRuntime, runId, decisionOsRoot);
+  const active = canonicalExecution ? canonicalExecution.live : runtimeOwnsExecution && runtimeCodexRunOwnsLiveProcess(fencedRuntime, runId, decisionOsRoot);
   const currentElapsedMs = elapsedMs({ runtime: fencedRuntime, runId, status, stdoutFile, stderrFile });
   const projectedExecutions = executionHistory({
     executions,
@@ -378,7 +383,9 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     pipelineStatus: persistedPipelineRun?.status ?? null,
     status,
     active,
-    executionId: cardExecutionId || runtimeExecutionId || persistedSkill?.executionId || String(currentExecution?.executionId ?? ''),
+    executionId: canonicalExecution?.executionId ?? (cardExecutionId || runtimeExecutionId || persistedSkill?.executionId || String(currentExecution?.executionId ?? '')),
+    phase: canonicalExecution?.phase ?? '',
+    execution: canonicalExecution,
     currentExecution,
     executions: projectedExecutions,
     interruptedAt: interruptedProcess?.interruptedAt ?? null,
@@ -389,7 +396,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
           ? unifiedCodexQueuePosition({ decisionOsRoot, id: persistedPipelineRun.id, createdAt: persistedPipelineRun.createdAt, runtime })
           : null
       : null,
-    startedAt: new Date(runSegmentStartedAtMs({ runtime: fencedRuntime, runId, stderrFile })).toISOString(),
+    startedAt: canonicalExecution?.startedAt ?? new Date(runSegmentStartedAtMs({ runtime: fencedRuntime, runId, stderrFile })).toISOString(),
     elapsedMs: currentElapsedMs,
     lineCount: parsedLines.at(-1)?.line ?? 0,
     nextSince: parsedLines.at(-1)?.line ?? 0,

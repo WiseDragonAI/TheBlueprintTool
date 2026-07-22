@@ -9,6 +9,7 @@ import type { CodexProcessQueuePayload } from '../../../../../shared/schemas/cod
 import { clearCardCodexExecutionForLedger } from './clear-card-codex-execution.js';
 import { codexExecutionTimeoutMs, reportCodexBackgroundFailure, scheduleCodexRuntime } from './codex-runtime-run-store.js';
 import { signalCodexProcessTree } from './reconcile-terminal-codex-process.js';
+import { codexExecutionCoordinator } from './codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 export type CodexProcessQueueItem = {
@@ -120,6 +121,17 @@ export function markCodexProcessQueueItemRunning(decisionOsRoot: string, id: str
   const items = readCodexProcessQueue(decisionOsRoot).map((item) => {
     if (item.id !== id || item.status !== 'pending') return item;
     selected = { ...item, status: 'running', startedAt: now, interruptedAt: null, interruptionReason: '' };
+    return selected;
+  });
+  if (selected) writeCodexProcessQueue(decisionOsRoot, items);
+  return selected;
+}
+
+export function releaseCodexProcessQueueItemClaim(decisionOsRoot: string, id: string): CodexProcessQueueItem | null {
+  let selected: CodexProcessQueueItem | null = null;
+  const items = readCodexProcessQueue(decisionOsRoot).map((item) => {
+    if (item.id !== id || item.status !== 'running' || item.processId > 0) return item;
+    selected = { ...item, status: 'pending', startedAt: null };
     return selected;
   });
   if (selected) writeCodexProcessQueue(decisionOsRoot, items);
@@ -309,6 +321,19 @@ function scheduleAfterAdoptedSettlement(runtime: AnyRecord): void {
   scheduleCodexRuntime(runtime, 'schedule-after-adopted-codex-settlement');
 }
 
+async function recoverCanonicalContinuation(runtime: AnyRecord | undefined, executionId: string): Promise<void> {
+  if (!runtime) return;
+  const coordinator = codexExecutionCoordinator(runtime);
+  const record = coordinator?.store.find(executionId);
+  if (!coordinator || !record || record.phase === 'queued') return;
+  if (record.phase === 'starting' || record.phase === 'running') await coordinator.settle(executionId, {
+    phase: 'interrupted',
+    result: { status: 'interrupted', summary: codexProcessRestartInterruptionReason },
+  });
+  const interrupted = coordinator.store.find(executionId);
+  if (interrupted?.phase === 'interrupted') await coordinator.requeueInterrupted(executionId);
+}
+
 function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item: CodexProcessQueueItem): void {
   let monitors = runtime.codexAdoptedProcessMonitors instanceof Map
     ? runtime.codexAdoptedProcessMonitors as Map<string, NodeJS.Timeout>
@@ -349,9 +374,32 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
       }
       return;
     }
+    const coordinator = codexExecutionCoordinator(runtime);
+    const canonical = coordinator?.store.find(String(current.payload.executionId ?? ''));
+    if (coordinator && canonical) {
+      const owned = interruptedItemStillOwned(decisionOsRoot, current);
+      if (canonical.phase === 'starting' || canonical.phase === 'running') await coordinator.settle(canonical.executionId, {
+        phase: 'interrupted', result: { status: 'interrupted', summary: codexProcessRestartInterruptionReason },
+      });
+      const interrupted = coordinator.store.find(canonical.executionId)?.phase === 'interrupted';
+      if (owned && interrupted) await coordinator.requeueInterrupted(canonical.executionId);
+      const recoverable = owned && ['queued', 'interrupted', 'starting', 'running'].includes(canonical.phase);
+      const next = recoverable ? recoveredContinuation(current) : null;
+      writeCodexProcessQueue(decisionOsRoot, readCodexProcessQueue(decisionOsRoot).flatMap((entry) => entry.id !== current.id ? [entry] : next ? [next] : []));
+      delete runs[runId];
+      stopAdoptedMonitor(runtime, current.id);
+      scheduleAfterAdoptedSettlement(runtime);
+      return;
+    }
     const settled = terminalStatus(current.stdoutFile);
     if (settled) {
       runs[runId] = { ...(runs[runId] ?? {}), status: settled, adopted: false, finishedAt: new Date().toISOString() };
+      const coordinator = codexExecutionCoordinator(runtime);
+      if (coordinator) await coordinator.settle(String(current.payload.executionId ?? ''), {
+        phase: settled === 'complete' ? 'succeeded' : settled,
+        ...(settled === 'failed' ? { error: { code: 'adopted_codex_execution_failed', message: 'The adopted Codex process failed.' } } : {}),
+        result: { status: settled === 'complete' ? 'succeeded' : settled, summary: `Adopted Codex process settled as ${settled}.` },
+      });
       await clearCardCodexExecutionForLedger({
         decisionOsRoot,
         ledgerId: String(current.payload.ledgerId ?? ''),
@@ -398,9 +446,10 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
   monitors.set(item.id, timer);
 }
 
-export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRecord): void {
+export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRecord): Promise<void> {
   const items = readCodexProcessQueue(decisionOsRoot);
-  if (items.length === 0) return;
+  if (items.length === 0) return Promise.resolve();
+  const canonicalOperations: Promise<unknown>[] = [];
   const runs = runtime && runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object'
     ? runtime.codexSkillRuns as Record<string, AnyRecord>
     : {};
@@ -422,6 +471,7 @@ export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRe
     }
     const files = runFiles(decisionOsRoot, item);
     if (item.status === 'interrupted') {
+      canonicalOperations.push(recoverCanonicalContinuation(runtime, String(item.payload.executionId ?? '')));
       return interruptedItemStillOwned(decisionOsRoot, item) ? [recoveredContinuation(item)] : [];
     }
     if (isSameCodexProcess(item.processId, item.processStartTime)) {
@@ -439,25 +489,46 @@ export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRe
         adopted: true,
         queueItemId: item.id,
       };
+      const coordinator = runtime ? codexExecutionCoordinator(runtime) : null;
+      if (coordinator) canonicalOperations.push(coordinator.adoptRunning(String(item.payload.executionId ?? '')));
       if (runtime) monitorAdoptedProcess(decisionOsRoot, runtime, item);
       return [item];
+    }
+    const coordinator = runtime ? codexExecutionCoordinator(runtime) : null;
+    const canonical = coordinator?.store.find(String(item.payload.executionId ?? ''));
+    if (coordinator && canonical) {
+      const owned = interruptedItemStillOwned(decisionOsRoot, item);
+      if (canonical.phase === 'starting' || canonical.phase === 'running') canonicalOperations.push(owned
+        ? recoverCanonicalContinuation(runtime, canonical.executionId)
+        : coordinator.settle(canonical.executionId, { phase: 'interrupted', result: { status: 'interrupted', summary: codexProcessRestartInterruptionReason } }));
+      else if (owned && canonical.phase === 'interrupted') canonicalOperations.push(coordinator.requeueInterrupted(canonical.executionId));
+      delete runs[runId];
+      return owned && ['queued', 'interrupted', 'starting', 'running'].includes(canonical.phase) ? [recoveredContinuation(item)] : [];
     }
     const settled = terminalStatus(files.stdoutFile);
     if (settled) {
       runs[runId] = { ...(runs[runId] ?? {}), id: runId, executionId: item.payload.executionId, status: settled, pid: item.processId, adopted: false, finishedAt: new Date().toISOString() };
-      void clearCardCodexExecutionForLedger({
+      const settleCanonical = coordinator ? coordinator.settle(String(item.payload.executionId ?? ''), {
+        phase: settled === 'complete' ? 'succeeded' : settled,
+        ...(settled === 'failed' ? { error: { code: 'recovered_codex_execution_failed', message: 'The recovered Codex process failed.' } } : {}),
+        result: { status: settled === 'complete' ? 'succeeded' : settled, summary: `Recovered Codex process settled as ${settled}.` },
+      }) : Promise.resolve();
+      canonicalOperations.push(settleCanonical.then(() => clearCardCodexExecutionForLedger({
         decisionOsRoot,
         ledgerId: String(item.payload.ledgerId ?? ''),
         cardId: String(item.payload.cardId ?? ''),
         runId,
         executionId: String(item.payload.executionId ?? ''),
         runtime,
-      }).catch((error: unknown) => reportCodexBackgroundFailure(runtime ?? {}, 'clear-recovered-codex-execution', error, { runId, queueItemId: item.id }));
+      })));
       return [];
     }
-    return interruptedItemStillOwned(decisionOsRoot, item) ? [recoveredContinuation(item)] : [];
+    const recoverable = interruptedItemStillOwned(decisionOsRoot, item);
+    if (recoverable) canonicalOperations.push(recoverCanonicalContinuation(runtime, String(item.payload.executionId ?? '')));
+    return recoverable ? [recoveredContinuation(item)] : [];
   });
   writeCodexProcessQueue(decisionOsRoot, deduplicateLogicalRuns(recovered));
+  return Promise.all(canonicalOperations).then(() => undefined);
 }
 
 export function codexProcessQueuePosition(decisionOsRoot: string, id: string): number | null {

@@ -453,6 +453,30 @@ test('explicit card color overrides zone inheritance during hydration', () => {
   }
 });
 
+test('project-owned task accent overrides both zone and explicit card colors during hydration', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = patchLedgerCard({
+      id: 'task-card',
+      title: 'Project task',
+      color: '#ef4444',
+      labels: ['master-task']
+    }, null, { zoneId: 'zone-owner', zoneColor: '#a855f7', readableColor: '#bd91e4', colorSource: 'project' }) as unknown as FakeElement;
+
+    assert.equal(card.dataset.cardZoneId, 'zone-owner');
+    assert.equal(card.dataset.cardZoneColor, '#a855f7');
+    assert.equal(card.dataset.cardAccentSource, 'project');
+    assert.equal(card.style['--card-zone-color'], '#a855f7');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
 test('ledger card titles include PascalCase word break opportunities without changing text', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {

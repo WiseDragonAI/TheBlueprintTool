@@ -356,6 +356,16 @@ export class FederationRelay extends DurableObject<Env> {
         if (frame.stateVersion !== taskCurrentStateVersion) throw new Error('incompatible_state_protocol');
         if (!frame.to) {
           if (frame.type === 'state-entity-batch') await this.persistStateEntities(sender, socket, frame);
+          else if (frame.type === 'state-execution-observation') {
+            const projectId = String(frame.projectId ?? '');
+            this.assertProjectParticipation(sender, projectId);
+            for (const target of this.activeSockets()) {
+              const targetNodeId = (target.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
+              if (target !== socket && this.participatesInProject(targetNodeId, projectId)) {
+                this.sendSocket(target, { ...frame, from: sender, to: undefined, stateVersion: taskCurrentStateVersion });
+              }
+            }
+          }
           else if (frame.type === 'state-bucket-summary') await this.reconcileStateSummary(sender, socket, frame);
           else if (frame.type === 'state-missing-request') await this.sendMissingStateEntities(sender, socket, frame);
           else if (frame.type === 'state-summary-request') throw new Error('state_summary_request_requires_target');

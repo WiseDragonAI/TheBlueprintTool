@@ -25,6 +25,7 @@ test('serves one compact multi-project Control Room projection and refreshes one
       { id: 'master-done', title: 'Completed master', status: 'done', createdAt: '2026-07-14T10:00:00.000Z', lifecycle: { status: 'done', changedAt: '2026-07-14T10:04:00.000Z', waitingAt: null, closedAt: '2026-07-14T10:04:00.000Z' }, labels: ['master-task', 'release'], x: 10, y: 240, w: 300, h: 200, comment: { contentFile: '.decision-os/cards/tasks/master-done.md' } },
       { id: 'child', title: 'Child', status: 'done', createdAt: '2026-07-14T10:00:00.000Z', lifecycle: { status: 'done', changedAt: '2026-07-14T10:04:00.000Z', waitingAt: null, closedAt: '2026-07-14T10:04:00.000Z' }, labels: [], x: 350, y: 10, w: 300, h: 200 },
       { id: 'worker', title: 'Worker', status: 'todo', codexActiveRunId: 'codex-skill-test', codexActiveExecutionId: 'execution-test', codexRunId: 'codex-skill-test' },
+      { id: 'orphan', title: 'Orphaned execution', status: 'backlog', labels: ['master-task'], lifecycle: { status: 'backlog', changedAt: '2026-07-14T10:05:00.000Z', waitingAt: null, closedAt: null }, executionIntent: { id: 'lost-run', state: 'waiting', changedAt: '2026-07-14T10:05:00.000Z' } },
     ],
     annotations: [{ id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' }],
     relationships: [{ id: 'rel-a', from: 'master', to: 'child', label: 'subtask', position: 0 }], notes: {}, threadFiles: {
@@ -45,9 +46,13 @@ test('serves one compact multi-project Control Room projection and refreshes one
     const firstText = await firstResponse.text();
     const first = JSON.parse(firstText) as Record<string, any>;
     assert.equal(firstResponse.ok, true, firstText);
-    assert.equal(first.projectorVersion, 'control-room-v15-structural-task-state');
+    assert.equal(first.projectorVersion, 'control-room-v17-canonical-codex-execution');
     assert.ok(Buffer.byteLength(firstText) < 250_000);
     assert.equal(first.queue.length, 1);
+    assert.equal(first.exec.some((task: Record<string, unknown>) => task.cardId === 'orphan'), false);
+    const orphan = first.allTasks.find((task: Record<string, unknown>) => task.cardId === 'orphan');
+    assert.ok(orphan, JSON.stringify(first.allTasks.map((task: Record<string, unknown>) => task.cardId)));
+    assert.equal(orphan.status, 'task-backlog');
     assert.equal(first.queue[0].zoneId, 'zone-a');
     assert.equal(first.queue[0].complete, 1);
     assert.equal(first.queue[0].subtasks[0].cardId, 'child');

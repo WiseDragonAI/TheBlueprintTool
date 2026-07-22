@@ -52,6 +52,12 @@ async function loadGlobalLibraries() {
   return { issues: serverPipelines.issues || [], failedProjects: 0 };
 }
 function button(label, className, action) { const node = document.createElement('button'); node.type = 'button'; node.className = className; node.textContent = label; node.addEventListener('click', action); return node; }
+function processActionStatus() {
+  const status = document.createElement('p');
+  status.className = 'codex-message process-detail-message';
+  status.setAttribute('role', 'status');
+  return status;
+}
 function pipelineSteps(pipeline) { return pipeline.stepIds.map((id) => state.steps.find((step) => step.id === id && step.scope === pipeline.scope && (pipeline.scope === 'server' || step.projectId === pipeline.projectId))).filter(Boolean); }
 function catalogRecord(record, kind) {
   return {
@@ -204,14 +210,14 @@ async function renderProcessDetail(record) {
     const start = button('Start skill', 'primary-button process-start', () => startSkill(record, model.value, effort.value));
     start.disabled = !state.cardId;
     if (!state.cardId) start.title = 'Open a card to run this skill.';
-    detail.append(model, effort, start);
+    detail.append(model, effort, start, processActionStatus());
   } else {
     const steps = document.createElement('ol');
     for (const step of pipelineSteps(record)) { const item = document.createElement('li'); item.textContent = `${step.name}: ${step.skills.map((skill) => skill.skillName).join(', ') || 'No skills'}`; steps.append(item); }
     const start = button('Start pipeline', 'primary-button process-start', () => startPipeline(record));
     start.disabled = !state.cardId;
     if (!state.cardId) start.title = 'Open a card to run this pipeline.';
-    detail.append(steps, start);
+    detail.append(steps, start, processActionStatus());
   }
   setMobileCodexView(document, 'detail', viewContext);
 }
@@ -293,22 +299,22 @@ function processLaunchOwned(launch) {
     && launch.threadPresentationGeneration === Number(document.body.dataset.threadPresentationGeneration || 0);
 }
 async function startSkill(skill, codexModel, codexEffort) {
-  const submit = el('.process-start'); setBusy(submit, true); message('.process-message', 'Submitting skill run…');
+  const submit = el('.process-start'); setBusy(submit, true); message('.process-detail-message', 'Submitting skill run…');
   const launch = captureProcessLaunch();
   try {
     const payload = { ledgerId: launch.ledgerId, cardId: launch.cardId, skillName: skill.name };
     if (codexModel) payload.codexModel = codexModel; if (codexEffort) payload.codexEffort = codexEffort;
     const body = await jsonRequest('/api/codex/skills/process', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }, launch.projectId);
     finishProcessLaunch({ pipelineRunId: body.pipelineRun?.id || '', queuePosition: body.queuePosition }, launch);
-  } catch (error) { message('.process-message', error.message, true); setBusy(submit, false); }
+  } catch (error) { message('.process-detail-message', formatProcessLaunchError(error), true); setBusy(submit, false); }
 }
 async function startPipeline(pipeline) {
-  const submit = el('.process-start'); setBusy(submit, true); message('.process-message', 'Submitting pipeline run…');
+  const submit = el('.process-start'); setBusy(submit, true); message('.process-detail-message', 'Submitting pipeline run…');
   const launch = captureProcessLaunch();
   try {
     const body = await jsonRequest('/api/codex/pipelines/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ledgerId: launch.ledgerId, sourceCardId: launch.cardId, pipelineId: pipeline.id }) }, launch.projectId);
     finishProcessLaunch({ pipelineRunId: body.run?.id || '', queuePosition: body.queuePosition }, launch);
-  } catch (error) { message('.process-message', formatError(error), true); setBusy(submit, false); }
+  } catch (error) { message('.process-detail-message', formatProcessLaunchError(error), true); setBusy(submit, false); }
 }
 function finishProcessLaunch(detail, launch) {
   const actionOwned = processLaunchOwned(launch);
@@ -319,6 +325,12 @@ function finishProcessLaunch(detail, launch) {
   window.dispatchEvent(new CustomEvent('decision-os:codex-run-enqueued', { detail: { ...detail, ...launch, actionOwned } }));
 }
 function formatError(error) { const refs = error.body?.invalidReferences; return refs?.length ? `${error.message} Invalid references: ${refs.map((item) => item.reference).join(', ')}.` : error.message; }
+function formatProcessLaunchError(error) {
+  if (error.body?.error !== 'runtime-scope-paused') return formatError(error);
+  const scope = error.body.scope || 'unknown';
+  const incidentId = error.body.incidentId || 'unknown';
+  return `Decision OS execution is paused. Scope: ${scope}. Incident: ${incidentId}.`;
+}
 async function openProcess() {
   if (!state.ledgerId || !state.cardId) return;
   state.libraryScope = 'project'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';

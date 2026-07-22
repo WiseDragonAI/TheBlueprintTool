@@ -62,7 +62,11 @@ test('removes status and ownership when the settling run still owns execution', 
     assert.equal(card.codexActiveRunId, undefined);
     assert.equal(card.executionStatus, undefined);
     assert.equal(card.executionRunId, undefined);
-    assert.equal((card.executionIntent as Record<string, unknown>).state, 'terminal');
+    const intent = card.executionIntent as Record<string, unknown>;
+    assert.equal(intent.state, 'terminal');
+    assert.equal(typeof intent.changedAt, 'string');
+    assert.equal(intent.settledAt, intent.changedAt);
+    assert.equal(intent.error, null);
   } finally {
     await state?.flush();
     rmSync(root, { recursive: true, force: true });

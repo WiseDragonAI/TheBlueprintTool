@@ -3,13 +3,22 @@
  * WHY: One project-wide process limit and FIFO order must govern every launch surface.
  */
 import { readCodexPipelineStore } from './codex-pipeline-store.js';
-import { markCodexProcessQueueItemRunning, readCodexProcessQueue, removeCodexProcessQueueItem } from './codex-process-queue.js';
+import { markCodexProcessQueueItemRunning, readCodexProcessQueue, releaseCodexProcessQueueItemClaim, removeCodexProcessQueueItem } from './codex-process-queue.js';
 import { maxConcurrentCodexProcesses, runNextPipelineSkill } from './codex-pipeline-runner.js';
 import { startThreadCodexProcessController } from '../controller/start-thread-codex-process-controller.js';
 import { continueCardSkillRunController } from '../controller/continue-card-skill-run-controller.js';
 import { clearCardCodexExecutionForLedger } from './clear-card-codex-execution.js';
 
 type AnyRecord = Record<string, unknown>;
+
+function runnablePipelineRuns(decisionOsRoot: string) {
+  return readCodexPipelineStore({ decisionOsRoot }).store.runs.filter((run) => (
+    run.executionMode !== 'federated'
+    && (run.status === 'pending' || run.status === 'running')
+    && run.steps.some((step) => step.skills.some((skill) => skill.status === 'pending'))
+    && !run.steps.some((step) => step.skills.some((skill) => skill.status === 'running'))
+  ));
+}
 
 export function runningCodexProcessCount(runtime: AnyRecord): number {
   const sharedCount = runtime.globalCodexRunningProcessCount;
@@ -19,7 +28,7 @@ export function runningCodexProcessCount(runtime: AnyRecord): number {
 }
 
 export function nextPendingCodexProcessCreatedAt(decisionOsRoot: string): string | null {
-  const pipeline = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.status === 'pending');
+  const pipeline = runnablePipelineRuns(decisionOsRoot)[0];
   const process = readCodexProcessQueue(decisionOsRoot).find((item) => item.status === 'pending');
   if (!pipeline) return process?.createdAt ?? null;
   if (!process) return pipeline.createdAt;
@@ -28,7 +37,7 @@ export function nextPendingCodexProcessCreatedAt(decisionOsRoot: string): string
 
 export function pendingCodexProcessEntries(decisionOsRoot: string): Array<{ id: string; createdAt: string; order: number }> {
   return [
-    ...readCodexPipelineStore({ decisionOsRoot }).store.runs.filter((run) => run.status === 'pending').map((run, order) => ({ id: run.id, createdAt: run.createdAt, order })),
+    ...runnablePipelineRuns(decisionOsRoot).map((run, order) => ({ id: run.id, createdAt: run.createdAt, order })),
     ...readCodexProcessQueue(decisionOsRoot).filter((item) => item.status === 'pending').map((item, order) => ({ id: item.id, createdAt: item.createdAt, order: 1_000_000 + order })),
   ];
 }
@@ -48,7 +57,7 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
   const capacity = maxConcurrentCodexProcesses(input.runtime);
   const launchLimit = Math.max(1, input.launchLimit ?? Number.POSITIVE_INFINITY);
   while (runningCodexProcessCount(input.runtime) < capacity && launched.length < launchLimit) {
-    const pipeline = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs.find((run) => run.status === 'pending');
+    const pipeline = runnablePipelineRuns(input.decisionOsRoot)[0];
     const thread = readCodexProcessQueue(input.decisionOsRoot).find((item) => item.status === 'pending');
     if (!pipeline && !thread) break;
     const launchThread = Boolean(thread && (!pipeline || thread.createdAt <= pipeline.createdAt));
@@ -60,6 +69,10 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
         : await startThreadCodexProcessController({ action_payload: { ...claimed.payload, reservedRunId: claimed.id, queueDispatch: true }, runtime_state: input.runtime });
       launched.push(result);
       if (result.ok === false) {
+        if (result.code === 'codex_execution_projection_pending' && result.retryable === true) {
+          releaseCodexProcessQueueItemClaim(input.decisionOsRoot, thread.id);
+          break;
+        }
         removeCodexProcessQueueItem(input.decisionOsRoot, thread.id);
         const runId = String(claimed.payload.runId ?? claimed.id);
         const executionId = String(claimed.payload.executionId ?? '');
@@ -90,7 +103,7 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
       continue;
     }
     if (pipeline) {
-      const result = runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: pipeline.id });
+      const result = await runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: pipeline.id });
       launched.push(result);
       if (result.ok === false || !result.skillRun) break;
     }

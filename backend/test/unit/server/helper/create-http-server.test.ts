@@ -121,6 +121,122 @@ test('create-http-server resolves the retained launcher incident only after list
   }
 });
 
+test('create-http-server resolves retained transient task bootstrap incidents at startup', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-bootstrap-incident-recovery-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'project-a' }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const incidents = createRuntimeIncidentLedger({ decisionOsRoot });
+  incidents.record({
+    severity: 'error',
+    scope: 'http-request:POST:/api/voice-upload',
+    component: 'http-server',
+    operation: 'handle-request',
+    code: 'task_state_bootstrap_incomplete',
+    error: new Error('task_state_bootstrap_incomplete'),
+  });
+  incidents.record({
+    severity: 'warning',
+    scope: 'project-task-write:project-a',
+    component: 'task-current-state',
+    operation: 'capture-watched-task-content',
+    code: 'task_state_bootstrap_incomplete',
+    error: new Error('task_state_bootstrap_incomplete'),
+  });
+  incidents.record({
+    severity: 'error',
+    scope: 'background:codex-startup-project-a',
+    component: 'codex-startup-project-a',
+    operation: 'reconcile-codex-startup-state',
+    code: 'task_state_bootstrap_incomplete',
+    error: new Error('task_state_bootstrap_incomplete'),
+  });
+  incidents.record({
+    severity: 'error',
+    scope: 'background:codex-runtime:project-a',
+    component: 'codex-runtime:project-a',
+    operation: 'codex-execution-timeout',
+    error: new Error('Codex execution exceeded 1800000ms.'),
+  });
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+
+  try {
+    const health = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/health`).then((response) => response.json()) as { status: string; activeIncidentCount: number };
+    assert.equal(health.status, 'ready');
+    assert.equal(health.activeIncidentCount, 0);
+    assert.equal(incidents.snapshot().incidents.filter((incident) => incident.code === 'task_state_bootstrap_incomplete').every((incident) => incident.status === 'resolved'), true);
+    assert.equal(incidents.snapshot().incidents.find((incident) => incident.operation === 'codex-execution-timeout')?.status, 'resolved');
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('transient task bootstrap rejection returns 503 without degrading server health', async () => {
+  const originalCwd = process.cwd();
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-bootstrap-http-gate-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {} }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  process.chdir(projectRoot);
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot,
+    decisionOsSettings: {
+      federationRelayUrl: 'http://127.0.0.1:1',
+      federationId: 'bootstrap-test',
+      federationNodeId: 'workstation',
+      federationNodeCredential: 'credential',
+    },
+  };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    const form = new FormData();
+    form.append('audio', new Blob(['voice-bytes'], { type: 'audio/webm' }), 'voice.webm');
+    form.append('ledgerId', 'tasks');
+    form.append('threadId', 'thread-card-a');
+    form.append('cardId', 'card-a');
+    form.append('noteId', 'note-a');
+    form.append('queueCodex', 'false');
+    form.append('transcriptionText', 'Transient bootstrap test.');
+    form.append('awaitCompletion', 'true');
+    const rejection = await fetch(`${baseUrl}/api/voice-upload`, { method: 'POST', body: form });
+    assert.equal(rejection.status, 503);
+    const rejectionBody = await rejection.json() as { error: string; incidentId: string };
+    assert.equal(rejectionBody.error, 'task-state-bootstrap-incomplete');
+    assert.match(rejectionBody.incidentId, /^incident-/);
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; activeIncidentCount: number };
+    assert.equal(health.status, 'ready');
+    assert.equal(health.activeIncidentCount, 0);
+    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ code: string; scope: string; status: string }> };
+    assert.ok(incidents.incidents.some((incident) => incident.code === 'task_state_bootstrap_incomplete' && incident.status === 'resolved'));
+    assert.ok(incidents.incidents.some((incident) => incident.scope.startsWith('project-task-write:') && incident.status === 'resolved'));
+  } finally {
+    server.close();
+    await once(server, 'close');
+    process.chdir(originalCwd);
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test('server close cancels project-owned Codex retry timers', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-codex-timer-cleanup-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
@@ -175,6 +291,40 @@ test('Codex background failure pauses only project Codex work and remains diagno
     assert.match(startBody.scope, /^background:codex-runtime:/);
     const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; message: string }> };
     assert.ok(incidents.incidents.some((incident) => incident.operation === 'injected-codex-background-work' && incident.message === 'injected Codex background failure'));
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('execution timeout settles as an execution-scoped diagnostic without pausing project Codex work', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-codex-execution-timeout-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    (runtime.onCodexBackgroundError as (event: Record<string, unknown>) => void)({
+      operation: 'codex-execution-timeout',
+      error: new Error('Codex execution exceeded 25ms.'),
+      context: { runId: 'run-a', executionId: 'execution-a' },
+    });
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; pausedBackgroundComponents: string[] };
+    assert.equal(health.status, 'ready');
+    assert.deepEqual(health.pausedBackgroundComponents, []);
+    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; scope: string; status: string }> };
+    const timeout = incidents.incidents.find((incident) => incident.operation === 'codex-execution-timeout');
+    assert.equal(timeout?.status, 'resolved');
+    assert.match(timeout?.scope ?? '', /^codex-execution:.*:execution-a$/);
   } finally {
     server.close();
     await once(server, 'close');

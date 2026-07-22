@@ -7,6 +7,7 @@ import { applyLedgerMutation } from '@backend/business/ledger/helper/apply-ledge
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import type { PipelineLedgerContext } from '../helper/codex-pipeline-runner.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { projectCardExecutionIntent } from '../helper/project-card-execution-intent.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -87,6 +88,12 @@ export async function createCodexPipelineStepCards(input: {
   input.source.codexQueuedRunId = firstSkill?.runId ?? '';
   input.source.codexActiveRunId = firstSkill?.runId ?? '';
   input.source.codexActiveExecutionId = firstSkill?.executionId ?? '';
+  if (input.context.ledgerId === 'tasks') projectCardExecutionIntent({
+    card: input.source,
+    intentId: input.run.id,
+    state: 'queued',
+    changedAt: input.run.createdAt,
+  });
   stripHydratedThreadNotes(input.context.ledger);
   await persistLedgerProjection({
     decisionOsRoot: input.decisionOsRoot,

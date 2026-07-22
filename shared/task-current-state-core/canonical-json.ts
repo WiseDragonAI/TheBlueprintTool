@@ -30,10 +30,14 @@ function assertJsonValue(value: unknown, seen = new Set<object>()): void {
 
 export function canonicalJson(value: unknown): string {
   assertJsonValue(value);
+  return encodeCanonicalJson(value);
+}
+
+function encodeCanonicalJson(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (Array.isArray(value)) return `[${value.map(encodeCanonicalJson).join(',')}]`;
   return `{${Object.entries(value as Record<string, unknown>)
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child)}`)
+    .map(([key, child]) => `${JSON.stringify(key)}:${encodeCanonicalJson(child)}`)
     .join(',')}}`;
 }

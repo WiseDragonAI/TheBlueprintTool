@@ -26,6 +26,9 @@ import { readLedgerProjection } from '@backend/business/task-state/helper/read-l
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-process.js';
+import { projectCardExecutionIntent } from '../helper/project-card-execution-intent.js';
+import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
+import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import {
   attachCodexRuntimeChild as attachRuntimeRunChild,
   codexRuntimeRuns as runtimeRuns,
@@ -55,6 +58,10 @@ function workspaceRootForDecisionOsRoot(decisionOsRoot: string): string {
 
 function optionalText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function reportBackground(runtime: AnyRecord, operation: string, error: unknown, context: AnyRecord): void {
+  if (typeof runtime.onCodexBackgroundError === 'function') runtime.onCodexBackgroundError({ operation, error, context });
 }
 
 function appendRunStatus(filePath: string, status: ProcessStatus, detail: string): void {
@@ -212,12 +219,40 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const command = newSession
     ? resolveCodexCommand({ workspaceRoot, runtime, codexModel, codexEffort })
     : resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel, codexEffort });
+  const executionCoordinator = codexExecutionCoordinator(runtime);
+  let canonicalRecord = executionCoordinator?.store.find(executionId) ?? null;
   if (card && queueDispatch) {
+    if (executionCoordinator) {
+      try {
+        if (!canonicalRecord) canonicalRecord = await executionCoordinator.admit({
+          executionId,
+          sessionId: runId,
+          projectId: String(runtime.projectId ?? ''),
+          ledgerId,
+          taskId: cardId,
+          ownerCardId: cardId,
+          kind: 'continuation',
+        });
+        if (canonicalRecord.phase === 'preparing') canonicalRecord = await executionCoordinator.enqueue(executionId);
+        if (canonicalRecord.phase === 'queued') canonicalRecord = await executionCoordinator.claim(executionId);
+      } catch (error) {
+        return fail(503, error instanceof Error ? error.message : String(error), { code: String((error as { code?: unknown })?.code ?? ''), retryable: true, executionId });
+      }
+    }
     card.codexActiveRunId = runId;
     card.codexRunModel = command.model;
     card.codexRunEffort = command.effort;
+    if (ledgerId === 'tasks') {
+      if (executionCoordinator && canonicalRecord) card.executionIntent = executionCoordinator.intent(canonicalRecord);
+      else projectCardExecutionIntent({ card, intentId: runId, state: 'running' });
+    }
     stripHydratedThreadNotes(ledger);
-    await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'queue-codex-continuation', cardIds: [cardId] } });
+    try {
+      await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'queue-codex-continuation', cardIds: [cardId] } });
+    } catch (error) {
+      if (isTaskStateBootstrapGate(error)) return fail(503, 'Task-state projection is waiting for relay convergence.', { code: 'codex_execution_projection_pending', retryable: true, executionId });
+      throw error;
+    }
   }
   const prompt = buildCardSkillContinuePrompt({
     messages,
@@ -244,6 +279,23 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   if (!queueDispatch) {
     const createdAt = new Date().toISOString();
     const itemId = `codex-continuation-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    if (executionCoordinator) {
+      try {
+        if (!canonicalRecord) canonicalRecord = await executionCoordinator.admit({
+            executionId,
+            sessionId: runId,
+            projectId: String(runtime.projectId ?? ''),
+            ledgerId,
+            taskId: cardId,
+            ownerCardId: cardId,
+            kind: 'continuation',
+            requestedAt: createdAt,
+          });
+        if (canonicalRecord.phase === 'preparing') canonicalRecord = await executionCoordinator.enqueue(executionId);
+      } catch (error) {
+        return fail(503, error instanceof Error ? error.message : String(error), { code: String((error as { code?: unknown })?.code ?? ''), retryable: true, executionId });
+      }
+    }
     const admitted = enqueueCodexContinuation({
       decisionOsRoot,
       id: itemId,
@@ -256,11 +308,18 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       card.codexActiveExecutionId = executionId;
       card.codexRunModel = command.model;
       card.codexRunEffort = command.effort;
+      if (ledgerId === 'tasks') {
+        if (executionCoordinator && canonicalRecord) card.executionIntent = executionCoordinator.intent(canonicalRecord);
+        else projectCardExecutionIntent({ card, intentId: runId, state: 'queued', changedAt: admitted.createdAt });
+      }
       stripHydratedThreadNotes(ledger);
       try {
         await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'admit-codex-continuation', cardIds: [cardId] } });
       } catch (error) {
         if (admitted.id === itemId) removeCodexProcessQueueItem(decisionOsRoot, itemId);
+        if (executionCoordinator && canonicalRecord && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(canonicalRecord.phase)) {
+          await executionCoordinator.cancel(executionId, 'Codex continuation admission did not complete.').catch(() => undefined);
+        }
         throw error;
       }
     }
@@ -318,14 +377,24 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     startLine: eventStartLine,
     metadata: { sourceCardTitle: String(card?.title ?? cardId), codexModel: command.model, codexEffort: command.effort },
     onSpawn: (child, continuedAt) => {
-      if (queueItemId) recordCodexProcessQueueItemProcess({ decisionOsRoot, id: queueItemId, processId: child.pid ?? 0, stdoutFile, stderrFile });
+      const persistedProcess = queueItemId
+        ? recordCodexProcessQueueItemProcess({ decisionOsRoot, id: queueItemId, processId: child.pid ?? 0, stdoutFile, stderrFile })
+        : null;
       Object.assign(run, { pid: child.pid ?? 0, startedAt: continuedAt, continuedAt });
       updateRuntimeRun(runtime, runId, run);
       attachRuntimeRunChild(runtime, runId, child);
+      if (executionCoordinator) void executionCoordinator.spawned(executionId, {
+        processId: child.pid ?? null,
+        processStartTime: persistedProcess?.processStartTime || null,
+        stdoutFile,
+        stderrFile,
+      }).catch((error: unknown) => reportBackground(runtime, 'project-canonical-continuation-spawn', error, { runId, executionId }));
       logCodexContinueDebug('spawned', { traceId, ledgerId, cardId, runId, newSession, pid: child.pid ?? 0, continuedAt, continuedMessageCount: messages.length });
     },
     onTurnStarted: (_event, observedAt) => {
       if (updateRuntimeExecution(runtime, runId, executionId, { turnStartedAt: observedAt })) {
+        if (executionCoordinator) void executionCoordinator.heartbeat(executionId)
+          .catch((error: unknown) => reportBackground(runtime, 'publish-canonical-continuation-heartbeat', error, { runId, executionId }));
         notifyRuntimeCallback(runtime.onCodexTurnStarted, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status: 'running', startedAt: observedAt });
       }
     },
@@ -338,6 +407,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
         if (!ownsExecution) return;
         appendRunStatus(outputFile, 'failed', `${newSession ? 'new session' : 'resume'} failed: ${settlement.error.message}`);
         appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status: 'failed' }), 'utf8');
+        if (executionCoordinator) await executionCoordinator.settle(executionId, { phase: 'failed', error: { code: 'codex_continuation_start_failed', message: settlement.error.message }, result: { status: 'failed', summary: settlement.error.message } });
         try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' }); }
         catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
         if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
@@ -356,6 +426,11 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       appendRunStatus(outputFile, status, detail);
       if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
+      if (executionCoordinator) await executionCoordinator.settle(executionId, {
+        phase: status === 'complete' ? 'succeeded' : status,
+        result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
+        error: status === 'failed' ? { code: 'codex_continuation_failed', message: detail } : null,
+      });
       try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' }); }
       catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);

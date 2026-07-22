@@ -28,7 +28,7 @@ export type LedgerMutation = {
   geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
   viewport?: { x?: number; y?: number; scale?: number };
   region?: { id?: string; kind?: string; label?: string; color?: string };
-  note?: { id?: string; threadId?: string; body?: string; role?: 'operator' | 'agent'; voiceFileRef?: string; reviewContext?: Record<string, string>; status?: string; transcriptionStartedAt?: string; uploadReceivedAt?: string; audioPersistedAt?: string; acceptedAt?: string; providerStartedAt?: string; providerSettledAt?: string; completedAt?: string; revision?: number; source?: string; error?: string; codexQueueStatus?: string; codexQueueRequestedAt?: string; codexQueueRunId?: string; codexQueueError?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
+  note?: { id?: string; threadId?: string; body?: string; role?: 'operator' | 'agent'; voiceFileRef?: string; reviewContext?: Record<string, string>; status?: string; transcriptionStartedAt?: string; uploadReceivedAt?: string; audioPersistedAt?: string; acceptedAt?: string; providerStartedAt?: string; providerSettledAt?: string; completedAt?: string; revision?: number; source?: string; error?: string; codexQueueStatus?: string; codexQueueRequestedAt?: string; codexQueueRunId?: string; codexQueueExecutionId?: string; codexQueueError?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
   selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
   pasteSuffix?: string;
   executionIntent?: { id?: string; state?: 'waiting' | 'queued' | 'running' | 'terminal' | 'failed'; launchMode?: 'run' | 'pipeline'; error?: string; updatedAt?: string };
@@ -121,12 +121,13 @@ export function applyLedgerMutation(input: {
     codexQueueStatus: note?.codexQueueStatus ?? '',
     codexQueueRequestedAt: note?.codexQueueRequestedAt ?? '',
     codexQueueRunId: note?.codexQueueRunId ?? '',
+    codexQueueExecutionId: note?.codexQueueExecutionId ?? '',
     codexQueueError: note?.codexQueueError ?? '',
     reviewContext: note?.reviewContext ?? undefined
   });
 
   const patchVoiceMetadata = (target: Record<string, unknown>, note: Record<string, unknown> | undefined, options: { overwrite: boolean }): void => {
-    for (const key of ['voiceFileRef', 'reviewContext', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt', 'error', 'codexQueueStatus', 'codexQueueRequestedAt', 'codexQueueRunId', 'codexQueueError']) {
+    for (const key of ['voiceFileRef', 'reviewContext', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt', 'error', 'codexQueueStatus', 'codexQueueRequestedAt', 'codexQueueRunId', 'codexQueueExecutionId', 'codexQueueError']) {
       if ((typeof note?.[key] === 'string' || (key === 'reviewContext' && typeof note?.[key] === 'object')) && (options.overwrite || !target[key])) target[key] = note[key];
     }
     if (Number.isFinite(Number(note?.revision)) && (options.overwrite || !target.revision)) target.revision = Number(note?.revision);

@@ -28,6 +28,7 @@ import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/cod
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -183,11 +184,45 @@ export async function startPipelineRun(input: {
     // WHY: An untracked child process could not be resumed or cancelled safely.
     return { ok: false, statusCode: 500, error: 'Could not persist the pipeline run manifest.' };
   }
+  const executionCoordinator = codexExecutionCoordinator(input.runtime);
+  const firstStep = run.steps[0];
+  const firstSkill = firstStep?.skills[0];
+  if (executionCoordinator && firstStep && firstSkill) {
+    try {
+      let execution = executionCoordinator.store.find(firstSkill.executionId);
+      if (!execution) execution = await executionCoordinator.admit({
+        executionId: firstSkill.executionId,
+        sessionId: firstSkill.runId,
+        projectId: String(input.runtime.projectId ?? ''),
+        ledgerId: run.ledgerId,
+        taskId: run.sourceCardId,
+        ownerCardId: firstStep.outputCardId,
+        kind: 'pipeline-skill',
+        pipelineRunId: run.id,
+        pipelineStepId: firstStep.id,
+        pipelineSkillRunId: firstSkill.runId,
+        requestedAt: run.createdAt,
+      });
+      if (execution.phase === 'preparing') await executionCoordinator.enqueue(firstSkill.executionId);
+    } catch (error) {
+      const current = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
+      writeCodexPipelineStore({
+        decisionOsRoot: input.decisionOsRoot,
+        availableSkillNames,
+        store: { ...current.store, runs: current.store.runs.filter((entry) => entry.id !== run.id) },
+      });
+      const execution = executionCoordinator.store.find(firstSkill.executionId);
+      if (execution && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(execution.phase)) {
+        await executionCoordinator.cancel(firstSkill.executionId, 'Pipeline admission did not complete.').catch(() => undefined);
+      }
+      await rollbackPipelineCards({ decisionOsRoot: input.decisionOsRoot, context, ledgerBefore, sourceCardId: input.sourceCardId, outputCardIds: run.steps.map((step) => step.outputCardId) });
+      return { ok: false, statusCode: 503, code: String((error as { code?: unknown })?.code ?? ''), retryable: true, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
   // WHAT: Retain and invoke the request-scoped ledger callback when one is supplied.
   // WHY: Pipeline runner transitions must publish through the same server event boundary as startup.
   if (typeof input.onLedgerChange === 'function') input.runtime.onPipelineLedgerChange = input.onLedgerChange;
   if (typeof input.onLedgerChange === 'function') {
-    const firstSkill = run.steps[0]?.skills[0];
     (input.onLedgerChange as (event: AnyRecord) => void)({
       reason: 'pipeline-enqueued',
       ledgerId: input.ledgerId,

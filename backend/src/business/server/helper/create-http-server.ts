@@ -49,9 +49,12 @@ import { restartCodexPipelineRunController } from '../../codex/controller/restar
 import { resumeCodexPipelineRuns, stopAdoptedPipelineProcessMonitors } from '../../codex/helper/resume-codex-pipeline-runs.js';
 import { recoverCodexProcessQueue, stopAdoptedCodexProcessMonitors } from '../../codex/helper/codex-process-queue.js';
 import { reconcileCodexExecutionOwnership } from '../../codex/helper/reconcile-codex-execution-ownership.js';
+import { CodexExecutionProjectionPendingError, createCodexExecutionCoordinator } from '../../codex/helper/codex-execution-coordinator.js';
+import { codexExecutionCoordinator, installCodexExecutionCoordinator } from '../../codex/helper/codex-execution-runtime.js';
+import { migrateLegacyCodexExecutions } from '../../codex/helper/migrate-legacy-codex-executions.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
 import { createCodexCapacitySlots, type CodexSlotAcquireOptions } from '../../codex/helper/codex-capacity-slots.js';
-import { stopCodexRuntimeTimers } from '../../codex/helper/codex-runtime-run-store.js';
+import { scheduleCodexRuntimeTimer, stopCodexRuntimeTimers } from '../../codex/helper/codex-runtime-run-store.js';
 import { resolveCatalogProject, tasksLedgerForProject, type DecisionOsProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
@@ -68,19 +71,24 @@ import { createFederationContentReplicaStore } from '../../federation/helper/fed
 import { createFederationContentScheduler } from '../../federation/helper/federation-content-scheduler.js';
 import { readTaskContentOnDemand } from '../../federation/helper/read-task-content-on-demand.js';
 import { createProjectTaskState, type ProjectTaskState } from '../../task-state/helper/project-task-state.js';
+import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import type { TaskProjectionCommand } from '../../task-state/helper/task-mutation-command.js';
 import { createRuntimeIncidentLedger, RuntimeScopePausedError, type RuntimeIncident } from './runtime-incident-ledger.js';
+import { createRuntimeIncidentReviewScheduler } from './create-runtime-incident-review-scheduler.js';
+import { runtimeIncidentReviewProjectId } from './synchronize-runtime-incident-review-task.js';
 import {
   exportFederatedPipelineSnapshot,
-  exportFederatedSkillManifest,
-  exportFederatedSkillSnapshot,
+  createFederatedSkillExportIndex,
   importFederatedPipelineSnapshot,
   importFederatedSkillSnapshot,
   type FederatedPipelineSnapshot,
   type FederatedSkillManifest,
   type FederatedSkillSnapshot,
+  type FederatedSkillExportIndex,
 } from '../../federation/helper/federated-library-cache.js';
+import type { FederationInternalResponse } from '../../federation/helper/federation-node-connector.js';
+import type { CodexExecutionObservation } from '../../../../../shared/schemas/codex-execution-types.js';
 import { federatedControlRoomProjection } from './federated-control-room-projection.js';
 import { federatedProjectCatalog } from './federated-project-catalog.js';
 import { ensureServerPipelines, migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
@@ -100,6 +108,31 @@ type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
 
 const federationNodeMessageTimeoutMs = 30 * 60_000;
+const federatedLibraryRequestTimeoutMs = 60_000;
+const federatedLibraryRetryDelaysMs = [1_000, 3_000] as const;
+const federatedLibraryRecoveryDelayMs = 30_000;
+
+function isExecutionScopedCodexFailure(operation: string): boolean {
+  return operation === 'codex-execution-timeout'
+    || operation === 'adopted-codex-execution-timeout'
+    || operation === 'adopted-pipeline-execution-timeout';
+}
+
+class FederatedLibraryRequestError extends Error {
+  constructor(readonly detail: {
+    code: string;
+    nodeId: string;
+    nodeLabel: string;
+    path: string;
+    requestId: string;
+    status: number;
+    elapsedMs: number;
+    deadlineMs: number;
+    responseBytes: number;
+  }, message: string) {
+    super(message);
+  }
+}
 
 const decisionOsAssetPrefix = '/.decision-os/';
 const ledgerRevisionHeader = 'x-decision-os-ledger-revision';
@@ -252,16 +285,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   let federationContentScheduler: ReturnType<typeof createFederationContentScheduler> | null = null;
   const projectTaskStates = new Map<string, ProjectTaskState>();
   const federatedTaskStores = new Map<string, TaskCurrentStateStore>();
+  const federatedExecutionObservations = new Map<string, CodexExecutionObservation>();
   const pausedTaskProjects = new Map<string, RuntimeIncident>();
   const pausedFederatedTaskProjects = new Map<string, RuntimeIncident>();
   const pausedBackgroundComponents = new Set<string>();
   const pausedProjectWatchers = new Set<string>();
   const pausedProjectRuntimes = new Set<string>();
+  let serverClosing = false;
   let globalRuntimeIncident: RuntimeIncident | null = null;
   let projectSyncController: ReturnType<typeof createProjectSyncController> | null = null;
   let resumeProjectSyncRuntime: (() => void) | null = null;
 
   const disposeProjectContext = (context: ProjectContext): void => {
+    codexExecutionCoordinator(context.runtime)?.dispose();
     stopAdoptedCodexProcessMonitors(context.runtime);
     stopAdoptedPipelineProcessMonitors(context.runtime);
     stopCodexRuntimeTimers(context.runtime);
@@ -270,6 +306,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   };
 
   for (const incident of incidentLedger.active()) {
+    // WHAT: Reclassify diagnostics written before bootstrap gates became non-pausing.
+    // WHY: A restart after upgrading must restore ready health once state convergence is complete.
+    if (isTaskStateBootstrapGate(incident.code)
+      && (incident.scope.startsWith('http-request:')
+        || incident.scope.startsWith('project-task-write:')
+        || incident.scope.startsWith('background:codex-startup-'))) {
+      incidentLedger.resolveScope(incident.scope, 'Transient task-state bootstrap gates do not pause runtime scopes.');
+      continue;
+    }
+    // WHAT: Retain pre-upgrade transient incidents as diagnostics without restoring their obsolete permanent pauses.
+    // WHY: Successful relay reconciliation and library synchronization own resolution after startup.
+    if (isTaskStateBootstrapGate(incident.code) && incident.scope.startsWith('background:codex-runtime:')) continue;
+    if (incident.scope.startsWith('background:codex-runtime:') && isExecutionScopedCodexFailure(incident.operation)) continue;
+    if (incident.scope === 'background:federated-library-sync'
+      && (incident.code === 'federation_request_timeout' || /HTTP 504|request.+timeout/i.test(incident.message))) continue;
     if (incident.scope.startsWith('project-task-state:')) pausedTaskProjects.set(incident.scope.slice('project-task-state:'.length), incident);
     if (incident.scope.startsWith('federated-task-state:')) pausedFederatedTaskProjects.set(incident.scope.slice('federated-task-state:'.length), incident);
     if (incident.scope.startsWith('background:')) pausedBackgroundComponents.add(incident.scope.slice('background:'.length));
@@ -384,14 +435,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
 
   const recordProjectBackgroundFailure = (project: DecisionOsProject, error: unknown, operation: string): void => {
     if (error instanceof RuntimeScopePausedError) return;
-    const message = error instanceof Error ? error.message : String(error);
-    if (message === 'task_state_bootstrap_incomplete') {
-      recordIncident({
-        severity: 'warning',
+    // WHAT: Retain an expected convergence rejection as a resolved stopped operation.
+    // WHY: The watcher changed no task state, so this condition must not degrade server health.
+    if (isTaskStateBootstrapGate(error)) {
+      recordStoppedOperation({
         scope: `project-task-write:${project.id}`,
         component: 'task-current-state',
         operation,
-        code: 'task_state_bootstrap_incomplete',
         error,
         context: { projectId: project.id, projectName: project.name },
       });
@@ -525,12 +575,52 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const codexRuntimeComponent = `codex-runtime:${projectId}`;
     projectRuntime.codexRuntimePaused = pausedBackgroundComponents.has(codexRuntimeComponent);
     projectRuntime.onCodexBackgroundError = (event: AnyRecord): void => {
+      const reported = event.error;
+      const error = reported instanceof Error ? reported : new Error(String(reported ?? 'Unknown Codex background failure.'));
+      const operation = String(event.operation ?? 'project-canonical-codex-execution');
+      const context = event.context && typeof event.context === 'object' ? event.context as AnyRecord : {};
+      if (isExecutionScopedCodexFailure(operation)) {
+        const executionIdentity = String(context.executionId ?? context.runId ?? 'unknown');
+        recordStoppedOperation({
+          scope: `codex-execution:${projectId}:${executionIdentity}`,
+          component: 'codex-execution',
+          operation,
+          error,
+          context: { projectId, decisionOsRoot: activeDecisionOsRoot, ...context },
+        });
+        return;
+      }
+      if (isTaskStateBootstrapGate(reported)
+        || (reported instanceof CodexExecutionProjectionPendingError && isTaskStateBootstrapGate(reported.cause))) {
+        projectRuntime.taskStatePersistenceError = error.message;
+        recordStoppedOperation({
+          scope: `project-task-write:${projectId}`,
+          component: codexRuntimeComponent,
+          operation,
+          error,
+          context: {
+            projectId,
+            decisionOsRoot: activeDecisionOsRoot,
+            ...context,
+          },
+        });
+        const executionId = reported instanceof CodexExecutionProjectionPendingError ? reported.record.executionId : String((event.context as AnyRecord | undefined)?.executionId ?? '');
+        if (executionId) scheduleCodexRuntimeTimer(projectRuntime, `canonical-projection:${executionId}`, 1_000, 'retry-canonical-codex-projection', () => {
+          void codexExecutionCoordinator(projectRuntime)?.reproject(executionId)
+            .then(() => { delete projectRuntime.taskStatePersistenceError; })
+            .catch((retryError: unknown) => (projectRuntime.onCodexBackgroundError as (retry: AnyRecord) => void)({
+              operation: 'retry-canonical-codex-projection',
+              error: retryError,
+              context: { projectId, executionId },
+            }));
+        }, { projectId, executionId });
+        return;
+      }
       projectRuntime.codexRuntimePaused = true;
-      const error = event.error instanceof Error ? event.error : new Error(String(event.error ?? 'Unknown Codex background failure.'));
-      recordBackgroundFailure(codexRuntimeComponent, String(event.operation ?? 'codex-background-operation'), error, {
+      recordBackgroundFailure(codexRuntimeComponent, operation, error, {
         projectId,
         decisionOsRoot: activeDecisionOsRoot,
-        ...(event.context && typeof event.context === 'object' ? event.context as AnyRecord : {}),
+        ...context,
       });
     };
     if (activeDecisionOsRoot !== masterDecisionOsRoot) {
@@ -583,10 +673,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (String(scopedEvent.ledgerId) === 'tasks') {
         const taskId = String(scopedEvent.cardId ?? (String(scopedEvent.threadId ?? '').startsWith('thread-') ? String(scopedEvent.threadId).slice('thread-'.length) : ''));
         const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
-        if (project && taskId) void Promise.resolve()
+        if (!serverClosing && project && taskId) void Promise.resolve()
           .then(() => taskStateForProject(project).recordContentContribution(taskId, String(scopedEvent.contentFile ?? '')))
           .then((delta) => controlRoomProjectionStore?.invalidate(projectId, delta.entities))
-          .catch((error: unknown) => recordProjectBackgroundFailure(project, error, 'capture-watched-task-content'));
+          .catch((error: unknown) => {
+            if (!serverClosing) recordProjectBackgroundFailure(project, error, 'capture-watched-task-content');
+          });
       }
       revisions.advance(String(scopedEvent.ledgerId));
       broadcast(`event: card-content-change\ndata: ${JSON.stringify({ ...scopedEvent, projectId })}\n\n`);
@@ -601,6 +693,72 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId })}\n\n`);
       federation?.publishContentChange();
     };
+    if (projectId) {
+      const project = projectCatalogStore.projects().find((entry) => entry.id === projectId);
+      if (!project) throw new Error(`Canonical Codex execution runtime has no project ${projectId}.`);
+      const nodeId = String((projectRuntime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId
+        ?? (runtime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId
+        ?? 'local').trim() || 'local';
+      const taskProjection = (): ProjectTaskState => taskStateForProject(project);
+      if (!pausedTaskProjects.has(projectId)) {
+        try {
+          migrateLegacyCodexExecutions({
+            decisionOsRoot: activeDecisionOsRoot,
+            projectId,
+            nodeId,
+            readLease: ({ ledgerId, cardId }) => {
+              if (ledgerId !== 'tasks') return null;
+              const ledger = taskProjection().projection().ledger;
+              const cards = Array.isArray(ledger.cards) ? ledger.cards as AnyRecord[] : [];
+              const card = cards.find((entry) => String(entry.id ?? '') === cardId);
+              const runId = String(card?.codexActiveRunId ?? '').trim();
+              const executionId = String(card?.codexActiveExecutionId ?? '').trim();
+              return runId && executionId ? { runId, executionId } : null;
+            },
+          });
+        } catch (error) {
+          (projectRuntime.onCodexBackgroundError as (event: AnyRecord) => void)({
+            operation: 'recover-durable-codex-process-queue',
+            error,
+            context: { projectId, decisionOsRoot: activeDecisionOsRoot, migration: 'canonical-execution-store' },
+          });
+        }
+      }
+      const executionCoordinator = createCodexExecutionCoordinator({
+        decisionOsRoot: activeDecisionOsRoot,
+        projectId,
+        nodeId,
+        project: async ({ record, intent }) => {
+          if (record.ledgerId !== 'tasks') return;
+          const delta = await taskProjection().projectExecutionIntent(record.taskId, intent);
+          controlRoomProjectionStore?.invalidate(projectId, delta.entities);
+        },
+        publish: ({ record, intent, observation, execution }) => {
+          federation?.publishExecutionObservation(projectId, { executionId: record.executionId, observation });
+          publishLedger({
+            reason: 'codex-execution-transition',
+            ledgerId: record.ledgerId,
+            cardId: record.taskId,
+            outputCardId: record.ownerCardId,
+            runId: record.sessionId,
+            executionId: record.executionId,
+            phase: record.phase,
+            revision: record.revision,
+            intent,
+            observation,
+            execution,
+          });
+        },
+        onBackgroundError: (error, context) => (projectRuntime.onCodexBackgroundError as (event: AnyRecord) => void)({
+          operation: context.operation,
+          error,
+          context: { projectId, executionId: context.executionId },
+        }),
+        assertAvailable: () => assertCodexRuntimeAvailable(projectRuntime),
+      });
+      installCodexExecutionCoordinator(projectRuntime, executionCoordinator);
+      startupProjectTasks.push(Promise.all(executionCoordinator.store.active().map((record) => executionCoordinator.reproject(record.executionId))).then(() => undefined));
+    }
     projectRuntime.onPipelineLedgerChange = publishLedger;
     projectRuntime.scheduleCodexProcesses = scheduleGlobalCodexProcesses;
     projectRuntime.onCodexRunAccepted = (event: AnyRecord): void => {
@@ -664,8 +822,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     });
     const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
+    let processQueueRecovery = Promise.resolve();
     try {
-      recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
+      if (projectRuntime.codexRuntimePaused !== true) processQueueRecovery = recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
     } catch (error) {
       (projectRuntime.onCodexBackgroundError as (event: AnyRecord) => void)({
         operation: 'recover-durable-codex-process-queue',
@@ -674,13 +833,54 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
     }
     const startupComponent = `codex-startup-${projectId}`;
-    const startupTask = pausedTaskProjects.has(projectId) || pausedBackgroundComponents.has(startupComponent) || projectRuntime.codexRuntimePaused === true ? Promise.resolve() : reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).then(async (ownershipReconciliation) => {
-      if (ownershipReconciliation.ledgersChanged > 0) console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
-      await resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
-    }).catch((error: unknown) => {
-      projectRuntime.taskStatePersistenceError = error instanceof Error ? error.message : String(error);
-      recordBackgroundFailure(startupComponent, 'reconcile-codex-startup-state', error, { projectId, decisionOsRoot: activeDecisionOsRoot });
-    });
+    const reconcileCodexStartup = async (recordBootstrapGate = true): Promise<void> => {
+      try {
+        const ownershipReconciliation = await reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
+        if (ownershipReconciliation.ledgersChanged > 0) {
+          controlRoomProjectionStore?.invalidate(projectId);
+          console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
+        }
+        await resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
+        const codexScope = `background:${codexRuntimeComponent}`;
+        const retainedRecoverableIncidents = incidentLedger.active().filter((incident) => incident.scope === codexScope);
+        if (retainedRecoverableIncidents.length > 0 && retainedRecoverableIncidents.every((incident) => (
+          isTaskStateBootstrapGate(incident.code) || isExecutionScopedCodexFailure(incident.operation)
+        ))) {
+          incidentLedger.resolveScope(codexScope, 'Relay-root equality and Codex ownership reconciliation completed; execution-scoped failures no longer pause the project runtime.');
+          pausedBackgroundComponents.delete(codexRuntimeComponent);
+          projectRuntime.codexRuntimePaused = false;
+        }
+        delete projectRuntime.taskStatePersistenceError;
+      } catch (error) {
+        projectRuntime.taskStatePersistenceError = error instanceof Error ? error.message : String(error);
+        // WHAT: Defer write-required Codex recovery until the local task root matches the relay.
+        // WHY: Federation starts only after the HTTP listener opens, so this startup gate is expected and retryable.
+        if (isTaskStateBootstrapGate(error)) {
+          if (recordBootstrapGate) recordStoppedOperation({
+            scope: `project-task-write:${projectId}`,
+            component: startupComponent,
+            operation: 'reconcile-codex-startup-state',
+            error,
+            context: { projectId, decisionOsRoot: activeDecisionOsRoot },
+          });
+          scheduleCodexRuntimeTimer(
+            projectRuntime,
+            'task-state-bootstrap-recovery',
+            1_000,
+            'retry-codex-startup-state',
+            () => reconcileCodexStartup(false),
+            { projectId, decisionOsRoot: activeDecisionOsRoot },
+          );
+          return;
+        }
+        recordBackgroundFailure(startupComponent, 'reconcile-codex-startup-state', error, { projectId, decisionOsRoot: activeDecisionOsRoot });
+      }
+    };
+    const startupTask = processQueueRecovery.then(() => (
+      pausedTaskProjects.has(projectId) || pausedBackgroundComponents.has(startupComponent) || projectRuntime.codexRuntimePaused === true
+        ? undefined
+        : reconcileCodexStartup()
+    ));
     startupProjectTasks.push(startupTask);
     return context;
   };
@@ -714,6 +914,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const projectCatalog = () => projectCatalogStore.projects();
   let federationServerPort = port;
   let federationSyncRequested = false;
+  let federationSyncForceRefresh = false;
   let federationSyncPromise: Promise<void> | null = null;
   const localWorkspaceRoots = (): string[] => [
     masterRoot,
@@ -724,7 +925,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     ...projectCatalog().filter((project) => project.available).map((project) => project.decisionOsRoot),
   ];
   let availableServerSkillNames: string[] = [];
+  let federatedSkillExportIndex: FederatedSkillExportIndex | null = null;
+  const invalidateFederatedSkillExportIndex = (): void => { federatedSkillExportIndex = null; };
+  const readFederatedSkillExportIndex = (): FederatedSkillExportIndex => {
+    federatedSkillExportIndex ??= createFederatedSkillExportIndex(masterRoot, localWorkspaceRoots());
+    return federatedSkillExportIndex;
+  };
   const initializePipelineCatalog = (): void => {
+    invalidateFederatedSkillExportIndex();
     availableServerSkillNames = readCodexSkillCatalog({ decisionOsRoot: masterDecisionOsRoot, runtime }).skills.map((skill) => skill.name);
     ensureServerPipelines({ serverDecisionOsRoot: masterDecisionOsRoot, availableSkillNames: availableServerSkillNames });
     migrateCodexSkillMetadataOwner({
@@ -752,49 +960,149 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       ? { ...result, skill: applyOwnedSkillMetadata(skill as AnyRecord & { name: string; favorite?: boolean; tags?: string[] }) }
       : result;
   };
-  const parseFederationResponse = <T>(result: { status: number; body: Buffer }, label: string): T => {
-    if (result.status !== 200) throw new Error(`${label} returned HTTP ${result.status}.`);
-    try { return JSON.parse(result.body.toString('utf8')) as T; }
-    catch { throw new Error(`${label} returned invalid JSON.`); }
+  let federationSyncRetryTimer: NodeJS.Timeout | null = null;
+  const parseFederationResponse = <T>(input: {
+    result: FederationInternalResponse;
+    nodeId: string;
+    nodeLabel: string;
+    path: string;
+    startedAt: number;
+  }): T => {
+    const elapsedMs = Date.now() - input.startedAt;
+    let payload: AnyRecord = {};
+    try { payload = JSON.parse(input.result.body.toString('utf8')) as AnyRecord; }
+    catch { /* The typed error below retains response size and transport status. */ }
+    if (input.result.status !== 200) {
+      const code = String(payload.error ?? `federation_http_${input.result.status}`);
+      throw new FederatedLibraryRequestError({
+        code,
+        nodeId: input.nodeId,
+        nodeLabel: input.nodeLabel,
+        path: input.path,
+        requestId: input.result.requestId,
+        status: input.result.status,
+        elapsedMs,
+        deadlineMs: federatedLibraryRequestTimeoutMs,
+        responseBytes: input.result.body.byteLength,
+      }, `${input.nodeLabel} ${input.path} returned HTTP ${input.result.status}.`);
+    }
+    try { return JSON.parse(input.result.body.toString('utf8')) as T; }
+    catch {
+      throw new FederatedLibraryRequestError({
+        code: 'federation_invalid_json',
+        nodeId: input.nodeId,
+        nodeLabel: input.nodeLabel,
+        path: input.path,
+        requestId: input.result.requestId,
+        status: input.result.status,
+        elapsedMs,
+        deadlineMs: federatedLibraryRequestTimeoutMs,
+        responseBytes: input.result.body.byteLength,
+      }, `${input.nodeLabel} ${input.path} returned invalid JSON.`);
+    }
   };
-  const synchronizeFederatedLibraries = (): Promise<void> => {
+  const requestFederatedLibrary = async <T>(peer: { nodeId: string; nodeLabel: string }, path: string): Promise<T> => {
+    const startedAt = Date.now();
+    return parseFederationResponse<T>({
+      result: await federation!.request(peer.nodeId, path, { timeoutMs: federatedLibraryRequestTimeoutMs }),
+      nodeId: peer.nodeId,
+      nodeLabel: peer.nodeLabel,
+      path,
+      startedAt,
+    });
+  };
+  const wait = (delayMs: number): Promise<void> => new Promise((resolveWait) => {
+    const timer = setTimeout(resolveWait, delayMs);
+    timer.unref?.();
+  });
+  const performFederatedLibrarySynchronization = async (forceRefresh: boolean): Promise<number> => {
+    const peers = federation?.nodes().filter((node) => node.online) ?? [];
+    if (peers.length === 0) return 0;
+    // WHAT: Complete skill materialization is the first synchronization phase.
+    // WHY: Pipeline validation and every Process Card consumer require local skill packages.
+    for (const peer of peers) {
+      const manifestPath = forceRefresh ? '/api/federation/skills-manifest?refresh=1' : '/api/federation/skills-manifest';
+      const manifest = await requestFederatedLibrary<FederatedSkillManifest>(peer, manifestPath);
+      const local = new Map(readFederatedSkillExportIndex().manifest.skills.map((skill) => [skill.name, skill.revision]));
+      for (const skill of manifest.skills) {
+        if (local.get(skill.name) === skill.revision) continue;
+        const path = `/api/federation/skills-snapshot?name=${encodeURIComponent(skill.name)}`;
+        const snapshot = await requestFederatedLibrary<FederatedSkillSnapshot>(peer, path);
+        const imported = importFederatedSkillSnapshot({ serverRoot: masterRoot, snapshot });
+        if (imported.imported.length > 0) invalidateFederatedSkillExportIndex();
+      }
+    }
+    // WHAT: Pipeline definitions synchronize only after every available skill package is local.
+    // WHY: The persisted pipeline catalog must normalize against the complete local skill set.
+    for (const peer of peers) {
+      const snapshot = await requestFederatedLibrary<FederatedPipelineSnapshot>(peer, '/api/federation/pipelines-snapshot');
+      importFederatedPipelineSnapshot({ decisionOsRoot: masterDecisionOsRoot, snapshot });
+    }
+    return peers.length;
+  };
+  const synchronizeFederatedLibraries = (forceRefresh = false): Promise<void> => {
     federationSyncRequested = true;
+    federationSyncForceRefresh ||= forceRefresh;
     if (federationSyncPromise) return federationSyncPromise;
+    if (federationSyncRetryTimer) {
+      clearTimeout(federationSyncRetryTimer);
+      federationSyncRetryTimer = null;
+    }
     const run = (async () => {
       do {
         federationSyncRequested = false;
-        const peers = federation?.nodes().filter((node) => node.online) ?? [];
-        // WHAT: Complete skill materialization is the first synchronization phase.
-        // WHY: Pipeline validation and every Process Card consumer require local skill packages.
-        for (const peer of peers) {
-          const manifest = parseFederationResponse<FederatedSkillManifest>(
-            await federation!.request(peer.nodeId, '/api/federation/skills-manifest'),
-            `${peer.nodeLabel} skill manifest`,
-          );
-          const local = new Map(exportFederatedSkillManifest(masterRoot, localWorkspaceRoots()).skills.map((skill) => [skill.name, skill.revision]));
-          for (const skill of manifest.skills) {
-            if (local.get(skill.name) === skill.revision) continue;
-            const snapshot = parseFederationResponse<FederatedSkillSnapshot>(
-              await federation!.request(peer.nodeId, `/api/federation/skills-snapshot?name=${encodeURIComponent(skill.name)}`),
-              `${peer.nodeLabel} skill ${skill.name}`,
-            );
-            importFederatedSkillSnapshot({ serverRoot: masterRoot, snapshot });
+        const forceRemoteRefresh = federationSyncForceRefresh;
+        federationSyncForceRefresh = false;
+        let synchronizedPeerCount = 0;
+        for (let attempt = 1; attempt <= federatedLibraryRetryDelaysMs.length + 1; attempt += 1) {
+          try {
+            synchronizedPeerCount = await performFederatedLibrarySynchronization(forceRemoteRefresh);
+            break;
+          } catch (error) {
+            if (!(error instanceof FederatedLibraryRequestError)) {
+              recordBackgroundFailure('federated-library-sync', 'synchronize-federated-libraries', error);
+              throw error;
+            }
+            runtime.federatedLibrarySyncStatus = { phase: 'retrying', attempt, ...error.detail, observedAt: new Date().toISOString() };
+            recordIncident({
+              severity: 'warning',
+              scope: 'background:federated-library-sync',
+              component: 'federated-library-sync',
+              operation: 'synchronize-federated-libraries',
+              code: 'federated_library_remote_unavailable',
+              error,
+              context: { ...error.detail, connectorCode: error.detail.code, attempt },
+            });
+            const retryDelay = federatedLibraryRetryDelaysMs[attempt - 1];
+            if (retryDelay !== undefined) {
+              await wait(retryDelay);
+              continue;
+            }
+            federationSyncRetryTimer = setTimeout(() => {
+              federationSyncRetryTimer = null;
+              if (!pausedBackgroundComponents.has('federated-library-sync')) void synchronizeFederatedLibraries().catch(() => undefined);
+            }, federatedLibraryRecoveryDelayMs);
+            federationSyncRetryTimer.unref?.();
+            return;
           }
         }
-        // WHAT: Pipeline definitions synchronize only after every available skill package is local.
-        // WHY: The persisted pipeline catalog must normalize against the complete local skill set.
-        for (const peer of peers) {
-          const snapshot = parseFederationResponse<FederatedPipelineSnapshot>(
-            await federation!.request(peer.nodeId, '/api/federation/pipelines-snapshot'),
-            `${peer.nodeLabel} pipeline snapshot`,
-          );
-          importFederatedPipelineSnapshot({ decisionOsRoot: masterDecisionOsRoot, snapshot });
+        if (synchronizedPeerCount === 0) {
+          runtime.federatedLibrarySyncStatus = { phase: 'waiting-for-peer', observedAt: new Date().toISOString() };
+          federationSyncRetryTimer = setTimeout(() => {
+            federationSyncRetryTimer = null;
+            if (!pausedBackgroundComponents.has('federated-library-sync')) void synchronizeFederatedLibraries().catch(() => undefined);
+          }, federatedLibraryRecoveryDelayMs);
+          federationSyncRetryTimer.unref?.();
+          return;
         }
+        runtime.federatedLibrarySyncStatus = { phase: 'synchronized', synchronizedPeerCount, observedAt: new Date().toISOString() };
+        incidentLedger.resolveScope('background:federated-library-sync', 'Complete skills-then-pipelines synchronization succeeded.');
+        pausedBackgroundComponents.delete('federated-library-sync');
       } while (federationSyncRequested);
     })().finally(() => {
       if (federationSyncPromise === run) federationSyncPromise = null;
       if (federationSyncRequested && !pausedBackgroundComponents.has('federated-library-sync')) void synchronizeFederatedLibraries()
-        .catch((error: unknown) => recordBackgroundFailure('federated-library-sync', 'repeat-synchronization', error));
+        .catch(() => undefined);
     });
     federationSyncPromise = run;
     Object.defineProperty(runtime, 'federatedLibrarySyncPromise', { value: run, writable: true, configurable: true, enumerable: false });
@@ -813,7 +1121,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       federationTaskStateReplicator?.reconcileRelay();
       for (const projectId of new Set(federation?.remoteProjects().map((project) => project.localProjectId) ?? [])) federationTaskStateReplicator?.reconcileProject('relay', projectId);
       if (!pausedBackgroundComponents.has('federated-library-sync')) void synchronizeFederatedLibraries()
-        .catch((error: unknown) => recordBackgroundFailure('federated-library-sync', 'catalog-change-synchronization', error));
+        .catch(() => undefined);
       projectSyncController?.resume();
     },
     onStateFrame: async (frame) => {
@@ -836,9 +1144,40 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
       }
     },
+    onExecutionObservation: (frame) => {
+      const executionId = String(frame.payload?.executionId ?? '').trim();
+      const observation = frame.payload?.observation;
+      const key = `${frame.projectId}\0${executionId}\0${frame.from}`;
+      const now = Date.now();
+      const observedAt = observation ? Date.parse(observation.observedAt) : Number.NaN;
+      const expiresAt = observation ? Date.parse(observation.expiresAt) : Number.NaN;
+      if (!executionId || !frame.projectId || !frame.from) return;
+      if (observation === null) federatedExecutionObservations.delete(key);
+      else if (observation
+        && observation.executionId === executionId
+        && observation.executorNodeId === frame.from
+        && (observation.phase === 'starting' || observation.phase === 'running')
+        && Number.isSafeInteger(observation.revision) && observation.revision >= 1
+        && Number.isFinite(observedAt) && observedAt <= now + 5_000
+        && Number.isFinite(expiresAt) && expiresAt > now && expiresAt <= now + 60_000
+        && expiresAt > observedAt && expiresAt - observedAt <= 60_000) {
+        federatedExecutionObservations.set(key, observation);
+      } else {
+        recordStoppedOperation({
+          scope: `federation-execution-observation:${frame.projectId}:${frame.from}`,
+          component: 'federation-execution-observation',
+          operation: 'validate-execution-observation',
+          error: new Error('invalid_federated_execution_observation'),
+          context: { projectId: frame.projectId, nodeId: frame.from, executionId },
+        });
+      }
+      controlRoomProjectionStore?.invalidate(frame.projectId);
+      for (const client of globalContentEventClients) client.write(`event: codex-execution-change\ndata: ${JSON.stringify({ remote: true, projectId: frame.projectId, nodeId: frame.from, executionId })}\n\n`);
+    },
     onStateConnected: () => {
       federationTaskStateReplicator?.reconcileRelay();
       for (const projectId of new Set(federation?.remoteProjects().map((project) => project.localProjectId) ?? [])) federationTaskStateReplicator?.reconcileProject('relay', projectId);
+      if (!pausedBackgroundComponents.has('federated-library-sync')) void synchronizeFederatedLibraries().catch(() => undefined);
     },
     onError: (error, context) => {
       recordStoppedOperation({
@@ -930,6 +1269,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   controlRoomProjectionStore = createControlRoomProjectionStore({
     cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
     taskProjectionForProject,
+    runtimeForProject: (project) => projectContexts.get(project.decisionOsRoot)?.runtime,
     taskEntityForProject: (project, entityType, entityId) => tryTaskStateForProject(project)?.store.projectedEntity(entityType, entityId) ?? null,
     taskRootForProject: (project) => tryTaskStateForProject(project)?.store.rootHash() ?? `paused:${project.id}`,
   });
@@ -965,6 +1305,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     controlRoomProjectionStore?.reconcile(registered);
   };
+  const runtimeIncidentReviewScheduler = createRuntimeIncidentReviewScheduler({
+    incidentLedger,
+    intervalMs: Number(payload.runtimeIncidentReviewIntervalMs ?? 5_000),
+    targetProject: () => projectCatalog().find((entry) => entry.available && entry.id === runtimeIncidentReviewProjectId) ?? null,
+    taskState: taskStateForProject,
+    paused: () => pausedBackgroundComponents.has('runtime-incident-review'),
+    onChanged: (projectId) => controlRoomProjectionStore?.invalidate(projectId),
+    onBootstrapGate: (error, context) => {
+      recordStoppedOperation({
+        scope: 'runtime-incident-review',
+        component: 'runtime-incident-review',
+        operation: 'synchronize-admin-master-task',
+        error,
+        context,
+      });
+    },
+    onFailure: (error, context) => {
+      recordBackgroundFailure('runtime-incident-review', 'synchronize-decision-os-project-master-task', error, context);
+    },
+  });
   const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
     const requestPath = requestUrl.pathname;
@@ -979,6 +1339,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           pausedTaskProjects.delete(projectId);
           projectTaskStates.delete(projectId);
           resumed = Boolean(tryTaskStateForProject(project));
+          if (resumed) {
+            const context = projectContexts.get(project.decisionOsRoot);
+            if (context) disposeProjectContext(context);
+            projectContexts.delete(project.decisionOsRoot);
+            resumed = Boolean(tryProjectContext(project, 'operator-resume-task-state'));
+          }
           if (resumed) federationTaskStateReplicator?.reconcileProject('relay', projectId);
         }
       } else if (scope.startsWith('federated-task-state:')) {
@@ -1006,7 +1372,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             const context = project ? projectContexts.get(project.decisionOsRoot) : null;
             if (!project || !context) throw new Error(`Codex runtime ${projectId} is unavailable.`);
             try {
-              recoverCodexProcessQueue(project.decisionOsRoot, context.runtime);
+              await recoverCodexProcessQueue(project.decisionOsRoot, context.runtime);
               await reconcileCodexExecutionOwnership({ decisionOsRoot: project.decisionOsRoot, runtime: context.runtime });
               await resumeCodexPipelineRuns({ decisionOsRoot: project.decisionOsRoot, runtime: context.runtime });
               context.runtime.codexRuntimePaused = false;
@@ -1437,6 +1803,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             project: { ...project, id: project.localProjectId, originFingerprint: remoteProjectIdentity.get(`${project.ownerNodeId}\0${project.localProjectId}`) ?? project.originFingerprint },
             ledger: store.projection().ledger,
             conflicts: store.projection().conflicts,
+            executionObservationFor: (executionId) => {
+              const observation = federatedExecutionObservations.get(`${project.localProjectId}\0${executionId}\0${project.ownerNodeId}`) ?? null;
+              if (!observation || Date.parse(observation.expiresAt) <= Date.now()) return null;
+              return observation;
+            },
           }),
           owner: { nodeId: project.ownerNodeId, nodeLabel: project.ownerNodeLabel, remote: true, online: project.online },
         }];
@@ -1735,9 +2106,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (!projectScope && url === '/api/federation/skills-manifest' && request.method === 'GET') {
+      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+      if (requestUrl.searchParams.get('refresh') === '1') invalidateFederatedSkillExportIndex();
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify(exportFederatedSkillManifest(masterRoot, localWorkspaceRoots())));
+      response.end(JSON.stringify(readFederatedSkillExportIndex().manifest));
       return;
     }
     if (!projectScope && url === '/api/federation/skills-snapshot' && request.method === 'GET') {
@@ -1751,7 +2124,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify(exportFederatedSkillSnapshot(masterRoot, new Set([skillName]), localWorkspaceRoots())));
+      response.end(JSON.stringify(readFederatedSkillExportIndex().snapshot(new Set([skillName]))));
       return;
     }
     if (!projectScope && url === '/api/federation/pipelines-snapshot' && request.method === 'GET') {
@@ -1765,10 +2138,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.setHeader('content-type', 'application/json');
       try {
         pausedBackgroundComponents.delete('federated-library-sync');
-        await synchronizeFederatedLibraries();
-        response.end(JSON.stringify({ ok: true, synchronizedPeerCount: federation.nodes().filter((node) => node.online).length }));
+        await synchronizeFederatedLibraries(true);
+        const status = runtime.federatedLibrarySyncStatus as AnyRecord | undefined;
+        if (status?.phase === 'synchronized') {
+          response.end(JSON.stringify({ ok: true, synchronizedPeerCount: Number(status.synchronizedPeerCount ?? 0) }));
+        } else {
+          response.statusCode = 202;
+          response.end(JSON.stringify({ ok: false, ...status }));
+        }
       } catch (error) {
-        recordBackgroundFailure('federated-library-sync', 'operator-synchronization', error);
         response.statusCode = 502;
         response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Federated library synchronization failed.' }));
       }
@@ -2592,16 +2970,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           mimeType: audio?.mimeType ?? (contentType || 'audio/webm'),
           onCardContentChange: publishCardContentChange,
           onLedgerChange: publishLedgerContentChange,
-          onExecutionIntentChange: (event: AnyRecord) => {
-            if (!localProject || String(fields.ledgerId ?? '') !== 'tasks') return;
-            void Promise.resolve().then(() => taskStateForProject(localProject).transitionExecutionIntent(String(event.cardId ?? ''), {
-              id: String(event.intentId ?? ''),
-              state: ['waiting', 'queued', 'running', 'terminal', 'failed'].includes(String(event.state ?? '')) ? event.state as 'waiting' | 'queued' | 'running' | 'terminal' | 'failed' : 'failed',
-              launchMode: event.launchMode === 'pipeline' ? 'pipeline' : 'run',
-              error: String(event.error ?? ''),
-            })).then((delta) => controlRoomProjectionStore?.invalidate(localProject.id, delta.entities))
-              .catch((error: unknown) => recordProjectBackgroundFailure(localProject, error, 'transition-voice-execution-intent'));
-          }
         },
         runtime_state: requestRuntime
       });
@@ -2611,15 +2979,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (result.ok !== false && result.uploaded && ledgerId === 'tasks' && localProject && cardId) {
         const projection = taskStateForProject(localProject).projection().ledger;
         const refs = projection.threadFiles && typeof projection.threadFiles === 'object' ? projection.threadFiles as AnyRecord : {};
-        const deltas = [await taskStateForProject(localProject).recordContentContribution(cardId, [String(refs[threadId] ?? ''), String(result.voiceFileRef ?? '')])];
-        if (String(result.launchMode ?? '') === 'run' || String(result.launchMode ?? '') === 'pipeline') {
-          deltas.push(await taskStateForProject(localProject).transitionExecutionIntent(cardId, {
-            id: String(result.noteId ?? ''),
-            state: 'waiting',
-            launchMode: result.launchMode === 'pipeline' ? 'pipeline' : 'run',
-          }));
-        }
-        controlRoomProjectionStore?.invalidate(localProject.id, deltas.flatMap((delta) => delta.entities));
+        const delta = await taskStateForProject(localProject).recordContentContribution(cardId, [String(refs[threadId] ?? ''), String(result.voiceFileRef ?? '')]);
+        controlRoomProjectionStore?.invalidate(localProject.id, delta.entities);
       }
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
@@ -2909,33 +3270,61 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     void handleRequest(request, response).catch((error: unknown) => {
       const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
       const paused = error instanceof RuntimeScopePausedError;
-      const incident = paused ? null : recordIncident({
-        scope: `http-request:${request.method ?? 'UNKNOWN'}:${requestUrl.pathname}`,
-        component: 'http-server',
-        operation: 'handle-request',
-        error,
-        context: { method: request.method ?? '', path: requestUrl.pathname },
-      });
+      const bootstrapIncomplete = isTaskStateBootstrapGate(error);
+      const scope = `http-request:${request.method ?? 'UNKNOWN'}:${requestUrl.pathname}`;
+      let incidentId = '';
+      let incidentCode = 'runtime_error';
+      // WHAT: Preserve the incident that already owns an explicitly paused runtime scope.
+      // WHY: The response must identify the original failure instead of creating a duplicate incident.
+      if (paused) {
+        incidentId = error.incidentId;
+        incidentCode = error.code;
+      }
+      // WHAT: Record the bootstrap rejection and resolve it in the same operation.
+      // WHY: Relay convergence is retryable and did not corrupt state or pause a runtime component.
+      else if (bootstrapIncomplete) {
+        incidentId = recordStoppedOperation({
+          scope,
+          component: 'http-server',
+          operation: 'handle-request',
+          error,
+          context: { method: request.method ?? '', path: requestUrl.pathname },
+        });
+        incidentCode = 'task_state_bootstrap_incomplete';
+      }
+      // WHAT: Persist unexpected request failures as active incidents.
+      // WHY: Unclassified errors still require operator-visible degraded health and diagnosis.
+      else {
+        const incident = recordIncident({
+          scope,
+          component: 'http-server',
+          operation: 'handle-request',
+          error,
+          context: { method: request.method ?? '', path: requestUrl.pathname },
+        });
+        incidentId = incident.id;
+        incidentCode = incident.code;
+      }
       telemetry('http-request-failed', {
         method: request.method ?? '',
         path: requestUrl.pathname,
-        statusCode: paused ? 503 : 500,
-        incidentId: paused ? error.incidentId : incident?.id ?? '',
-        code: paused ? error.code : incident?.code ?? 'runtime_error',
+        statusCode: paused || bootstrapIncomplete ? 503 : 500,
+        incidentId,
+        code: incidentCode,
       });
       if (response.writableEnded) return;
       if (response.headersSent) {
         response.destroy();
         return;
       }
-      response.statusCode = paused ? 503 : 500;
+      response.statusCode = paused || bootstrapIncomplete ? 503 : 500;
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({
         ok: false,
-        error: paused ? 'runtime-scope-paused' : 'internal-runtime-error',
-        incidentId: paused ? error.incidentId : incident?.id ?? '',
-        scope: paused ? error.scope : incident?.scope ?? '',
+        error: paused ? 'runtime-scope-paused' : bootstrapIncomplete ? 'task-state-bootstrap-incomplete' : 'internal-runtime-error',
+        incidentId,
+        scope: paused ? error.scope : scope,
       }));
     });
   });
@@ -2945,7 +3334,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   }, 1_000);
   codexQueueScanTimer.unref?.();
   server.on('close', () => {
+    serverClosing = true;
     clearInterval(codexQueueScanTimer);
+    if (federationSyncRetryTimer) clearTimeout(federationSyncRetryTimer);
+    runtimeIncidentReviewScheduler.stop();
     for (const context of projectContexts.values()) disposeProjectContext(context);
     globalContentEventClients.clear();
     federation.stop();
@@ -2957,6 +3349,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (address && typeof address === 'object') federationServerPort = address.port;
     incidentLedger.resolveScope('server-launcher', 'The server child started and opened its HTTP listener successfully.');
     federation.start();
+    void runtimeIncidentReviewScheduler.run();
   });
   server.on('error', (error: Error & { code?: string }) => {
     recordIncident({
