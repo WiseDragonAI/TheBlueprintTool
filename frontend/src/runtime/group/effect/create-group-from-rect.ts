@@ -4,6 +4,7 @@
  */
 import { content } from '../../dom.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
+import { runOptimisticActiveLedgerMutation } from '../../ledger/effect/run-optimistic-active-ledger-mutation.js';
 import { createLedgerGroupAnnotation } from '../../ledger/helper/create-ledger-group-annotation.js';
 import { createLedgerObjectId } from '../../ledger/helper/create-ledger-object-id.js';
 import { state } from '../../state.js';
@@ -16,14 +17,28 @@ export async function createGroupFromRect(rect: { x: number; y: number; width: n
   const groupId = createLedgerObjectId('group');
   // WHAT: Insert and render the group immediately when ledger state owns the canvas.
   // WHY: The operator should not wait for a server round trip before seeing the drawn record.
+  if (state.activeLedger && state.canvasMode === 'ledger') {
+    const annotation = createLedgerGroupAnnotation({ id: groupId, rect });
+    const previousSelection = structuredClone(state.selection);
+    state.selection = { cardIds: [], zoneIds: [], groupIds: [groupId] };
+    await runOptimisticActiveLedgerMutation({
+      mutation: { action: 'create-group', annotation },
+      apply: (ledger) => {
+        ledger.annotations = (ledger.annotations ?? []).filter((entry: Record<string, unknown>) => String(entry.id ?? '') !== groupId).concat(structuredClone(annotation));
+      },
+      render: (outcome) => {
+        if (outcome === 'rejected') state.selection = previousSelection;
+        refreshZoneAttributionCache(`optimistic-create-group:${outcome}`);
+        telemetry('render-group-layer', { created: groupId, authority: 'optimistic-client', outcome });
+        renderCanvasSurface({ renderThreadPanel: false });
+      },
+    });
+    return;
+  }
   if (state.activeLedger) {
     const annotation = createLedgerGroupAnnotation({ id: groupId, rect });
     insertActiveLedgerAnnotation(annotation);
-    refreshZoneAttributionCache('optimistic-create-group');
-    state.selection = { cardIds: [], zoneIds: [], groupIds: [groupId] };
-    telemetry('render-group-layer', { created: groupId, authority: 'optimistic-client' });
-    renderCanvasSurface({ renderThreadPanel: false });
-    await commitActiveLedgerMutation({ action: 'create-group', annotation });
+    await commitActiveLedgerMutation({ action: 'create-group', annotation }, { render: true });
     return;
   }
   const group = document.createElement('article');

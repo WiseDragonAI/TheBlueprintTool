@@ -3,7 +3,9 @@
  * WHY: Card editing should preserve markdown source while routing persistence through ledger mutations.
  */
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
+import { runOptimisticActiveLedgerMutation } from '../../ledger/effect/run-optimistic-active-ledger-mutation.js';
 import { ledgerCardBody } from '../../ledger/helper/ledger-card-body.js';
+import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -33,7 +35,16 @@ export function beginLedgerCardTitleEdit(cardElement: HTMLElement): void {
     title.contentEditable = 'false';
     title.classList.remove('editing');
     if (state.activeLedger) {
-      void commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: cardId, title: nextTitle } }, { render: true });
+      if (state.canvasMode === 'ledger') {
+        void runOptimisticActiveLedgerMutation({
+          mutation: { action: 'patch-card', cardPatch: { id: cardId, title: nextTitle } },
+          apply: (ledger) => {
+            const current = (ledger.cards ?? []).find((entry: Record<string, unknown>) => String(entry.id ?? '') === cardId);
+            if (current) current.title = nextTitle;
+          },
+          render: () => renderCanvasSurface({ renderThreadPanel: false }),
+        });
+      } else void commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: cardId, title: nextTitle } }, { render: true });
     }
   }, { once: true });
   telemetry('open-card-title-edit', { cardId });
@@ -69,7 +80,19 @@ export function beginLedgerCardDescriptionEdit(cardElement: HTMLElement): void {
   });
   textarea.addEventListener('blur', () => {
     if (state.activeLedger) {
-      void commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: cardId, description: textarea.value.trimEnd() } }, { render: true });
+      const description = textarea.value.trimEnd();
+      if (state.canvasMode === 'ledger') {
+        void runOptimisticActiveLedgerMutation({
+          mutation: { action: 'patch-card', cardPatch: { id: cardId, description } },
+          apply: (ledger) => {
+            const current = (ledger.cards ?? []).find((entry: Record<string, any>) => String(entry.id ?? '') === cardId);
+            if (!current) return;
+            const comment = current.comment && typeof current.comment === 'object' ? current.comment : (current.comment = {});
+            comment.what = description;
+          },
+          render: () => renderCanvasSurface({ renderThreadPanel: false }),
+        });
+      } else void commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: cardId, description } }, { render: true });
     }
   }, { once: true });
   telemetry('open-card-description-edit', { cardId });

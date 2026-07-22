@@ -35,6 +35,7 @@ import { voiceRetryInput } from './thread-voice-retry.js';
 import { bindDesktopVoiceActionPreview } from '/src/runtime/voice/effect/update-desktop-voice-action-preview.js';
 import { hydrateThreadViewportState, saveThreadPanelScrollPositions } from '/src/runtime/thread/effect/persist-thread-scroll.js';
 import { readPersistedState } from '/src/runtime/persistence/helper/read-persisted-state.js';
+import { deleteNoteController } from '/src/runtime/thread/controller/delete-note-controller.js';
 
 let currentCard = null;
 let currentProjectId = '';
@@ -339,12 +340,8 @@ async function deleteNote(button) {
   const threadId = button.dataset.threadId || canvasState.threadId;
   const noteId = button.dataset.noteId || '';
   if (!threadId || !noteId) return;
-  const response = await fetch(`/decision-os/${encodeURIComponent(currentLedgerId)}`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ action: 'delete-note', note: { threadId, id: noteId } })
-  });
-  if (response.ok) await refreshThreadLedger();
+  await deleteNoteController({ threadId, noteId });
+  currentCard = canvasState.activeLedger?.cards?.find((card) => String(card.id) === String(currentCard?.id)) ?? currentCard;
 }
 
 async function startCodex(button) {

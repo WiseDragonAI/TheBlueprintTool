@@ -11,6 +11,14 @@ import { taskContentReferences } from './task-content-resources.js';
 import { taskCommandForMutation, taskCommandForProjection, type TaskProjectionCommand } from './task-mutation-command.js';
 
 type AnyRecord = Record<string, unknown>;
+type TaskProjectionEntityChange = { entityType: TaskEntityChange['entityType']; entityId: string };
+
+export type ProjectTaskMutationResult = {
+  changed: boolean;
+  deltas: TaskStateDelta[];
+  localChanges: TaskProjectionEntityChange[];
+  ledger: AnyRecord;
+};
 
 function readableLedger(file: string): AnyRecord {
   if (!existsSync(file)) return { cards: [], annotations: [], relationships: [] };
@@ -21,6 +29,15 @@ function mergeDeltas(projectId: string, deltas: TaskStateDelta[]): TaskStateDelt
   const entities = new Map<string, TaskStateDelta['entities'][number]>();
   for (const delta of deltas) for (const entity of delta.entities) entities.set(`${entity.entityType}\u0000${entity.entityId}`, entity);
   return { version: taskCurrentStateVersion, projectId, entities: [...entities.values()] };
+}
+
+function projectionEntityChanges(changes: TaskEntityChange[]): TaskProjectionEntityChange[] {
+  const identities = new Map<string, TaskProjectionEntityChange>();
+  for (const change of changes) {
+    const identity = { entityType: change.entityType, entityId: change.entityId };
+    identities.set(`${identity.entityType}\u0000${identity.entityId}`, identity);
+  }
+  return [...identities.values()];
 }
 
 export function createProjectTaskState(input: {
@@ -107,7 +124,7 @@ export function createProjectTaskState(input: {
     return operation;
   };
 
-  const executeMutationNow = async (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+  const executeMutationNow = async (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<ProjectTaskMutationResult> => {
     if (mutation.action === 'complete-master-task' && mutation.masterTaskId) {
       const masterTaskId = String(mutation.masterTaskId);
       const subtaskIds = Array.isArray(before.relationships) ? (before.relationships as AnyRecord[])
@@ -130,17 +147,17 @@ export function createProjectTaskState(input: {
         : [String(mutation.note?.voiceFileRef ?? ''), ...taskContentReferences(body)];
       deltas.push(await recordContentContribution(command.activationTaskId, resourceIds));
     }
-    return { changed, deltas, ledger: store.projection().ledger };
+    return { changed, deltas, localChanges: projectionEntityChanges(command.changes), ledger: store.projection().ledger };
   };
 
-  const executeMutation = (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+  const executeMutation = (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<ProjectTaskMutationResult> => {
     assertWritable();
     const operation = commandQueue.then(() => executeMutationNow(mutation, before, after));
     commandQueue = operation.then(() => undefined, () => undefined);
     return operation;
   };
 
-  const transitionCardLifecycle = (taskId: string, status: 'todo' | 'backlog' | 'done'): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+  const transitionCardLifecycle = (taskId: string, status: 'todo' | 'backlog' | 'done'): Promise<ProjectTaskMutationResult> => {
     assertWritable();
     // WHAT: Serialize one lifecycle transition against the latest authoritative projection.
     // WHY: CLI callers do not carry a trusted whole-ledger before/after document.
@@ -158,14 +175,19 @@ export function createProjectTaskState(input: {
     return operation;
   };
 
-  const executeProjectionCommandNow = async (command: TaskProjectionCommand, ledger: AnyRecord, emittedAt = new Date().toISOString()): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+  const executeProjectionCommandNow = async (command: TaskProjectionCommand, ledger: AnyRecord, emittedAt = new Date().toISOString()): Promise<ProjectTaskMutationResult> => {
     const changes = taskCommandForProjection({ command, before: store.projection().ledger, after: ledger });
     const priorHashes = changes.map(entityHash);
     const delta = await persistChanges(changes, { emittedAt });
-    return { changed: changes.some((change, index) => entityHash(change) !== priorHashes[index]), deltas: delta.entities.length > 0 ? [delta] : [], ledger: store.projection().ledger };
+    return {
+      changed: changes.some((change, index) => entityHash(change) !== priorHashes[index]),
+      deltas: delta.entities.length > 0 ? [delta] : [],
+      localChanges: projectionEntityChanges(changes),
+      ledger: store.projection().ledger,
+    };
   };
 
-  const executeProjectionCommand = (command: TaskProjectionCommand, ledger: AnyRecord, emittedAt = new Date().toISOString()): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+  const executeProjectionCommand = (command: TaskProjectionCommand, ledger: AnyRecord, emittedAt = new Date().toISOString()): Promise<ProjectTaskMutationResult> => {
     assertWritable();
     const operation = commandQueue.then(() => executeProjectionCommandNow(command, ledger, emittedAt));
     commandQueue = operation.then(() => undefined, () => undefined);

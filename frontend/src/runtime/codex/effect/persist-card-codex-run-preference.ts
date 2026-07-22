@@ -3,6 +3,8 @@
  * WHY: Widget and thread controls must never become independent preference authorities.
  */
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
+import { runOptimisticActiveLedgerMutation } from '../../ledger/effect/run-optimistic-active-ledger-mutation.js';
+import { state } from '../../state.js';
 import {
   activeCardCodexRunPreference,
   type CardCodexRunPreference,
@@ -38,14 +40,30 @@ export async function persistCardCodexRunPreference(input: { cardId: string; mod
     return false;
   }
 
-  const committed = await commitActiveLedgerMutation({
-    action: 'patch-card',
+  const mutation = {
+    action: 'patch-card' as const,
     cardPatch: {
       id: input.cardId,
       codexRunModel: input.model,
       codexRunEffort: input.effort,
     },
-  });
+  };
+  const optimisticPreference = { model: input.model, effort: input.effort } as CardCodexRunPreference;
+  const committed = state.activeLedger && state.canvasMode === 'ledger'
+    ? await runOptimisticActiveLedgerMutation({
+      mutation,
+      apply: (ledger) => {
+        const card = (ledger.cards ?? []).find((entry: Record<string, unknown>) => String(entry.id ?? '') === input.cardId);
+        if (!card) return;
+        card.codexRunModel = input.model;
+        card.codexRunEffort = input.effort;
+      },
+      render: (outcome) => synchronizeMountedCardCodexRunPreference(
+        input.cardId,
+        outcome === 'optimistic' ? optimisticPreference : activeCardCodexRunPreference(input.cardId),
+      ),
+    })
+    : await commitActiveLedgerMutation(mutation);
   synchronizeMountedCardCodexRunPreference(input.cardId, activeCardCodexRunPreference(input.cardId));
   return committed;
 }

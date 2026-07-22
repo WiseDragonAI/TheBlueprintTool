@@ -10,6 +10,7 @@ import { ledgerGeometryRevisionKey } from '../helper/active-ledger-geometry.js';
 import { mergeLocalCanvasStateIntoLedger } from '../helper/merge-local-canvas-state.js';
 import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
 import { refreshZoneAttributionCache } from '../helper/zone-attribution-cache.js';
+import { overlayPendingActiveLedger } from './run-optimistic-active-ledger-mutation.js';
 
 type AnyRecord = Record<string, any>;
 
@@ -261,7 +262,8 @@ export function reconcileActiveLedgerState(input: ReconcileActiveLedgerInput): b
       retainMissingCardIds: new Set<string>(),
       retainMissingAnnotationIds: new Set<string>()
     };
-  const withLocalNotes = sameLedger ? mergeLocalThreadNotes(input.ledger) : input.ledger;
+  const withPendingIntent = overlayPendingActiveLedger(input.ledger, input.request.ledgerStateId);
+  const withLocalNotes = sameLedger ? mergeLocalThreadNotes(withPendingIntent) : withPendingIntent;
   const reconciledLedger = sameLedger
     ? mergeLocalCanvasStateIntoLedger(withLocalNotes, localLedger, {
       preserveCardIds: preserve.cardIds,

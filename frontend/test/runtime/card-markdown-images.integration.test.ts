@@ -80,7 +80,9 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(deleteImageController, /persistLedgerCardMediaCarouselDeleteHandoff/);
   assert.match(deleteImageController, /sources: parseCarouselSources\(input\.carouselSources\)/);
   assert.match(deleteImageController, /slideIndex: Number\(input\.carouselSlideIndex\)/);
-  assert.match(deleteImageController, /commitActiveLedgerMutation\(\{ action: 'delete-card-image', cardId, imageSrc \}, \{ render: true \}\)/);
+  assert.match(deleteImageController, /runOptimisticActiveLedgerMutation\(\{/);
+  assert.match(deleteImageController, /mutation: \{ action: 'delete-card-image', cardId, imageSrc \}/);
+  assert.match(deleteImageController, /removeMarkdownImage/);
   assert.match(keyboard, /modal\.dataset\.confirmKind === 'card-image'/);
   assert.match(keyboard, /carouselSources: modal\.dataset\.carouselSources/);
   assert.match(keyboard, /carouselSlideIndex: modal\.dataset\.carouselSlideIndex/);

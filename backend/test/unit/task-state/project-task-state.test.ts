@@ -56,6 +56,37 @@ test('task intake publishes no state until its first durable content contributio
   assert.equal(state.store.entity('card', 'card-a')?.fields.replicationState, undefined);
 });
 
+test('held deletion reports local projection changes without publishing federation state', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-held-delete-'));
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const ledgerPath = resolve(root, 'tasks.json');
+  writeFileSync(ledgerPath, JSON.stringify({ modelName: 'tasks', cards: [], annotations: [], relationships: [], threadFiles: {} }));
+  const published: TaskStateDelta[] = [];
+  const state = createProjectTaskState({
+    projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true,
+    publish: (delta) => { published.push(delta); },
+  });
+  const execute = async (mutation: LedgerMutation) => {
+    const before = structuredClone(state.projection().ledger);
+    const after = structuredClone(before);
+    assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
+    return state.executeMutation(mutation, before, after);
+  };
+
+  await execute({
+    action: 'create-task-intake',
+    annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' },
+    card: { id: 'card-a', title: 'Local task', status: 'todo', labels: ['master-task'], domainId: 'tasks', comment: { what: 'Task' } },
+  });
+  const deletion = await execute({ action: 'delete-card', cardId: 'card-a' });
+
+  assert.equal(deletion.changed, true);
+  assert.equal(deletion.deltas.length, 0);
+  assert.ok(deletion.localChanges.some((change) => change.entityType === 'card' && change.entityId === 'card-a'));
+  assert.equal(published.length, 0);
+  assert.equal((state.projection().ledger.cards as Array<Record<string, unknown>>).some((card) => card.id === 'card-a'), false);
+});
+
 test('unchanged content bytes do not create a second resource mutation when file metadata changes', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-content-dedupe-'));
   context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
@@ -112,6 +143,7 @@ test('lifecycle command changes one atomic card lane without note tombstones', a
 
   assert.equal(result.deltas.length, 1);
   assert.deepEqual(result.deltas[0].entities.map((entity) => [entity.entityType, entity.entityId]), [['card', 'a']]);
+  assert.deepEqual(result.localChanges, [{ entityType: 'card', entityId: 'a' }]);
   assert.notEqual(state.store.entity('card', 'a')?.stateHash, beforeA?.stateHash);
   assert.equal(state.store.entity('card', 'b')?.stateHash, beforeB?.stateHash);
   assert.equal(state.store.entity('thread-note', 'thread-a/note-a')?.stateHash, beforeNote?.stateHash);

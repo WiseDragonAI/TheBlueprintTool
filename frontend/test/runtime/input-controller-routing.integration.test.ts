@@ -130,7 +130,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(noteDelete, /commitActiveLedgerMutation/);
 
   const paste = source('frontend/src/runtime/clipboard/controller/paste-selection-controller.ts');
-  assert.match(paste, /commitActiveLedgerMutation/);
+  assert.match(paste, /runOptimisticActiveLedgerMutation/);
 
   const serverMutation = source('frontend/src/runtime/ledger/effect/commit-active-ledger-mutation.ts');
   const serverLoad = source('frontend/src/runtime/ledger/effect/load-active-ledger-state.ts');
@@ -140,7 +140,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(serverMutation, /reconcileActiveLedgerState\(\{/);
   assert.match(serverLoad, /reconcileActiveLedgerState\(\{/);
   assert.doesNotMatch(`${serverMutation}\n${serverLoad}`, /mergeLocalCanvasStateIntoLedger|mergeLocalThreadNotes|state\.activeLedger\s*=/);
-  assert.match(activeLedgerReconciliation, /const withLocalNotes = sameLedger \? mergeLocalThreadNotes\(input\.ledger\) : input\.ledger/);
+  assert.match(activeLedgerReconciliation, /const withPendingIntent = overlayPendingActiveLedger\(input\.ledger, input\.request\.ledgerStateId\)/);
+  assert.match(activeLedgerReconciliation, /const withLocalNotes = sameLedger \? mergeLocalThreadNotes\(withPendingIntent\) : withPendingIntent/);
   assert.match(activeLedgerReconciliation, /mergeLocalCanvasStateIntoLedger\(withLocalNotes, localLedger, \{/);
   assert.match(activeLedgerReconciliation, /function replaceActiveLedger\(ledger: AnyRecord, ledgerStateId: string\): void \{[\s\S]*state\.activeLedger = ledger;[\s\S]*state\.activeLedgerId = ledgerStateId;[\s\S]*\}/);
   assert.match(activeLedgerReconciliation, /replaceActiveLedger\(reconciledLedger, input\.request\.ledgerStateId\)/);

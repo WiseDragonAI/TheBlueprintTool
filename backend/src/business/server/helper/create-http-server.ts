@@ -1522,7 +1522,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const persistedLedger = taskCommit?.ledger ?? (writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2)), ledger);
       context.watcher.refreshOwnership();
       if (!taskCommit) controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
-      else if (taskCommit.changed) controlRoomProjectionStore?.invalidate(activeProject?.id ?? '', taskCommit.deltas.flatMap((delta) => delta.entities));
+      else if (taskCommit.changed) controlRoomProjectionStore?.invalidate(activeProject?.id ?? '', taskCommit.localChanges);
       if (ledgerId !== 'tasks') federation?.publishContentChange();
       const revision = ledgerRevisions.advance(ledgerId);
       const cardId = String(mutation.cardPatch?.id ?? mutation.card?.id ?? mutation.cardId ?? mutation.masterTaskId ?? '');
@@ -1665,7 +1665,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
         throw error;
       }
-      if (committed.changed) controlRoomProjectionStore?.invalidate(project.id, committed.deltas.flatMap((delta) => delta.entities));
+      if (committed.changed) controlRoomProjectionStore?.invalidate(project.id, committed.localChanges);
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: true, cardId, lifecycleStatus, changedBatchCount: Number(committed.changed) }));
       return;
