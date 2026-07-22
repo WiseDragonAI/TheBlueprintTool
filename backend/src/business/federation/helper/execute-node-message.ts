@@ -10,6 +10,7 @@ import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
 import { decisionOsCodexEnvironment } from '../../codex/helper/decision-os-codex-runtime.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from '../../codex/helper/resolve-codex-command.js';
 import { signalCodexProcessTree } from '../../codex/helper/reconcile-terminal-codex-process.js';
+import type { CodexSlotAcquireOptions } from '../../codex/helper/codex-capacity-slots.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -35,6 +36,7 @@ export type NodeMessageExecutionResult = {
 };
 
 const maximumMessageBytes = 64 * 1024;
+const maximumSlotWaitMs = 60_000;
 
 function safeNodeId(value: unknown): string {
   return String(value ?? '').trim().replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 100);
@@ -85,9 +87,13 @@ export async function executeNodeMessage(input: {
 
   const acquire = input.runtime.acquireProjectSyncCodexSlot;
   const release = typeof acquire === 'function'
-    ? await (acquire as () => Promise<() => void>)()
+    ? await (acquire as (options: CodexSlotAcquireOptions) => Promise<() => void>)({
+      signal: input.signal,
+      timeoutMs: maximumSlotWaitMs,
+    })
     : () => undefined;
   try {
+    if (input.signal?.aborted) throw new Error('Node message was cancelled before execution.');
     const startedAt = new Date().toISOString();
     const runId = `node-message-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const artifactRoot = resolve(input.project.decisionOsRoot, 'runs', 'node-messages');
