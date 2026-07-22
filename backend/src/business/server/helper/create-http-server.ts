@@ -72,6 +72,7 @@ import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import type { TaskProjectionCommand } from '../../task-state/helper/task-mutation-command.js';
 import { createRuntimeIncidentLedger, RuntimeScopePausedError, type RuntimeIncident } from './runtime-incident-ledger.js';
+import { createRuntimeIncidentReviewScheduler } from './create-runtime-incident-review-scheduler.js';
 import {
   exportFederatedPipelineSnapshot,
   exportFederatedSkillManifest,
@@ -1001,6 +1002,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     controlRoomProjectionStore?.reconcile(registered);
   };
+  const runtimeIncidentReviewScheduler = createRuntimeIncidentReviewScheduler({
+    incidentLedger,
+    intervalMs: Number(payload.runtimeIncidentReviewIntervalMs ?? 5_000),
+    targetProject: () => projectCatalog().find((entry) => entry.available && entry.relativePath === 'admin') ?? null,
+    taskState: taskStateForProject,
+    paused: () => pausedBackgroundComponents.has('runtime-incident-review'),
+    onChanged: (projectId) => controlRoomProjectionStore?.invalidate(projectId),
+    onBootstrapGate: (error, context) => {
+      recordStoppedOperation({
+        scope: 'runtime-incident-review',
+        component: 'runtime-incident-review',
+        operation: 'synchronize-admin-master-task',
+        error,
+        context,
+      });
+    },
+    onFailure: (error, context) => {
+      recordBackgroundFailure('runtime-incident-review', 'synchronize-admin-master-task', error, context);
+    },
+  });
   const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
     const requestPath = requestUrl.pathname;
@@ -3010,6 +3031,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   codexQueueScanTimer.unref?.();
   server.on('close', () => {
     clearInterval(codexQueueScanTimer);
+    runtimeIncidentReviewScheduler.stop();
     for (const context of projectContexts.values()) disposeProjectContext(context);
     globalContentEventClients.clear();
     federation.stop();
@@ -3021,6 +3043,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (address && typeof address === 'object') federationServerPort = address.port;
     incidentLedger.resolveScope('server-launcher', 'The server child started and opened its HTTP listener successfully.');
     federation.start();
+    void runtimeIncidentReviewScheduler.run();
   });
   server.on('error', (error: Error & { code?: string }) => {
     recordIncident({

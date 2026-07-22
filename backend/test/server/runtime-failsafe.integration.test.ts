@@ -7,7 +7,78 @@ import { basename, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createRuntimeIncidentLedger } from '@backend/business/server/helper/runtime-incident-ledger.js';
+import { runtimeIncidentReviewCardId } from '@backend/business/server/helper/synchronize-runtime-incident-review-task.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
+
+async function waitUntil(assertion: () => boolean | Promise<boolean>, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await assertion()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.fail('Timed out waiting for runtime incident review synchronization.');
+}
+
+test('periodically centralizes runtime incidents in one admin master task', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'decision-os-runtime-incident-review-'));
+  const adminDecisionOsRoot = join(home, 'admin', '.decision-os');
+  const tasksFile = join(adminDecisionOsRoot, 'tasks.json');
+  const centralDecisionOsRoot = join(home, '.decision-os');
+  mkdirSync(adminDecisionOsRoot, { recursive: true });
+  writeFileSync(join(adminDecisionOsRoot, 'project.json'), JSON.stringify({ id: 'admin' }));
+  writeFileSync(join(adminDecisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(tasksFile, JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {}, threadFiles: {} }));
+  const incidents = createRuntimeIncidentLedger({ decisionOsRoot: centralDecisionOsRoot });
+  incidents.record({
+    scope: 'http-request:POST:/api/voice-upload',
+    component: 'http-server',
+    operation: 'handle-request',
+    code: 'task_state_bootstrap_incomplete',
+    error: new Error('task_state_bootstrap_incomplete'),
+  });
+
+  const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({
+    action_payload: {
+      port: 0,
+      host: '127.0.0.1',
+      cwd: home,
+      decisionOsFrontendRoot: join(repositoryRoot, 'frontend'),
+      runtimeIncidentReviewIntervalMs: 20,
+    },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const cards = async (): Promise<Array<Record<string, unknown>>> => {
+      const response = await fetch(`${baseUrl}/api/ledgers/tasks/canvas`);
+      if (!response.ok) return [];
+      return ((await response.json()) as { cards?: Array<Record<string, unknown>> }).cards ?? [];
+    };
+    await waitUntil(async () => (await cards()).some((card) => card.id === runtimeIncidentReviewCardId));
+    assert.equal((await cards()).filter((card) => card.id === runtimeIncidentReviewCardId).length, 1);
+    const contentFile = join(adminDecisionOsRoot, 'cards', 'tasks', `${runtimeIncidentReviewCardId}.md`);
+    assert.match(readFileSync(contentFile, 'utf8'), /task_state_bootstrap_incomplete/);
+
+    incidents.record({
+      scope: 'background:test-worker',
+      component: 'test-worker',
+      operation: 'run-test-worker',
+      error: new Error('second centralized failure'),
+    });
+    await waitUntil(() => readFileSync(contentFile, 'utf8').includes('second centralized failure'));
+    assert.equal((await cards()).filter((card) => card.id === runtimeIncidentReviewCardId).length, 1);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(home, { recursive: true, force: true });
+  }
+});
 
 test('keeps the catalog and diagnostics online when one project has colliding retained journals', async () => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-runtime-failsafe-'));
