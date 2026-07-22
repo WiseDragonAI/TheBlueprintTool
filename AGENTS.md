@@ -11,6 +11,21 @@
 
 ## KNOWLEDGE
 
+### Error Handling and Failsafe Boundaries
+
+- **Contain recoverable failures.** A failed request, task, project runtime, watcher, federation stream, or child process must fail only its owning scope. Keep unrelated HTTP routes, projects, federation traffic, health routes, and diagnostic routes available.
+- **Reserve process termination for process-wide invariants.** Expected input errors, corrupt project data, unavailable peers, timeouts, task failures, and synchronization conflicts must not terminate the server process. A process-wide invariant failure must be recorded before exit and handled by the external supervisor.
+- **Observe every asynchronous operation.** Every detached promise, timer callback, event callback, stream handler, and child-process settlement callback must end at an explicit success-and-failure boundary. A fire-and-forget call must have a terminal rejection handler that records its scope and context.
+- **Bound every wait.** Capacity waits, relay requests, flow-control credits, drains, retries, child executions, and shutdown waits require a finite deadline plus cancellation. Clear their timers and listeners on settlement and server close.
+- **Propagate cancellation.** Client disconnect, server close, replaced relay stream, and operator cancellation must abort downstream HTTP requests, relay streams, subprocesses, and queued work.
+- **Own child-process lifecycle.** Record process identity and start time, stream output to bounded durable files, terminate on deadline, escalate `SIGTERM` to `SIGKILL`, and force promise settlement when exit events do not arrive.
+- **Preserve invalid durable state.** Invalid JSON, journals, registries, queues, manifests, and incident ledgers must remain byte-identical. Do not treat corrupt state as empty and do not rewrite it. Pause the owning scope and record the file path plus validation error.
+- **Persist actionable incidents.** Record scope, component, operation, stable error code, message, stack, timestamps, occurrence count, and task-specific context in a bounded durable incident ledger. Incident diagnostics must remain readable when normal project startup fails.
+- **Make recovery explicit.** Resume a paused scope only after re-reading and validating its durable state. Install recovered runtime state atomically. A failed recovery keeps the scope paused and retains the incident evidence.
+- **Keep diagnostics failsafe.** Incident reporting and logging must not throw into the work being contained. Protect telemetry, serialization, durable incident writes, and console transports from becoming a second failure.
+- **Supervise fatal exits.** The process supervisor must use exponential restart backoff, bounded log retention, a finite failure circuit, and supervisor-owned incident evidence. A tight restart loop is a production failure.
+- **Verify failure behavior.** Tests must inject the failure at the first asynchronous, process, network, or persistence boundary and prove that the server plus diagnostics stay online, the affected scope pauses, the incident persists, durable bytes remain unchanged, resources settle, and explicit recovery succeeds.
+
 ### Anti Specs
 
 - **Rule.** Never write anti-specs: generic process claims that spend operator tokens and attention without adding a concrete requirement, constraint, decision, evidence, or action.
