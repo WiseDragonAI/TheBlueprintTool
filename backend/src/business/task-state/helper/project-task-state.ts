@@ -32,10 +32,12 @@ export function createProjectTaskState(input: {
   publishContent?: (resourceId: string) => void | Promise<void>;
   initialize?: boolean;
   canWrite?: () => boolean;
+  onPersistenceError?: (error: Error) => void;
 }) {
   const store = createTaskCurrentStateStore({
     decisionOsRoot: input.decisionOsRoot,
     projectId: input.projectId,
+    onPersistenceError: input.onPersistenceError,
     ...(input.initialize ? { initializeLedger: readableLedger(input.tasksLedgerFile) } : {}),
   });
   const contentObjects = createTaskContentObjectStore({ decisionOsRoot: input.decisionOsRoot, projectId: input.projectId });
@@ -81,11 +83,28 @@ export function createProjectTaskState(input: {
   const recordContentContribution = async (taskId: string, resourceIds: string | string[]): Promise<TaskStateDelta> => {
     const resources = [...new Set((Array.isArray(resourceIds) ? resourceIds : [resourceIds]).filter(Boolean))];
     const heads = (await Promise.all(resources.map((resourceId) => contentObjects.capture(resourceId)))).filter((head) => head !== null);
-    const contentDelta = heads.length > 0
-      ? await persistChanges(heads.map((head) => ({ entityType: 'resource', entityId: head.key, changes: [{ path: 'head', operation: 'set', value: head }] })), { activationTaskId: taskId })
+    const changedHeads = heads.filter((head) => !store.contentHeads(head.key).some((current) => (
+      current.type === head.type && current.hash === head.hash && current.bytes === head.bytes
+    )));
+    const contentDelta = changedHeads.length > 0
+      ? await persistChanges(changedHeads.map((head) => ({ entityType: 'resource', entityId: head.key, changes: [{ path: 'head', operation: 'set', value: head }] })), { activationTaskId: taskId })
       : { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-    for (const head of heads) await input.publishContent?.(head.key);
+    for (const head of changedHeads) await input.publishContent?.(head.key);
     return mergeDeltas(input.projectId, [contentDelta, await activateTask(taskId)]);
+  };
+
+  const queueContentContribution = (taskId: string, resourceIds: string | string[]): Promise<TaskStateDelta> => {
+    assertWritable();
+    const operation = commandQueue.then(() => recordContentContribution(taskId, resourceIds));
+    commandQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+  };
+
+  const queueTaskActivation = (taskId: string): Promise<TaskStateDelta> => {
+    assertWritable();
+    const operation = commandQueue.then(() => activateTask(taskId));
+    commandQueue = operation.then(() => undefined, () => undefined);
+    return operation;
   };
 
   const executeMutationNow = async (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
@@ -183,8 +202,8 @@ export function createProjectTaskState(input: {
     transitionCardLifecycle,
     executeProjectionCommand,
     executeProjectionCommandNow,
-    activateTask: (taskId: string) => { assertWritable(); return activateTask(taskId); },
-    recordContentContribution: (taskId: string, resourceIds: string | string[]) => { assertWritable(); return recordContentContribution(taskId, resourceIds); },
+    activateTask: queueTaskActivation,
+    recordContentContribution: queueContentContribution,
     transitionExecutionIntent,
     flush: store.flush,
     projection: store.projection,

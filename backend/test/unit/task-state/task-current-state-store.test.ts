@@ -38,6 +38,22 @@ test('restart reconstructs projection, clock, and buckets from current shards on
   assert.deepEqual(restarted.bucketManifest(), first.bucketManifest());
 });
 
+test('concurrent local mutations reserve unique causal dots before journaling', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-concurrent-dots-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
+  const [first, second] = await Promise.all([
+    store.mutate({ replicaId: 'workstation', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'First' }] }] }),
+    store.mutate({ replicaId: 'workstation', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Second' }] }] }),
+  ]);
+
+  assert.deepEqual([first.batch.dot.counter, second.batch.dot.counter], [1, 2]);
+  assert.equal(store.projectedEntity('card', 'card-a')?.title, 'Second');
+  await store.flush();
+  const restarted = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' });
+  assert.equal(restarted.projectedEntity('card', 'card-a')?.title, 'Second');
+});
+
 test('a state-lost writer advances beyond its joined replica clock before writing', async (context) => {
   const sourceRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-counter-source-'));
   const recoveredRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-counter-recovered-'));

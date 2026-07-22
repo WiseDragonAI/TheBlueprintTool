@@ -40,6 +40,7 @@ type StoreOptions = {
   initializeLedger?: Record<string, unknown>;
   initializeReplica?: { replicaId: string; counter: number };
   deferFormat?: boolean;
+  onPersistenceError?: (error: Error) => void;
 };
 
 function emptyProjection(projectId: string): TaskCurrentProjection {
@@ -87,6 +88,13 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   let clock: TaskCausalClock = {};
   let materializer: Promise<void> | null = null;
   let materializerError: Error | null = null;
+  let localMutationTail = Promise.resolve();
+
+  const serializeLocalMutation = <Result>(operation: () => Promise<Result>): Promise<Result> => {
+    const result = localMutationTail.then(operation);
+    localMutationTail = result.then(() => undefined, () => undefined);
+    return result;
+  };
 
   const updateBucket = (key: string, entity: TaskCurrentEntity): void => {
     const bucket = taskCurrentBucketForEntityKey(key);
@@ -241,6 +249,8 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     materializerError = null;
     materializer = runMaterializer().catch((error: unknown) => {
       materializerError = error instanceof Error ? error : new Error(String(error));
+      try { options.onPersistenceError?.(materializerError); }
+      catch { /* Persistence error reporting cannot replace the original materialization failure. */ }
     }).finally(() => { materializer = null; });
   };
 
@@ -294,26 +304,28 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
         });
       });
     },
-    async mutate(input: { replicaId: string; changes: TaskEntityChange[]; activationTaskId?: string; replication?: 'active' | 'held'; emittedAt?: string }): Promise<{ batch: TaskMutationBatch; delta: TaskStateDelta }> {
-      const counter = (clock[input.replicaId] ?? 0) + 1;
-      const batch: TaskMutationBatch = {
-        version: taskCurrentStateVersion,
-        batchId: `${input.replicaId}-${counter}-${randomUUID()}`,
-        projectId: options.projectId,
-        replicaId: input.replicaId,
-        emittedAt: input.emittedAt ?? new Date().toISOString(),
-        dot: { replicaId: input.replicaId, counter },
-        context: mutationContext(input.changes),
-        changes: structuredClone(input.changes),
-        activationTaskId: input.activationTaskId ?? '',
-        replication: input.replication ?? 'active',
-      };
-      const journalFile = await journal({ version: taskCurrentStateVersion, mutation: batch }, batch.batchId);
-      const changed = applyMutation(batch);
-      for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
-      pendingJournals.add(journalFile);
-      scheduleMaterializer();
-      return { batch, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: changed.filter((entity) => !publication.isHeld(taskCurrentEntityKey(entity))).map((entity) => structuredClone(entity)) } };
+    mutate(input: { replicaId: string; changes: TaskEntityChange[]; activationTaskId?: string; replication?: 'active' | 'held'; emittedAt?: string }): Promise<{ batch: TaskMutationBatch; delta: TaskStateDelta }> {
+      return serializeLocalMutation(async () => {
+        const counter = (clock[input.replicaId] ?? 0) + 1;
+        const batch: TaskMutationBatch = {
+          version: taskCurrentStateVersion,
+          batchId: `${input.replicaId}-${counter}-${randomUUID()}`,
+          projectId: options.projectId,
+          replicaId: input.replicaId,
+          emittedAt: input.emittedAt ?? new Date().toISOString(),
+          dot: { replicaId: input.replicaId, counter },
+          context: mutationContext(input.changes),
+          changes: structuredClone(input.changes),
+          activationTaskId: input.activationTaskId ?? '',
+          replication: input.replication ?? 'active',
+        };
+        const journalFile = await journal({ version: taskCurrentStateVersion, mutation: batch }, batch.batchId);
+        const changed = applyMutation(batch);
+        for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
+        pendingJournals.add(journalFile);
+        scheduleMaterializer();
+        return { batch, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: changed.filter((entity) => !publication.isHeld(taskCurrentEntityKey(entity))).map((entity) => structuredClone(entity)) } };
+      });
     },
     async activate(taskId: string): Promise<TaskStateDelta> {
       const keys = publication.keysForTask(taskId);

@@ -2,7 +2,7 @@
  * WHAT: Creates the Decision OS HTTP server, workspace routes, and scoped content event stream.
  * WHY: Ledger IO, SSE publication, and Codex process callbacks share one server lifecycle for the active workspace.
  */
-import { createServer, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { readFile as readFileAsync } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -68,6 +68,7 @@ import { readTaskContentOnDemand } from '../../federation/helper/read-task-conte
 import { createProjectTaskState, type ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import type { TaskProjectionCommand } from '../../task-state/helper/task-mutation-command.js';
+import { createRuntimeIncidentLedger, RuntimeScopePausedError, type RuntimeIncident } from './runtime-incident-ledger.js';
 import {
   exportFederatedPipelineSnapshot,
   exportFederatedSkillManifest,
@@ -219,6 +220,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const masterDecisionOsRoot = resolveDecisionOsRoot({ action_payload: payload, runtime_state: runtime });
   const masterRoot = dirname(masterDecisionOsRoot);
   const decisionOsRoot = masterDecisionOsRoot;
+  const incidentLedger = createRuntimeIncidentLedger({ decisionOsRoot: masterDecisionOsRoot });
   runtime.decisionOsRoot = masterDecisionOsRoot;
   runtime.serverRoot = masterRoot;
   runtime.port = port;
@@ -248,48 +250,183 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   let federationContentScheduler: ReturnType<typeof createFederationContentScheduler> | null = null;
   const projectTaskStates = new Map<string, ProjectTaskState>();
   const federatedTaskStores = new Map<string, TaskCurrentStateStore>();
+  const pausedTaskProjects = new Map<string, RuntimeIncident>();
+  const pausedFederatedTaskProjects = new Map<string, RuntimeIncident>();
+  const pausedBackgroundComponents = new Set<string>();
+  const pausedProjectWatchers = new Set<string>();
+  const pausedProjectRuntimes = new Set<string>();
+  let globalRuntimeIncident: RuntimeIncident | null = null;
   let projectSyncController: ReturnType<typeof createProjectSyncController> | null = null;
 
-  const taskStateForProject = (project: DecisionOsProject): ProjectTaskState => {
-    const current = projectTaskStates.get(project.id);
-    if (current) return current;
-    const ledger = tasksLedgerForProject(project);
-    const tasksLedgerFile = resolve(project.decisionOsRoot, ledger.ledgerFile.replace(/^\.decision-os\//, ''));
-    const stateRoot = resolve(project.decisionOsRoot, 'task-state', project.id);
-    let initialize = !existsSync(stateRoot) && !existsSync(tasksLedgerFile);
-    if (!existsSync(stateRoot) && existsSync(tasksLedgerFile)) {
-      const document = JSON.parse(readFileSync(tasksLedgerFile, 'utf8')) as AnyRecord;
-      initialize = ['cards', 'annotations', 'relationships'].every((key) => !Array.isArray(document[key]) || document[key].length === 0);
-    }
-    const value = createProjectTaskState({
-      projectId: project.id,
-      writerId: federation?.localOwner().ownerNodeId ?? String((runtime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId ?? 'local'),
-      decisionOsRoot: project.decisionOsRoot,
-      tasksLedgerFile,
-      publish: (delta) => federationTaskStateReplicator?.publishDelta(delta),
-      canWrite: () => {
-        if (!federation?.status().configured) return true;
-        const state = projectTaskStates.get(project.id);
-        const convergence = federationTaskStateReplicator?.diagnostics().convergence.find((entry) => entry.peerId === 'relay' && entry.projectId === project.id);
-        return Boolean(state && convergence?.converged && convergence.root === state.store.rootHash());
-      },
-      initialize,
-    });
-    projectTaskStates.set(project.id, value);
-    return value;
+  for (const incident of incidentLedger.active()) {
+    if (incident.scope.startsWith('project-task-state:')) pausedTaskProjects.set(incident.scope.slice('project-task-state:'.length), incident);
+    if (incident.scope.startsWith('federated-task-state:')) pausedFederatedTaskProjects.set(incident.scope.slice('federated-task-state:'.length), incident);
+    if (incident.scope.startsWith('background:')) pausedBackgroundComponents.add(incident.scope.slice('background:'.length));
+    if (incident.scope.startsWith('project-watcher:')) pausedProjectWatchers.add(incident.scope.slice('project-watcher:'.length));
+    if (incident.scope.startsWith('project-runtime:')) pausedProjectRuntimes.add(incident.scope.slice('project-runtime:'.length));
+    if (incident.scope === 'server-runtime') globalRuntimeIncident = incident;
+  }
+
+  const recordIncident = (input: {
+    scope: string;
+    component: string;
+    operation: string;
+    error: unknown;
+    code?: string;
+    context?: Record<string, unknown>;
+    severity?: RuntimeIncident['severity'];
+  }): RuntimeIncident => incidentLedger.record(input);
+
+  const recordBackgroundFailure = (component: string, operation: string, error: unknown, context: Record<string, unknown> = {}): void => {
+    pausedBackgroundComponents.add(component);
+    recordIncident({ scope: `background:${component}`, component, operation, error, context });
   };
 
-  const federatedTaskStoreForProject = (projectId: string, _ownerNodeId: string): TaskCurrentStateStore | null => {
+  const pauseGlobalRuntime = (error: unknown, operation: string): void => {
+    globalRuntimeIncident ??= recordIncident({
+      severity: 'fatal',
+      scope: 'server-runtime',
+      component: 'node-process',
+      operation,
+      error,
+    });
+    telemetry('runtime-scope-paused', { scope: 'server-runtime', incidentId: globalRuntimeIncident.id, operation });
+  };
+  const onUncaughtException = (error: Error): void => pauseGlobalRuntime(error, 'uncaught-exception');
+  const onUnhandledRejection = (reason: unknown): void => pauseGlobalRuntime(reason, 'unhandled-rejection');
+  process.on('uncaughtException', onUncaughtException);
+  process.on('unhandledRejection', onUnhandledRejection);
+
+  const pauseTaskProject = (project: DecisionOsProject, error: unknown, operation: string): RuntimeScopePausedError => {
+    const scope = `project-task-state:${project.id}`;
+    const existing = pausedTaskProjects.get(project.id);
+    const incident = existing ?? recordIncident({
+      scope,
+      component: 'task-current-state',
+      operation,
+      error,
+      context: { projectId: project.id, projectName: project.name, decisionOsRoot: project.decisionOsRoot },
+    });
+    pausedTaskProjects.set(project.id, incident);
+    return new RuntimeScopePausedError(scope, incident.id);
+  };
+
+  const taskStateForProject = (project: DecisionOsProject): ProjectTaskState => {
+    const paused = pausedTaskProjects.get(project.id);
+    if (paused) throw new RuntimeScopePausedError(paused.scope, paused.id);
+    const current = projectTaskStates.get(project.id);
+    if (current) return current;
+    try {
+      const ledger = tasksLedgerForProject(project);
+      const tasksLedgerFile = resolve(project.decisionOsRoot, ledger.ledgerFile.replace(/^\.decision-os\//, ''));
+      const stateRoot = resolve(project.decisionOsRoot, 'task-state', project.id);
+      let initialize = !existsSync(stateRoot) && !existsSync(tasksLedgerFile);
+      if (!existsSync(stateRoot) && existsSync(tasksLedgerFile)) {
+        const document = JSON.parse(readFileSync(tasksLedgerFile, 'utf8')) as AnyRecord;
+        initialize = ['cards', 'annotations', 'relationships'].every((key) => !Array.isArray(document[key]) || document[key].length === 0);
+      }
+      const value = createProjectTaskState({
+        projectId: project.id,
+        writerId: federation?.localOwner().ownerNodeId ?? String((runtime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId ?? 'local'),
+        decisionOsRoot: project.decisionOsRoot,
+        tasksLedgerFile,
+        publish: (delta) => federationTaskStateReplicator?.publishDelta(delta),
+        onPersistenceError: (error) => { pauseTaskProject(project, error, 'materialize-local-task-state'); },
+        canWrite: () => {
+          if (!federation?.status().configured) return true;
+          const state = projectTaskStates.get(project.id);
+          const convergence = federationTaskStateReplicator?.diagnostics().convergence.find((entry) => entry.peerId === 'relay' && entry.projectId === project.id);
+          return Boolean(state && convergence?.converged && convergence.root === state.store.rootHash());
+        },
+        initialize,
+      });
+      projectTaskStates.set(project.id, value);
+      return value;
+    } catch (error) {
+      if (error instanceof RuntimeScopePausedError) throw error;
+      throw pauseTaskProject(project, error, 'open-local-task-state');
+    }
+  };
+
+  const recordProjectBackgroundFailure = (project: DecisionOsProject, error: unknown, operation: string): void => {
+    if (error instanceof RuntimeScopePausedError) return;
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === 'task_state_bootstrap_incomplete') {
+      recordIncident({
+        severity: 'warning',
+        scope: `project-task-write:${project.id}`,
+        component: 'task-current-state',
+        operation,
+        code: 'task_state_bootstrap_incomplete',
+        error,
+        context: { projectId: project.id, projectName: project.name },
+      });
+      return;
+    }
+    pauseTaskProject(project, error, operation);
+  };
+
+  const tryTaskStateForProject = (project: DecisionOsProject): ProjectTaskState | null => {
+    try { return taskStateForProject(project); }
+    catch (error) {
+      if (!(error instanceof RuntimeScopePausedError)) pauseTaskProject(project, error, 'open-local-task-state');
+      return null;
+    }
+  };
+
+  const fallbackTaskProjection = (project: DecisionOsProject): AnyRecord => {
+    const ledger = tasksLedgerForProject(project);
+    const tasksLedgerFile = resolve(project.decisionOsRoot, ledger.ledgerFile.replace(/^\.decision-os\//, ''));
+    try {
+      return { ledger: JSON.parse(readFileSync(tasksLedgerFile, 'utf8')) as AnyRecord, conflicts: [], degraded: true };
+    } catch {
+      return { ledger: { cards: [], annotations: [], relationships: [] }, conflicts: [], degraded: true };
+    }
+  };
+
+  const taskProjectionForProject = (project: DecisionOsProject): AnyRecord => tryTaskStateForProject(project)?.projection() ?? fallbackTaskProjection(project);
+
+  const federatedTaskStoreForProject = (projectId: string, ownerNodeId: string): TaskCurrentStateStore | null => {
     if (!projectId) return null;
+    if (pausedFederatedTaskProjects.has(projectId)) return null;
     const current = federatedTaskStores.get(projectId);
     if (current) return current;
-    const store = createTaskCurrentStateStore({ decisionOsRoot: resolve(masterDecisionOsRoot, 'cache', 'federation-task-state'), projectId, initializeLedger: {} });
-    federatedTaskStores.set(projectId, store);
-    return store;
+    try {
+      const store = createTaskCurrentStateStore({
+        decisionOsRoot: resolve(masterDecisionOsRoot, 'cache', 'federation-task-state'),
+        projectId,
+        initializeLedger: {},
+        onPersistenceError: (error) => {
+          const incident = recordIncident({
+            scope: `federated-task-state:${projectId}`,
+            component: 'federation-task-state',
+            operation: 'materialize-federated-task-state',
+            error,
+            context: { projectId, ownerNodeId },
+          });
+          pausedFederatedTaskProjects.set(projectId, incident);
+        },
+      });
+      federatedTaskStores.set(projectId, store);
+      return store;
+    } catch (error) {
+      const incident = recordIncident({
+        scope: `federated-task-state:${projectId}`,
+        component: 'federation-task-state',
+        operation: 'open-federated-task-state',
+        error,
+        context: { projectId, ownerNodeId },
+      });
+      pausedFederatedTaskProjects.set(projectId, incident);
+      return null;
+    }
   };
   const taskStoreForProject = (projectId: string, ownerNodeId = ''): TaskCurrentStateStore | null => {
+    if (pausedTaskProjects.has(projectId)) return null;
     const local = projectTaskStates.get(projectId)?.store;
     if (local) return local;
+    const localProject = projectCatalogStore.projects().find((project) => project.id === projectId && project.available);
+    if (localProject) return tryTaskStateForProject(localProject)?.store ?? null;
     return federatedTaskStoreForProject(projectId, ownerNodeId);
   };
   let projectSyncCodexRunningProcessCount = 0;
@@ -334,7 +471,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return { ok: launched.every((entry) => entry.ok !== false), launched, capacity };
     })().finally(() => {
       if (runtime.globalCodexSchedulePromise === schedule) delete runtime.globalCodexSchedulePromise;
-      if (globalCodexScheduleRequested) void scheduleGlobalCodexProcesses().catch(() => undefined);
+      if (globalCodexScheduleRequested && !pausedBackgroundComponents.has('codex-process-scheduler')) void scheduleGlobalCodexProcesses()
+        .catch((error: unknown) => recordBackgroundFailure('codex-process-scheduler', 'reschedule-global-processes', error));
     });
     Object.defineProperty(runtime, 'globalCodexSchedulePromise', { value: schedule, writable: true, configurable: true, enumerable: false });
     return schedule;
@@ -378,7 +516,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (released) return;
         released = true;
         projectSyncCodexRunningProcessCount = Math.max(0, projectSyncCodexRunningProcessCount - 1);
-        void scheduleGlobalCodexProcesses().catch(() => undefined);
+        if (!pausedBackgroundComponents.has('codex-process-scheduler')) void scheduleGlobalCodexProcesses()
+          .catch((error: unknown) => recordBackgroundFailure('codex-process-scheduler', 'release-project-sync-slot', error, { projectId }));
       };
     };
     let watcher: ReturnType<typeof watchProjectFiles> | null = null;
@@ -404,9 +543,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (String(scopedEvent.ledgerId) === 'tasks') {
         const taskId = String(scopedEvent.cardId ?? (String(scopedEvent.threadId ?? '').startsWith('thread-') ? String(scopedEvent.threadId).slice('thread-'.length) : ''));
         const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
-        if (project && taskId) void taskStateForProject(project).recordContentContribution(taskId, String(scopedEvent.contentFile ?? ''))
+        if (project && taskId) void Promise.resolve()
+          .then(() => taskStateForProject(project).recordContentContribution(taskId, String(scopedEvent.contentFile ?? '')))
           .then((delta) => controlRoomProjectionStore?.invalidate(projectId, delta.entities))
-          .catch(() => undefined);
+          .catch((error: unknown) => recordProjectBackgroundFailure(project, error, 'capture-watched-task-content'));
       }
       revisions.advance(String(scopedEvent.ledgerId));
       broadcast(`event: card-content-change\ndata: ${JSON.stringify({ ...scopedEvent, projectId })}\n\n`);
@@ -458,33 +598,71 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           threadId: String(event.threadId ?? '')
         });
       }
-      if (event.pipelineRunId) void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
+      if (event.pipelineRunId) void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime })
+        .catch((error: unknown) => recordBackgroundFailure('codex-pipeline-resume', 'resume-after-run-settled', error, { projectId, pipelineRunId: String(event.pipelineRunId) }));
       if (!event.pipelineRunId || event.pipelineTerminal === true) void continueQueuedVoiceCodexAfterRun({
         runtime: projectRuntime, ledgerId: String(event.ledgerId ?? ''), cardId: String(event.cardId ?? event.outputCardId ?? ''),
         threadId: String(event.threadId ?? ''), runId: String(event.runId ?? ''), onCardContentChange: publishCard, onLedgerChange: publishLedger
-      });
+      }).catch((error: unknown) => recordBackgroundFailure('voice-codex-queue', 'continue-after-run-settled', error, { projectId, runId: String(event.runId ?? '') }));
     };
     watcher = watchProjectFiles({
       decisionOsRoot: activeDecisionOsRoot,
       onContentChange: publishCard,
       onProjectChange: publishLedger,
+      onError: (error, context) => {
+        const incident = recordIncident({
+          scope: `project-watcher:${projectId}`,
+          component: 'project-file-watcher',
+          operation: context.operation,
+          error,
+          context: { projectId, decisionOsRoot: activeDecisionOsRoot, file: context.file },
+        });
+        telemetry('runtime-scope-paused', { scope: incident.scope, incidentId: incident.id, projectId });
+        pausedProjectWatchers.add(projectId);
+        watcher?.close();
+      },
     });
     const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
     recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
-    const startupTask = reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).then(async (ownershipReconciliation) => {
+    const startupComponent = `codex-startup-${projectId}`;
+    const startupTask = pausedTaskProjects.has(projectId) || pausedBackgroundComponents.has(startupComponent) ? Promise.resolve() : reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).then(async (ownershipReconciliation) => {
       if (ownershipReconciliation.ledgersChanged > 0) console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
       await resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
-    }).catch((error: unknown) => { projectRuntime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); });
+    }).catch((error: unknown) => {
+      projectRuntime.taskStatePersistenceError = error instanceof Error ? error.message : String(error);
+      recordBackgroundFailure(startupComponent, 'reconcile-codex-startup-state', error, { projectId, decisionOsRoot: activeDecisionOsRoot });
+    });
     startupProjectTasks.push(startupTask);
     return context;
   };
-  migrateLegacyProjectPipelines({
-    serverDecisionOsRoot: masterDecisionOsRoot,
-    projectDecisionOsRoots: projectCatalogStore.projects()
-      .filter((project) => project.available)
-      .map((project) => project.decisionOsRoot),
-  });
+  const tryProjectContext = (project: DecisionOsProject, operation: string): ProjectContext | null => {
+    if (pausedProjectWatchers.has(project.id) || pausedProjectRuntimes.has(project.id)) return null;
+    try { return projectContext(project.decisionOsRoot, project.id); }
+    catch (error) {
+      recordIncident({
+        scope: `project-runtime:${project.id}`,
+        component: 'project-runtime',
+        operation,
+        error,
+        context: { projectId: project.id, projectName: project.name, decisionOsRoot: project.decisionOsRoot },
+      });
+      pausedProjectRuntimes.add(project.id);
+      return null;
+    }
+  };
+  const migrateProjectPipelines = (): void => {
+    migrateLegacyProjectPipelines({
+      serverDecisionOsRoot: masterDecisionOsRoot,
+      projectDecisionOsRoots: projectCatalogStore.projects()
+        .filter((project) => project.available)
+        .map((project) => project.decisionOsRoot),
+    });
+  };
+  if (!pausedBackgroundComponents.has('pipeline-migration')) {
+    try { migrateProjectPipelines(); }
+    catch (error) { recordBackgroundFailure('pipeline-migration', 'migrate-legacy-project-pipelines', error); }
+  }
   const projectCatalog = () => projectCatalogStore.projects();
   let federationServerPort = port;
   let federationSyncRequested = false;
@@ -497,13 +675,23 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     masterDecisionOsRoot,
     ...projectCatalog().filter((project) => project.available).map((project) => project.decisionOsRoot),
   ];
-  const availableServerSkillNames = readCodexSkillCatalog({ decisionOsRoot: masterDecisionOsRoot, runtime }).skills.map((skill) => skill.name);
-  ensureServerPipelines({ serverDecisionOsRoot: masterDecisionOsRoot, availableSkillNames: availableServerSkillNames });
-  migrateCodexSkillMetadataOwner({
-    ownerDecisionOsRoot: masterDecisionOsRoot,
-    sourceDecisionOsRoots: localDecisionOsRoots(),
-    availableSkillNames: availableServerSkillNames,
-  });
+  let availableServerSkillNames: string[] = [];
+  const initializePipelineCatalog = (): void => {
+    availableServerSkillNames = readCodexSkillCatalog({ decisionOsRoot: masterDecisionOsRoot, runtime }).skills.map((skill) => skill.name);
+    ensureServerPipelines({ serverDecisionOsRoot: masterDecisionOsRoot, availableSkillNames: availableServerSkillNames });
+    migrateCodexSkillMetadataOwner({
+      ownerDecisionOsRoot: masterDecisionOsRoot,
+      sourceDecisionOsRoots: localDecisionOsRoots(),
+      availableSkillNames: availableServerSkillNames,
+    });
+  };
+  if (!pausedBackgroundComponents.has('pipeline-catalog')) {
+    try {
+      initializePipelineCatalog();
+    } catch (error) {
+      recordBackgroundFailure('pipeline-catalog', 'initialize-pipeline-catalog', error);
+    }
+  }
   const ownedSkillMetadata = () => new Map(
     readCodexPipelineStore({ decisionOsRoot: masterDecisionOsRoot, availableSkillNames: availableServerSkillNames })
       .store.skillLibrary.map((record) => [record.skillName, record]),
@@ -557,7 +745,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       } while (federationSyncRequested);
     })().finally(() => {
       if (federationSyncPromise === run) federationSyncPromise = null;
-      if (federationSyncRequested) void synchronizeFederatedLibraries().catch(() => undefined);
+      if (federationSyncRequested && !pausedBackgroundComponents.has('federated-library-sync')) void synchronizeFederatedLibraries()
+        .catch((error: unknown) => recordBackgroundFailure('federated-library-sync', 'repeat-synchronization', error));
     });
     federationSyncPromise = run;
     Object.defineProperty(runtime, 'federatedLibrarySyncPromise', { value: run, writable: true, configurable: true, enumerable: false });
@@ -571,25 +760,53 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       for (const client of globalContentEventClients) client.write('event: ledger-content-change\ndata: {"remote":true}\n\n');
     },
     onRemoteCatalogChange: () => {
-      for (const project of projectCatalog().filter((entry) => entry.available)) taskStateForProject(project);
+      for (const project of projectCatalog().filter((entry) => entry.available)) tryTaskStateForProject(project);
       controlRoomProjectionStore?.invalidate();
       federationTaskStateReplicator?.reconcileRelay();
       for (const projectId of new Set(federation?.remoteProjects().map((project) => project.localProjectId) ?? [])) federationTaskStateReplicator?.reconcileProject('relay', projectId);
-      void synchronizeFederatedLibraries().catch(() => undefined);
+      if (!pausedBackgroundComponents.has('federated-library-sync')) void synchronizeFederatedLibraries()
+        .catch((error: unknown) => recordBackgroundFailure('federated-library-sync', 'catalog-change-synchronization', error));
       projectSyncController?.resume();
     },
     onStateFrame: async (frame) => {
-      await federationTaskStateReplicator?.handleFrame(frame);
-      void federationContentScheduler?.drain();
+      try {
+        await federationTaskStateReplicator?.handleFrame(frame);
+        if (!pausedBackgroundComponents.has('federation-content-scheduler')) void federationContentScheduler?.drain()
+          .catch((error: unknown) => recordBackgroundFailure('federation-content-scheduler', 'drain-after-state-frame', error, { projectId: frame.projectId, frameType: frame.type }));
+      } catch (error) {
+        const localProject = projectCatalogStore.projects().find((project) => project.id === frame.projectId && project.available);
+        if (localProject) pauseTaskProject(localProject, error, 'handle-federated-state-frame');
+        else {
+          const incident = recordIncident({
+            scope: `federation-task-state:${frame.projectId}`,
+            component: 'federation-task-state-replicator',
+            operation: 'handle-state-frame',
+            error,
+            context: { projectId: frame.projectId, frameType: frame.type },
+          });
+          pausedFederatedTaskProjects.set(frame.projectId, incident);
+        }
+      }
     },
     onStateConnected: () => {
       federationTaskStateReplicator?.reconcileRelay();
       for (const projectId of new Set(federation?.remoteProjects().map((project) => project.localProjectId) ?? [])) federationTaskStateReplicator?.reconcileProject('relay', projectId);
     },
+    onError: (error, context) => {
+      recordIncident({
+        scope: 'federation-connector',
+        component: 'federation-node-connector',
+        operation: context.operation,
+        error,
+        context: { frameType: context.frameType ?? '' },
+      });
+    },
   });
-  for (const project of projectCatalog().filter((entry) => entry.available)) taskStateForProject(project);
+  for (const project of projectCatalog().filter((entry) => entry.available)) tryTaskStateForProject(project);
   federationTaskStateReplicator = createFederationTaskStateReplicator({
-    stores: () => new Map([...projectTaskStates].map(([projectId, state]) => [projectId, state.store])),
+    stores: () => new Map([...projectTaskStates]
+      .filter(([projectId]) => !pausedTaskProjects.has(projectId))
+      .map(([projectId, state]) => [projectId, state.store])),
     storeFor: taskStoreForProject,
     publish: (nodeId, frame) => federation!.publishStateFrame(nodeId, frame),
     onProjectionChange: ({ projectId, from, delta }) => {
@@ -642,17 +859,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
   controlRoomProjectionStore = createControlRoomProjectionStore({
     cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
-    taskProjectionForProject: (project) => taskStateForProject(project).projection(),
-    taskEntityForProject: (project, entityType, entityId) => taskStateForProject(project).store.projectedEntity(entityType, entityId),
-    taskRootForProject: (project) => taskStateForProject(project).store.rootHash(),
+    taskProjectionForProject,
+    taskEntityForProject: (project, entityType, entityId) => tryTaskStateForProject(project)?.store.projectedEntity(entityType, entityId) ?? null,
+    taskRootForProject: (project) => tryTaskStateForProject(project)?.store.rootHash() ?? `paused:${project.id}`,
   });
   // WHAT: Build the first projection during startup, then let project watchers maintain it.
   // WHY: Control Room requests must read a ready snapshot instead of traversing every registered project.
-  controlRoomProjectionStore.get(projectCatalog().filter((project) => project.available));
+  try {
+    controlRoomProjectionStore.get(projectCatalog().filter((project) => project.available));
+  } catch (error) {
+    recordIncident({
+      scope: 'control-room-projection',
+      component: 'control-room-projection-store',
+      operation: 'build-startup-projection',
+      error,
+    });
+  }
   for (const project of projectCatalog()) {
     // WHAT: Start runtimes only for paths that passed registry validation.
     // WHY: An unavailable registration must remain visible without recreating directories through watcher setup.
-    if (project.available) projectContext(project.decisionOsRoot, project.id);
+    if (project.available) tryProjectContext(project, 'start-project-runtime');
   }
   const reconcileProjectRuntimes = (): void => {
     const registered = projectCatalog();
@@ -660,7 +886,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     for (const project of registered) {
       // WHAT: Reconcile only validated project roots.
       // WHY: Missing registrations remain catalog diagnostics rather than implicit directory creation requests.
-      if (project.available) projectContext(project.decisionOsRoot, project.id);
+      if (project.available) tryProjectContext(project, 'reconcile-project-runtime');
     }
     for (const [root, context] of projectContexts) {
       if (activeRoots.has(root)) continue;
@@ -670,9 +896,96 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     controlRoomProjectionStore?.reconcile(registered);
   };
-  const server = createServer(async (request, response) => {
+  const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
     const requestPath = requestUrl.pathname;
+    if (requestPath === '/api/diagnostics/runtime/resume' && request.method === 'POST') {
+      const body = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord;
+      const scope = String(body.scope ?? '').trim();
+      let resumed = false;
+      if (scope.startsWith('project-task-state:')) {
+        const projectId = scope.slice('project-task-state:'.length);
+        const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
+        if (project) {
+          pausedTaskProjects.delete(projectId);
+          projectTaskStates.delete(projectId);
+          resumed = Boolean(tryTaskStateForProject(project));
+        }
+      } else if (scope.startsWith('federated-task-state:')) {
+        const projectId = scope.slice('federated-task-state:'.length);
+        pausedFederatedTaskProjects.delete(projectId);
+        federatedTaskStores.delete(projectId);
+        resumed = Boolean(federatedTaskStoreForProject(projectId, 'operator-resume'));
+      } else if (scope.startsWith('background:')) {
+        const component = scope.slice('background:'.length);
+        pausedBackgroundComponents.delete(component);
+        try {
+          if (component === 'pipeline-migration') migrateProjectPipelines();
+          if (component === 'pipeline-catalog') initializePipelineCatalog();
+          if (component === 'federated-library-sync') await synchronizeFederatedLibraries();
+          if (component === 'codex-process-scheduler') await scheduleGlobalCodexProcesses();
+          if (component === 'federation-content-scheduler') await federationContentScheduler?.drain();
+          if (component.startsWith('codex-startup-')) {
+            const projectId = component.slice('codex-startup-'.length);
+            const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
+            const context = project ? projectContexts.get(project.decisionOsRoot) : null;
+            if (!project || !context) throw new Error(`Project runtime ${projectId} is unavailable.`);
+            await reconcileCodexExecutionOwnership({ decisionOsRoot: project.decisionOsRoot, runtime: context.runtime });
+            await resumeCodexPipelineRuns({ decisionOsRoot: project.decisionOsRoot, runtime: context.runtime });
+          }
+          resumed = true;
+        } catch (error) {
+          recordBackgroundFailure(component, 'operator-resume-background-component', error);
+        }
+      } else if (scope.startsWith('project-watcher:')) {
+        const projectId = scope.slice('project-watcher:'.length);
+        const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
+        if (project) {
+          pausedProjectWatchers.delete(projectId);
+          const context = projectContexts.get(project.decisionOsRoot);
+          context?.watcher.close();
+          projectContexts.delete(project.decisionOsRoot);
+          resumed = Boolean(tryProjectContext(project, 'operator-resume-project-runtime'));
+        }
+      } else if (scope.startsWith('project-runtime:')) {
+        const projectId = scope.slice('project-runtime:'.length);
+        const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
+        if (project) {
+          pausedProjectRuntimes.delete(projectId);
+          resumed = Boolean(tryProjectContext(project, 'operator-resume-project-runtime'));
+        }
+      } else if (scope === 'server-runtime') {
+        globalRuntimeIncident = null;
+        resumed = true;
+      }
+      const resolved = resumed ? incidentLedger.resolveScope(scope, String(body.resolution ?? 'Operator resumed the paused runtime scope.')) : [];
+      response.statusCode = resumed ? 200 : 409;
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: resumed, scope, resolvedIncidentIds: resolved.map((incident) => incident.id) }));
+      return;
+    }
+    if ((requestPath === '/api/health' || requestPath === '/api/diagnostics/incidents') && request.method === 'GET') {
+      const incidentSnapshot = incidentLedger.snapshot();
+      const activeIncidents = incidentSnapshot.incidents.filter((incident) => incident.status === 'paused');
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({
+        ok: true,
+        status: activeIncidents.length > 0 ? 'degraded' : 'ready',
+        observedAt: new Date().toISOString(),
+        incidentLedger: incidentLedger.file,
+        activeIncidentCount: activeIncidents.length,
+        pausedTaskProjectIds: [...pausedTaskProjects.keys()].sort(),
+        pausedFederatedTaskProjectIds: [...pausedFederatedTaskProjects.keys()].sort(),
+        pausedBackgroundComponents: [...pausedBackgroundComponents].sort(),
+        pausedProjectWatcherIds: [...pausedProjectWatchers].sort(),
+        pausedProjectRuntimeIds: [...pausedProjectRuntimes].sort(),
+        ...(requestPath === '/api/diagnostics/incidents' ? { incidents: incidentSnapshot.incidents } : {}),
+      }));
+      return;
+    }
+    if (globalRuntimeIncident) throw new RuntimeScopePausedError('server-runtime', globalRuntimeIncident.id);
     const projectScope = parseProjectUrlScope(requestPath);
     if (requestPath.startsWith('/p/') && !projectScope) {
       response.statusCode = 400;
@@ -736,7 +1049,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             contentStatus = { status: content.state, resource: key, error: content.error, conflict: content.conflict, candidates: content.candidates };
             if (!resourceReady) {
               federationContentStore.prioritize(contentOwner, localProjectId, key);
-              void federationContentScheduler?.drain();
+              if (!pausedBackgroundComponents.has('federation-content-scheduler')) void federationContentScheduler?.drain()
+                .catch((error: unknown) => recordBackgroundFailure('federation-content-scheduler', 'drain-card-content-demand', error, { projectId: localProjectId, key }));
             }
             const body = content.file ? await readFileAsync(content.file, 'utf8') : '';
             replicaBody = { ...card, comment: { ...comment, ...(content.file ? { what: body } : {}) } };
@@ -756,7 +1070,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           // WHY: Catalog and head synchronization must transfer zero body bytes.
           if (!resourceReady) {
             federationContentStore.prioritize(contentOwner, localProjectId, key);
-            void federationContentScheduler?.drain();
+            if (!pausedBackgroundComponents.has('federation-content-scheduler')) void federationContentScheduler?.drain()
+              .catch((error: unknown) => recordBackgroundFailure('federation-content-scheduler', 'drain-thread-content-demand', error, { projectId: localProjectId, key }));
           }
           const notes = content.file ? parseThreadMarkdown(await readFileAsync(content.file, 'utf8')) : [];
           replicaBody = {
@@ -1320,9 +1635,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
       try {
+        pausedBackgroundComponents.delete('federated-library-sync');
         await synchronizeFederatedLibraries();
         response.end(JSON.stringify({ ok: true, synchronizedPeerCount: federation.nodes().filter((node) => node.online).length }));
       } catch (error) {
+        recordBackgroundFailure('federated-library-sync', 'operator-synchronization', error);
         response.statusCode = 502;
         response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Federated library synchronization failed.' }));
       }
@@ -1364,7 +1681,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         availableVoicePipelineIds: pipelines.map((pipeline) => String(pipeline.id ?? '')).filter(Boolean),
         availableMasterTaskCompletionPipelineIds: pipelines.map((pipeline) => String(pipeline.id ?? '')).filter(Boolean)
       });
-      if (result.ok === true) void scheduleGlobalCodexProcesses();
+      if (result.ok === true) {
+        pausedBackgroundComponents.delete('codex-process-scheduler');
+        void scheduleGlobalCodexProcesses()
+          .catch((error: unknown) => recordBackgroundFailure('codex-process-scheduler', 'settings-change-schedule', error));
+      }
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -2133,12 +2454,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           onLedgerChange: publishLedgerContentChange,
           onExecutionIntentChange: (event: AnyRecord) => {
             if (!localProject || String(fields.ledgerId ?? '') !== 'tasks') return;
-            void taskStateForProject(localProject).transitionExecutionIntent(String(event.cardId ?? ''), {
+            void Promise.resolve().then(() => taskStateForProject(localProject).transitionExecutionIntent(String(event.cardId ?? ''), {
               id: String(event.intentId ?? ''),
               state: ['waiting', 'queued', 'running', 'terminal', 'failed'].includes(String(event.state ?? '')) ? event.state as 'waiting' | 'queued' | 'running' | 'terminal' | 'failed' : 'failed',
               launchMode: event.launchMode === 'pipeline' ? 'pipeline' : 'run',
               error: String(event.error ?? ''),
-            }).then((delta) => controlRoomProjectionStore?.invalidate(localProject.id, delta.entities)).catch(() => undefined);
+            })).then((delta) => controlRoomProjectionStore?.invalidate(localProject.id, delta.entities))
+              .catch((error: unknown) => recordProjectBackgroundFailure(localProject, error, 'transition-voice-execution-intent'));
           }
         },
         runtime_state: requestRuntime
@@ -2442,9 +2764,44 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     response.setHeader('content-type', 'application/json');
     response.end(JSON.stringify({ ok: true, method: request.method, url }));
+  };
+  const server = createServer((request, response) => {
+    void handleRequest(request, response).catch((error: unknown) => {
+      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+      const paused = error instanceof RuntimeScopePausedError;
+      const incident = paused ? null : recordIncident({
+        scope: `http-request:${request.method ?? 'UNKNOWN'}:${requestUrl.pathname}`,
+        component: 'http-server',
+        operation: 'handle-request',
+        error,
+        context: { method: request.method ?? '', path: requestUrl.pathname },
+      });
+      telemetry('http-request-failed', {
+        method: request.method ?? '',
+        path: requestUrl.pathname,
+        statusCode: paused ? 503 : 500,
+        incidentId: paused ? error.incidentId : incident?.id ?? '',
+        code: paused ? error.code : incident?.code ?? 'runtime_error',
+      });
+      if (response.writableEnded) return;
+      if (response.headersSent) {
+        response.destroy();
+        return;
+      }
+      response.statusCode = paused ? 503 : 500;
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({
+        ok: false,
+        error: paused ? 'runtime-scope-paused' : 'internal-runtime-error',
+        incidentId: paused ? error.incidentId : incident?.id ?? '',
+        scope: paused ? error.scope : incident?.scope ?? '',
+      }));
+    });
   });
   const codexQueueScanTimer = setInterval(() => {
-    void scheduleGlobalCodexProcesses().catch(() => undefined);
+    if (!pausedBackgroundComponents.has('codex-process-scheduler')) void scheduleGlobalCodexProcesses()
+      .catch((error: unknown) => recordBackgroundFailure('codex-process-scheduler', 'periodic-queue-scan', error));
   }, 1_000);
   codexQueueScanTimer.unref?.();
   server.on('close', () => {
@@ -2455,13 +2812,38 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     globalContentEventClients.clear();
     federation.stop();
+    process.off('uncaughtException', onUncaughtException);
+    process.off('unhandledRejection', onUnhandledRejection);
   });
   server.on('listening', () => {
     const address = server.address();
     if (address && typeof address === 'object') federationServerPort = address.port;
     federation.start();
   });
-  void Promise.all(startupProjectTasks).then(() => server.listen(port, String(payload.host ?? '127.0.0.1')));
+  server.on('error', (error: Error & { code?: string }) => {
+    recordIncident({
+      severity: 'fatal',
+      scope: 'server-listener',
+      component: 'http-server',
+      operation: 'listen',
+      code: error.code ?? 'server_listen_error',
+      error,
+      context: { host: String(payload.host ?? '127.0.0.1'), port },
+    });
+  });
+  void Promise.allSettled(startupProjectTasks).then(() => {
+    try { server.listen(port, String(payload.host ?? '127.0.0.1')); }
+    catch (error) {
+      recordIncident({
+        severity: 'fatal',
+        scope: 'server-listener',
+        component: 'http-server',
+        operation: 'listen',
+        error,
+        context: { host: String(payload.host ?? '127.0.0.1'), port },
+      });
+    }
+  });
   runtime.server = server;
   return { ok: true, port, server };
 }

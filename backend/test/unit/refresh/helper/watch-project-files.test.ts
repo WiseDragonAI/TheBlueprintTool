@@ -91,3 +91,33 @@ test('suppresses marked server writes and audits only known dependencies', async
     watcher.close();
   }
 });
+
+test('captures synchronous project callback failures without escaping the watcher timer', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-project-watch-error-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  const stateFile = join(decisionOsRoot, 'state.json');
+  const ledgerFile = join(decisionOsRoot, 'specs.json');
+  writeFileSync(stateFile, JSON.stringify({ ledgers: [{ id: 'specs', ledgerFile: '.decision-os/specs.json' }] }));
+  writeFileSync(ledgerFile, JSON.stringify({ cards: [] }));
+  const errors: Array<{ error: unknown; operation: string; file: string }> = [];
+  const watcher = watchProjectFiles({
+    decisionOsRoot,
+    onContentChange: () => undefined,
+    onProjectChange: () => { throw new Error('project-callback-failed'); },
+    onError: (error, context) => errors.push({ error, ...context }),
+    auditIntervalMs: 10_000,
+  });
+
+  try {
+    writeFileSync(ledgerFile, JSON.stringify({ cards: [{ id: 'changed' }] }));
+    const deadline = Date.now() + 2_000;
+    while (errors.length === 0 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(errors.length, 1);
+    assert.match(String(errors[0].error), /project-callback-failed/);
+    assert.equal(errors[0].operation, 'publish-project-change');
+    assert.equal(errors[0].file, ledgerFile);
+  } finally {
+    watcher.close();
+  }
+});

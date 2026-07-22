@@ -3,7 +3,7 @@
  * WHY: The application command boundary must remain intact while persistence stays lane-scoped.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
@@ -54,6 +54,30 @@ test('task intake publishes no state until its first durable content contributio
   assert.match(readFileSync(resolve(root, 'threads', 'tasks', 'thread-card-a.md'), 'utf8'), /Activate it\./);
   assert.equal((state.projection().ledger.cards as Array<Record<string, unknown>>)[0].replicationState, undefined);
   assert.equal(state.store.entity('card', 'card-a')?.fields.replicationState, undefined);
+});
+
+test('unchanged content bytes do not create a second resource mutation when file metadata changes', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-content-dedupe-'));
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const ledgerPath = resolve(root, 'tasks.json');
+  const contentFile = resolve(root, 'cards', 'tasks', 'card-a.md');
+  mkdirSync(resolve(root, 'cards', 'tasks'), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify({ cards: [{ id: 'card-a', title: 'Task', status: 'todo' }], annotations: [], relationships: [] }));
+  writeFileSync(contentFile, '# Same bytes\n');
+  const published: TaskStateDelta[] = [];
+  const publishedContent: string[] = [];
+  const state = createProjectTaskState({
+    projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true,
+    publish: (delta) => { published.push(delta); }, publishContent: (resource) => { publishedContent.push(resource); },
+  });
+
+  await state.recordContentContribution('card-a', '.decision-os/cards/tasks/card-a.md');
+  utimesSync(contentFile, new Date('2026-07-22T01:00:00.000Z'), new Date('2026-07-22T01:00:00.000Z'));
+  await state.recordContentContribution('card-a', '.decision-os/cards/tasks/card-a.md');
+
+  assert.equal(state.store.contentHeads('.decision-os/cards/tasks/card-a.md').length, 1);
+  assert.equal(publishedContent.length, 1);
+  assert.equal(published.flatMap((delta) => delta.entities).filter((entity) => entity.entityType === 'resource').length, 1);
 });
 
 test('projection commands modify only declared entity lanes', async (context) => {

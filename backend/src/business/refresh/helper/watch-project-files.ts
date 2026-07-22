@@ -49,13 +49,24 @@ function ledgerFiles(decisionOsRoot: string): Map<string, string> {
 
 export function watchProjectFiles(input: {
   decisionOsRoot: string;
-  onContentChange: (event: CardContentChange) => void;
-  onProjectChange: (event: ProjectFileChange) => void;
+  onContentChange: (event: CardContentChange) => unknown;
+  onProjectChange: (event: ProjectFileChange) => unknown;
+  onError?: (error: unknown, context: { operation: string; file: string }) => void;
   auditIntervalMs?: number;
 }) {
   const stateFile = resolve(input.decisionOsRoot, 'state.json');
   const canvasFile = resolve(input.decisionOsRoot, 'ledgers-canvas.json');
-  const contentWatcher = watchCardContentFiles({ decisionOsRoot: input.decisionOsRoot, onChange: input.onContentChange });
+  const reportError = (error: unknown, operation: string, file: string): void => {
+    try { input.onError?.(error, { operation, file }); } catch { /* Error reporting must not escape a watcher callback. */ }
+  };
+  const publishProjectChange = (change: ProjectFileChange): void => {
+    try {
+      Promise.resolve(input.onProjectChange(change)).catch((error: unknown) => reportError(error, 'publish-project-change', change.file));
+    } catch (error) {
+      reportError(error, 'publish-project-change', change.file);
+    }
+  };
+  const contentWatcher = watchCardContentFiles({ decisionOsRoot: input.decisionOsRoot, onChange: input.onContentChange, onError: input.onError });
   const pending = new Map<string, NodeJS.Timeout>();
   const ignoredWrites = new Set<string>();
   let ledgers = ledgerFiles(input.decisionOsRoot);
@@ -96,30 +107,39 @@ export function watchProjectFiles(input: {
         contentWatcher.refreshOwnership();
       }
       signatures.set(file, signatureKey(fileSignature(file)));
-      input.onProjectChange(change);
+      publishProjectChange(change);
     }, 50));
   };
 
   refreshSignatures();
   const rootWatcher: FSWatcher = watch(input.decisionOsRoot, { persistent: false }, (_eventType, filename) => {
-    // WHAT: Ignore anonymous root events.
-    // WHY: Reconstruction needs an exact dependency path.
-    if (!filename) return;
-    const file = resolve(input.decisionOsRoot, String(filename));
-    const change = dependencies().get(file);
-    // WHAT: Ignore project-root files outside the registered dependency set.
-    // WHY: Card and thread subtrees have their own ownership-aware watcher.
-    if (!change) return;
-    emit(change);
+    try {
+      // WHAT: Ignore anonymous root events.
+      // WHY: Reconstruction needs an exact dependency path.
+      if (!filename) return;
+      const file = resolve(input.decisionOsRoot, String(filename));
+      const change = dependencies().get(file);
+      // WHAT: Ignore project-root files outside the registered dependency set.
+      // WHY: Card and thread subtrees have their own ownership-aware watcher.
+      if (!change) return;
+      emit(change);
+    } catch (error) {
+      reportError(error, 'process-project-watch-event', input.decisionOsRoot);
+    }
   });
+  rootWatcher.on('error', (error) => reportError(error, 'project-watcher-error', input.decisionOsRoot));
 
   const audit = setInterval(() => {
-    for (const [file, change] of dependencies()) {
-      const next = signatureKey(fileSignature(file));
-      // WHAT: Skip dependencies whose bounded signature is unchanged.
-      // WHY: The audit exists only to recover missed native watcher events.
-      if (signatures.get(file) === next) continue;
-      emit({ ...change, reason: `audit-${change.reason}` });
+    try {
+      for (const [file, change] of dependencies()) {
+        const next = signatureKey(fileSignature(file));
+        // WHAT: Skip dependencies whose bounded signature is unchanged.
+        // WHY: The audit exists only to recover missed native watcher events.
+        if (signatures.get(file) === next) continue;
+        emit({ ...change, reason: `audit-${change.reason}` });
+      }
+    } catch (error) {
+      reportError(error, 'audit-project-files', input.decisionOsRoot);
     }
   }, input.auditIntervalMs ?? 30_000);
   audit.unref();
