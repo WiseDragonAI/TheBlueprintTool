@@ -50,6 +50,7 @@ import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipelin
 import { recoverCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
 import { reconcileCodexExecutionOwnership } from '../../codex/helper/reconcile-codex-execution-ownership.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
+import { createCodexCapacitySlots, type CodexSlotAcquireOptions } from '../../codex/helper/codex-capacity-slots.js';
 import { resolveCatalogProject, tasksLedgerForProject, type DecisionOsProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
@@ -277,6 +278,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     severity?: RuntimeIncident['severity'];
   }): RuntimeIncident => incidentLedger.record(input);
 
+  const recordStoppedOperation = (input: {
+    scope: string;
+    operation: string;
+    error: unknown;
+    context: Record<string, unknown>;
+  }): string => {
+    const incident = recordIncident({
+      severity: 'warning',
+      component: 'federation-node-message',
+      ...input,
+    });
+    incidentLedger.resolveScope(incident.scope, 'The failed operation stopped without changing project state.');
+    return incident.id;
+  };
+
   const recordBackgroundFailure = (component: string, operation: string, error: unknown, context: Record<string, unknown> = {}): void => {
     pausedBackgroundComponents.add(component);
     recordIncident({ scope: `background:${component}`, component, operation, error, context });
@@ -429,14 +445,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (localProject) return tryTaskStateForProject(localProject)?.store ?? null;
     return federatedTaskStoreForProject(projectId, ownerNodeId);
   };
-  let projectSyncCodexRunningProcessCount = 0;
-  let projectSyncSlotTail = Promise.resolve();
   const globalCodexProcessCapacity = (): number => {
     const settings = runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object' ? runtime.decisionOsSettings as AnyRecord : {};
     return normalizedConcurrentCodexProcesses(process.env.CODEX_MAX_CONCURRENT_PROCESSES ?? settings.maxConcurrentCodexProcesses ?? 1) ?? 1;
   };
-  const globalCodexRunningProcessCount = (): number => [...projectContexts.values()]
-    .reduce((count, context) => count + runningCodexProcessCount({ codexSkillRuns: context.runtime.codexSkillRuns }), projectSyncCodexRunningProcessCount);
+  const scheduledCodexRunningProcessCount = (): number => [...projectContexts.values()]
+    .reduce((count, context) => count + runningCodexProcessCount({ codexSkillRuns: context.runtime.codexSkillRuns }), 0);
+  const projectSyncCodexSlots = createCodexCapacitySlots({
+    capacity: globalCodexProcessCapacity,
+    externalRunningCount: scheduledCodexRunningProcessCount,
+  });
+  const globalCodexRunningProcessCount = (): number => scheduledCodexRunningProcessCount() + projectSyncCodexSlots.reservedCount();
   const globalCodexQueuePosition = (id: string): number => {
     const pending = [...projectContexts.keys()].flatMap((root, rootOrder) => pendingCodexProcessEntries(root)
       .map((entry) => ({ ...entry, order: rootOrder * 2_000_000 + entry.order })))
@@ -501,21 +520,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (!project) throw new Error(`Task-state authority has no project ${projectId}.`);
       return taskStateForProject(project).projection().ledger;
     };
-    projectRuntime.acquireProjectSyncCodexSlot = async (): Promise<() => void> => {
-      let unlockQueue: () => void = () => undefined;
-      const previous = projectSyncSlotTail;
-      projectSyncSlotTail = new Promise<void>((resolveSlot) => { unlockQueue = resolveSlot; });
-      await previous;
-      while (globalCodexRunningProcessCount() >= globalCodexProcessCapacity()) {
-        await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
-      }
-      projectSyncCodexRunningProcessCount += 1;
-      unlockQueue();
+    projectRuntime.acquireProjectSyncCodexSlot = async (options: CodexSlotAcquireOptions = {}): Promise<() => void> => {
+      const releaseSlot = await projectSyncCodexSlots.acquire(options);
       let released = false;
       return () => {
         if (released) return;
         released = true;
-        projectSyncCodexRunningProcessCount = Math.max(0, projectSyncCodexRunningProcessCount - 1);
+        releaseSlot();
         if (!pausedBackgroundComponents.has('codex-process-scheduler')) void scheduleGlobalCodexProcesses()
           .catch((error: unknown) => recordBackgroundFailure('codex-process-scheduler', 'release-project-sync-slot', error, { projectId }));
       };
@@ -1189,7 +1200,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         response.end(JSON.stringify(result));
       } catch (error) {
         response.statusCode = abort.signal.aborted ? 499 : error instanceof RangeError ? 400 : 502;
-        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Node message execution failed.' }));
+        const incidentId = !abort.signal.aborted && !(error instanceof RangeError)
+          ? recordStoppedOperation({
+            scope: `node-message-execution:${requesterNodeId}`,
+            operation: 'execute-node-message',
+            error,
+            context: { requesterNodeId },
+          })
+          : '';
+        response.end(JSON.stringify({
+          ok: false,
+          error: error instanceof Error ? error.message : 'Node message execution failed.',
+          ...(incidentId ? { incidentId } : {}),
+        }));
       }
       return;
     }
@@ -1244,7 +1267,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         response.end(remote.body);
       } catch (error) {
         response.statusCode = abort.signal.aborted ? 499 : error instanceof RangeError || error instanceof SyntaxError ? 400 : 502;
-        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Node message dispatch failed.' }));
+        const incidentId = !abort.signal.aborted && !(error instanceof RangeError) && !(error instanceof SyntaxError)
+          ? recordStoppedOperation({
+            scope: `node-message-dispatch:${targetNodeId}`,
+            operation: 'dispatch-node-message',
+            error,
+            context: { targetNodeId },
+          })
+          : '';
+        response.end(JSON.stringify({
+          ok: false,
+          error: error instanceof Error ? error.message : 'Node message dispatch failed.',
+          ...(incidentId ? { incidentId } : {}),
+        }));
       }
       return;
     }
