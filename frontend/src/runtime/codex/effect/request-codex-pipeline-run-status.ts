@@ -9,6 +9,7 @@ import type {
   CodexPipelineRunStep,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { projectReplicaRequestPath } from '../../project/helper/project-request-scope.js';
+import type { CodexExecutionDto } from '../../../../../shared/schemas/codex-execution-types.js';
 
 export type CodexPipelineRunSkillDetail = CodexPipelineRunSkill & {
   stdoutAvailable: boolean;
@@ -40,6 +41,7 @@ export type CodexPipelineRunStatusResult = {
   pipeline?: CodexPipeline | null;
   activeStep?: CodexPipelineRunStepDetail | null;
   activeSkill?: CodexPipelineRunSkillDetail | null;
+  execution?: CodexExecutionDto | null;
   canCancel: boolean;
   canRestart: boolean;
   canContinue: boolean;
@@ -95,6 +97,7 @@ function normalizeStatus(response: Response, body: PipelineRunStatusResponse): C
     pipeline: body.pipeline,
     activeStep: body.activeStep,
     activeSkill: body.activeSkill,
+    execution: body.execution ?? null,
     canCancel: Boolean(body.canCancel),
     canRestart: Boolean(body.canRestart),
     canContinue: Boolean(body.canContinue),

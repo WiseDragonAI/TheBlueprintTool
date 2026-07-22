@@ -10,6 +10,8 @@ import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
+import { legacyCodexExecutionStatus } from '../helper/codex-execution-coordinator.js';
+import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -48,6 +50,29 @@ export function readCompactSkillRunStatusController(input: { runId: string; ledg
   const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime });
   const ownership = resolveCardSkillRunOwnership({ ledger, decisionOsRoot, cardId, runId });
   if (!ownership.found) return { ok: false, statusCode: 404, error: 'Run not found on card.' };
+  const canonical = codexExecutionCoordinator(runtime)?.dtoForSession(runId, cardId) ?? null;
+  if (canonical) {
+    const status = legacyCodexExecutionStatus(canonical.phase);
+    return {
+      ok: true,
+      statusCode: 200,
+      runId,
+      kind: 'skill',
+      ledgerId,
+      cardId,
+      status,
+      phase: canonical.phase,
+      active: canonical.live,
+      startedAt: canonical.startedAt ?? '',
+      finishedAt: canonical.finishedAt ?? '',
+      elapsedMs: elapsedMs(canonical.startedAt ?? canonical.requestedAt, canonical.finishedAt),
+      error: canonical.error?.message ?? '',
+      lifecycleRevision: canonical.revision,
+      queuePosition: null,
+      pipelineRunId: canonical.pipelineRunId,
+      execution: canonical,
+    };
+  }
   const live = runtimeRun(runtime, runId);
   const pipelineRun = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.steps.some((step) => step.skills.some((skill) => skill.runId === runId)));
   const persistedSkill = pipelineRun?.steps.flatMap((step) => step.skills).find((skill) => skill.runId === runId);
@@ -82,6 +107,29 @@ export function readCompactPipelineRunStatusController(input: { runId: string; r
   if (!run) return { ok: false, statusCode: 404, error: 'Pipeline run not found.' };
   const activeStep = run.steps.find((step) => step.status === 'running' || step.status === 'pending') ?? null;
   const activeSkill = activeStep?.skills.find((skill) => skill.status === 'running' || skill.status === 'pending') ?? null;
+  const latestSkill = activeSkill ?? run.steps.flatMap((step) => step.skills).at(-1) ?? null;
+  const canonical = latestSkill ? codexExecutionCoordinator(input.runtime)?.dto(latestSkill.executionId) ?? null : null;
+  if (canonical) {
+    const status = legacyCodexExecutionStatus(canonical.phase);
+    return {
+      ok: true,
+      statusCode: 200,
+      runId: run.id,
+      kind: 'pipeline',
+      ledgerId: run.ledgerId,
+      cardId: canonical.ownerCardId,
+      status,
+      phase: canonical.phase,
+      active: canonical.live,
+      startedAt: canonical.startedAt ?? '',
+      finishedAt: canonical.finishedAt ?? '',
+      elapsedMs: elapsedMs(canonical.startedAt ?? canonical.requestedAt, canonical.finishedAt),
+      error: canonical.error?.message ?? '',
+      lifecycleRevision: canonical.revision,
+      queuePosition: null,
+      execution: canonical,
+    };
+  }
   const status = normalizedStatus(run.status);
   const startedAt = activeSkill?.startedAt ?? activeStep?.startedAt ?? run.resumedAt ?? run.startedAt ?? '';
   const finishedAt = run.finishedAt ?? '';

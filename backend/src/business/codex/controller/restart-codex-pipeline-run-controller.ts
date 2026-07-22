@@ -3,6 +3,7 @@
  * WHY: Restart must be deterministic, remove prior card/thread results, and retain resolved run settings.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
@@ -34,6 +35,7 @@ function resetRun(run: CodexPipelineRun, timestamp: string): CodexPipelineRun {
       error: '',
       skills: step.skills.map((skill) => ({
         ...skill,
+        executionId: `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`,
         status: 'pending',
         startedAt: null,
         finishedAt: null,

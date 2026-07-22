@@ -29,6 +29,7 @@ function taskSemanticFingerprint(task: AnyRecord): string {
     'projectName', 'projectColor', 'ledger', 'ledgerTitle',
     'logicalProjectKey', 'replica', 'replicas', 'replicaCount', 'conflict',
     'status', 'executionStatus', 'executionObservation', 'executionSince', 'executionTime',
+    'execution', 'executionObservations', 'executionNodeId', 'executionNodeLabel',
     'executionOwnerCardId', 'executionOwnerKind',
     'codexStatus', 'codexProcessing', 'codexQueued', 'codexQueuePosition', 'transcribingBeforeLaunch',
     'codexRunId', 'codexPipelineRunId', 'codexActiveRunId', 'codexActiveExecutionId',
@@ -148,12 +149,26 @@ export function federatedControlRoomProjection(input: {
     const authorityIntent = authority.executionIntent && typeof authority.executionIntent === 'object' && !Array.isArray(authority.executionIntent)
       ? authority.executionIntent as AnyRecord
       : {};
-    const structuralExecution = ['waiting', 'queued', 'running'].includes(text(authorityIntent.state));
-    const observationMembers = members.filter((member) => member.executionObservation && typeof member.executionObservation === 'object');
+    const legacyState = text(authorityIntent.state);
+    const intentPhase = text(authorityIntent.phase) || (legacyState === 'waiting' ? 'preparing' : legacyState);
+    const intentExecutionId = text(authorityIntent.executionId) || text(authorityIntent.id);
+    const structuralExecution = ['preparing', 'queued', 'starting', 'running'].includes(intentPhase);
+    const observationMembers = members.filter((member) => {
+      const candidate = member.executionObservation && typeof member.executionObservation === 'object'
+        ? member.executionObservation as AnyRecord
+        : null;
+      if (!candidate) return false;
+      if (!intentExecutionId) return true;
+      return text(candidate.executionId) === intentExecutionId
+        && Number(candidate.revision) === Number(authorityIntent.revision)
+        && Date.parse(text(candidate.expiresAt)) > Date.now();
+    });
     const orderedObservationMembers = [...observationMembers].sort((left, right) => {
       const priority = (member: AnyRecord): number => {
-        const kind = text((member.executionObservation as AnyRecord | undefined)?.kind);
-        return kind === 'codex-process' ? 0 : kind === 'voice-transcription' ? 1 : 2;
+        const candidate = member.executionObservation as AnyRecord | undefined;
+        const phase = text(candidate?.phase);
+        const kind = text(candidate?.kind);
+        return phase === 'running' || kind === 'codex-process' ? 0 : phase === 'starting' ? 1 : kind === 'voice-transcription' ? 2 : 3;
       };
       return priority(left) - priority(right)
         || text(left.ownerNodeId).localeCompare(text(right.ownerNodeId));
@@ -170,7 +185,7 @@ export function federatedControlRoomProjection(input: {
           : 'task-waiting';
     const fingerprints = new Set(members.map(taskSemanticFingerprint));
     const stateConflict = fingerprints.size > 1;
-    const executionConflict = !structuralExecution && orderedObservationMembers.length > 1;
+    const executionConflict = orderedObservationMembers.length > 1;
     const conflict = stateConflict || executionConflict;
     if (stateConflict) {
       conflictDiagnostics.push({
@@ -197,22 +212,25 @@ export function federatedControlRoomProjection(input: {
     return {
       ...authority,
       status,
-      executionObservation: structuralExecution ? null : observation ?? null,
-      executionObservations: structuralExecution ? [] : orderedObservationMembers.map((member) => member.executionObservation),
-      executionStatus: structuralExecution ? text(authority.executionStatus) : observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'queued' : observation?.kind === 'voice-transcription' ? 'transcribing-before-launch' : '',
+      execution: executionMember?.execution ?? authority.execution ?? null,
+      executionObservation: observation ?? null,
+      executionObservations: orderedObservationMembers.map((member) => member.executionObservation),
+      executionStatus: structuralExecution
+        ? ((intentPhase === 'starting' || intentPhase === 'running') && !observation ? 'interrupted' : intentPhase)
+        : observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'queued' : observation?.kind === 'voice-transcription' ? 'preparing' : '',
       executionSince: structuralExecution ? text(authority.executionSince) : observation?.kind === 'codex-process' ? text(executionMember.executionSince) : '',
       executionTime: structuralExecution ? Number(authority.executionTime) : observation?.kind === 'codex-process' ? Number(executionMember.executionTime) : Number.NaN,
       executionOwnerCardId: structuralExecution ? text(authority.executionOwnerCardId) : observation ? text(executionMember.executionOwnerCardId) || text(observation.cardId) : '',
       executionOwnerKind: structuralExecution ? text(authority.executionOwnerKind) : observation ? text(executionMember.executionOwnerKind) || text(observation.ownerKind) : '',
-      codexRunId: structuralExecution ? text(authority.codexRunId) : observation?.kind === 'codex-process' || observation?.kind === 'codex-queue' ? text(executionMember.codexRunId) : text(authority.codexRunId),
-      codexPipelineRunId: structuralExecution ? text(authority.codexPipelineRunId) : observation?.kind === 'codex-process' || observation?.kind === 'codex-queue' ? text(executionMember.codexPipelineRunId) : text(authority.codexPipelineRunId),
-      codexStatus: structuralExecution ? text(authority.codexStatus) : observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'queued' : text(authority.codexStatus),
-      codexProcessing: structuralExecution ? authority.codexProcessing === true : observation?.kind === 'codex-process',
-      codexQueued: structuralExecution ? authority.codexQueued === true : observation?.kind === 'codex-queue',
+      codexRunId: structuralExecution ? text(executionMember?.codexRunId) || text(authority.codexRunId) : observation?.kind === 'codex-process' || observation?.kind === 'codex-queue' ? text(executionMember.codexRunId) : text(authority.codexRunId),
+      codexPipelineRunId: structuralExecution ? text(executionMember?.codexPipelineRunId) || text(authority.codexPipelineRunId) : observation?.kind === 'codex-process' || observation?.kind === 'codex-queue' ? text(executionMember.codexPipelineRunId) : text(authority.codexPipelineRunId),
+      codexStatus: structuralExecution ? intentPhase : observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'queued' : text(authority.codexStatus),
+      codexProcessing: structuralExecution ? intentPhase === 'starting' || intentPhase === 'running' : observation?.kind === 'codex-process',
+      codexQueued: structuralExecution ? intentPhase === 'queued' : observation?.kind === 'codex-queue',
       codexQueuePosition: structuralExecution ? authority.codexQueuePosition ?? null : observation?.kind === 'codex-queue' ? executionMember.codexQueuePosition ?? null : null,
-      transcribingBeforeLaunch: structuralExecution ? authority.transcribingBeforeLaunch === true : observation?.kind === 'voice-transcription',
-      executionNodeId: structuralExecution ? '' : observation ? text(observation.nodeId) : '',
-      executionNodeLabel: structuralExecution ? '' : observation ? text(observation.nodeLabel) : '',
+      transcribingBeforeLaunch: structuralExecution ? intentPhase === 'preparing' && authority.transcribingBeforeLaunch === true : observation?.kind === 'voice-transcription',
+      executionNodeId: observation ? text(observation.executorNodeId) || text(observation.nodeId) : '',
+      executionNodeLabel: observation ? text(observation.nodeLabel) || text(executionMember.ownerNodeLabel) : '',
       conflict,
       replicaCount: members.length,
       replicas: [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId))).map((member) => ({

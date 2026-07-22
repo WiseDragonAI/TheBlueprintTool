@@ -10,6 +10,7 @@ import WebSocket from 'ws';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
 import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 import { taskCurrentBaselineEpoch, taskCurrentStateVersion, taskStateProtocol } from '../../task-state/helper/task-current-state-types.js';
+import type { CodexExecutionObservation } from '../../../../../shared/schemas/codex-execution-types.js';
 
 type ProjectManifest = Pick<DecisionOsProject, 'id' | 'name' | 'description' | 'color' | 'ledgers' | 'originFingerprint'>;
 type RelayFrame = {
@@ -43,6 +44,13 @@ export type FederationStateFrame = {
   from: string;
   projectId: string;
   payload: unknown;
+};
+
+export type FederationExecutionObservationFrame = {
+  type: 'state-execution-observation';
+  from: string;
+  projectId: string;
+  payload: { executionId: string; observation: CodexExecutionObservation | null };
 };
 
 export type FederationSettings = {
@@ -153,6 +161,7 @@ class CreditGate {
 }
 
 type InternalResponse = { status: number; headers: Record<string, string>; body: Buffer };
+export type FederationInternalResponse = InternalResponse & { requestId: string };
 type RequesterStream = {
   response?: ServerResponse;
   requestCredit: CreditGate;
@@ -186,6 +195,7 @@ export function createFederationNodeConnector(input: {
   onRemoteCatalogChange?: () => void;
   onStateConnected?: () => void;
   onStateFrame?: (frame: FederationStateFrame) => void | Promise<void>;
+  onExecutionObservation?: (frame: FederationExecutionObservationFrame) => void;
   onError?: (error: unknown, context: { operation: string; frameType?: string }) => void;
   internalRequestTimeoutMs?: number;
   flowControlTimeoutMs?: number;
@@ -375,6 +385,15 @@ export function createFederationNodeConnector(input: {
     }
     if (frame.type === 'content-change') {
       input.onRemoteContentChange?.(String(frame.from ?? ''));
+      return;
+    }
+    if (frame.type === 'state-execution-observation') {
+      input.onExecutionObservation?.({
+        type: frame.type,
+        from: String(frame.from ?? ''),
+        projectId: String(frame.projectId ?? ''),
+        payload: frame.payload as FederationExecutionObservationFrame['payload'],
+      });
       return;
     }
     if (frame.type.startsWith('state-')) {
@@ -752,6 +771,16 @@ export function createFederationNodeConnector(input: {
         return false;
       }
     },
+    publishExecutionObservation(projectId: string, payload: FederationExecutionObservationFrame['payload']): boolean {
+      if (socket?.readyState !== WebSocket.OPEN) return false;
+      try {
+        send({ version: 1, type: 'state-execution-observation', stateVersion: taskCurrentStateVersion, projectId, payload });
+        return true;
+      } catch (error) {
+        reportError(error, 'publish-execution-observation', 'state-execution-observation');
+        return false;
+      }
+    },
     localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
       return { ownerNodeId: settings?.nodeId || 'local', ownerNodeLabel: settings?.nodeLabel || 'This server', online: true };
     },
@@ -822,8 +851,9 @@ export function createFederationNodeConnector(input: {
         failRequester(requestId, 504, 'federation_request_flow_stalled', error instanceof Error ? error.message : 'Federation request flow stalled.');
       }
     },
-    async request(ownerNodeId: string, path: string, options?: { method?: string; body?: Buffer; headers?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal }): Promise<InternalResponse> {
-      return openRequest(ownerNodeId, path, options).response;
+    async request(ownerNodeId: string, path: string, options?: { method?: string; body?: Buffer; headers?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal }): Promise<FederationInternalResponse> {
+      const opened = openRequest(ownerNodeId, path, options);
+      return { ...await opened.response, requestId: opened.requestId };
     },
     async requestToFile(ownerNodeId: string, path: string, target: string, expectedHash: string): Promise<{ status: number; bytes: number }> {
       if (!settings || !remoteNodes.get(ownerNodeId)?.online || socket?.readyState !== WebSocket.OPEN) return { status: 503, bytes: 0 };

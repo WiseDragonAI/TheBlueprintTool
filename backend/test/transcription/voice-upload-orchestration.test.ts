@@ -8,6 +8,7 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
+import { codexExecutionCoordinator } from '@backend/business/codex/helper/codex-execution-runtime.js';
 
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
@@ -26,6 +27,15 @@ async function waitForPipelineComplete(decisionOsRoot: string, pipelineId: strin
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
   assert.fail(`Timed out waiting for pipeline ${pipelineId} to complete`);
+}
+
+async function waitForExecutionPhase(runtime: Record<string, unknown>, executionId: string, phase: string): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 3000) {
+    if (codexExecutionCoordinator(runtime)?.store.find(executionId)?.phase === phase) return;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+  assert.fail(`Timed out waiting for execution ${executionId} phase ${phase}`);
 }
 
 function voiceUploadForm(input: { transcript?: string; queueCodex?: boolean; launchMode?: 'send' | 'run' | 'pipeline'; noteId?: string; ledgerId?: string | null; threadId?: string | null; cardId?: string | null; awaitCompletion?: boolean }): FormData {
@@ -81,16 +91,13 @@ test('queued voice acceptance moves the card to transcribing-before-launch durin
       body: voiceUploadForm({ queueCodex: true, awaitCompletion: false })
     });
     assert.equal(response.status, 202);
-    const responseBody = await response.json() as { body: { queueCodex?: boolean } };
+    const responseBody = await response.json() as { body: { queueCodex?: boolean; executionId: string } };
     assert.equal(responseBody.body.queueCodex, true);
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '"status":"transcribing"');
     let ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string; executionRunId?: string }> };
     assert.equal(ledger.cards[0].executionStatus, undefined);
     assert.equal(ledger.cards[0].executionRunId, undefined);
-    assert.deepEqual((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], {
-      kind: 'voice-transcription',
-      startedAt: (runtime.voiceCodexExecutionObservations as Record<string, Record<string, unknown>>)['specs\0card-a'].startedAt,
-    });
+    assert.equal(codexExecutionCoordinator(runtime)?.store.find(responseBody.body.executionId)?.phase, 'preparing');
 
     ledger.cards = [];
     writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify(ledger, null, 2));
@@ -98,7 +105,8 @@ test('queued voice acceptance moves the card to transcribing-before-launch durin
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '"status":"transcription failed"');
     ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string }> };
     assert.equal(ledger.cards.length, 0);
-    assert.equal((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], undefined);
+    assert.equal(codexExecutionCoordinator(runtime)?.store.find(responseBody.body.executionId)?.phase, 'failed');
+    assert.equal(runtime.voiceCodexExecutionObservations, undefined);
   } finally {
     settleTranscription?.(new Response(JSON.stringify({ error: { message: 'test cleanup' } }), { status: 503, headers: { 'content-type': 'application/json' } }));
     server.close();
@@ -276,16 +284,18 @@ test('voice upload transcribes on the backend and starts Codex when the card has
       body: voiceUploadForm({ transcript: 'Backend-owned transcript.', queueCodex: true })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { body: { ok: boolean; noteId: string; queueCodex: boolean } };
+    const body = await response.json() as { body: { ok: boolean; noteId: string; queueCodex: boolean; executionId: string } };
     assert.equal(body.body.ok, true);
     assert.equal(body.body.noteId, 'note-voice-1');
     assert.equal(body.body.queueCodex, true);
 
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), 'Backend-owned transcript.');
     await waitForText(inputFile, 'Backend-owned transcript.');
+    await waitForExecutionPhase(runtime, body.body.executionId, 'succeeded');
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ id: string; codexThreadRunId?: string }> };
     assert.match(ledger.cards.find((card) => card.id === 'card-a')?.codexThreadRunId ?? '', /^codex-skill-/);
-    assert.equal((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], undefined);
+    assert.equal(codexExecutionCoordinator(runtime)?.store.find(body.body.executionId)?.kind, 'voice');
+    assert.equal(runtime.voiceCodexExecutionObservations, undefined);
   } finally {
     server.close();
     process.chdir(originalCwd);
@@ -344,12 +354,13 @@ test('voice Pipeline mode starts the pipeline configured in Settings', async () 
       body: voiceUploadForm({ transcript: 'Pipeline transcript.', launchMode: 'pipeline', noteId: 'note-voice-pipeline' })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { body: { ok: boolean; launchMode: string } };
+    const body = await response.json() as { body: { ok: boolean; launchMode: string; executionId: string } };
     assert.equal(body.body.ok, true);
     assert.equal(body.body.launchMode, 'pipeline');
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.some((run) => run.pipelineId === 'voice-pipeline'), true);
     await waitForPipelineComplete(decisionOsRoot, 'voice-pipeline');
-    assert.equal((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], undefined);
+    assert.equal(codexExecutionCoordinator(runtime)?.store.find(body.body.executionId)?.phase, 'succeeded');
+    assert.equal(runtime.voiceCodexExecutionObservations, undefined);
   } finally {
     server.close();
     process.chdir(originalCwd);
@@ -426,10 +437,12 @@ test('voice upload continues the existing Codex session when the card has a run 
       body: voiceUploadForm({ transcript: 'Existing-session transcript.', queueCodex: true, noteId: 'note-voice-continue' })
     });
     assert.equal(response.status, 202);
+    const body = await response.json() as { body: { executionId: string } };
 
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), 'Existing-session transcript.');
     await waitForText(inputFile, 'Existing-session transcript.');
     await waitForText(argvFile, 'gpt-5.4');
+    await waitForExecutionPhase(runtime, body.body.executionId, 'succeeded');
     const argv = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
     assert.equal(argv.includes('gpt-5.4'), true);
     assert.equal(argv.includes('model_reasoning_effort="medium"'), true);
@@ -437,7 +450,8 @@ test('voice upload continues the existing Codex session when the card has a run 
     assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexThreadRunId, runId);
     assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexRunModel, 'gpt-5.4');
     assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexRunEffort, 'medium');
-    assert.equal((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], undefined);
+    assert.equal(codexExecutionCoordinator(runtime)?.store.find(body.body.executionId)?.sessionId, runId);
+    assert.equal(runtime.voiceCodexExecutionObservations, undefined);
   } finally {
     server.close();
     process.chdir(originalCwd);

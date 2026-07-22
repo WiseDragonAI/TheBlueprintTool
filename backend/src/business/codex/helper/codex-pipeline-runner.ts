@@ -23,6 +23,7 @@ import { resolveServerSkillContext } from './server-skill-context.js';
 import { projectCardCodexRun } from './project-card-codex-run.js';
 import { projectCardExecutionIntent } from './project-card-execution-intent.js';
 import { queueLedgerProjectionPersistence } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { codexProcessIdentity } from './codex-process-queue.js';
 import { launchCodexExecutionProcess } from './launch-codex-execution-process.js';
@@ -37,6 +38,7 @@ import {
   scheduleCodexRuntime,
   updateCodexRuntimeRun as updateRuntimeRun,
 } from './codex-runtime-run-store.js';
+import { codexExecutionCoordinator } from './codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type TerminalStatus = 'complete' | 'failed' | 'cancelled';
@@ -210,13 +212,13 @@ function outputFileForCard(context: PipelineLedgerContext, decisionOsRoot: strin
   return resolveCardContentFile(decisionOsRoot, comment.contentFile) ?? '';
 }
 
-function projectPipelineSkillRun(input: {
+async function projectPipelineSkillRun(input: {
   decisionOsRoot: string;
   context: PipelineLedgerContext;
   step: CodexPipelineRunStep;
   skill: CodexPipelineRunSkill;
   pipelineRun: CodexPipelineRun;
-}): void {
+}): Promise<void> {
   const outputFile = outputFileForCard(input.context, input.decisionOsRoot, input.step.outputCardId);
   const outputFileRef = outputFile ? relative(dirname(input.decisionOsRoot), outputFile) : '';
   const projection = {
@@ -238,13 +240,26 @@ function projectPipelineSkillRun(input: {
   projectCardCodexRun({ ...projection, cardId: input.pipelineRun.sourceCardId });
   projectCardCodexRun({ ...projection, cardId: input.step.outputCardId });
   const source = (input.context.ledger.cards ?? []).find((card) => String(card.id ?? '') === input.pipelineRun.sourceCardId);
-  if (input.context.ledgerId === 'tasks' && source) projectCardExecutionIntent({
-    card: source,
-    intentId: input.pipelineRun.id,
-    state: 'running',
-    changedAt: input.skill.startedAt ?? new Date().toISOString(),
+  if (input.context.ledgerId === 'tasks' && source) {
+    const coordinator = codexExecutionCoordinator(input.context.runtime ?? {});
+    const execution = coordinator?.store.find(input.skill.executionId);
+    if (coordinator && execution) source.executionIntent = coordinator.intent(execution);
+    else projectCardExecutionIntent({
+      card: source,
+      intentId: input.pipelineRun.id,
+      state: 'running',
+      changedAt: input.skill.startedAt ?? new Date().toISOString(),
+    });
+  }
+  stripHydratedThreadNotes(input.context.ledger);
+  await persistLedgerProjection({
+    decisionOsRoot: input.decisionOsRoot,
+    ledgerId: input.context.ledgerId,
+    ledgerPath: input.context.ledgerPath,
+    ledger: input.context.ledger,
+    runtime: input.context.runtime,
+    command: { kind: 'project-codex-pipeline-skill', cardIds: [input.pipelineRun.sourceCardId, input.step.outputCardId] },
   });
-  persistLedger(input.context, 'project-codex-pipeline-skill', [input.pipelineRun.sourceCardId, input.step.outputCardId]);
 }
 
 function terminalFromFiles(skill: CodexPipelineRunSkill): TerminalStatus | null {
@@ -260,6 +275,14 @@ export function derivePipelineSkillStatus(input: {
   skill: CodexPipelineRunSkill;
   runtime?: AnyRecord;
 }): CodexPipelineStatus {
+  const canonical = input.runtime ? codexExecutionCoordinator(input.runtime)?.store.find(input.skill.executionId) : null;
+  if (canonical) {
+    if (canonical.phase === 'preparing' || canonical.phase === 'queued') return 'pending';
+    if (canonical.phase === 'starting' || canonical.phase === 'running') return 'running';
+    if (canonical.phase === 'succeeded') return 'complete';
+    if (canonical.phase === 'cancelled') return 'cancelled';
+    return 'failed';
+  }
   const inMemory = input.runtime ? runtimeStatus(input.runtime, input.skill.runId) : null;
   if (inMemory) return inMemory;
   return terminalFromFiles(input.skill) ?? input.skill.status;
@@ -432,13 +455,13 @@ function priorInput(input: {
   };
 }
 
-export function spawnPipelineSkillProcess(input: {
+export async function spawnPipelineSkillProcess(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
   pipelineRun: CodexPipelineRun;
   step: CodexPipelineRunStep;
   skill: CodexPipelineRunSkill;
-}): AnyRecord {
+}): Promise<AnyRecord> {
   const workspaceRoot = dirname(input.decisionOsRoot);
   const context = resolvePipelineLedgerContext({
     decisionOsRoot: input.decisionOsRoot,
@@ -448,7 +471,7 @@ export function spawnPipelineSkillProcess(input: {
   if (!context) throw new Error(`Ledger ${input.pipelineRun.ledgerId} could not be loaded for pipeline run ${input.pipelineRun.id}.`);
   const outputFile = outputFileForCard(context, input.decisionOsRoot, input.step.outputCardId);
   if (!outputFile) throw new Error(`Output card ${input.step.outputCardId} has no Markdown file.`);
-  projectPipelineSkillRun({ decisionOsRoot: input.decisionOsRoot, context, step: input.step, skill: input.skill, pipelineRun: input.pipelineRun });
+  await projectPipelineSkillRun({ decisionOsRoot: input.decisionOsRoot, context, step: input.step, skill: input.skill, pipelineRun: input.pipelineRun });
   const stageInput = priorInput({
     run: input.pipelineRun,
     step: input.step,
@@ -480,6 +503,7 @@ export function spawnPipelineSkillProcess(input: {
 
   mkdirSync(dirname(input.skill.stdoutFile), { recursive: true });
   const startedAt = input.skill.startedAt ?? new Date().toISOString();
+  const executionCoordinator = codexExecutionCoordinator(input.runtime);
   let runtimeRun: AnyRecord = {};
   launchCodexExecutionProcess({
     decisionOsRoot: input.decisionOsRoot,
@@ -524,12 +548,23 @@ export function spawnPipelineSkillProcess(input: {
       });
       attachRuntimeChild(input.runtime, input.skill.runId, child);
       recordPipelineSkillProcess({ decisionOsRoot: input.decisionOsRoot, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, processId: child.pid ?? 0 });
+      if (executionCoordinator) void executionCoordinator.spawned(input.skill.executionId, {
+        processId: child.pid ?? null,
+        processStartTime: codexProcessIdentity(child.pid ?? 0) || null,
+        stdoutFile: input.skill.stdoutFile,
+        stderrFile: input.skill.stderrFile,
+      }).catch((error: unknown) => {
+        if (typeof input.runtime.onCodexBackgroundError === 'function') input.runtime.onCodexBackgroundError({ operation: 'project-canonical-pipeline-spawn', error, context: { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId } });
+      });
       notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-started', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', cardId: input.step.outputCardId });
     },
     onTurnStarted: (_event, observedAt) => {
+      if (executionCoordinator) void executionCoordinator.heartbeat(input.skill.executionId).catch((error: unknown) => {
+        if (typeof input.runtime.onCodexBackgroundError === 'function') input.runtime.onCodexBackgroundError({ operation: 'publish-canonical-pipeline-heartbeat', error, context: { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId } });
+      });
       notify(input.runtime.onCodexTurnStarted, { ledgerId: input.pipelineRun.ledgerId, cardId: input.pipelineRun.sourceCardId, outputCardId: input.step.outputCardId, threadId: `thread-${input.pipelineRun.sourceCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', startedAt: observedAt });
     },
-    onSettled: (settlement) => {
+    onSettled: async (settlement) => {
       const cancelled = pipelineRuntimeRun(input.runtime, input.skill.runId)?.cancelRequestedAt || runtimeStatus(input.runtime, input.skill.runId) === 'cancelled';
       const status: TerminalStatus = cancelled
         ? 'cancelled'
@@ -544,24 +579,26 @@ export function spawnPipelineSkillProcess(input: {
       if (status === 'cancelled') appendFileSync(input.skill.stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       if (status === 'failed') appendFileSync(input.skill.stderrFile, `Codex run failed: ${detail}\n`, 'utf8');
       appendFileSync(input.skill.stderrFile, codexRunExecutionFinishedMarker({ runId: input.skill.runId, executionId: input.skill.executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
+      if (executionCoordinator) await executionCoordinator.settle(input.skill.executionId, {
+        phase: status === 'complete' ? 'succeeded' : status,
+        result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
+        error: status === 'failed' ? { code: 'codex_pipeline_skill_failed', message: detail } : null,
+      });
       const reassessed = reassessPipelineAfterSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, settledStatus: status, error, exitCode, finishedAt: settlement.finishedAt });
       updateRuntimeRun(input.runtime, input.skill.runId, { settledAt: new Date().toISOString() });
       notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-settled', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, cardId: input.step.outputCardId, status, pipelineStatus: reassessed?.status ?? status });
-      if (status === 'complete' && reassessed && !isTerminal(reassessed.status)) runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id });
-      if (reassessed && isTerminal(reassessed.status)) {
-        scheduleCodexRuntime(input.runtime, 'schedule-after-pipeline-settlement', { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId });
-      }
+      scheduleCodexRuntime(input.runtime, 'schedule-after-pipeline-settlement', { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId });
       notify(input.runtime.onCodexRunSettled, { ledgerId: input.pipelineRun.ledgerId, cardId: input.step.outputCardId, outputCardId: input.step.outputCardId, threadId: `thread-${input.step.outputCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, pipelineRunId: input.pipelineRun.id, status, pipelineStatus: reassessed?.status ?? status, pipelineTerminal: Boolean(reassessed && isTerminal(reassessed.status)), exitCode });
     },
   });
   return publicPipelineSkillRuntimeRun(runtimeRun);
 }
 
-export function runNextPipelineSkill(input: {
+export async function runNextPipelineSkill(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
   pipelineRunId: string;
-}): AnyRecord {
+}): Promise<AnyRecord> {
   const reassessed = reassessPipelineAfterSkill({
     decisionOsRoot: input.decisionOsRoot,
     runtime: input.runtime,
@@ -572,18 +609,43 @@ export function runNextPipelineSkill(input: {
   const next = findNextSkill(reassessed);
   if (!next) return { ok: true, statusCode: 200, run: reassessed };
   const startedAt = new Date().toISOString();
-  const started = markPipelineSkillStarted({
-    decisionOsRoot: input.decisionOsRoot,
-    pipelineRunId: reassessed.id,
-    skillRunId: next.skill.runId,
-    startedAt,
-  });
-  if (!started) return { ok: true, statusCode: 200, run: reassessed };
-  const step = started.steps.find((entry) => entry.id === next.step.id);
-  const skill = step?.skills.find((entry) => entry.runId === next.skill.runId);
-  if (!step || !skill) return { ok: false, statusCode: 500, error: 'Started pipeline skill was not persisted.' };
+  const executionCoordinator = codexExecutionCoordinator(input.runtime);
+  if (executionCoordinator) {
+    try {
+      let execution = executionCoordinator.store.find(next.skill.executionId);
+      if (!execution) execution = await executionCoordinator.admit({
+        executionId: next.skill.executionId,
+        sessionId: next.skill.runId,
+        projectId: String(input.runtime.projectId ?? ''),
+        ledgerId: reassessed.ledgerId,
+        taskId: reassessed.sourceCardId,
+        ownerCardId: next.step.outputCardId,
+        kind: 'pipeline-skill',
+        pipelineRunId: reassessed.id,
+        pipelineStepId: next.step.id,
+        pipelineSkillRunId: next.skill.runId,
+        requestedAt: startedAt,
+      });
+      if (execution.phase === 'preparing') execution = await executionCoordinator.enqueue(next.skill.executionId);
+      if (execution.phase === 'queued') await executionCoordinator.claim(next.skill.executionId);
+    } catch (error) {
+      return { ok: false, statusCode: 503, code: String((error as { code?: unknown })?.code ?? ''), retryable: true, error: error instanceof Error ? error.message : String(error), run: reassessed };
+    }
+  }
+  let started: CodexPipelineRun | null = null;
+  let skill: CodexPipelineRunSkill | undefined;
   try {
-    const runtimeRun = spawnPipelineSkillProcess({
+    started = markPipelineSkillStarted({
+      decisionOsRoot: input.decisionOsRoot,
+      pipelineRunId: reassessed.id,
+      skillRunId: next.skill.runId,
+      startedAt,
+    });
+    if (!started) throw new Error('Pipeline skill claim was not persisted.');
+    const step = started.steps.find((entry) => entry.id === next.step.id);
+    skill = step?.skills.find((entry) => entry.runId === next.skill.runId);
+    if (!step || !skill) throw new Error('Started pipeline skill was not persisted.');
+    const runtimeRun = await spawnPipelineSkillProcess({
       decisionOsRoot: input.decisionOsRoot,
       runtime: input.runtime,
       pipelineRun: started,
@@ -593,11 +655,17 @@ export function runNextPipelineSkill(input: {
     return { ok: true, statusCode: 202, run: started, skillRun: runtimeRun };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const canonical = executionCoordinator?.store.find(next.skill.executionId);
+    if (canonical && (canonical.phase === 'starting' || canonical.phase === 'running')) await executionCoordinator?.settle(next.skill.executionId, {
+      phase: 'failed',
+      error: { code: 'codex_pipeline_skill_start_failed', message },
+      result: { status: 'failed', summary: message },
+    }).catch(() => undefined);
     const failed = reassessPipelineAfterSkill({
       decisionOsRoot: input.decisionOsRoot,
       runtime: input.runtime,
-      pipelineRunId: started.id,
-      skillRunId: skill.runId,
+      pipelineRunId: started?.id ?? reassessed.id,
+      skillRunId: skill?.runId ?? next.skill.runId,
       settledStatus: 'failed',
       error: message,
     });
@@ -605,10 +673,10 @@ export function runNextPipelineSkill(input: {
   }
 }
 
-export function scheduleCodexPipelineRuns(input: {
+export async function scheduleCodexPipelineRuns(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
-}): { launched: AnyRecord[]; queuedRunIds: string[]; capacity: number } {
+}): Promise<{ launched: AnyRecord[]; queuedRunIds: string[]; capacity: number }> {
   const capacity = maxConcurrentCodexProcesses(input.runtime);
   const launched: AnyRecord[] = [];
   while (true) {
@@ -616,9 +684,12 @@ export function scheduleCodexPipelineRuns(input: {
     const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
     const running = Object.values(runs).filter((run) => run.status === 'running').length;
     if (running >= capacity) break;
-    const next = store.runs.find((run) => run.status === 'pending' && run.executionMode !== 'federated');
+    const next = store.runs.find((run) => run.executionMode !== 'federated'
+      && (run.status === 'pending' || run.status === 'running')
+      && run.steps.some((step) => step.skills.some((skill) => skill.status === 'pending'))
+      && !run.steps.some((step) => step.skills.some((skill) => skill.status === 'running')));
     if (!next) break;
-    const launch = runNextPipelineSkill({
+    const launch = await runNextPipelineSkill({
       decisionOsRoot: input.decisionOsRoot,
       runtime: input.runtime,
       pipelineRunId: next.id,

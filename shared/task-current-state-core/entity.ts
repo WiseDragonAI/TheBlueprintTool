@@ -11,7 +11,9 @@ const operations = new Set<TaskFieldOperation>(['set', 'add', 'remove', 'tombsto
 const unsafePathSegments = new Set(['__proto__', 'prototype', 'constructor']);
 const lifecycleStatuses = new Set(['todo', 'backlog', 'done']);
 const lifecycleKeys = new Set(['status', 'changedAt', 'waitingAt', 'closedAt']);
-const executionIntentKeys = new Set(['id', 'state', 'changedAt', 'startedAt', 'settledAt', 'error']);
+const legacyExecutionIntentKeys = new Set(['id', 'state', 'changedAt', 'startedAt', 'settledAt', 'error']);
+const canonicalExecutionIntentKeys = new Set(['executionId', 'phase', 'requestedAt', 'phaseSince', 'executorNodeId', 'changedAt', 'settledAt', 'error', 'revision']);
+const canonicalExecutionPhases = new Set(['preparing', 'queued', 'starting', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted']);
 const localCardPaths = new Set(['replicationState', 'persistenceState']);
 const narrativeThreadNotePaths = new Set(['message', 'body', 'content', 'contentBytes', 'markdown']);
 const encoder = new TextEncoder();
@@ -27,6 +29,27 @@ function assertAtomicObject(candidate: TaskRegisterCandidate, keys: Set<string>,
   if (candidateKeys.length !== keys.size || candidateKeys.some((key) => !keys.has(key))) throw new Error(error);
 }
 
+function assertExecutionIntent(candidate: TaskRegisterCandidate): void {
+  if (candidate.operation !== 'set' || !candidate.value || typeof candidate.value !== 'object' || Array.isArray(candidate.value)) throw new Error('invalid_task_current_execution_intent');
+  const intent = candidate.value as Record<string, unknown>;
+  const keys = Object.keys(intent);
+  if (keys.length === legacyExecutionIntentKeys.size && keys.every((key) => legacyExecutionIntentKeys.has(key))) return;
+  if (keys.length !== canonicalExecutionIntentKeys.size || keys.some((key) => !canonicalExecutionIntentKeys.has(key))) throw new Error('invalid_task_current_execution_intent');
+  if (typeof intent.executionId !== 'string' || !intent.executionId
+    || !canonicalExecutionPhases.has(String(intent.phase ?? ''))
+    || typeof intent.requestedAt !== 'string'
+    || typeof intent.phaseSince !== 'string'
+    || typeof intent.changedAt !== 'string'
+    || (intent.executorNodeId !== null && typeof intent.executorNodeId !== 'string')
+    || (intent.settledAt !== null && typeof intent.settledAt !== 'string')
+    || !Number.isSafeInteger(intent.revision) || Number(intent.revision) < 1) throw new Error('invalid_task_current_execution_intent');
+  if (intent.error !== null) {
+    if (!intent.error || typeof intent.error !== 'object' || Array.isArray(intent.error)) throw new Error('invalid_task_current_execution_intent');
+    const error = intent.error as Record<string, unknown>;
+    if (Object.keys(error).length !== 2 || typeof error.code !== 'string' || typeof error.message !== 'string') throw new Error('invalid_task_current_execution_intent');
+  }
+}
+
 function assertCardDomain(path: string, candidate: TaskRegisterCandidate): void {
   // WHAT: Reject derived descendants and node-local publication fields at wire admission.
   // WHY: A participant cannot make local activation metadata causal by bypassing the domain encoder.
@@ -37,7 +60,7 @@ function assertCardDomain(path: string, candidate: TaskRegisterCandidate): void 
     if (!lifecycleStatuses.has(String(lifecycle.status ?? '')) || typeof lifecycle.changedAt !== 'string') throw new Error('invalid_task_current_lifecycle');
     if (!Object.hasOwn(lifecycle, 'waitingAt') || !Object.hasOwn(lifecycle, 'closedAt')) throw new Error('invalid_task_current_lifecycle');
   }
-  if (path === 'executionIntent') assertAtomicObject(candidate, executionIntentKeys, 'invalid_task_current_execution_intent');
+  if (path === 'executionIntent') assertExecutionIntent(candidate);
 }
 
 function assertRegister(entity: TaskCurrentEntity, path: string, register: TaskCurrentRegister): void {

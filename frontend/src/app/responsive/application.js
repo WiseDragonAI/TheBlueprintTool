@@ -8,7 +8,7 @@ import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/per
 import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
-import { compareControlRoomQueueTasks, executionAge, executionStopwatch, projectMasterTask, waitingAge } from './control-room.js';
+import { compareControlRoomQueueTasks, executionPresentation, projectMasterTask, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
@@ -401,7 +401,8 @@ async function navigateVoiceSubmission() {
     && candidate.ledgerId === state.activeLedgerId
     && candidate.cardId === state.activeCardId);
   if (task) {
-    const waiting = { ...task, status: 'task-execution', executionStatus: 'waiting', codexStatus: 'waiting', codexQueued: false, codexProcessing: false, transcribingBeforeLaunch: false };
+    const acceptedAt = new Date().toISOString();
+    const waiting = { ...task, status: 'task-execution', executionStatus: 'preparing', executionSince: acceptedAt, codexStatus: 'preparing', codexQueued: false, codexProcessing: false, transcribingBeforeLaunch: true };
     optimisticExecutionIntents.set(taskIdentity(task), waiting);
     for (const column of ['queue', 'exec', 'backlog']) state.controlRoom[column] = (state.controlRoom[column] ?? []).filter((candidate) => taskIdentity(candidate) !== taskIdentity(task));
     state.controlRoom.exec = [waiting, ...(state.controlRoom.exec ?? [])];
@@ -1449,6 +1450,7 @@ function taskRow(task, tab, index) {
   summary.querySelector('strong').textContent = task.title;
   if (executing) {
     const runtimeStatus = summary.querySelector('.task-next');
+    const execution = executionPresentation(task);
     if (task.projectSyncFailed) {
       runtimeStatus.textContent = 'Failed';
     } else if (task.projectSync) {
@@ -1457,19 +1459,11 @@ function taskRow(task, tab, index) {
         : task.projectSyncPhase === 'requested'
           ? 'Starting'
           : task.projectSyncPhase.replaceAll('_', ' ');
-    } else if (task.executionStatus === 'waiting') {
-      runtimeStatus.textContent = 'Codex Log · waiting';
-    } else if (task.transcribingBeforeLaunch) {
-      runtimeStatus.textContent = 'Transcribing before launch';
-    } else if (task.codexQueued) {
-      runtimeStatus.className = 'task-queue-position';
-      runtimeStatus.textContent = Number.isInteger(task.codexQueuePosition)
-        ? `Queued · position ${task.codexQueuePosition}`
-        : 'Queued · waiting for execution';
-    } else if (task.executionSince) {
+    } else if (execution.phase) {
       runtimeStatus.className = 'task-stopwatch';
-      runtimeStatus.dataset.executionSince = task.executionSince;
-      runtimeStatus.textContent = executionStopwatch(task.executionSince);
+      runtimeStatus.dataset.executionSince = execution.since;
+      runtimeStatus.dataset.executionPhase = execution.phase;
+      runtimeStatus.textContent = execution.text;
     } else {
       runtimeStatus.textContent = 'Running';
     }
@@ -1478,6 +1472,7 @@ function taskRow(task, tab, index) {
   const completedLabel = Number.isFinite(completedTime)
     ? `Completed ${new Date(completedTime).toLocaleString()}`
     : 'Completion date unavailable';
+  const execution = executionPresentation(task);
   const age = task.status === 'task-backlog'
     ? 'backlog'
     : task.status === 'task-complete'
@@ -1485,7 +1480,7 @@ function taskRow(task, tab, index) {
     : task.transcribingBeforeLaunch
       ? waitingAge(task.waitingSince).replace(/ waiting$/, ' transcribing')
       : task.status === 'task-execution'
-        ? executionAge(task.executionSince)
+        ? `${execution.elapsed || '00:00'} ${execution.phase || 'executing'}`
         : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
   const taskOwner = executing
@@ -1870,6 +1865,7 @@ function subscribeControlRoomEvents() {
   };
   controlRoomEventSource.addEventListener('ledger-content-change', refresh);
   controlRoomEventSource.addEventListener('card-content-change', refresh);
+  controlRoomEventSource.addEventListener('codex-execution-change', refresh);
   controlRoomEventSource.addEventListener('project-sync-change', refresh);
   controlRoomEventSource.addEventListener('federation-replica-change', (event) => {
     refresh();
@@ -3023,7 +3019,7 @@ initializeMobileThread();
 initializeMobileCodex();
 window.setInterval(() => {
   document.querySelectorAll('.task-stopwatch[data-execution-since]').forEach((stopwatch) => {
-    stopwatch.textContent = executionStopwatch(stopwatch.dataset.executionSince);
+    stopwatch.textContent = executionPresentation({ executionStatus: stopwatch.dataset.executionPhase, executionSince: stopwatch.dataset.executionSince }).text;
   });
 }, 1000);
 void loadRoute();

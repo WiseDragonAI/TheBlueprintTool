@@ -1,5 +1,5 @@
 /**
- * WHAT: Maintains one deterministic admin master task from the central runtime incident ledger.
+ * WHAT: Maintains one deterministic Decision OS project master task from the central runtime incident ledger.
  * WHY: Runtime failures need a durable, operator-visible review queue without duplicating task cards.
  */
 import { resolve } from 'node:path';

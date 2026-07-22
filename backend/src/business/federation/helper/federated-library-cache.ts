@@ -36,6 +36,10 @@ export type FederatedSkillManifest = { version: 1; skills: FederatedSkillManifes
 export type FederatedSkillSnapshot = { version: 1; skills: FederatedSkillPackage[] };
 export type FederatedPipelineDefinition = { pipeline: CodexPipeline; steps: CodexPipelineStep[] };
 export type FederatedPipelineSnapshot = { version: 1; pipelines: FederatedPipelineDefinition[] };
+export type FederatedSkillExportIndex = {
+  readonly manifest: FederatedSkillManifest;
+  snapshot(skillNames?: ReadonlySet<string>): FederatedSkillSnapshot;
+};
 
 function safeSegment(value: string): string {
   const normalized = value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
@@ -121,6 +125,30 @@ export function exportFederatedSkillManifest(serverRoot: string, workspaceRoots:
         revision: packageRevision(files),
         updatedAt: packageUpdatedAt(packageRoot).toISOString(),
       };
+    }),
+  };
+}
+
+export function createFederatedSkillExportIndex(serverRoot: string, workspaceRoots: readonly string[] = [serverRoot]): FederatedSkillExportIndex {
+  const packages = exportableSkills(serverRoot, workspaceRoots).map((skill): FederatedSkillPackage => {
+    const packageRoot = dirname(skill.skillFile);
+    const files = collectPackageFiles(packageRoot);
+    if (decodedBytes(files) > maximumSnapshotBytes) throw new Error(`Federated skill package exceeds 18 MiB: ${skill.name}.`);
+    return {
+      name: skill.name,
+      revision: packageRevision(files),
+      updatedAt: packageUpdatedAt(packageRoot).toISOString(),
+      files,
+    };
+  });
+  return {
+    manifest: {
+      version: snapshotVersion,
+      skills: packages.map(({ files: _files, ...skill }) => skill),
+    },
+    snapshot: (skillNames?: ReadonlySet<string>): FederatedSkillSnapshot => ({
+      version: snapshotVersion,
+      skills: packages.filter((skill) => !skillNames || skillNames.has(skill.name)).map((skill) => structuredClone(skill)),
     }),
   };
 }

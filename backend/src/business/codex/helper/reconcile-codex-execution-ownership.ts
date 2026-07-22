@@ -12,6 +12,7 @@ import { projectCardExecutionIntent } from './project-card-execution-intent.js';
 import { indexCodexRunArtifactDirectories, resolveCardSkillRunFiles } from './resolve-card-skill-run-files.js';
 import { persistLedgerProjection } from '../../task-state/helper/persist-ledger-projection.js';
 import { readLedgerProjection } from '../../task-state/helper/read-ledger-projection.js';
+import { codexExecutionCoordinator } from './codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 export type CodexOwnershipReconciliation = {
@@ -56,6 +57,9 @@ export async function reconcileCodexExecutionOwnership(input: { decisionOsRoot: 
   ].join('\0')));
   const queueOwnedCards = new Set(queueEntries.map((item) => [text(item.payload.ledgerId), text(item.payload.cardId)].join('\0')));
   const pipelineOwned = activePipelineExecutions(input.decisionOsRoot);
+  const canonicalRecords = input.runtime ? codexExecutionCoordinator(input.runtime)?.store.active() ?? [] : [];
+  const canonicalOwned = new Set(canonicalRecords.map((record) => [record.ledgerId, record.taskId, record.sessionId, record.executionId].join('\0')));
+  const canonicalOwnedCards = new Set(canonicalRecords.map((record) => [record.ledgerId, record.taskId].join('\0')));
   const artifactDirectoryByRunId = indexCodexRunArtifactDirectories(input.decisionOsRoot);
   const runtimeRuns = input.runtime?.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object'
     ? input.runtime.codexSkillRuns as Record<string, AnyRecord>
@@ -82,8 +86,8 @@ export async function reconcileCodexExecutionOwnership(input: { decisionOsRoot: 
         && text(runtimeRun?.executionId) === activeExecutionId
         && (runtimeRun?.status === 'pending' || runtimeRun?.status === 'running'));
       const exactExecutionOwned = Boolean(activeRunId && activeExecutionId
-        && (queueOwned.has(executionKey) || pipelineOwned.executions.has(executionKey) || runtimeOwns));
-      const cardExecutionOwned = exactExecutionOwned || queueOwnedCards.has(cardKey) || pipelineOwned.cards.has(cardKey);
+        && (canonicalOwned.has(executionKey) || queueOwned.has(executionKey) || pipelineOwned.executions.has(executionKey) || runtimeOwns));
+      const cardExecutionOwned = exactExecutionOwned || canonicalOwnedCards.has(cardKey) || queueOwnedCards.has(cardKey) || pipelineOwned.cards.has(cardKey);
       if (activeRunId || activeExecutionId) {
         if (!exactExecutionOwned) {
           delete card.codexActiveRunId;

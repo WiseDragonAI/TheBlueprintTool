@@ -19,6 +19,8 @@ type FramePayload = {
   entries?: Array<{ key: string; stateHash: string; entity: unknown }>;
   accepted?: Array<{ key: string; stateHash: string }>;
   root?: string;
+  executionId?: string;
+  observation?: unknown;
 };
 type Frame = { type: string; requestId?: string; direction?: string; from?: string; stateVersion?: number; projectId?: string; payload?: FramePayload; nodes?: Array<{ nodeId: string; nodeLabel: string; online: boolean }> };
 const maximumStateFrameBytes = 512 * 1024;
@@ -170,6 +172,12 @@ describe('federation relay', () => {
     const stateEntity = nextFrame(nodeB, (frame) => frame.type === 'state-entity-batch');
     nodeA.send(JSON.stringify(stateBatch('shared', entity)));
     await expect(stateEntity).resolves.toMatchObject({ type: 'state-entity-batch', stateVersion: 3, from: 'relay', projectId: 'shared', payload: { entries: [{ key: 'card\u0000card-live', stateHash: entity.stateHash, entity }] } });
+
+    const observedAt = new Date().toISOString();
+    const observation = { executionId: 'execution-live', executorNodeId: 'node-a', phase: 'running', observedAt, expiresAt: new Date(Date.parse(observedAt) + 15_000).toISOString(), revision: 3 };
+    const relayedObservation = nextFrame(nodeB, (frame) => frame.type === 'state-execution-observation');
+    nodeA.send(JSON.stringify({ version: 1, type: 'state-execution-observation', stateVersion: 3, projectId: 'shared', payload: { executionId: observation.executionId, observation } }));
+    await expect(relayedObservation).resolves.toMatchObject({ type: 'state-execution-observation', stateVersion: 3, from: 'node-a', projectId: 'shared', payload: { executionId: 'execution-live', observation } });
 
     const requestId = crypto.randomUUID();
     const ownerOpen = nextFrame(nodeB, (frame) => frame.type === 'request-open' && frame.requestId === requestId);
