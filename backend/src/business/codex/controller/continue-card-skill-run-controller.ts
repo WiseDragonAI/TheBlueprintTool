@@ -26,6 +26,7 @@ import { readLedgerProjection } from '@backend/business/task-state/helper/read-l
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-process.js';
+import { projectCardExecutionIntent } from '../helper/project-card-execution-intent.js';
 import {
   attachCodexRuntimeChild as attachRuntimeRunChild,
   codexRuntimeRuns as runtimeRuns,
@@ -216,6 +217,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     card.codexActiveRunId = runId;
     card.codexRunModel = command.model;
     card.codexRunEffort = command.effort;
+    if (ledgerId === 'tasks') projectCardExecutionIntent({ card, intentId: runId, state: 'running' });
     stripHydratedThreadNotes(ledger);
     await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'queue-codex-continuation', cardIds: [cardId] } });
   }
@@ -256,6 +258,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       card.codexActiveExecutionId = executionId;
       card.codexRunModel = command.model;
       card.codexRunEffort = command.effort;
+      if (ledgerId === 'tasks') projectCardExecutionIntent({ card, intentId: runId, state: 'queued', changedAt: admitted.createdAt });
       stripHydratedThreadNotes(ledger);
       try {
         await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'admit-codex-continuation', cardIds: [cardId] } });

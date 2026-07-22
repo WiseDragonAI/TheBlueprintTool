@@ -27,6 +27,32 @@ test('merges Exec tasks from current structural projections', () => {
   assert.equal(result.active, undefined);
 });
 
+test('preserves one replicated structural execution intent without inventing a node conflict', () => {
+  const structuralTask = {
+    cardId: 'master', projectId: 'project-1', ledgerId: 'tasks', title: 'Master', cardStatus: 'todo', status: 'task-execution',
+    executionIntent: { id: 'run-a', state: 'running', changedAt: '2026-07-22T10:00:00.000Z', startedAt: '2026-07-22T10:01:00.000Z', settledAt: null, error: null },
+    executionStatus: 'running', executionSince: '2026-07-22T10:01:00.000Z', executionTime: Date.parse('2026-07-22T10:01:00.000Z'),
+    executionOwnerCardId: 'child', executionOwnerKind: 'subtask', executionObservation: null,
+  };
+  const projection = (fingerprint: string) => ({
+    fingerprint, projects: [{ id: 'project-1', name: 'Project' }], queue: [], exec: [structuralTask], backlog: [], done: [], allTasks: [structuralTask], diagnostics: [], ledgers: ['Tasks'],
+  });
+
+  const result = federatedControlRoomProjection({
+    localProjection: projection('local'),
+    localOwner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: false },
+    remoteProjections: [{ projection: projection('phone'), owner: { nodeId: 'phone', nodeLabel: 'Mobile', remote: true } }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  assert.equal(result.queue.length, 0);
+  assert.equal(result.exec.length, 1);
+  assert.equal(result.exec[0].executionStatus, 'running');
+  assert.equal(result.exec[0].executionOwnerCardId, 'child');
+  assert.equal(result.exec[0].conflict, false);
+  assert.equal(result.diagnostics.some((entry: Record<string, unknown>) => entry.type === 'federation_execution_conflict'), false);
+});
+
 test('does not admit removed Active projections into the current runtime', () => {
   const result = federatedControlRoomProjection({
     localProjection: { fingerprint: 'local', projects: [], queue: [], exec: [], backlog: [], done: [], allTasks: [], diagnostics: [], ledgers: [] },

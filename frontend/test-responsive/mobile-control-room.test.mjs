@@ -44,6 +44,16 @@ test('replicated execution intent is the only local task execution authority', (
   assert.equal(projected.executionStatus, 'running');
 });
 
+test('replicated subtask execution intent projects the master into Exec', () => {
+  const current = task();
+  current.cards[1] = { ...current.cards[1], executionIntent: { id: 'run-child', state: 'running', startedAt: '2026-07-10T10:30:00.000Z' } };
+  const projected = projectMasterTask(current);
+  assert.equal(projected.status, 'task-execution');
+  assert.equal(projected.executionStatus, 'running');
+  assert.equal(projected.executionOwnerCardId, 'card-b');
+  assert.equal(projected.executionOwnerKind, 'subtask');
+});
+
 test('renders dynamic task totals in every Control Room status tab', () => {
   assert.match(html, /data-control-tab="queue"[\s\S]*?<small>0 tasks<\/small>/);
   assert.match(html, /data-control-tab="exec"[\s\S]*?<small>0 tasks<\/small>/);

@@ -25,9 +25,10 @@ type Dependency = { path: string; size: number; mtimeMs: number; sha256: string 
 type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string; revision: number; generatedAt: string; fingerprint: string };
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string; taskRoot: string };
 type ProjectionEntityChange = { entityType: string; entityId: string };
+type ExecutionCandidate = { card: AnyRecord; intent: AnyRecord; state: string; ownerCardId: string; ownerKind: 'master-task' | 'subtask' };
 
 const schemaVersion = 8;
-const projectorVersion = 'control-room-v15-structural-task-state';
+const projectorVersion = 'control-room-v16-replicated-codex-execution';
 const taskMaterializationBatchSize = 64;
 
 function records(value: unknown): AnyRecord[] {
@@ -67,11 +68,37 @@ function zoneIdFor(card: AnyRecord, ledger: AnyRecord): string {
   return selected;
 }
 
+function activeExecutionCandidate(card: AnyRecord | undefined, ownerKind: 'master-task' | 'subtask'): ExecutionCandidate | null {
+  const intent = card?.executionIntent && typeof card.executionIntent === 'object' && !Array.isArray(card.executionIntent)
+    ? card.executionIntent as AnyRecord
+    : {};
+  const state = text(intent.state);
+  if (!['waiting', 'queued', 'running'].includes(state)) return null;
+  return { card: card!, intent, state, ownerCardId: text(card?.id), ownerKind };
+}
+
+function selectedExecutionCandidate(master: AnyRecord, subtasks: AnyRecord[]): ExecutionCandidate | null {
+  const candidates = [
+    activeExecutionCandidate(master, 'master-task'),
+    ...subtasks.map((card) => activeExecutionCandidate(card, 'subtask')),
+  ].filter((candidate): candidate is ExecutionCandidate => candidate !== null);
+  const priority = (candidate: ExecutionCandidate): number => candidate.state === 'running' ? 0 : candidate.state === 'queued' ? 1 : 2;
+  return candidates.sort((left, right) => priority(left) - priority(right)
+    || Number(left.ownerKind === 'subtask') - Number(right.ownerKind === 'subtask')
+    || text(left.ownerCardId).localeCompare(text(right.ownerCardId)))[0] ?? null;
+}
+
 function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsProject['ledgers'][number]; ledger: AnyRecord; card: AnyRecord; conflicts?: AnyRecord[]; index?: TaskLedgerIndex }): AnyRecord | null {
   const jsonLabels = Array.isArray(input.card.labels) ? input.card.labels.map(String) : [];
   if (!jsonLabels.includes('master-task')) return null;
   const lifecycle = input.card.lifecycle && typeof input.card.lifecycle === 'object' && !Array.isArray(input.card.lifecycle) ? input.card.lifecycle as AnyRecord : {};
-  const executionIntent = input.card.executionIntent && typeof input.card.executionIntent === 'object' && !Array.isArray(input.card.executionIntent) ? input.card.executionIntent as AnyRecord : {};
+  const cards = input.index?.cards ?? new Map(records(input.ledger.cards).map((card) => [text(card.id), card]));
+  const relationships = input.index?.relationshipsByMaster.get(text(input.card.id)) ?? records(input.ledger.relationships)
+    .filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask')
+    .sort((left, right) => Number(left.position) - Number(right.position) || text(left.id).localeCompare(text(right.id)));
+  const linkedCards = relationships.map((relationship) => cards.get(text(relationship.to))).filter((card): card is AnyRecord => Boolean(card));
+  const execution = selectedExecutionCandidate(input.card, linkedCards);
+  const executionIntent = execution?.intent ?? {};
   const lifecycleStatus = text(lifecycle.status);
   const executionState = text(executionIntent.state);
   const executionActive = ['waiting', 'queued', 'running'].includes(executionState);
@@ -79,10 +106,6 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const completedAt = text(lifecycle.closedAt);
   const waitingTime = Date.parse(waitingSince);
   const completedTime = Date.parse(completedAt);
-  const cards = input.index?.cards ?? new Map(records(input.ledger.cards).map((card) => [text(card.id), card]));
-  const relationships = input.index?.relationshipsByMaster.get(text(input.card.id)) ?? records(input.ledger.relationships)
-    .filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask')
-    .sort((left, right) => Number(left.position) - Number(right.position) || text(left.id).localeCompare(text(right.id)));
   const status = executionActive ? 'task-execution' : lifecycleStatus === 'backlog' ? 'task-backlog' : lifecycleStatus === 'done' ? 'task-complete' : 'task-waiting';
   const labels = [...new Set(jsonLabels.map((label) => label.trim()).filter((label) => label && label !== 'master-task' && label !== 'subtask'))];
   const subtasks: AnyRecord[] = [];
@@ -103,6 +126,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   if (taskConflicts.length > 0) diagnostics.push(...taskConflicts.map((conflict) => `task-conflict:${text(conflict.entityId)}`));
   const complete = subtasks.filter((subtask) => subtask.status === 'complete').length;
   const executionSince = executionActive ? text(executionIntent.startedAt) || text(executionIntent.changedAt) : '';
+  const executionCard = execution?.card as AnyRecord | undefined;
   return {
     valid: diagnostics.length === 0, masterTask: true, diagnostics,
     cardId: text(input.card.id), title: text(input.card.title) || `Card ${text(input.card.id)}`, labels,
@@ -110,10 +134,10 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     projectId: input.project.id, projectName: input.project.name, projectColor: input.project.color,
     ledgerId: input.ledgerEntry.id, ledgerTitle: input.ledgerEntry.title, ledger: input.ledgerEntry.title,
     zoneId: zoneIdFor(input.card, input.ledger), status,
-    codexRunId: '', codexPipelineRunId: '', codexStatus: executionState,
-    executionOwnerCardId: executionActive ? text(input.card.id) : '', executionOwnerKind: executionActive ? 'master-task' : '',
+    codexRunId: executionActive ? text(executionCard?.codexActiveRunId) : '', codexPipelineRunId: executionActive ? text(executionCard?.codexPipelineRunId ?? executionCard?.codexQueuedPipelineRunId) : '', codexStatus: executionState,
+    executionOwnerCardId: executionActive ? text(execution?.ownerCardId) : '', executionOwnerKind: executionActive ? text(execution?.ownerKind) : '',
     executionStatus: executionActive ? executionState : '', executionObservation: null,
-    transcribingBeforeLaunch: false,
+    transcribingBeforeLaunch: executionState === 'waiting',
     codexProcessing: executionState === 'running', codexQueued: executionState === 'queued', codexQueuePosition: null,
     waitingSince,
     waitingTime, executionSince,

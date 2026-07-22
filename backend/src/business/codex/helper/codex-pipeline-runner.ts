@@ -21,6 +21,7 @@ import { resolveCodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 import { resolveServerSkillContext } from './server-skill-context.js';
 import { projectCardCodexRun } from './project-card-codex-run.js';
+import { projectCardExecutionIntent } from './project-card-execution-intent.js';
 import { queueLedgerProjectionPersistence } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { codexProcessIdentity } from './codex-process-queue.js';
@@ -184,7 +185,7 @@ function reconcilePipelineExecution(context: PipelineLedgerContext, run: CodexPi
       cardChanged = true;
     }
     if (isTerminal(run.status) && card.executionIntent && typeof card.executionIntent === 'object' && ['waiting', 'queued', 'running'].includes(String((card.executionIntent as AnyRecord).state ?? ''))) {
-      card.executionIntent = { ...(card.executionIntent as AnyRecord), state: run.status === 'failed' ? 'failed' : 'terminal', updatedAt: new Date().toISOString() };
+      projectCardExecutionIntent({ card, intentId: run.id, state: run.status === 'failed' ? 'failed' : 'terminal', error: run.error });
       changed = true;
       cardChanged = true;
     }
@@ -236,6 +237,13 @@ function projectPipelineSkillRun(input: {
   };
   projectCardCodexRun({ ...projection, cardId: input.pipelineRun.sourceCardId });
   projectCardCodexRun({ ...projection, cardId: input.step.outputCardId });
+  const source = (input.context.ledger.cards ?? []).find((card) => String(card.id ?? '') === input.pipelineRun.sourceCardId);
+  if (input.context.ledgerId === 'tasks' && source) projectCardExecutionIntent({
+    card: source,
+    intentId: input.pipelineRun.id,
+    state: 'running',
+    changedAt: input.skill.startedAt ?? new Date().toISOString(),
+  });
   persistLedger(input.context, 'project-codex-pipeline-skill', [input.pipelineRun.sourceCardId, input.step.outputCardId]);
 }
 
