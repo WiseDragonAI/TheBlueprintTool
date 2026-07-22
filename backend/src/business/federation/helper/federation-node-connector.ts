@@ -4,7 +4,6 @@
  */
 import { createHash, randomUUID, type Hash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { once } from 'node:events';
 import { mkdir, open, rename, rm, type FileHandle } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import WebSocket from 'ws';
@@ -70,6 +69,8 @@ const maximumContentBodyBytes = 1024 * 1024 * 1024;
 const connectTimeoutMs = 10_000;
 const defaultInternalRequestTimeoutMs = 15_000;
 const maximumInternalRequestTimeoutMs = 30 * 60_000;
+const defaultFlowControlTimeoutMs = 15_000;
+const defaultOwnerRequestTimeoutMs = 30 * 60_000;
 
 type FederationConnectionPhase = 'not_configured' | 'connecting' | 'retrying' | 'connected' | 'disconnected';
 
@@ -108,16 +109,46 @@ function publicHeaders(headers: IncomingMessage['headers']): Record<string, stri
 
 class CreditGate {
   private available = creditWindowBytes;
-  private waiters: Array<() => void> = [];
+  private waiters = new Set<() => void>();
+  private closed: Error | null = null;
 
-  async consume(bytes: number): Promise<void> {
-    while (this.available < bytes) await new Promise<void>((resolve) => this.waiters.push(resolve));
+  constructor(private readonly timeoutMs: number) {}
+
+  async consume(bytes: number, signal?: AbortSignal): Promise<void> {
+    const deadline = Date.now() + this.timeoutMs;
+    while (this.available < bytes) {
+      if (this.closed) throw this.closed;
+      if (signal?.aborted) throw new Error('federation_credit_cancelled');
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) throw new Error(`federation_credit_timeout:${this.timeoutMs}`);
+      await new Promise<void>((resolveWait) => {
+        let timer: NodeJS.Timeout | null = null;
+        const wake = (): void => {
+          if (timer) clearTimeout(timer);
+          this.waiters.delete(wake);
+          signal?.removeEventListener('abort', wake);
+          resolveWait();
+        };
+        timer = setTimeout(wake, remainingMs);
+        timer.unref?.();
+        this.waiters.add(wake);
+        signal?.addEventListener('abort', wake, { once: true });
+      });
+    }
+    if (this.closed) throw this.closed;
+    if (signal?.aborted) throw new Error('federation_credit_cancelled');
     this.available -= bytes;
   }
 
   grant(bytes: number): void {
+    if (this.closed || !Number.isFinite(bytes) || bytes <= 0) return;
     this.available = Math.min(creditWindowBytes, this.available + bytes);
-    for (const resolve of this.waiters.splice(0)) resolve();
+    for (const wake of [...this.waiters]) wake();
+  }
+
+  close(error: Error): void {
+    this.closed ??= error;
+    for (const wake of [...this.waiters]) wake();
   }
 }
 
@@ -144,6 +175,7 @@ type OwnerStream = {
   bytes: number;
   responseCredit: CreditGate;
   abort: AbortController;
+  timeout?: NodeJS.Timeout;
 };
 
 export function createFederationNodeConnector(input: {
@@ -156,8 +188,12 @@ export function createFederationNodeConnector(input: {
   onStateFrame?: (frame: FederationStateFrame) => void | Promise<void>;
   onError?: (error: unknown, context: { operation: string; frameType?: string }) => void;
   internalRequestTimeoutMs?: number;
+  flowControlTimeoutMs?: number;
+  ownerRequestTimeoutMs?: number;
 }) {
   const internalRequestTimeoutMs = input.internalRequestTimeoutMs ?? defaultInternalRequestTimeoutMs;
+  const flowControlTimeoutMs = Math.max(1, input.flowControlTimeoutMs ?? defaultFlowControlTimeoutMs);
+  const ownerRequestTimeoutMs = Math.max(1, input.ownerRequestTimeoutMs ?? defaultOwnerRequestTimeoutMs);
   let settings = configuredSettings(input.settings);
   const requesterStreams = new Map<string, RequesterStream>();
   const ownerStreams = new Map<string, OwnerStream>();
@@ -213,6 +249,7 @@ export function createFederationNodeConnector(input: {
   const cleanupRequester = (stream: RequesterStream): void => {
     if (stream.timeout) clearTimeout(stream.timeout);
     if (stream.abortSignal && stream.abortListener) stream.abortSignal.removeEventListener('abort', stream.abortListener);
+    stream.requestCredit.close(new Error('federation_request_settled'));
   };
 
   const failRequester = (requestId: string, status: number, code: string, message: string): void => {
@@ -228,24 +265,66 @@ export function createFederationNodeConnector(input: {
         .catch((error: unknown) => reportError(error, 'remove-failed-request-file'))
         .finally(() => stream.file!.resolve({ status, bytes: stream.bytes }));
     } else if (stream.response) {
-      stream.response.statusCode = status;
-      stream.response.setHeader('content-type', 'application/json');
-      stream.response.end(body);
+      if (stream.response.destroyed || stream.response.writableEnded) {
+        // The client already owns final settlement.
+      } else if (stream.response.headersSent) stream.response.destroy();
+      else {
+        stream.response.statusCode = status;
+        stream.response.setHeader('content-type', 'application/json');
+        stream.response.end(body);
+      }
     } else settleInternal(stream, status, { 'content-type': 'application/json' }, body);
     requesterStreams.delete(requestId);
   };
 
-  const sendChunks = async (requestId: string, direction: 'request' | 'response', buffer: Uint8Array, gate: CreditGate): Promise<void> => {
+  const sendChunks = async (requestId: string, direction: 'request' | 'response', buffer: Uint8Array, gate: CreditGate, signal?: AbortSignal): Promise<void> => {
     for (let offset = 0; offset < buffer.byteLength; offset += chunkBytes) {
       const chunk = buffer.subarray(offset, Math.min(buffer.byteLength, offset + chunkBytes));
-      await gate.consume(chunk.byteLength);
+      await gate.consume(chunk.byteLength, signal);
       send({ version: 1, type: `${direction}-chunk`, requestId, data: Buffer.from(chunk).toString('base64') });
     }
+  };
+
+  const waitForResponseDrain = (response: ServerResponse): Promise<void> => new Promise((resolveDrain, rejectDrain) => {
+    let timer: NodeJS.Timeout | null = null;
+    const cleanup = (): void => {
+      if (timer) clearTimeout(timer);
+      response.off('drain', onDrain);
+      response.off('close', onClose);
+      response.off('error', onError);
+    };
+    const onDrain = (): void => { cleanup(); resolveDrain(); };
+    const onClose = (): void => { cleanup(); rejectDrain(new Error('federation_response_closed')); };
+    const onError = (error: Error): void => { cleanup(); rejectDrain(error); };
+    if (response.destroyed || response.writableEnded) {
+      rejectDrain(new Error('federation_response_closed'));
+      return;
+    }
+    response.once('drain', onDrain);
+    response.once('close', onClose);
+    response.once('error', onError);
+    timer = setTimeout(() => {
+      cleanup();
+      rejectDrain(new Error(`federation_response_drain_timeout:${flowControlTimeoutMs}`));
+    }, flowControlTimeoutMs);
+    timer.unref?.();
+  });
+
+  const abortOwnerStreams = (reason: string): void => {
+    for (const stream of ownerStreams.values()) {
+      if (stream.timeout) clearTimeout(stream.timeout);
+      stream.abort.abort(new Error(reason));
+      stream.responseCredit.close(new Error(reason));
+    }
+    ownerStreams.clear();
   };
 
   const handleOwnerRequest = async (requestId: string): Promise<void> => {
     const stream = ownerStreams.get(requestId);
     if (!stream) return;
+    if (stream.timeout) clearTimeout(stream.timeout);
+    const deadline = setTimeout(() => stream.abort.abort(new Error(`federation_owner_request_timeout:${ownerRequestTimeoutMs}`)), ownerRequestTimeoutMs);
+    deadline.unref?.();
     try {
       const result = await fetch(`${input.localServerUrl()}${stream.path}`, {
         method: stream.method,
@@ -261,11 +340,12 @@ export function createFederationNodeConnector(input: {
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
-          await sendChunks(requestId, 'response', value, stream.responseCredit);
+          await sendChunks(requestId, 'response', value, stream.responseCredit, stream.abort.signal);
         }
       }
       send({ version: 1, type: 'response-end', requestId });
     } catch (error) {
+      if (!stream.abort.signal.aborted || String(stream.abort.signal.reason ?? '').includes('timeout')) reportError(error, 'owner-request');
       try {
         send({
           version: 1,
@@ -278,7 +358,9 @@ export function createFederationNodeConnector(input: {
         // The relay can close while an owner-side fetch is being aborted during shutdown.
       }
     } finally {
-      ownerStreams.delete(requestId);
+      clearTimeout(deadline);
+      stream.responseCredit.close(new Error('federation_owner_request_settled'));
+      if (ownerStreams.get(requestId) === stream) ownerStreams.delete(requestId);
     }
   };
 
@@ -307,15 +389,33 @@ export function createFederationNodeConnector(input: {
     const requestId = String(frame.requestId ?? '');
     if (!requestId) return;
     if (frame.type === 'request-open') {
-      ownerStreams.set(requestId, {
+      const previous = ownerStreams.get(requestId);
+      if (previous) {
+        if (previous.timeout) clearTimeout(previous.timeout);
+        previous.abort.abort(new Error('federation_request_replaced'));
+        previous.responseCredit.close(new Error('federation_request_replaced'));
+      }
+      const stream: OwnerStream = {
         method: String(frame.method ?? 'GET').toUpperCase(),
         path: String(frame.path ?? '/'),
         headers: frame.headers ?? {},
         chunks: [],
         bytes: 0,
-        responseCredit: new CreditGate(),
+        responseCredit: new CreditGate(flowControlTimeoutMs),
         abort: new AbortController(),
-      });
+      };
+      stream.timeout = setTimeout(() => {
+        if (ownerStreams.get(requestId) !== stream) return;
+        const error = new Error(`federation_owner_open_timeout:${ownerRequestTimeoutMs}`);
+        stream.abort.abort(error);
+        stream.responseCredit.close(error);
+        ownerStreams.delete(requestId);
+        reportError(error, 'owner-request-open');
+        try { send({ version: 1, type: 'response-error', requestId, code: 'owner_request_timeout', message: error.message }); }
+        catch { /* Relay settlement owns the disconnected stream. */ }
+      }, ownerRequestTimeoutMs);
+      stream.timeout.unref?.();
+      ownerStreams.set(requestId, stream);
       return;
     }
     const owner = ownerStreams.get(requestId);
@@ -324,6 +424,9 @@ export function createFederationNodeConnector(input: {
       owner.bytes += chunk.byteLength;
       if (owner.bytes > maximumBodyBytes) {
         ownerStreams.delete(requestId);
+        if (owner.timeout) clearTimeout(owner.timeout);
+        owner.abort.abort(new Error('federation_body_limit'));
+        owner.responseCredit.close(new Error('federation_body_limit'));
         send({ version: 1, type: 'response-error', requestId, code: 'federation_body_limit', message: 'Remote body exceeds 25 MiB.' });
         return;
       }
@@ -332,11 +435,15 @@ export function createFederationNodeConnector(input: {
       return;
     }
     if (frame.type === 'request-end' && owner) {
+      if (owner.timeout) clearTimeout(owner.timeout);
+      owner.timeout = undefined;
       void handleOwnerRequest(requestId);
       return;
     }
     if (frame.type === 'cancel' && owner) {
-      owner.abort.abort();
+      if (owner.timeout) clearTimeout(owner.timeout);
+      owner.abort.abort(new Error('federation_request_cancelled'));
+      owner.responseCredit.close(new Error('federation_request_cancelled'));
       ownerStreams.delete(requestId);
       return;
     }
@@ -368,7 +475,14 @@ export function createFederationNodeConnector(input: {
         requester.file.hash.update(chunk);
         await requester.file.descriptor.write(chunk);
       } else if (requester.response) {
-        if (!requester.response.write(chunk)) await once(requester.response, 'drain');
+        if (!requester.response.write(chunk)) {
+          try { await waitForResponseDrain(requester.response); }
+          catch (error) {
+            reportError(error, 'response-backpressure', frame.type);
+            failRequester(requestId, 504, 'federation_response_backpressure', error instanceof Error ? error.message : 'Federation response stalled.');
+            return;
+          }
+        }
       } else requester.chunks.push(chunk);
       send({ version: 1, type: 'credit', requestId, direction: 'response', bytes: chunk.byteLength });
       return;
@@ -410,7 +524,7 @@ export function createFederationNodeConnector(input: {
     let resolveResponse: (response: InternalResponse) => void = () => undefined;
     const response = new Promise<InternalResponse>((resolve) => { resolveResponse = resolve; });
     const stream: RequesterStream = {
-      requestCredit: new CreditGate(), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
+      requestCredit: new CreditGate(flowControlTimeoutMs), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
       resolve: resolveResponse,
     };
     const requestedTimeoutMs = Number(options.timeoutMs ?? internalRequestTimeoutMs);
@@ -437,20 +551,25 @@ export function createFederationNodeConnector(input: {
         return { requestId, response };
       }
     }
-    send({
-      version: 1,
-      type: 'request-open',
-      requestId,
-      to: ownerNodeId,
-      method,
-      path,
-      headers: { ...options.headers, 'x-decision-os-federation-node': settings.nodeId },
-    });
-    for (let offset = 0; offset < body.byteLength; offset += chunkBytes) {
-      const chunk = body.subarray(offset, Math.min(body.byteLength, offset + chunkBytes));
-      send({ version: 1, type: 'request-chunk', requestId, data: chunk.toString('base64') });
+    try {
+      send({
+        version: 1,
+        type: 'request-open',
+        requestId,
+        to: ownerNodeId,
+        method,
+        path,
+        headers: { ...options.headers, 'x-decision-os-federation-node': settings.nodeId },
+      });
+      for (let offset = 0; offset < body.byteLength; offset += chunkBytes) {
+        const chunk = body.subarray(offset, Math.min(body.byteLength, offset + chunkBytes));
+        send({ version: 1, type: 'request-chunk', requestId, data: chunk.toString('base64') });
+      }
+      send({ version: 1, type: 'request-end', requestId });
+    } catch (error) {
+      reportError(error, 'open-internal-request');
+      failRequester(requestId, 502, 'federation_outcome_unknown', 'Relay disconnected while opening the request.');
     }
-    send({ version: 1, type: 'request-end', requestId });
     return { requestId, response };
   };
 
@@ -494,7 +613,13 @@ export function createFederationNodeConnector(input: {
       lastCloseCode = null;
       lastCloseReason = '';
       setPhase('connected');
-      send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, stateProtocol: taskStateProtocol, stateSchema: taskCurrentStateVersion, baselineEpoch: taskCurrentBaselineEpoch, projects: manifest() });
+      try {
+        send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, stateProtocol: taskStateProtocol, stateSchema: taskCurrentStateVersion, baselineEpoch: taskCurrentBaselineEpoch, projects: manifest() });
+      } catch (error) {
+        reportError(error, 'publish-initial-manifest');
+        active.terminate();
+        return;
+      }
       try { input.onStateConnected?.(); }
       catch (error) { reportError(error, 'state-connected-callback'); }
     });
@@ -536,6 +661,7 @@ export function createFederationNodeConnector(input: {
       }
       else if (!lastError && event.reason) lastError = event.reason;
       for (const requestId of requesterStreams.keys()) failRequester(requestId, 502, 'federation_outcome_unknown', 'Relay disconnected before the owner response completed.');
+      abortOwnerStreams('federation_relay_disconnected');
       for (const stream of remoteNodes.values()) stream.online = false;
       if (!stopped && retryAllowed) {
         const delay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt) * (0.75 + Math.random() * 0.5);
@@ -568,6 +694,10 @@ export function createFederationNodeConnector(input: {
         nextRetryAt,
         connectTimeoutMs,
         internalRequestTimeoutMs,
+        flowControlTimeoutMs,
+        ownerRequestTimeoutMs,
+        requesterStreamCount: requesterStreams.size,
+        ownerStreamCount: ownerStreams.size,
         lastError,
         lastCloseCode,
         lastCloseReason,
@@ -582,8 +712,7 @@ export function createFederationNodeConnector(input: {
       reconnectTimer = null;
       clearConnectTimer();
       for (const requestId of requesterStreams.keys()) failRequester(requestId, 502, 'federation_reconfigured', 'Federation connection was reconfigured.');
-      for (const stream of ownerStreams.values()) stream.abort.abort();
-      ownerStreams.clear();
+      abortOwnerStreams('federation_reconfigured');
       socket?.close(1000, 'server_stopped');
       socket = null;
       connectedAt = null;
@@ -604,15 +733,24 @@ export function createFederationNodeConnector(input: {
       connect();
     },
     publishManifest(): void {
-      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, stateProtocol: taskStateProtocol, stateSchema: taskCurrentStateVersion, baselineEpoch: taskCurrentBaselineEpoch, projects: manifest() });
+      if (socket?.readyState !== WebSocket.OPEN) return;
+      try { send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, stateProtocol: taskStateProtocol, stateSchema: taskCurrentStateVersion, baselineEpoch: taskCurrentBaselineEpoch, projects: manifest() }); }
+      catch (error) { reportError(error, 'publish-manifest'); }
     },
     publishContentChange(): void {
-      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'content-change' });
+      if (socket?.readyState !== WebSocket.OPEN) return;
+      try { send({ version: 1, type: 'content-change' }); }
+      catch (error) { reportError(error, 'publish-content-change'); }
     },
     publishStateFrame(ownerNodeId: string, frame: Omit<FederationStateFrame, 'from'>): boolean {
       if (socket?.readyState !== WebSocket.OPEN) return false;
-      send({ version: 1, type: frame.type, stateVersion: taskCurrentStateVersion, ...(ownerNodeId === 'relay' ? {} : { to: ownerNodeId }), projectId: frame.projectId, payload: frame.payload });
-      return true;
+      try {
+        send({ version: 1, type: frame.type, stateVersion: taskCurrentStateVersion, ...(ownerNodeId === 'relay' ? {} : { to: ownerNodeId }), projectId: frame.projectId, payload: frame.payload });
+        return true;
+      } catch (error) {
+        reportError(error, 'publish-state-frame', frame.type);
+        return false;
+      }
     },
     localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
       return { ownerNodeId: settings?.nodeId || 'local', ownerNodeLabel: settings?.nodeLabel || 'This server', online: true };
@@ -645,29 +783,44 @@ export function createFederationNodeConnector(input: {
         return;
       }
       const requestId = randomUUID();
-      const requestCredit = new CreditGate();
-      requesterStreams.set(requestId, { response, requestCredit, settled: false, status: 502, headers: {}, chunks: [], bytes: 0 });
+      const requestCredit = new CreditGate(flowControlTimeoutMs);
+      const stream: RequesterStream = { response, requestCredit, settled: false, status: 502, headers: {}, chunks: [], bytes: 0 };
+      stream.timeout = setTimeout(() => {
+        if (!requesterStreams.has(requestId)) return;
+        try { send({ version: 1, type: 'cancel', requestId }); } catch { /* Connection settlement owns relay cleanup. */ }
+        failRequester(requestId, 504, 'federation_request_timeout', `Federation proxy request exceeded ${internalRequestTimeoutMs}ms.`);
+      }, internalRequestTimeoutMs);
+      stream.timeout.unref?.();
+      requesterStreams.set(requestId, stream);
       response.on('close', () => {
-        if (requesterStreams.has(requestId)) {
+        const activeStream = requesterStreams.get(requestId);
+        if (activeStream) {
           try { send({ version: 1, type: 'cancel', requestId }); } catch { /* Relay already closed. */ }
+          cleanupRequester(activeStream);
           requesterStreams.delete(requestId);
         }
       });
       const query = (request.url ?? '').includes('?') ? `?${(request.url ?? '').split('?').slice(1).join('?')}` : '';
       const ownerPath = `/p/${encodeURIComponent(localProjectId)}${scopedPath}${query}`;
-      send({ version: 1, type: 'request-open', requestId, to: ownerNodeId, method: request.method ?? 'GET', path: ownerPath, headers: publicHeaders(request.headers) });
-      let total = 0;
-      for await (const part of request) {
-        const chunk = Buffer.isBuffer(part) ? part : Buffer.from(part);
-        total += chunk.byteLength;
-        if (total > maximumBodyBytes) {
-          send({ version: 1, type: 'cancel', requestId });
-          failRequester(requestId, 413, 'federation_body_limit', 'Remote body exceeds 25 MiB.');
-          return;
+      try {
+        send({ version: 1, type: 'request-open', requestId, to: ownerNodeId, method: request.method ?? 'GET', path: ownerPath, headers: publicHeaders(request.headers) });
+        let total = 0;
+        for await (const part of request) {
+          const chunk = Buffer.isBuffer(part) ? part : Buffer.from(part);
+          total += chunk.byteLength;
+          if (total > maximumBodyBytes) {
+            send({ version: 1, type: 'cancel', requestId });
+            failRequester(requestId, 413, 'federation_body_limit', 'Remote body exceeds 25 MiB.');
+            return;
+          }
+          await sendChunks(requestId, 'request', chunk, requestCredit);
         }
-        await sendChunks(requestId, 'request', chunk, requestCredit);
+        send({ version: 1, type: 'request-end', requestId });
+      } catch (error) {
+        reportError(error, 'proxy-request-flow');
+        try { send({ version: 1, type: 'cancel', requestId }); } catch { /* Relay already closed. */ }
+        failRequester(requestId, 504, 'federation_request_flow_stalled', error instanceof Error ? error.message : 'Federation request flow stalled.');
       }
-      send({ version: 1, type: 'request-end', requestId });
     },
     async request(ownerNodeId: string, path: string, options?: { method?: string; body?: Buffer; headers?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal }): Promise<InternalResponse> {
       return openRequest(ownerNodeId, path, options).response;
@@ -681,7 +834,7 @@ export function createFederationNodeConnector(input: {
       let resolveResult: (result: { status: number; bytes: number }) => void = () => undefined;
       const result = new Promise<{ status: number; bytes: number }>((resolveResultPromise) => { resolveResult = resolveResultPromise; });
       const stream: RequesterStream = {
-        requestCredit: new CreditGate(), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
+        requestCredit: new CreditGate(flowControlTimeoutMs), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
         file: { descriptor, temporary, target, expectedHash, hash: createHash('sha256'), resolve: resolveResult },
       };
       stream.timeout = setTimeout(() => {
@@ -690,8 +843,13 @@ export function createFederationNodeConnector(input: {
       }, Math.max(internalRequestTimeoutMs, 120_000));
       stream.timeout.unref?.();
       requesterStreams.set(requestId, stream);
-      send({ version: 1, type: 'request-open', requestId, to: ownerNodeId, method: 'GET', path, headers: { 'x-decision-os-federation-node': settings.nodeId } });
-      send({ version: 1, type: 'request-end', requestId });
+      try {
+        send({ version: 1, type: 'request-open', requestId, to: ownerNodeId, method: 'GET', path, headers: { 'x-decision-os-federation-node': settings.nodeId } });
+        send({ version: 1, type: 'request-end', requestId });
+      } catch (error) {
+        reportError(error, 'open-content-request');
+        failRequester(requestId, 502, 'federation_outcome_unknown', 'Relay disconnected while opening the content request.');
+      }
       return result;
     },
   };

@@ -280,13 +280,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
 
   const recordStoppedOperation = (input: {
     scope: string;
+    component: string;
     operation: string;
     error: unknown;
     context: Record<string, unknown>;
   }): string => {
     const incident = recordIncident({
       severity: 'warning',
-      component: 'federation-node-message',
       ...input,
     });
     incidentLedger.resolveScope(incident.scope, 'The failed operation stopped without changing project state.');
@@ -804,8 +804,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       for (const projectId of new Set(federation?.remoteProjects().map((project) => project.localProjectId) ?? [])) federationTaskStateReplicator?.reconcileProject('relay', projectId);
     },
     onError: (error, context) => {
-      recordIncident({
-        scope: 'federation-connector',
+      recordStoppedOperation({
+        scope: `federation-operation:${context.operation}`,
         component: 'federation-node-connector',
         operation: context.operation,
         error,
@@ -1203,6 +1203,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const incidentId = !abort.signal.aborted && !(error instanceof RangeError)
           ? recordStoppedOperation({
             scope: `node-message-execution:${requesterNodeId}`,
+            component: 'federation-node-message',
             operation: 'execute-node-message',
             error,
             context: { requesterNodeId },
@@ -1270,6 +1271,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const incidentId = !abort.signal.aborted && !(error instanceof RangeError) && !(error instanceof SyntaxError)
           ? recordStoppedOperation({
             scope: `node-message-dispatch:${targetNodeId}`,
+            component: 'federation-node-message',
             operation: 'dispatch-node-message',
             error,
             context: { targetNodeId },

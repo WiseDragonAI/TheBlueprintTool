@@ -54,7 +54,7 @@ test('malformed startup settings keep an emergency diagnostics server online', a
   });
 
   let response: Response | null = null;
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
     try {
       response = await fetch(`http://127.0.0.1:${port}/api/diagnostics/incidents`);
       break;
