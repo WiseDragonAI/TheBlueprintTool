@@ -15,6 +15,7 @@ import { readCodexPipelineRunController } from './read-codex-pipeline-run-contro
 import { signalCodexProcessTree } from '../helper/reconcile-terminal-codex-process.js';
 import { isSameCodexProcess } from '../helper/codex-process-queue.js';
 import { scheduleCodexRuntime } from '../helper/codex-runtime-run-store.js';
+import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -65,6 +66,8 @@ export async function cancelCodexPipelineRunController(
       // A missing log file does not prevent durable cancellation.
     }
   }
+  const executionCoordinator = codexExecutionCoordinator(runtime);
+  if (executionCoordinator) await executionCoordinator.cancel(target.executionId);
   const cancelled = reassessPipelineAfterSkill({
     decisionOsRoot,
     runtime,
@@ -75,7 +78,7 @@ export async function cancelCodexPipelineRunController(
   });
   if (!cancelled) return { ok: false, statusCode: 500, error: 'Pipeline cancellation could not be persisted.', runId };
   if (typeof runtime.scheduleCodexProcesses === 'function') scheduleCodexRuntime(runtime, 'schedule-after-pipeline-cancellation', { pipelineRunId: run.id, runId: target.runId });
-  else scheduleCodexPipelineRuns({ decisionOsRoot, runtime });
+  else await scheduleCodexPipelineRuns({ decisionOsRoot, runtime });
   if (typeof runtime.onPipelineLedgerChange === 'function') {
     (runtime.onPipelineLedgerChange as (event: AnyRecord) => void)({
       reason: 'pipeline-cancelled',

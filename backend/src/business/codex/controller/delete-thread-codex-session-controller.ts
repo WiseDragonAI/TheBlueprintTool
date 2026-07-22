@@ -11,6 +11,7 @@ import { persistLedgerProjection } from '@backend/business/task-state/helper/per
 import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
 import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
+import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type ArtifactSnapshot = { file: string; content: Buffer };
@@ -143,6 +144,7 @@ export async function deleteThreadCodexSessionController(input: { action_payload
     }
     stripHydratedThreadNotes(ledger);
     await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'delete-codex-session', cardIds: [cardId] } });
+    await codexExecutionCoordinator(runtime)?.deleteSession(runId);
   } catch (error) {
     try {
       await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger: JSON.parse(ledgerText) as AnyRecord, runtime, command: { kind: 'restore-codex-session', cardIds: [cardId] } });

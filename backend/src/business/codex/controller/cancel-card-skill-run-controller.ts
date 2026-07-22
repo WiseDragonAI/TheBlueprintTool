@@ -14,6 +14,7 @@ import { codexRuntimeRuns, notifyCodexLifecycle, publicCodexRuntimeRun } from '.
 import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
 import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 import { readLedgerProjection } from '../../task-state/helper/read-ledger-projection.js';
+import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -69,6 +70,17 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
   }
   const status = String(run?.status ?? queued?.status ?? '');
   if (status === 'pending') {
+    const coordinator = codexExecutionCoordinator(runtime);
+    if (coordinator) {
+      try {
+        const canonical = coordinator.store.find(executionId);
+        if (!canonical) return { ok: false, statusCode: 409, error: 'Canonical execution is no longer active.', runId, executionId };
+        if (canonical.phase === 'cancelled') await coordinator.reproject(executionId);
+        else await coordinator.cancel(executionId);
+      } catch (error) {
+        return { ok: false, statusCode: 503, code: String((error as { code?: unknown })?.code ?? ''), retryable: true, error: error instanceof Error ? error.message : String(error), runId, executionId };
+      }
+    }
     if (queued) removeCodexProcessQueueItem(decisionOsRoot, queued.id);
     const cancelled = run ?? { id: runId, executionId, ledgerId, outputCardId: cardId };
     const finishedAt = new Date().toISOString();

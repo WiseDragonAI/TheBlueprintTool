@@ -106,6 +106,9 @@ test('exposes origin identity and fixed repository status while protecting feder
     const pipelineStore = JSON.parse(readFileSync(join(project, '.decision-os', 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
     assert.equal(pipelineStore.runs.length, 1);
     assert.equal(pipelineStore.runs[0].sourceCardId, attached.masterCardId);
+    // Let watcher-triggered task contributions drain before deleting the temporary repository.
+    // The federated pipeline intentionally remains active while it waits for its remote role.
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
   } finally {
     server.close();
     await once(server, 'close');

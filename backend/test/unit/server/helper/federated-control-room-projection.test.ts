@@ -47,10 +47,42 @@ test('preserves one replicated structural execution intent without inventing a n
 
   assert.equal(result.queue.length, 0);
   assert.equal(result.exec.length, 1);
-  assert.equal(result.exec[0].executionStatus, 'running');
+  assert.equal(result.exec[0].executionStatus, 'interrupted');
   assert.equal(result.exec[0].executionOwnerCardId, 'child');
   assert.equal(result.exec[0].conflict, false);
   assert.equal(result.diagnostics.some((entry: Record<string, unknown>) => entry.type === 'federation_execution_conflict'), false);
+});
+
+test('matches one fresh canonical observation to its exact replicated execution', () => {
+  const observedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 15_000).toISOString();
+  const executionIntent = {
+    executionId: 'execution-a', phase: 'running', requestedAt: observedAt, phaseSince: observedAt,
+    executorNodeId: 'phone', changedAt: observedAt, settledAt: null, error: null, revision: 3,
+  };
+  const task = {
+    cardId: 'master', projectId: 'project-1', ledgerId: 'tasks', title: 'Master', cardStatus: 'todo', status: 'task-execution',
+    executionIntent, executionStatus: 'running', executionSince: observedAt, executionTime: Date.parse(observedAt),
+    executionOwnerCardId: 'master', executionOwnerKind: 'master-task',
+  };
+  const projection = (fingerprint: string, executionObservation: Record<string, unknown> | null) => ({
+    fingerprint, projects: [{ id: 'project-1', name: 'Project' }], queue: [],
+    exec: [{ ...task, executionObservation }], backlog: [], done: [], allTasks: [{ ...task, executionObservation }], diagnostics: [], ledgers: ['Tasks'],
+  });
+  const observation = { executionId: 'execution-a', executorNodeId: 'phone', phase: 'running', observedAt, expiresAt, revision: 3 };
+
+  const result = federatedControlRoomProjection({
+    localProjection: projection('workstation', null),
+    localOwner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: false },
+    remoteProjections: [{ projection: projection('phone', observation), owner: { nodeId: 'phone', nodeLabel: 'Mobile', remote: true } }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  assert.equal(result.exec[0].executionStatus, 'running');
+  assert.equal(result.exec[0].executionNodeId, 'phone');
+  assert.equal(result.exec[0].executionNodeLabel, 'Mobile');
+  assert.equal(result.exec[0].executionObservation.executionId, 'execution-a');
+  assert.equal(result.exec[0].conflict, false);
 });
 
 test('does not admit removed Active projections into the current runtime', () => {

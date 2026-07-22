@@ -1,5 +1,5 @@
 /**
- * WHAT: Periodically synchronizes central runtime incidents into the admin review task.
+ * WHAT: Periodically synchronizes central runtime incidents into the Decision OS project review task.
  * WHY: Incident admission must retry transient bootstrap gates without duplicating tasks or crashing the server.
  */
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
@@ -46,7 +46,7 @@ export function createRuntimeIncidentReviewScheduler(input: {
       // WHY: Periodic checking must not rewrite content or replicate unchanged task resources.
       if (digest === synchronizedDigest) return;
       project = input.targetProject();
-      // WHAT: Wait for the configured admin project instead of inventing another task owner.
+      // WHAT: Wait for the configured Decision OS project instead of inventing another task owner.
       // WHY: The central operational task has one deterministic project boundary.
       if (!project) return;
       const result = await synchronizeRuntimeIncidentReviewTask({

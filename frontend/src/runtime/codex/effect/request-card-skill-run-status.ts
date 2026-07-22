@@ -3,6 +3,7 @@
  * WHY: Widgets and thread logs need the same stable incremental JSONL and diagnostic contract.
  */
 import { projectReplicaRequestPath } from '../../project/helper/project-request-scope.js';
+import type { CodexExecutionDto, CodexExecutionPhase } from '../../../../../shared/schemas/codex-execution-types.js';
 
 export type CardSkillRunStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
 export type CardSkillRunEventSource = 'jsonl' | 'stderr';
@@ -67,6 +68,8 @@ export type CardSkillRunSummary = {
   skillName: string;
   pipelineStatus: CardSkillRunStatus | '';
   status: CardSkillRunStatus;
+  phase: CodexExecutionPhase | '';
+  execution: CodexExecutionDto | null;
   executionId: string;
   currentExecution: CardSkillRunExecution | null;
   executions: CardSkillRunExecution[];
@@ -168,6 +171,8 @@ function unavailableSummary(runId: string, since: number, error: string): CardSk
     skillName: '',
     pipelineStatus: '',
     status: 'unknown',
+    phase: '',
+    execution: null,
     executionId: '',
     currentExecution: null,
     executions: [],
@@ -204,6 +209,10 @@ export async function requestCardSkillRunStatus(input: { projectId?: string; rep
   const events = normalizedEvents(body.events, runId);
   const diagnostics = normalizedEvents(body.diagnostics, runId);
   const executions = Array.isArray(body.executions) ? body.executions.map((execution) => normalizedExecution(execution, runId)).filter((execution): execution is CardSkillRunExecution => Boolean(execution)) : [];
+  const raw = body as Record<string, unknown>;
+  const phase = ['preparing', 'queued', 'starting', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted'].includes(String(raw.phase ?? ''))
+    ? String(raw.phase) as CodexExecutionPhase
+    : '';
   return {
     ok: response.ok && body.ok !== false,
     active: body.active === true,
@@ -218,6 +227,8 @@ export async function requestCardSkillRunStatus(input: { projectId?: string; rep
       ? String((body as Record<string, unknown>).pipelineStatus) as CardSkillRunStatus
       : '',
     status: body.status ?? 'unknown',
+    phase,
+    execution: raw.execution && typeof raw.execution === 'object' ? raw.execution as CodexExecutionDto : null,
     executionId: String(body.executionId ?? ''),
     currentExecution: normalizedExecution(body.currentExecution, runId),
     executions,

@@ -213,7 +213,7 @@ test('server startup resumes after a persisted completed skill without duplicati
         steps: [{
           id: 'pipeline-resume-step-1', stepId: 'step', name: 'Resume Step', purpose: '', outputCardId, status: 'running',
           skills: [
-            { id: 'run-first', pipelineSkillId: 'first-config', skillName: 'first', runId: 'first-run', status: 'running', codexModel: 'gpt-5.4', codexEffort: 'high', stdoutFile: firstStdout, stderrFile: firstStderr, startedAt: now, finishedAt: null, error: '' },
+            { id: 'run-first', pipelineSkillId: 'first-config', skillName: 'first', runId: 'first-run', status: 'complete', codexModel: 'gpt-5.4', codexEffort: 'high', stdoutFile: firstStdout, stderrFile: firstStderr, startedAt: now, finishedAt: now, error: '' },
             { id: 'run-second', pipelineSkillId: 'second-config', skillName: 'second', runId: 'second-run', status: 'pending', codexModel: 'gpt-5.5', codexEffort: 'low', stdoutFile: secondStdout, stderrFile: secondStderr, startedAt: null, finishedAt: null, error: '' },
           ],
           startedAt: now, finishedAt: null, error: '',

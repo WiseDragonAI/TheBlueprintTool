@@ -21,6 +21,7 @@ export const priorityStateFrameTypes = new Set([
   'state-missing-request',
   'state-converged',
   'state-subscribe',
+  'state-execution-observation',
 ]);
 
 export type ProjectManifest = {

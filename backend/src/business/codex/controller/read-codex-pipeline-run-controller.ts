@@ -12,6 +12,7 @@ import {
   resolvePipelineLedgerContext,
 } from '../helper/codex-pipeline-runner.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
+import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -56,6 +57,8 @@ export async function readCodexPipelineRunController(
   });
   const activeStep = steps.find((step) => step.status === 'running' || step.status === 'pending') ?? null;
   const activeSkill = activeStep?.skills.find((skill) => skill.status === 'running' || skill.status === 'pending') ?? null;
+  const latestSkill = activeSkill ?? steps.flatMap((step) => step.skills).at(-1) ?? null;
+  const execution = latestSkill ? codexExecutionCoordinator(runtime)?.dto(latestSkill.executionId) ?? null : null;
   const pipeline = run.pipelineId
     ? readCodexPipelineStore({ decisionOsRoot }).store.pipelines.find((entry) => entry.id === run.pipelineId) ?? null
     : null;
@@ -67,7 +70,8 @@ export async function readCodexPipelineRunController(
     pipeline,
     activeStep,
     activeSkill,
-    canCancel: run.status === 'pending' || run.status === 'running',
+    execution,
+    canCancel: execution ? execution.validActions.includes('cancel') : run.status === 'pending' || run.status === 'running',
     canRestart: terminal,
     canContinue: terminal,
     queuePosition: run.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: run.id, createdAt: run.createdAt, runtime }) : null,

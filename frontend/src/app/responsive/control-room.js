@@ -18,12 +18,13 @@ export function projectMasterTask({ card, cards = [], relationships = [], ledger
   const linkedCards = orderedRelationships.map((relationship) => cards.find((candidate) => String(candidate?.id) === String(relationship.to))).filter(Boolean);
   const executionCandidates = [card, ...linkedCards].flatMap((candidate, index) => {
     const intent = candidate?.executionIntent && typeof candidate.executionIntent === 'object' ? candidate.executionIntent : {};
-    const executionState = String(intent.state ?? '');
-    return ['waiting', 'queued', 'running'].includes(executionState)
+    const legacyState = String(intent.state ?? '');
+    const executionState = String(intent.phase ?? (legacyState === 'waiting' ? 'preparing' : legacyState));
+    return ['preparing', 'queued', 'starting', 'running'].includes(executionState)
       ? [{ card: candidate, intent, executionState, ownerKind: index === 0 ? 'master-task' : 'subtask' }]
       : [];
   }).sort((left, right) => {
-    const priority = (candidate) => candidate.executionState === 'running' ? 0 : candidate.executionState === 'queued' ? 1 : 2;
+    const priority = (candidate) => candidate.executionState === 'running' ? 0 : candidate.executionState === 'starting' ? 1 : candidate.executionState === 'queued' ? 2 : 3;
     return priority(left) - priority(right)
       || Number(left.ownerKind === 'subtask') - Number(right.ownerKind === 'subtask')
       || String(left.card?.id ?? '').localeCompare(String(right.card?.id ?? ''));
@@ -50,7 +51,7 @@ export function projectMasterTask({ card, cards = [], relationships = [], ledger
     title: String(card?.title || `Card ${card?.id ?? ''}`),
     ledger: String(ledgerTitle),
     status: executionActive ? 'task-execution' : lifecycleStatus === 'backlog' ? 'task-backlog' : lifecycleStatus === 'done' ? 'task-complete' : 'task-waiting',
-    executionStatus: executionActive ? String(executionIntent.state) : '',
+    executionStatus: executionActive ? execution.executionState : '',
     executionOwnerCardId: executionActive ? String(execution.card?.id ?? '') : '',
     executionOwnerKind: executionActive ? execution.ownerKind : '',
     waitingSince: String(lifecycle.waitingAt ?? ''),
@@ -88,4 +89,12 @@ export function executionStopwatch(timestamp, now = Date.now()) {
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+export function executionPresentation(task, now = Date.now()) {
+  const phase = String(task?.executionStatus || task?.execution?.phase || '');
+  const since = String(task?.execution?.phaseSince || task?.executionSince || '');
+  const label = ({ preparing: 'Preparing', queued: 'Queued', starting: 'Starting', running: 'Running', interrupted: 'Interrupted' })[phase] || 'Execution';
+  const elapsed = Number.isFinite(Date.parse(since)) ? executionStopwatch(since, now) : '';
+  return { phase, since, label, elapsed, text: elapsed ? `${label} · ${elapsed}` : label };
 }

@@ -42,8 +42,9 @@ test('pipeline library routes expose empty, create, invalid-reference, conflict,
 
   try {
     const emptyResponse = await fetch(`${baseUrl}/api/codex/pipelines`);
-    assert.equal(emptyResponse.status, 200);
     const empty = await emptyResponse.json() as Record<string, any>;
+    const diagnostics = emptyResponse.status === 200 ? null : await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json());
+    assert.equal(emptyResponse.status, 200, JSON.stringify({ empty, diagnostics }));
     assert.equal(empty.ok, true);
     assert.equal(empty.empty, false);
     assert.equal(empty.pipelines.some((pipeline: Record<string, unknown>) => pipeline.id === 'project-synchronization' && pipeline.scope === 'server'), true);

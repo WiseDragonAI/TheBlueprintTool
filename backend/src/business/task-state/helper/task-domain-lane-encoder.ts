@@ -23,6 +23,17 @@ function structural(value: unknown): unknown {
 function executionIntent(value: unknown): AnyRecord | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const intent = value as AnyRecord;
+  if (typeof intent.executionId === 'string' && intent.executionId) return {
+    executionId: intent.executionId,
+    phase: intent.phase ?? null,
+    requestedAt: intent.requestedAt ?? null,
+    phaseSince: intent.phaseSince ?? null,
+    executorNodeId: intent.executorNodeId ?? null,
+    changedAt: intent.changedAt ?? intent.phaseSince ?? null,
+    settledAt: intent.settledAt ?? null,
+    error: intent.error ?? null,
+    revision: intent.revision ?? null,
+  };
   return { id: intent.id ?? null, state: intent.state ?? null, changedAt: intent.changedAt ?? intent.updatedAt ?? null, startedAt: intent.startedAt ?? null, settledAt: intent.settledAt ?? null, error: intent.error ?? null };
 }
 

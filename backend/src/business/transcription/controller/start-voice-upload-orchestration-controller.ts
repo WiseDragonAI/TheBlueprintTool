@@ -20,6 +20,7 @@ import { startThreadCodexProcessController } from '../../codex/controller/start-
 import { startCodexPipelineRunController } from '../../codex/controller/start-codex-pipeline-run-controller.js';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { readLedgerProjection } from '../../task-state/helper/read-ledger-projection.js';
+import { codexExecutionCoordinator } from '../../codex/helper/codex-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 export const voiceTranscriptionDeadlineMs = 120_000;
@@ -106,34 +107,6 @@ function notifyThreadChange(context: LedgerContext, threadId: string, callback: 
   });
 }
 
-function setQueuedVoiceExecution(input: {
-  runtime: AnyRecord;
-  ledgerId: string;
-  cardId: string;
-  transcribingBeforeLaunch: boolean;
-  onLedgerChange?: unknown;
-}): { ok: boolean; error?: string } {
-  const observations = input.runtime.voiceCodexExecutionObservations && typeof input.runtime.voiceCodexExecutionObservations === 'object'
-    ? input.runtime.voiceCodexExecutionObservations as Record<string, AnyRecord>
-    : {};
-  input.runtime.voiceCodexExecutionObservations = observations;
-  const observationKey = `${input.ledgerId}\0${input.cardId}`;
-  if (!input.transcribingBeforeLaunch) {
-    delete observations[observationKey];
-    telemetry('voice-codex-execution', { ledgerId: input.ledgerId, cardId: input.cardId, transcribingBeforeLaunch: false });
-    notify(input.onLedgerChange, { reason: 'voice-codex-transcribing-before-launch-cleared', ledgerId: input.ledgerId, cardId: input.cardId });
-    return { ok: true };
-  }
-  const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
-  if (!context.ok) return { ok: false, error: context.error };
-  const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
-  if (!card) return { ok: false, error: 'Thread target card not found.' };
-  observations[observationKey] = { kind: 'voice-transcription', startedAt: new Date().toISOString() };
-  telemetry('voice-codex-execution', { ledgerId: input.ledgerId, cardId: input.cardId, transcribingBeforeLaunch: true });
-  notify(input.onLedgerChange, { reason: 'voice-codex-transcribing-before-launch', ledgerId: input.ledgerId, cardId: input.cardId });
-  return { ok: true };
-}
-
 export function applyNotePatch(input: {
   runtime: AnyRecord;
   ledgerId: string;
@@ -186,7 +159,8 @@ function voiceStatusPayload(note: AnyRecord): AnyRecord {
     acceptedAt: String(note.acceptedAt ?? ''),
     providerStartedAt: String(note.providerStartedAt ?? ''),
     providerSettledAt: String(note.providerSettledAt ?? ''),
-    completedAt: String(note.completedAt ?? '')
+    completedAt: String(note.completedAt ?? ''),
+    codexQueueExecutionId: String(note.codexQueueExecutionId ?? '')
   };
 }
 
@@ -250,6 +224,8 @@ export async function runQueuedThreadCodex(input: {
   threadId: string;
   cardId: string;
   noteId: string;
+  executionId: string;
+  sessionId: string;
   onCardContentChange?: unknown;
   onLedgerChange?: unknown;
 }): Promise<AnyRecord> {
@@ -268,7 +244,7 @@ export async function runQueuedThreadCodex(input: {
   if (!runId) {
     await updateQueueStatus({ ...input, status: 'starting' });
     const result = await startThreadCodexProcessController({
-      action_payload: { ledgerId: input.ledgerId, threadId: input.threadId, cardId: input.cardId, ...selection, disallowSkills: true, onLedgerChange: input.onLedgerChange },
+      action_payload: { ledgerId: input.ledgerId, threadId: input.threadId, cardId: input.cardId, reservedRunId: input.sessionId, executionId: input.executionId, ...selection, disallowSkills: true, onLedgerChange: input.onLedgerChange },
       runtime_state: input.runtime
     });
     await updateQueueStatus({ ...input, status: result.ok === false ? 'failed' : 'started', runId: String((result.run as AnyRecord | undefined)?.id ?? ''), error: result.ok === false ? String(result.error ?? 'Codex launch failed.') : '' });
@@ -285,7 +261,7 @@ export async function runQueuedThreadCodex(input: {
   }
   await updateQueueStatus({ ...input, status: 'starting', runId });
   const result = await continueCardSkillRunController({
-    action_payload: { ledgerId: input.ledgerId, cardId: input.cardId, runId, disallowSkills: true, onLedgerChange: input.onLedgerChange },
+    action_payload: { ledgerId: input.ledgerId, cardId: input.cardId, runId, executionId: input.executionId, disallowSkills: true, onLedgerChange: input.onLedgerChange },
     runtime_state: input.runtime
   });
   await updateQueueStatus({ ...input, status: result.ok === false ? 'failed' : 'started', runId, error: result.ok === false ? String(result.error ?? 'Codex continue failed.') : '' });
@@ -299,6 +275,8 @@ async function runQueuedVoicePipeline(input: {
   cardId: string;
   noteId: string;
   pipelineId: string;
+  executionId: string;
+  sessionId: string;
   onCardContentChange?: unknown;
   onLedgerChange?: unknown;
 }): Promise<AnyRecord> {
@@ -334,23 +312,21 @@ export async function continueQueuedVoiceCodexAfterRun(input: {
   if (!context.ok) return { ok: false, error: context.error };
   const waiting = (normalizeLedgerNotes(context.ledger)[threadId] ?? []).filter((note) => String(note.codexQueueStatus ?? '') === 'waiting');
   if (waiting.length === 0) return { ok: true, queued: false };
-  for (const note of waiting) {
-    await updateQueueStatus({ ...input, threadId, noteId: String(note.id ?? ''), status: 'starting', runId: input.runId });
-  }
+  const note = waiting[0];
+  const queuedExecutionId = String(note.codexQueueExecutionId ?? '');
+  await updateQueueStatus({ ...input, threadId, noteId: String(note.id ?? ''), status: 'starting', runId: input.runId });
   const result = await continueCardSkillRunController({
-    action_payload: { ledgerId: input.ledgerId, cardId: input.cardId, runId: input.runId, disallowSkills: true, onLedgerChange: input.onLedgerChange },
+    action_payload: { ledgerId: input.ledgerId, cardId: input.cardId, runId: input.runId, executionId: queuedExecutionId, disallowSkills: true, onLedgerChange: input.onLedgerChange },
     runtime_state: input.runtime
   });
-  for (const note of waiting) {
-    await updateQueueStatus({
-      ...input,
-      threadId,
-      noteId: String(note.id ?? ''),
-      status: result.ok === false ? 'failed' : 'started',
-      runId: input.runId,
-      error: result.ok === false ? String(result.error ?? 'Codex continue failed.') : ''
-    });
-  }
+  await updateQueueStatus({
+    ...input,
+    threadId,
+    noteId: String(note.id ?? ''),
+    status: result.ok === false ? 'failed' : 'started',
+    runId: input.runId,
+    error: result.ok === false ? String(result.error ?? 'Codex continue failed.') : ''
+  });
   return result;
 }
 
@@ -367,6 +343,8 @@ async function finishVoiceUploadOrchestration(input: {
   mimeType: string;
   launchMode: VoiceLaunchMode;
   pipelineId: string;
+  executionId: string;
+  sessionId: string;
   onCardContentChange?: unknown;
   onLedgerChange?: unknown;
   uploadReceivedAt: string;
@@ -441,6 +419,7 @@ async function finishVoiceUploadOrchestration(input: {
         revision: input.revisionBase + 3,
         error: '',
         codexQueueStatus: input.launchMode !== 'send' ? input.cardId ? 'pending' : 'failed' : '',
+        codexQueueExecutionId: input.launchMode !== 'send' ? input.executionId : '',
         codexQueueError: input.launchMode !== 'send' && !input.cardId ? 'Thread target card not found.' : ''
       },
       onCardContentChange: input.onCardContentChange,
@@ -448,15 +427,26 @@ async function finishVoiceUploadOrchestration(input: {
     });
     lifecycleTelemetry({ noteId: input.noteId, phase: 'completed', at: completedAt, previousAt: providerSettledAt });
     if (input.launchMode !== 'send' && input.cardId) {
-      notify(input.payload.onExecutionIntentChange, { cardId: input.cardId, intentId: input.noteId, state: 'queued', launchMode: input.launchMode });
+      const coordinator = codexExecutionCoordinator(input.runtime);
       const result = input.launchMode === 'pipeline' ? await runQueuedVoicePipeline(input) : await runQueuedThreadCodex(input);
-      notify(input.payload.onExecutionIntentChange, {
-        cardId: input.cardId,
-        intentId: input.noteId,
-        state: result.ok === false ? 'failed' : result.queued ? 'queued' : 'running',
-        launchMode: input.launchMode,
-        error: result.ok === false ? String(result.error ?? 'Codex launch failed.') : '',
-      });
+      if (input.launchMode === 'pipeline') {
+        const preparation = coordinator?.store.find(input.executionId);
+        if (preparation?.phase === 'preparing') await coordinator?.settle(input.executionId, result.ok === false ? {
+          phase: 'failed',
+          error: { code: 'voice_pipeline_launch_failed', message: String(result.error ?? 'Pipeline launch failed.') },
+          result: { status: 'failed', summary: String(result.error ?? 'Pipeline launch failed.') },
+        } : {
+          phase: 'succeeded',
+          result: { status: 'succeeded', summary: 'Voice transcription completed and handed off to the pipeline.' },
+        });
+      } else if (result.ok === false) {
+        const current = coordinator?.store.find(input.executionId);
+        if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.phase)) await coordinator?.settle(input.executionId, {
+          phase: 'failed',
+          error: { code: 'voice_codex_launch_failed', message: String(result.error ?? 'Codex launch failed.') },
+          result: { status: 'failed', summary: String(result.error ?? 'Codex launch failed.') },
+        });
+      }
     }
     return;
   }
@@ -482,7 +472,13 @@ async function finishVoiceUploadOrchestration(input: {
     reason: 'voice-transcription-failed'
   });
   lifecycleTelemetry({ noteId: input.noteId, phase: 'failed', at: completedAt, previousAt: providerSettledAt || input.acceptedAt });
-  if (input.launchMode !== 'send' && input.cardId) notify(input.payload.onExecutionIntentChange, { cardId: input.cardId, intentId: input.noteId, state: 'failed', launchMode: input.launchMode, error });
+  const coordinator = codexExecutionCoordinator(input.runtime);
+  const execution = coordinator?.store.find(input.executionId);
+  if (execution && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(execution.phase)) await coordinator?.settle(input.executionId, {
+    phase: 'failed',
+    error: { code: 'voice_transcription_failed', message: error },
+    result: { status: 'failed', summary: error },
+  });
 }
 
 export async function startVoiceUploadOrchestrationController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
@@ -509,6 +505,8 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
   }
   const launchMode = voiceLaunchMode(payload);
   const queueCodex = launchMode !== 'send';
+  const executionId = queueCodex ? optionalText(payload.executionId) || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}` : '';
+  let executionSessionId = '';
   const acceptedAt = new Date().toISOString();
   const reviewContext = (() => {
     try {
@@ -539,9 +537,38 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
   });
   if (!patch.ok) return { ok: false, statusCode: 500, uploaded: true, configured: true, noteId: id, voiceFileRef, error: patch.error ?? 'Voice note commit failed.' };
   if (queueCodex && cardId) {
-    const execution = setQueuedVoiceExecution({ runtime, ledgerId, cardId, transcribingBeforeLaunch: true, onLedgerChange: payload.onLedgerChange });
-    if (!execution.ok) {
-      return { ok: false, statusCode: 404, uploaded: true, configured: true, noteId: id, voiceFileRef, error: execution.error ?? 'Thread target card not found.' };
+    const context = resolveLedgerContext({ runtime, ledgerId });
+    if (!context.ok) return { ok: false, statusCode: 404, uploaded: true, configured: true, noteId: id, voiceFileRef, error: context.error ?? 'Thread target card not found.' };
+    const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+    if (!card) return { ok: false, statusCode: 404, uploaded: true, configured: true, noteId: id, voiceFileRef, error: 'Thread target card not found.' };
+    executionSessionId = cardRunId(card) || (launchMode === 'pipeline' ? `voice-preparation-${id}` : `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`);
+    const coordinator = codexExecutionCoordinator(runtime);
+    if (coordinator) {
+      try {
+        await coordinator.admit({
+          executionId,
+          sessionId: executionSessionId,
+          projectId: String(runtime.projectId ?? ''),
+          ledgerId,
+          taskId: cardId,
+          ownerCardId: cardId,
+          kind: 'voice',
+          requestedAt: acceptedAt,
+        });
+      } catch (error) {
+        return {
+          ok: false,
+          statusCode: 503,
+          uploaded: true,
+          configured: true,
+          noteId: id,
+          voiceFileRef,
+          executionId,
+          code: String((error as { code?: unknown })?.code ?? ''),
+          retryable: true,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
     }
   }
   lifecycleTelemetry({ noteId: id, phase: 'accepted', at: acceptedAt, previousAt: audioPersistedAt });
@@ -558,6 +585,8 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     mimeType,
     launchMode,
     pipelineId: optionalText(payload.voicePipelineId),
+    executionId,
+    sessionId: executionSessionId,
     uploadReceivedAt,
     audioPersistedAt,
     acceptedAt,
@@ -583,13 +612,16 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
       onCardContentChange: payload.onCardContentChange,
       reason: 'voice-orchestration-failed'
     });
-  }).finally(() => {
-    if (queueCodex && cardId) {
-      setQueuedVoiceExecution({ runtime, ledgerId, cardId, transcribingBeforeLaunch: false, onLedgerChange: payload.onLedgerChange });
-    }
+    const coordinator = codexExecutionCoordinator(runtime);
+    const execution = coordinator?.store.find(executionId);
+    if (execution && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(execution.phase)) void coordinator?.settle(executionId, {
+      phase: 'failed',
+      error: { code: 'voice_orchestration_failed', message: error instanceof Error ? error.message : String(error) },
+      result: { status: 'failed', summary: error instanceof Error ? error.message : String(error) },
+    });
   });
   if (bool(payload.awaitCompletion)) await completion;
-  return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef, status: 'queued', revision: 1, uploadReceivedAt, audioPersistedAt, acceptedAt, queueCodex, launchMode };
+  return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef, status: 'queued', revision: 1, uploadReceivedAt, audioPersistedAt, acceptedAt, queueCodex, launchMode, executionId };
 }
 
 export async function startVoiceRetryOrchestrationController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
@@ -614,6 +646,9 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
   const revisionBase = Number(current.revision ?? 0) + 1;
   const launchMode = voiceLaunchMode(payload);
   const cardId = cardIdForThread(threadId, payload.cardId);
+  const queueCodex = launchMode !== 'send';
+  const executionId = queueCodex ? `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}` : '';
+  let executionSessionId = '';
   const patch = applyNotePatch({
     runtime,
     ledgerId,
@@ -633,6 +668,24 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
     reason: 'voice-retry-queued'
   });
   if (!patch.ok) return { ok: false, statusCode: patch.stale ? 409 : 500, error: patch.error };
+  if (queueCodex && cardId) {
+    const context = resolveLedgerContext({ runtime, ledgerId });
+    if (!context.ok) return { ok: false, statusCode: 404, error: context.error ?? 'Thread target card not found.' };
+    const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+    if (!card) return { ok: false, statusCode: 404, error: 'Thread target card not found.' };
+    executionSessionId = cardRunId(card) || (launchMode === 'pipeline' ? `voice-preparation-${id}` : `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`);
+    const coordinator = codexExecutionCoordinator(runtime);
+    if (coordinator) await coordinator.admit({
+      executionId,
+      sessionId: executionSessionId,
+      projectId: String(runtime.projectId ?? ''),
+      ledgerId,
+      taskId: cardId,
+      ownerCardId: cardId,
+      kind: 'voice',
+      requestedAt: acceptedAt,
+    });
+  }
   const completion = finishVoiceUploadOrchestration({
     payload,
     runtime,
@@ -646,6 +699,8 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
     mimeType: String(loaded.mimeType ?? 'audio/webm'),
     launchMode,
     pipelineId: optionalText(payload.voicePipelineId),
+    executionId,
+    sessionId: executionSessionId,
     uploadReceivedAt,
     audioPersistedAt,
     acceptedAt,
@@ -654,5 +709,5 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
     onLedgerChange: payload.onLedgerChange
   }).catch(() => undefined);
   if (bool(payload.awaitCompletion)) await completion;
-  return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef, status: 'queued', revision: revisionBase, uploadReceivedAt, audioPersistedAt, acceptedAt };
+  return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef, status: 'queued', revision: revisionBase, uploadReceivedAt, audioPersistedAt, acceptedAt, executionId };
 }

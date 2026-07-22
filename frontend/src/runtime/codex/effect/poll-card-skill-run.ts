@@ -30,8 +30,6 @@ type Poller = {
   since: number;
   startedAtMs: number;
   timer: ReturnType<typeof setTimeout> | null;
-  clock: ClockHandle | null;
-  lastClockPaintMs: number;
   inFlight: boolean;
   cancelInFlight: boolean;
   continueInFlight: boolean;
@@ -41,10 +39,6 @@ type Poller = {
   generation: number;
   expectedExecutionId: string;
 };
-
-type ClockHandle =
-  | { kind: 'animation'; id: number }
-  | { kind: 'timeout'; id: ReturnType<typeof setTimeout> };
 
 const pollers = new Map<string, Poller>();
 const terminalSummaries = new Map<string, CardSkillRunSummary>();
@@ -62,8 +56,6 @@ type PipelineStepPoller = {
   pipelineStepId: string;
   element: HTMLElement;
   timer: ReturnType<typeof setTimeout> | null;
-  clock: ClockHandle | null;
-  lastClockPaintMs: number;
   startedAtMs: number;
   since: number;
   inFlight: boolean;
@@ -79,6 +71,7 @@ type PipelineStepPoller = {
 };
 
 const pipelineStepPollers = new Map<string, PipelineStepPoller>();
+let sharedExecutionClock: ReturnType<typeof setInterval> | null = null;
 
 function consumersFor(key: string): Map<string, (summary: CardSkillRunSummary) => void> {
   let consumers = runConsumers.get(key);
@@ -281,29 +274,30 @@ function paintFrontendClock(poller: Poller): void {
   setText(poller.element, '[data-codex-run-timer]', durationLabel(Date.now() - poller.startedAtMs));
 }
 
-function scheduleClockFrame(poller: Poller): void {
-  if (poller.clock || poller.terminal) return;
-  const tick = (): void => {
-    poller.clock = null;
-    if (poller.terminal) return;
-    if (!poller.element || !globalThis.document?.contains(poller.element)) return;
-    const now = Date.now();
-    if (now - poller.lastClockPaintMs >= 33) {
-      poller.lastClockPaintMs = now;
-      paintFrontendClock(poller);
-    }
-    scheduleClockFrame(poller);
-  };
-  if (typeof globalThis.requestAnimationFrame === 'function') {
-    poller.clock = { kind: 'animation', id: globalThis.requestAnimationFrame(tick) };
-  } else {
-    poller.clock = { kind: 'timeout', id: setTimeout(tick, 33) };
-  }
+function sharedClockRequired(): boolean {
+  return [...pollers.values()].some((poller) => !poller.terminal && Boolean(poller.element) && globalThis.document?.contains(poller.element!))
+    || [...pipelineStepPollers.values()].some((poller) => !poller.terminal && poller.element.dataset.runStatus === 'running' && globalThis.document?.contains(poller.element));
 }
 
-function startFrontendClock(poller: Poller): void {
-  paintFrontendClock(poller);
-  scheduleClockFrame(poller);
+function stopSharedExecutionClockIfIdle(): void {
+  if (!sharedExecutionClock || sharedClockRequired()) return;
+  clearInterval(sharedExecutionClock);
+  sharedExecutionClock = null;
+}
+
+function paintSharedExecutionClock(): void {
+  for (const poller of pollers.values()) {
+    if (!poller.terminal && poller.element && globalThis.document?.contains(poller.element)) paintFrontendClock(poller);
+  }
+  for (const poller of pipelineStepPollers.values()) {
+    if (!poller.terminal && poller.element.dataset.runStatus === 'running' && globalThis.document?.contains(poller.element)) paintPipelineClock(poller);
+  }
+  stopSharedExecutionClockIfIdle();
+}
+
+function startSharedExecutionClock(): void {
+  paintSharedExecutionClock();
+  if (!sharedExecutionClock && sharedClockRequired()) sharedExecutionClock = setInterval(paintSharedExecutionClock, 250);
 }
 
 function schedulePoll(poller: Poller, delayMs = 1000): void {
@@ -315,10 +309,8 @@ function stopPoller(key: string): void {
   const poller = pollers.get(key);
   if (!poller) return;
   if (poller.timer) clearTimeout(poller.timer);
-  if (poller.clock?.kind === 'animation') globalThis.cancelAnimationFrame?.(poller.clock.id);
-  if (poller.clock?.kind === 'timeout') clearTimeout(poller.clock.id);
-  poller.clock = null;
   pollers.delete(key);
+  stopSharedExecutionClockIfIdle();
 }
 
 function setCancelButtonState(button: HTMLButtonElement, state: 'ready' | 'stopping', status: string): void {
@@ -355,7 +347,7 @@ function paintExternallyStartedRun(poller: Poller, status: 'pending' | 'running'
   const cancel = cancelButton(poller.element);
   if (cancel) setCancelButtonState(cancel, 'ready', status);
   showTimer(poller.element);
-  startFrontendClock(poller);
+  startSharedExecutionClock();
 }
 
 function bindCancelButton(poller: Poller): void {
@@ -460,7 +452,7 @@ async function continueRun(poller: Poller): Promise<void> {
   paintExternallyStartedRun(poller, acceptedStatus, acceptedStatus === 'pending' && Number.isInteger(result.queuePosition) ? `Queued · position ${result.queuePosition}` : 'Continuing session');
   pollers.set(key, poller);
   setContinueButtonState(button, 'ready');
-  startFrontendClock(poller);
+  startSharedExecutionClock();
   debugContinue(traceId, 'continue-response-schedule-poll', pollerDebugState(poller));
   schedulePoll(poller, 0);
 }
@@ -481,7 +473,7 @@ async function poll(poller: Poller): Promise<void> {
     return;
   }
   poller.detachedChecks = 0;
-  if (poller.element) startFrontendClock(poller);
+  if (poller.element) startSharedExecutionClock();
   if (poller.inFlight) {
     schedulePoll(poller);
     return;
@@ -625,8 +617,6 @@ function createConsumerPoller(identity: Required<PollerIdentity>, consumers: Map
     since: 0,
     startedAtMs: runStartedAt(identity.runId),
     timer: null,
-    clock: null,
-    lastClockPaintMs: 0,
     inFlight: false,
     cancelInFlight: false,
     continueInFlight: false,
@@ -662,7 +652,7 @@ export function bindCardSkillRunWidget(input: PollerIdentity & { element: HTMLEl
   const key = pollerKey(identity);
   const terminalSummary = terminalSummaries.get(key);
   if (terminalSummary) {
-    const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [...terminalSummary.events], lastSummary: terminalSummary, since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true, generation: 0, expectedExecutionId: '' };
+    const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [...terminalSummary.events], lastSummary: terminalSummary, since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true, generation: 0, expectedExecutionId: '' };
     pollers.set(key, poller);
     paintWidget(input.element, terminalSummary);
     bindCancelButton(poller);
@@ -680,15 +670,15 @@ export function bindCardSkillRunWidget(input: PollerIdentity & { element: HTMLEl
     existing.terminal = false;
     bindCancelButton(existing);
     bindContinueButton(existing);
-    startFrontendClock(existing);
+    startSharedExecutionClock();
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
-  const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [], lastSummary: null, since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false, generation: 0, expectedExecutionId: '' };
+  const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [], lastSummary: null, since: 0, startedAtMs: runStartedAt(input.runId), timer: null, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false, generation: 0, expectedExecutionId: '' };
   pollers.set(key, poller);
   bindCancelButton(poller);
   bindContinueButton(poller);
-  startFrontendClock(poller);
+  startSharedExecutionClock();
   schedulePoll(poller, 0);
 }
 
@@ -837,28 +827,12 @@ function paintPipelineClock(poller: PipelineStepPoller): void {
 }
 
 function schedulePipelineClock(poller: PipelineStepPoller): void {
-  if (poller.clock || poller.terminal || poller.element.dataset.runStatus !== 'running') return;
-  const tick = (): void => {
-    poller.clock = null;
-    if (poller.terminal || poller.element.dataset.runStatus !== 'running' || !globalThis.document?.contains(poller.element)) return;
-    const now = Date.now();
-    if (now - poller.lastClockPaintMs >= 33) {
-      poller.lastClockPaintMs = now;
-      paintPipelineClock(poller);
-    }
-    schedulePipelineClock(poller);
-  };
-  if (typeof globalThis.requestAnimationFrame === 'function') {
-    poller.clock = { kind: 'animation', id: globalThis.requestAnimationFrame(tick) };
-  } else {
-    poller.clock = { kind: 'timeout', id: setTimeout(tick, 33) };
-  }
+  if (poller.terminal || poller.element.dataset.runStatus !== 'running') return;
+  startSharedExecutionClock();
 }
 
-function stopPipelineClock(poller: PipelineStepPoller): void {
-  if (poller.clock?.kind === 'animation') globalThis.cancelAnimationFrame?.(poller.clock.id);
-  if (poller.clock?.kind === 'timeout') clearTimeout(poller.clock.id);
-  poller.clock = null;
+function stopPipelineClock(_poller: PipelineStepPoller): void {
+  stopSharedExecutionClockIfIdle();
 }
 
 function schedulePipelinePoll(poller: PipelineStepPoller, delayMs = 1000): void {
@@ -887,6 +861,7 @@ function removePipelinePoller(poller: PipelineStepPoller): void {
   poller.timer = null;
   stopPipelineClock(poller);
   pipelineStepPollers.delete(pipelineStepPollerKey(poller));
+  stopSharedExecutionClockIfIdle();
 }
 
 function bindPipelineButtons(poller: PipelineStepPoller): void {
@@ -1177,8 +1152,6 @@ export function bindPipelineStepRunWidget(input: {
   const poller: PipelineStepPoller = {
     ...scopedInput,
     timer: null,
-    clock: null,
-    lastClockPaintMs: 0,
     startedAtMs: runStartedAt(input.runId),
     since: 0,
     inFlight: false,

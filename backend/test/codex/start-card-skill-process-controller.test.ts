@@ -1082,15 +1082,16 @@ test('card skill run continue route resumes the captured session after its card 
 
     const orphanedStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=tasks&cardId=${outputCardId}&since=0`);
     const orphanedStatus = await orphanedStatusResponse.json() as { status: string; active: boolean };
-    assert.equal(orphanedStatus.status, 'running');
+    assert.equal(orphanedStatus.status, 'complete');
     assert.equal(orphanedStatus.active, false);
     const interruptedResumeResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ledgerId: 'tasks', cardId: outputCardId, codexModel: 'gpt-5.5', codexEffort: 'high' })
     });
-    assert.equal(interruptedResumeResponse.status, 202);
-    await waitForText(inputFile, 'Continue the interrupted task from the durable session context.');
+    assert.equal(interruptedResumeResponse.status, 409);
+    const interruptedResumeBody = await interruptedResumeResponse.json() as { error: string };
+    assert.equal(interruptedResumeBody.error, 'No thread messages were found after the last Codex session end.');
   } finally {
     server.close();
     process.chdir(originalCwd);

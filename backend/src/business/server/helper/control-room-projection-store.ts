@@ -9,6 +9,7 @@ import { readRepositoryOriginIdentity } from '../../project-sync/helper/reposito
 import type { DecisionOsProject } from './project-catalog.js';
 import { compareControlRoomQueueTasks } from './control-room-queue-order.js';
 import type { ProjectSyncRun } from '../../project-sync/helper/project-sync-types.js';
+import { codexExecutionCoordinator } from '../../codex/helper/codex-execution-runtime.js';
 import {
   addRelationshipToIndex,
   cachedAggregateTasks,
@@ -28,7 +29,7 @@ type ProjectionEntityChange = { entityType: string; entityId: string };
 type ExecutionCandidate = { card: AnyRecord; intent: AnyRecord; state: string; ownerCardId: string; ownerKind: 'master-task' | 'subtask' };
 
 const schemaVersion = 8;
-const projectorVersion = 'control-room-v16-replicated-codex-execution';
+const projectorVersion = 'control-room-v17-canonical-codex-execution';
 const taskMaterializationBatchSize = 64;
 
 function records(value: unknown): AnyRecord[] {
@@ -37,6 +38,17 @@ function records(value: unknown): AnyRecord[] {
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+function executionPhase(intent: AnyRecord): string {
+  const phase = text(intent.phase);
+  if (phase) return phase;
+  const legacy = text(intent.state);
+  return legacy === 'waiting' ? 'preparing' : legacy;
+}
+
+function activeExecutionPhase(phase: string): boolean {
+  return ['preparing', 'queued', 'starting', 'running'].includes(phase);
 }
 
 function dependency(file: string): Dependency | null {
@@ -72,8 +84,8 @@ function activeExecutionCandidate(card: AnyRecord | undefined, ownerKind: 'maste
   const intent = card?.executionIntent && typeof card.executionIntent === 'object' && !Array.isArray(card.executionIntent)
     ? card.executionIntent as AnyRecord
     : {};
-  const state = text(intent.state);
-  if (!['waiting', 'queued', 'running'].includes(state)) return null;
+  const state = executionPhase(intent);
+  if (!activeExecutionPhase(state)) return null;
   return { card: card!, intent, state, ownerCardId: text(card?.id), ownerKind };
 }
 
@@ -82,13 +94,13 @@ function selectedExecutionCandidate(master: AnyRecord, subtasks: AnyRecord[]): E
     activeExecutionCandidate(master, 'master-task'),
     ...subtasks.map((card) => activeExecutionCandidate(card, 'subtask')),
   ].filter((candidate): candidate is ExecutionCandidate => candidate !== null);
-  const priority = (candidate: ExecutionCandidate): number => candidate.state === 'running' ? 0 : candidate.state === 'queued' ? 1 : 2;
+  const priority = (candidate: ExecutionCandidate): number => candidate.state === 'running' ? 0 : candidate.state === 'starting' ? 1 : candidate.state === 'queued' ? 2 : 3;
   return candidates.sort((left, right) => priority(left) - priority(right)
     || Number(left.ownerKind === 'subtask') - Number(right.ownerKind === 'subtask')
     || text(left.ownerCardId).localeCompare(text(right.ownerCardId)))[0] ?? null;
 }
 
-function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsProject['ledgers'][number]; ledger: AnyRecord; card: AnyRecord; conflicts?: AnyRecord[]; index?: TaskLedgerIndex }): AnyRecord | null {
+function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsProject['ledgers'][number]; ledger: AnyRecord; card: AnyRecord; conflicts?: AnyRecord[]; index?: TaskLedgerIndex; runtime?: AnyRecord; executionObservationFor?: (executionId: string) => AnyRecord | null }): AnyRecord | null {
   const jsonLabels = Array.isArray(input.card.labels) ? input.card.labels.map(String) : [];
   if (!jsonLabels.includes('master-task')) return null;
   const lifecycle = input.card.lifecycle && typeof input.card.lifecycle === 'object' && !Array.isArray(input.card.lifecycle) ? input.card.lifecycle as AnyRecord : {};
@@ -100,8 +112,8 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const execution = selectedExecutionCandidate(input.card, linkedCards);
   const executionIntent = execution?.intent ?? {};
   const lifecycleStatus = text(lifecycle.status);
-  const executionState = text(executionIntent.state);
-  const executionActive = ['waiting', 'queued', 'running'].includes(executionState);
+  const executionState = executionPhase(executionIntent);
+  const executionActive = activeExecutionPhase(executionState);
   const waitingSince = text(lifecycle.waitingAt);
   const completedAt = text(lifecycle.closedAt);
   const waitingTime = Date.parse(waitingSince);
@@ -125,8 +137,12 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const taskConflicts = records(input.conflicts).filter((conflict) => conflict.kind === 'task-conflict' && conflict.path === 'lifecycle' && taskIds.has(text(conflict.entityId)));
   if (taskConflicts.length > 0) diagnostics.push(...taskConflicts.map((conflict) => `task-conflict:${text(conflict.entityId)}`));
   const complete = subtasks.filter((subtask) => subtask.status === 'complete').length;
-  const executionSince = executionActive ? text(executionIntent.startedAt) || text(executionIntent.changedAt) : '';
+  const executionSince = executionActive ? text(executionIntent.phaseSince) || text(executionIntent.startedAt) || text(executionIntent.changedAt) : '';
   const executionCard = execution?.card as AnyRecord | undefined;
+  const executionId = text(executionIntent.executionId) || text(executionIntent.id);
+  const canonicalExecution = executionId && input.runtime ? codexExecutionCoordinator(input.runtime)?.dto(executionId) ?? null : null;
+  const projectedObservation = executionId ? input.executionObservationFor?.(executionId) ?? null : null;
+  const observation = canonicalExecution?.observation?.executionId === executionId ? canonicalExecution.observation : projectedObservation;
   return {
     valid: diagnostics.length === 0, masterTask: true, diagnostics,
     cardId: text(input.card.id), title: text(input.card.title) || `Card ${text(input.card.id)}`, labels,
@@ -134,11 +150,12 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     projectId: input.project.id, projectName: input.project.name, projectColor: input.project.color,
     ledgerId: input.ledgerEntry.id, ledgerTitle: input.ledgerEntry.title, ledger: input.ledgerEntry.title,
     zoneId: zoneIdFor(input.card, input.ledger), status,
-    codexRunId: executionActive ? text(executionCard?.codexActiveRunId) : '', codexPipelineRunId: executionActive ? text(executionCard?.codexPipelineRunId ?? executionCard?.codexQueuedPipelineRunId) : '', codexStatus: executionState,
+    codexRunId: executionActive ? canonicalExecution?.sessionId ?? text(executionCard?.codexActiveRunId) : '', codexPipelineRunId: executionActive ? canonicalExecution?.pipelineRunId ?? text(executionCard?.codexPipelineRunId ?? executionCard?.codexQueuedPipelineRunId) : '', codexStatus: executionState,
     executionOwnerCardId: executionActive ? text(execution?.ownerCardId) : '', executionOwnerKind: executionActive ? text(execution?.ownerKind) : '',
-    executionStatus: executionActive ? executionState : '', executionObservation: null,
-    transcribingBeforeLaunch: executionState === 'waiting',
-    codexProcessing: executionState === 'running', codexQueued: executionState === 'queued', codexQueuePosition: null,
+    executionStatus: executionActive ? executionState : '', execution: canonicalExecution, executionObservation: observation,
+    transcribingBeforeLaunch: executionState === 'preparing' && canonicalExecution?.kind === 'voice',
+    codexProcessing: executionState === 'starting' || executionState === 'running', codexQueued: executionState === 'queued', codexQueuePosition: null,
+    executionNodeId: observation?.executorNodeId ?? '', executionNodeLabel: '',
     waitingSince,
     waitingTime, executionSince,
     executionTime: Date.parse(executionSince),
@@ -155,11 +172,11 @@ function compareTasks(left: AnyRecord, right: AnyRecord): number {
 }
 
 /** Builds the Control Room slice directly from a worker-owned task projection. */
-export function controlRoomProjectionFromTaskLedger(input: { project: DecisionOsProject; ledger: AnyRecord; conflicts?: AnyRecord[]; runtime?: AnyRecord }): AnyRecord {
+export function controlRoomProjectionFromTaskLedger(input: { project: DecisionOsProject; ledger: AnyRecord; conflicts?: AnyRecord[]; runtime?: AnyRecord; executionObservationFor?: (executionId: string) => AnyRecord | null }): AnyRecord {
   const ledgerEntry = input.project.ledgers.find((entry) => entry.id === 'tasks') ?? { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' };
   const index = indexTaskLedger(input.ledger);
   const tasks = records(input.ledger.cards).flatMap((card) => {
-    const task = taskFrom({ project: input.project, ledgerEntry, ledger: input.ledger, card, conflicts: input.conflicts, index });
+    const task = taskFrom({ project: input.project, ledgerEntry, ledger: input.ledger, card, conflicts: input.conflicts, index, runtime: input.runtime, executionObservationFor: input.executionObservationFor });
     return task ? [task] : [];
   });
   return {
@@ -253,10 +270,11 @@ function sliceFingerprint(slice: Pick<ProjectSlice, 'projectId' | 'project' | 'd
     projectorVersion,
     dependencies: slice.dependencies.map(({ path, sha256 }) => ({ path, sha256 })),
     taskState: slice.taskRoot || slice.tasks,
+    executions: slice.tasks.map((task) => [task.cardId, task.executionIntent, task.execution, task.executionObservation]),
   })).digest('hex');
 }
 
-function buildProjectSlice(input: { project: DecisionOsProject; taskProjection: AnyRecord; taskRoot?: string; onTaskMaterialized?: () => void }): { slice: ProjectSlice; index: TaskLedgerIndex } {
+function buildProjectSlice(input: { project: DecisionOsProject; taskProjection: AnyRecord; taskRoot?: string; runtime?: AnyRecord; onTaskMaterialized?: () => void }): { slice: ProjectSlice; index: TaskLedgerIndex } {
   const tasks: AnyRecord[] = [];
   const dependencies: Dependency[] = [];
   const project = input.project;
@@ -273,7 +291,7 @@ function buildProjectSlice(input: { project: DecisionOsProject; taskProjection: 
       const ledger = structuredClone(projectedLedger);
       index = indexTaskLedger(ledger);
       for (const card of records(ledger.cards)) {
-        const task = taskFrom({ project, ledgerEntry, ledger, card, conflicts: records(input.taskProjection?.conflicts), index });
+        const task = taskFrom({ project, ledgerEntry, ledger, card, conflicts: records(input.taskProjection?.conflicts), index, runtime: input.runtime });
         input.onTaskMaterialized?.();
         if (task) tasks.push(task);
       }
@@ -324,7 +342,7 @@ function affectedTaskIds(index: TaskLedgerIndex, entities: ProjectionEntityChang
   return taskIds;
 }
 
-function rebuildAffectedTasks(input: { slice: ProjectSlice; index: TaskLedgerIndex; taskPositions: Map<string, number>; project: DecisionOsProject; taskProjection: AnyRecord; taskRoot?: string; taskIds: string[]; onTaskMaterialized?: () => void }): ProjectSlice {
+function rebuildAffectedTasks(input: { slice: ProjectSlice; index: TaskLedgerIndex; taskPositions: Map<string, number>; project: DecisionOsProject; taskProjection: AnyRecord; taskRoot?: string; taskIds: string[]; runtime?: AnyRecord; onTaskMaterialized?: () => void }): ProjectSlice {
   const ledger = input.taskProjection?.ledger && typeof input.taskProjection.ledger === 'object' && !Array.isArray(input.taskProjection.ledger)
     ? input.taskProjection.ledger as AnyRecord
     : input.taskProjection;
@@ -335,7 +353,7 @@ function rebuildAffectedTasks(input: { slice: ProjectSlice; index: TaskLedgerInd
   for (const taskId of input.taskIds) {
     const existingIndex = input.taskPositions.get(taskId) ?? -1;
     const card = input.index.cards.get(taskId);
-    const task = card ? taskFrom({ project: input.project, ledgerEntry, ledger, card, conflicts: records(input.taskProjection?.conflicts), index: input.index }) : null;
+    const task = card ? taskFrom({ project: input.project, ledgerEntry, ledger, card, conflicts: records(input.taskProjection?.conflicts), index: input.index, runtime: input.runtime }) : null;
     input.onTaskMaterialized?.();
     if (task && existingIndex >= 0) nextTasks[existingIndex] = task;
     else if (task) {
@@ -386,6 +404,7 @@ function aggregateProjection(input: { slices: ProjectSlice[]; revision: number; 
 export function createControlRoomProjectionStore(input: {
   cacheFile: string;
   taskProjectionForProject: (project: DecisionOsProject) => AnyRecord;
+  runtimeForProject?: (project: DecisionOsProject) => AnyRecord | undefined;
   taskEntityForProject?: (project: DecisionOsProject, entityType: 'card' | 'relationship', entityId: string) => AnyRecord | null;
   taskRootForProject?: (project: DecisionOsProject) => string;
 }): {
@@ -454,6 +473,7 @@ export function createControlRoomProjectionStore(input: {
       if (!dirtyAll && !dirtyProjects.has(project.id) && slices.has(project.id)) continue;
       const taskProjection = input.taskProjectionForProject(project);
       const taskRoot = input.taskRootForProject?.(project) ?? '';
+      const projectRuntime = input.runtimeForProject?.(project);
       const entities = dirtyEntities.get(project.id);
       const currentSlice = slices.get(project.id);
       projectBuilds += 1;
@@ -480,7 +500,7 @@ export function createControlRoomProjectionStore(input: {
         const ledgerIndex = ledgerIndexes.get(project.id)!;
         const positions = taskPositions.get(project.id) ?? new Map(currentSlice.tasks.map((task, index) => [text(task.cardId), index]));
         taskPositions.set(project.id, positions);
-        const updatedSlice = rebuildAffectedTasks({ slice: currentSlice, index: ledgerIndex, taskPositions: positions, project, taskProjection, taskRoot, taskIds: batch, onTaskMaterialized: () => { taskMaterializations += 1; } });
+        const updatedSlice = rebuildAffectedTasks({ slice: currentSlice, index: ledgerIndex, taskPositions: positions, project, taskProjection, taskRoot, taskIds: batch, runtime: projectRuntime, onTaskMaterialized: () => { taskMaterializations += 1; } });
         slices.set(project.id, updatedSlice);
         if (aggregateTaskIndex) {
           for (const taskId of batch) {
@@ -497,7 +517,7 @@ export function createControlRoomProjectionStore(input: {
           remainingDirtyProjects.add(project.id);
         } else dirtyTaskIds.delete(project.id);
       } else {
-        const built = buildProjectSlice({ project, taskProjection, taskRoot, onTaskMaterialized: () => { taskMaterializations += 1; } });
+        const built = buildProjectSlice({ project, taskProjection, taskRoot, runtime: projectRuntime, onTaskMaterialized: () => { taskMaterializations += 1; } });
         slices.set(project.id, built.slice);
         ledgerIndexes.set(project.id, built.index);
         taskPositions.set(project.id, new Map(built.slice.tasks.map((task, index) => [text(task.cardId), index])));

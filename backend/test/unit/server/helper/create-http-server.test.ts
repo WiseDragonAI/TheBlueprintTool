@@ -127,6 +127,7 @@ test('create-http-server resolves retained transient task bootstrap incidents at
   const frontendRoot = join(projectRoot, 'frontend');
   mkdirSync(decisionOsRoot, { recursive: true });
   mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'project-a' }));
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
   writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
   const incidents = createRuntimeIncidentLedger({ decisionOsRoot });
@@ -154,6 +155,13 @@ test('create-http-server resolves retained transient task bootstrap incidents at
     code: 'task_state_bootstrap_incomplete',
     error: new Error('task_state_bootstrap_incomplete'),
   });
+  incidents.record({
+    severity: 'error',
+    scope: 'background:codex-runtime:project-a',
+    component: 'codex-runtime:project-a',
+    operation: 'codex-execution-timeout',
+    error: new Error('Codex execution exceeded 1800000ms.'),
+  });
   const runtime: Record<string, unknown> = { decisionOsRoot };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
@@ -164,6 +172,7 @@ test('create-http-server resolves retained transient task bootstrap incidents at
     assert.equal(health.status, 'ready');
     assert.equal(health.activeIncidentCount, 0);
     assert.equal(incidents.snapshot().incidents.filter((incident) => incident.code === 'task_state_bootstrap_incomplete').every((incident) => incident.status === 'resolved'), true);
+    assert.equal(incidents.snapshot().incidents.find((incident) => incident.operation === 'codex-execution-timeout')?.status, 'resolved');
   } finally {
     server.close();
     await once(server, 'close');
@@ -282,6 +291,40 @@ test('Codex background failure pauses only project Codex work and remains diagno
     assert.match(startBody.scope, /^background:codex-runtime:/);
     const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; message: string }> };
     assert.ok(incidents.incidents.some((incident) => incident.operation === 'injected-codex-background-work' && incident.message === 'injected Codex background failure'));
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('execution timeout settles as an execution-scoped diagnostic without pausing project Codex work', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-codex-execution-timeout-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    (runtime.onCodexBackgroundError as (event: Record<string, unknown>) => void)({
+      operation: 'codex-execution-timeout',
+      error: new Error('Codex execution exceeded 25ms.'),
+      context: { runId: 'run-a', executionId: 'execution-a' },
+    });
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; pausedBackgroundComponents: string[] };
+    assert.equal(health.status, 'ready');
+    assert.deepEqual(health.pausedBackgroundComponents, []);
+    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; scope: string; status: string }> };
+    const timeout = incidents.incidents.find((incident) => incident.operation === 'codex-execution-timeout');
+    assert.equal(timeout?.status, 'resolved');
+    assert.match(timeout?.scope ?? '', /^codex-execution:.*:execution-a$/);
   } finally {
     server.close();
     await once(server, 'close');
