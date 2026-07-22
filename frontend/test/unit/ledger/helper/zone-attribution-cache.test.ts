@@ -40,15 +40,38 @@ test('cached zone attribution applies and clears card DOM color state', () => {
     }
   };
 
-  applyZoneAttributionToCardElement(element, { zoneId: 'zone-a', zoneColor: '#38d9e8', readableColor: '#62cddd' });
+  applyZoneAttributionToCardElement(element, { zoneId: 'zone-a', zoneColor: '#38d9e8', readableColor: '#62cddd', colorSource: 'project' });
   assert.equal(element.dataset.cardZoneId, 'zone-a');
   assert.equal(element.dataset.cardZoneColor, '#38d9e8');
   assert.equal(element.style.getPropertyValue('--card-zone-color'), '#38d9e8');
   assert.equal(element.style.getPropertyValue('--card-code-color'), '#62cddd');
+  assert.equal(element.dataset.cardAccentSource, 'project');
 
   applyZoneAttributionToCardElement(element, null);
   assert.equal(element.dataset.cardZoneId, undefined);
   assert.equal(element.dataset.cardZoneColor, undefined);
+  assert.equal(element.dataset.cardAccentSource, undefined);
   assert.equal(element.style.getPropertyValue('--card-zone-color'), '');
   assert.equal(element.style.getPropertyValue('--card-code-color'), '');
+});
+
+test('project color overrides zone color for masters and canonical linked subtasks', () => {
+  const cache = buildZoneAttributionCache({
+    annotations: [{ id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#eab308' }],
+    cards: [
+      { id: 'master', labels: ['master-task'], x: 20, y: 20, w: 200, h: 120 },
+      { id: 'child', x: 240, y: 20, w: 200, h: 120 },
+      { id: 'ordinary', x: 460, y: 20, w: 200, h: 120 },
+    ],
+    relationships: [{ id: 'rel-child', from: 'master', to: 'child', label: 'subtask', position: 0 }],
+  }, 'tasks', '#a855f7');
+
+  assert.equal(cache.projectColor, '#a855f7');
+  assert.equal(cache.cardById.master?.zoneColor, '#a855f7');
+  assert.equal(cache.cardById.master?.colorSource, 'project');
+  assert.equal(cache.cardById.child?.zoneColor, '#a855f7');
+  assert.equal(cache.cardById.child?.colorSource, 'project');
+  assert.equal(cache.cardById.ordinary?.zoneColor, '#eab308');
+  assert.equal(cache.cardById.ordinary?.colorSource, 'zone');
+  assert.deepEqual(cache.cardIdsByZoneId['zone-a'], ['ordinary']);
 });

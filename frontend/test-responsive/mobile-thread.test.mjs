@@ -233,9 +233,10 @@ test('master-task Back uses a short accessible opacity-only handoff', () => {
 
 test('card entry owns the desktop default once while same-card reconciliation preserves operator state', () => {
   const renderCard = applicationSource.match(/function renderCard\(card\) \{[\s\S]*?\n\}/)?.[0] ?? '';
-  const openCardDetail = applicationSource.match(/function openCardDetail\(card\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const openCardDetail = applicationSource.match(/function openCardDetail\(card, cardAccent = responsiveCardAccent\(card\)\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(renderCard, /openCardDetail\(card\)/);
+  assert.match(renderCard, /const cardAccent = responsiveCardAccent\(card\)/);
+  assert.match(renderCard, /openCardDetail\(card, cardAccent\)/);
   assert.match(openCardDetail, /setView\('card-view'\)/);
   assert.match(openCardDetail, /if \(routeEntry\)[\s\S]*window\.matchMedia\?\.\('\(min-width: 761px\)'\)\.matches === true[\s\S]*openMobileThread\(card/);
   assert.match(openCardDetail, /else closeMobileThread\(\{ fromHistory: true \}\)/);

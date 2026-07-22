@@ -128,6 +128,7 @@ export function renderCardZoneColors(): void {
   for (const card of Array.from(document.querySelectorAll('[data-card-id]')) as HTMLElement[]) {
     const ledgerZoneId = card.dataset.cardZoneId ?? '';
     const ledgerZoneColor = card.dataset.cardZoneColor ?? '';
+    const explicitAccent = card.dataset.cardAccentSource === 'project' || card.dataset.cardAccentSource === 'card';
     card.style.removeProperty('--card-zone-color');
     card.style.removeProperty('--card-code-color');
     card.style.removeProperty('--card-readable-color');
@@ -135,12 +136,14 @@ export function renderCardZoneColors(): void {
       ? zones.find((zone) => zone.dataset.zoneId === ledgerZoneId)
       : null;
     if (ledgerZone || ledgerZoneColor) {
-      const zoneColor = ledgerZone
-        ? getComputedStyle(ledgerZone).getPropertyValue('--zone-color').trim()
-        : ledgerZoneColor;
+      const zoneColor = explicitAccent
+        ? ledgerZoneColor
+        : ledgerZone
+          ? getComputedStyle(ledgerZone).getPropertyValue('--zone-color').trim()
+          : ledgerZoneColor;
       card.style.setProperty('--card-zone-color', zoneColor);
       card.dataset.cardZoneColor = zoneColor;
-      const readableColor = ledgerZone ? setReadableZoneColor(ledgerZone) : clampReadableHsvColor(zoneColor);
+      const readableColor = explicitAccent ? clampReadableHsvColor(zoneColor) : ledgerZone ? setReadableZoneColor(ledgerZone) : clampReadableHsvColor(zoneColor);
       if (readableColor) {
         card.style.setProperty('--card-code-color', readableColor);
         card.style.setProperty('--card-readable-color', readableColor);

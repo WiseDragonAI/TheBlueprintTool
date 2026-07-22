@@ -20,11 +20,13 @@ function directChildByClass(element: HTMLElement, className: string): HTMLElemen
 }
 
 function applyCardColorOverride(element: HTMLElement, card: Record<string, unknown>): void {
+  if (element.dataset.cardAccentSource === 'project') return;
   const color = typeof card.color === 'string' ? card.color.trim() : '';
   const readableColor = color ? clampReadableHsvColor(color) : null;
   if (!readableColor) return;
   delete element.dataset.cardZoneId;
   element.dataset.cardZoneColor = color;
+  element.dataset.cardAccentSource = 'card';
   element.style.setProperty('--card-zone-color', color);
   element.style.setProperty('--card-code-color', readableColor);
   element.style.setProperty('--card-readable-color', readableColor);
