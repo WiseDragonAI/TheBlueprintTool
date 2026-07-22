@@ -33,6 +33,35 @@ export type CodexPipelineStoreInput = CodexPipelineStoreNormalizationOptions & {
   decisionOsRoot: string;
 };
 
+export class CodexPipelineStoreCorruptionError extends Error {
+  readonly code = 'codex_pipeline_store_corrupt';
+  constructor(readonly file: string, message: string) {
+    super(`Refusing to replace the invalid Codex pipeline store ${file}: ${message}`);
+  }
+}
+
+const writeBlockingIssueCodes = new Set([
+  'invalid-store',
+  'invalid-step-id',
+  'duplicate-step-id',
+  'duplicate-step-skill-id',
+  'invalid-pipeline-id',
+  'duplicate-pipeline-id',
+  'invalid-run-id',
+  'duplicate-run-id',
+  'empty-skill-library-name',
+  'duplicate-skill-library-name',
+  'invalid-active-workspace-run',
+  'unsupported-default-effort',
+  'unsupported-default-model',
+  'unsupported-pipeline-skill-effort',
+  'unsupported-pipeline-skill-model',
+]);
+
+export function codexPipelineStoreWriteBlocker(normalized: CodexPipelineStoreNormalization): CodexPipelineStoreIssue | null {
+  return normalized.issues.find((entry) => writeBlockingIssueCodes.has(entry.code)) ?? null;
+}
+
 function record(value: unknown): AnyRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as AnyRecord : {};
 }
@@ -449,8 +478,15 @@ export function readCodexPipelineStore(input: CodexPipelineStoreInput): CodexPip
 export function writeCodexPipelineStore(
   input: CodexPipelineStoreInput & { store: unknown },
 ): CodexPipelineStoreNormalization {
-  const normalized = normalizeCodexPipelineStore(input.store, input);
   const file = pipelineStoreFile(input.decisionOsRoot);
+  if (existsSync(file)) {
+    const existing = readCodexPipelineStore(input);
+    const corruption = codexPipelineStoreWriteBlocker(existing);
+    if (corruption) throw new CodexPipelineStoreCorruptionError(file, corruption.message);
+  }
+  const normalized = normalizeCodexPipelineStore(input.store, input);
+  const invalidInput = codexPipelineStoreWriteBlocker(normalized);
+  if (invalidInput) throw new CodexPipelineStoreCorruptionError(file, invalidInput.message);
   mkdirSync(input.decisionOsRoot, { recursive: true });
   const temporaryFile = resolve(input.decisionOsRoot, `.codex-pipelines-${process.pid}-${randomUUID()}.tmp`);
   try {

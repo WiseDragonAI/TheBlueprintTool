@@ -57,6 +57,82 @@ test('spawn metadata failure kills the new process group before returning the er
   }
 });
 
+test('asynchronous settlement failures are reported without becoming unhandled rejections', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-settlement-failure-'));
+  const stdoutFile = join(root, 'run.jsonl');
+  const stderrFile = join(root, 'run.log');
+  let resolveFailure!: (value: { operation: string; error: Error }) => void;
+  const failure = new Promise<{ operation: string; error: Error }>((resolve) => { resolveFailure = resolve; });
+  try {
+    launchCodexExecutionProcess({
+      decisionOsRoot: root,
+      runtime: { onCodexBackgroundError: resolveFailure },
+      workspaceRoot: root,
+      ledgerId: 'specs',
+      ledgerPath: join(root, 'specs.json'),
+      cardId: 'card-a',
+      runId: 'run-a',
+      executionId: 'execution-a',
+      command: { command: process.execPath, args: ['-e', 'process.exit(0)'], model: 'test', effort: 'test' },
+      env: { ...process.env },
+      prompt: '',
+      stdoutFile,
+      stderrFile,
+      segment: 'start',
+      startLine: 0,
+      onSpawn() {},
+      async onSettled() { throw new Error('injected asynchronous settlement failure'); },
+    });
+    const observed = await failure;
+    assert.equal(observed.operation, 'settle-codex-process');
+    assert.match(observed.error.message, /injected asynchronous settlement failure/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('execution deadline stops a non-terminating Codex process and reports the scoped failure', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-execution-timeout-'));
+  const stdoutFile = join(root, 'run.jsonl');
+  const stderrFile = join(root, 'run.log');
+  let childPid = 0;
+  let resolveFailure!: (value: { operation: string; error: Error }) => void;
+  let resolveSettlement!: () => void;
+  const failure = new Promise<{ operation: string; error: Error }>((resolve) => { resolveFailure = resolve; });
+  const settlement = new Promise<void>((resolve) => { resolveSettlement = resolve; });
+  try {
+    launchCodexExecutionProcess({
+      decisionOsRoot: root,
+      runtime: { codexExecutionTimeoutMs: 25, onCodexBackgroundError: resolveFailure },
+      workspaceRoot: root,
+      ledgerId: 'specs',
+      ledgerPath: join(root, 'specs.json'),
+      cardId: 'card-a',
+      runId: 'run-a',
+      executionId: 'execution-a',
+      command: { command: process.execPath, args: ['-e', 'setInterval(() => {}, 1000)'], model: 'test', effort: 'test' },
+      env: { ...process.env },
+      prompt: '',
+      stdoutFile,
+      stderrFile,
+      segment: 'start',
+      startLine: 0,
+      onSpawn(child) { childPid = child.pid ?? 0; },
+      onSettled() { resolveSettlement(); },
+    });
+    const observed = await failure;
+    assert.equal(observed.operation, 'codex-execution-timeout');
+    assert.match(observed.error.message, /exceeded 25ms/);
+    await settlement;
+    assert.equal(processExists(childPid), false);
+  } finally {
+    if (childPid && processExists(childPid)) {
+      try { process.kill(process.platform === 'win32' ? childPid : -childPid, 'SIGKILL'); } catch { /* already exited */ }
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('process-tree cancellation terminates the wrapper and its descendant', { skip: process.platform === 'win32' }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-process-tree-'));
   const descendantPidFile = join(root, 'descendant.pid');

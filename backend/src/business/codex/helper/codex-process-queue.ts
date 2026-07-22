@@ -7,6 +7,8 @@ import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'nod
 import { resolve } from 'node:path';
 import type { CodexProcessQueuePayload } from '../../../../../shared/schemas/codex-execution-types.js';
 import { clearCardCodexExecutionForLedger } from './clear-card-codex-execution.js';
+import { codexExecutionTimeoutMs, reportCodexBackgroundFailure, scheduleCodexRuntime } from './codex-runtime-run-store.js';
+import { signalCodexProcessTree } from './reconcile-terminal-codex-process.js';
 
 type AnyRecord = Record<string, unknown>;
 export type CodexProcessQueueItem = {
@@ -30,11 +32,18 @@ function filePath(decisionOsRoot: string): string {
   return resolve(decisionOsRoot, 'codex-process-queue.json');
 }
 
+export class CodexProcessQueueCorruptionError extends Error {
+  readonly code = 'codex_process_queue_corrupt';
+  constructor(readonly file: string, cause: unknown) {
+    super(`Could not read the durable Codex process queue ${file}: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
+}
+
 function normalizeItem(value: unknown): CodexProcessQueueItem | null {
   const item = value && typeof value === 'object' ? value as AnyRecord : {};
   const id = String(item.id ?? '').trim();
-  if (!id || (item.kind !== 'thread' && item.kind !== 'continuation')) return null;
-  const status = item.status === 'running' || item.status === 'interrupted' ? item.status : 'pending';
+  if (!id || (item.kind !== 'thread' && item.kind !== 'continuation') || !['pending', 'running', 'interrupted'].includes(String(item.status ?? '')) || !item.payload || typeof item.payload !== 'object' || Array.isArray(item.payload)) return null;
+  const status = item.status as CodexProcessQueueItem['status'];
   return {
     id,
     kind: item.kind,
@@ -52,17 +61,23 @@ function normalizeItem(value: unknown): CodexProcessQueueItem | null {
 }
 
 export function readCodexProcessQueue(decisionOsRoot: string): CodexProcessQueueItem[] {
-  if (!existsSync(filePath(decisionOsRoot))) return [];
+  const file = filePath(decisionOsRoot);
+  if (!existsSync(file)) return [];
   try {
-    const raw = JSON.parse(readFileSync(filePath(decisionOsRoot), 'utf8')) as AnyRecord;
-    return (Array.isArray(raw.items) ? raw.items : []).map(normalizeItem).filter((item): item is CodexProcessQueueItem => Boolean(item));
-  } catch {
-    return [];
+    const raw = JSON.parse(readFileSync(file, 'utf8')) as AnyRecord;
+    if ((raw.version !== undefined && raw.version !== 1) || !Array.isArray(raw.items)) throw new Error('Expected a version 1 queue document with an items array.');
+    const normalized = raw.items.map(normalizeItem);
+    if (normalized.some((item) => !item)) throw new Error('The queue contains an invalid item.');
+    return normalized as CodexProcessQueueItem[];
+  } catch (error) {
+    if (error instanceof CodexProcessQueueCorruptionError) throw error;
+    throw new CodexProcessQueueCorruptionError(file, error);
   }
 }
 
 export function writeCodexProcessQueue(decisionOsRoot: string, items: readonly CodexProcessQueueItem[]): void {
   const target = filePath(decisionOsRoot);
+  if (existsSync(target)) readCodexProcessQueue(decisionOsRoot);
   const temporary = resolve(decisionOsRoot, `.codex-process-queue-${process.pid}-${randomUUID()}.tmp`);
   try {
     writeFileSync(temporary, `${JSON.stringify({ version: 1, items }, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
@@ -281,9 +296,17 @@ function stopAdoptedMonitor(runtime: AnyRecord, id: string): void {
   monitors?.delete(id);
 }
 
+export function stopAdoptedCodexProcessMonitors(runtime: AnyRecord): void {
+  const monitors = runtime.codexAdoptedProcessMonitors instanceof Map
+    ? runtime.codexAdoptedProcessMonitors as Map<string, NodeJS.Timeout>
+    : null;
+  if (!monitors) return;
+  for (const timer of monitors.values()) clearInterval(timer);
+  monitors.clear();
+}
+
 function scheduleAfterAdoptedSettlement(runtime: AnyRecord): void {
-  const schedule = runtime.scheduleCodexProcesses;
-  if (typeof schedule === 'function') void Promise.resolve(schedule()).catch(() => undefined);
+  scheduleCodexRuntime(runtime, 'schedule-after-adopted-codex-settlement');
 }
 
 function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item: CodexProcessQueueItem): void {
@@ -296,7 +319,13 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
   }
   if (monitors.has(item.id)) return;
   const runId = String(item.payload.runId ?? item.id);
-  const timer = setInterval(async () => {
+  let checking = false;
+  let timeoutReported = false;
+  let forcedAt = 0;
+  const parsedStartedAtMs = Date.parse(String(item.startedAt ?? ''));
+  const startedAtMs = Number.isFinite(parsedStartedAtMs) ? parsedStartedAtMs : Date.now();
+  const timeoutMs = codexExecutionTimeoutMs(runtime);
+  const check = async (): Promise<void> => {
     const current = readCodexProcessQueue(decisionOsRoot).find((entry) => entry.id === item.id && entry.status === 'running');
     if (!current) {
       stopAdoptedMonitor(runtime, item.id);
@@ -306,7 +335,20 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
       ? runtime.codexSkillRuns as Record<string, AnyRecord>
       : {};
     runtime.codexSkillRuns = runs;
-    if (isSameCodexProcess(current.processId, current.processStartTime)) return;
+    if (isSameCodexProcess(current.processId, current.processStartTime)) {
+      if (Date.now() - startedAtMs >= timeoutMs) {
+        if (!timeoutReported) {
+          timeoutReported = true;
+          forcedAt = Date.now() + 2_000;
+          signalCodexProcessTree({ pid: current.processId, signal: 'SIGTERM' });
+          reportCodexBackgroundFailure(runtime, 'adopted-codex-execution-timeout', new Error(`Adopted Codex execution exceeded ${timeoutMs}ms.`), { runId, queueItemId: current.id, processId: current.processId });
+        } else if (Date.now() >= forcedAt) {
+          signalCodexProcessTree({ pid: current.processId, signal: 'SIGKILL' });
+          stopAdoptedMonitor(runtime, current.id);
+        }
+      }
+      return;
+    }
     const settled = terminalStatus(current.stdoutFile);
     if (settled) {
       runs[runId] = { ...(runs[runId] ?? {}), status: settled, adopted: false, finishedAt: new Date().toISOString() };
@@ -320,15 +362,19 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
       });
       removeCodexProcessQueueItem(decisionOsRoot, current.id);
       stopAdoptedMonitor(runtime, current.id);
-      if (typeof runtime.onCodexRunSettled === 'function') runtime.onCodexRunSettled({
-        ledgerId: current.payload.ledgerId,
-        cardId: current.payload.cardId,
-        outputCardId: current.payload.cardId,
-        threadId: `thread-${String(current.payload.cardId ?? '')}`,
-        runId,
-        executionId: current.payload.executionId,
-        status: settled,
-      });
+      try {
+        if (typeof runtime.onCodexRunSettled === 'function') runtime.onCodexRunSettled({
+          ledgerId: current.payload.ledgerId,
+          cardId: current.payload.cardId,
+          outputCardId: current.payload.cardId,
+          threadId: `thread-${String(current.payload.cardId ?? '')}`,
+          runId,
+          executionId: current.payload.executionId,
+          status: settled,
+        });
+      } catch (error) {
+        reportCodexBackgroundFailure(runtime, 'publish-adopted-codex-settlement', error, { runId, queueItemId: current.id });
+      }
       scheduleAfterAdoptedSettlement(runtime);
       return;
     }
@@ -337,6 +383,16 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
     delete runs[runId];
     stopAdoptedMonitor(runtime, current.id);
     scheduleAfterAdoptedSettlement(runtime);
+  };
+  const timer = setInterval(() => {
+    if (checking) return;
+    checking = true;
+    void check()
+      .catch((error: unknown) => {
+        stopAdoptedMonitor(runtime, item.id);
+        reportCodexBackgroundFailure(runtime, 'monitor-adopted-codex-process', error, { runId, queueItemId: item.id });
+      })
+      .finally(() => { checking = false; });
   }, 250);
   timer.unref?.();
   monitors.set(item.id, timer);
@@ -396,7 +452,7 @@ export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRe
         runId,
         executionId: String(item.payload.executionId ?? ''),
         runtime,
-      }).catch(() => undefined);
+      }).catch((error: unknown) => reportCodexBackgroundFailure(runtime ?? {}, 'clear-recovered-codex-execution', error, { runId, queueItemId: item.id }));
       return [];
     }
     return interruptedItemStillOwned(decisionOsRoot, item) ? [recoveredContinuation(item)] : [];

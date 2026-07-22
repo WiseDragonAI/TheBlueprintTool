@@ -11,6 +11,7 @@ import { decisionOsCodexEnvironment } from '../../codex/helper/decision-os-codex
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from '../../codex/helper/resolve-codex-command.js';
 import { signalCodexProcessTree } from '../../codex/helper/reconcile-terminal-codex-process.js';
 import type { CodexSlotAcquireOptions } from '../../codex/helper/codex-capacity-slots.js';
+import { codexExecutionTimeoutMs } from '../../codex/helper/codex-runtime-run-store.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -37,6 +38,7 @@ export type NodeMessageExecutionResult = {
 
 const maximumMessageBytes = 64 * 1024;
 const maximumSlotWaitMs = 60_000;
+const maximumExecutionOutputBytes = 32 * 1024 * 1024;
 
 function safeNodeId(value: unknown): string {
   return String(value ?? '').trim().replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 100);
@@ -155,16 +157,31 @@ export async function executeNodeMessage(input: {
       let answer = '';
       let remainder = '';
       let stderrTail = '';
+      let outputBytes = 0;
       let settled = false;
       let forceKillTimer: NodeJS.Timeout | null = null;
+      let forcedSettlementTimer: NodeJS.Timeout | null = null;
+      let pendingFailure: Error | null = null;
+      let settle!: (error: Error | null, exitCode: number | null) => Promise<void>;
+      const executionTimeout = codexExecutionTimeoutMs(input.runtime);
 
-      const onAbort = (): void => {
+      const stop = (error: Error): void => {
+        if (pendingFailure) return;
+        pendingFailure = error;
         signalCodexProcessTree({ child, signal: 'SIGTERM' });
         forceKillTimer = setTimeout(() => signalCodexProcessTree({ child, signal: 'SIGKILL' }), 2_000);
         forceKillTimer.unref?.();
+        forcedSettlementTimer = setTimeout(() => { void settle(error, null); }, 5_000);
+        forcedSettlementTimer.unref?.();
       };
+      const onAbort = (): void => stop(new Error('Node message execution was cancelled.'));
       input.signal?.addEventListener('abort', onAbort, { once: true });
       child.stdout.on('data', (chunk: Buffer) => {
+        outputBytes += chunk.length;
+        if (outputBytes > maximumExecutionOutputBytes) {
+          stop(new Error(`Node message execution exceeded ${maximumExecutionOutputBytes} output bytes.`));
+          return;
+        }
         stdout.write(chunk);
         remainder += chunk.toString('utf8');
         const lines = remainder.split('\n');
@@ -172,54 +189,71 @@ export async function executeNodeMessage(input: {
         for (const line of lines) answer = lastAgentAnswer(line) || answer;
       });
       child.stderr.on('data', (chunk: Buffer) => {
+        outputBytes += chunk.length;
+        if (outputBytes > maximumExecutionOutputBytes) {
+          stop(new Error(`Node message execution exceeded ${maximumExecutionOutputBytes} output bytes.`));
+          return;
+        }
         stderr.write(chunk);
         stderrTail = `${stderrTail}${chunk.toString('utf8')}`.slice(-8_192);
       });
-      child.stdin.on('error', () => undefined);
-      child.stdin.end(prompt);
+      child.stdin.on('error', (error) => stop(error));
+      child.stdout.on('error', (error) => stop(error));
+      child.stderr.on('error', (error) => stop(error));
+      stdout.on('error', (error) => stop(error));
+      stderr.on('error', (error) => stop(error));
 
-      const settle = async (error: Error | null, exitCode: number | null): Promise<void> => {
+      settle = async (error: Error | null, exitCode: number | null): Promise<void> => {
         if (settled) return;
         settled = true;
         if (forceKillTimer) clearTimeout(forceKillTimer);
+        if (forcedSettlementTimer) clearTimeout(forcedSettlementTimer);
+        clearTimeout(executionDeadline);
         input.signal?.removeEventListener('abort', onAbort);
-        if (remainder) answer = lastAgentAnswer(remainder) || answer;
-        await Promise.all([
-          new Promise<void>((resolveStream) => stdout.end(resolveStream)),
-          new Promise<void>((resolveStream) => stderr.end(resolveStream)),
-        ]);
-        const finishedAt = new Date().toISOString();
-        const cancelled = Boolean(input.signal?.aborted);
-        const failure = error?.message
-          || (cancelled ? 'Node message execution was cancelled.' : '')
-          || (exitCode !== 0 ? `Codex exited with code ${exitCode ?? 'unknown'}: ${stderrTail.trim() || 'no diagnostic'}` : '')
-          || (!answer ? 'Codex completed without an agent answer.' : '');
-        if (failure) {
-          writeManifest(manifestFile, { ...baseManifest, status: cancelled ? 'cancelled' : 'failed', finishedAt, error: failure, exitCode });
-          reject(new Error(failure));
-          return;
+        try {
+          if (remainder) answer = lastAgentAnswer(remainder) || answer;
+          await Promise.all([
+            stdout.destroyed || stdout.writableEnded ? Promise.resolve() : new Promise<void>((resolveStream) => stdout.end(resolveStream)),
+            stderr.destroyed || stderr.writableEnded ? Promise.resolve() : new Promise<void>((resolveStream) => stderr.end(resolveStream)),
+          ]);
+          const finishedAt = new Date().toISOString();
+          const cancelled = Boolean(input.signal?.aborted);
+          const failure = (error ?? pendingFailure)?.message
+            || (cancelled ? 'Node message execution was cancelled.' : '')
+            || (exitCode !== 0 ? `Codex exited with code ${exitCode ?? 'unknown'}: ${stderrTail.trim() || 'no diagnostic'}` : '')
+            || (!answer ? 'Codex completed without an agent answer.' : '');
+          if (failure) {
+            writeManifest(manifestFile, { ...baseManifest, status: cancelled ? 'cancelled' : 'failed', finishedAt, error: failure, exitCode });
+            reject(new Error(failure));
+            return;
+          }
+          const result: NodeMessageExecutionResult = {
+            ok: true,
+            runId,
+            requesterNodeId: input.requesterNodeId,
+            executorNodeId: input.executorNodeId,
+            executorNodeLabel: input.executorNodeLabel,
+            projectId: input.project.id,
+            answer,
+            status: 'complete',
+            model: command.model,
+            effort: command.effort,
+            startedAt,
+            finishedAt,
+            durationMs: new Date(finishedAt).getTime() - new Date(startedAt).getTime(),
+            artifacts,
+          };
+          writeManifest(manifestFile, { ...baseManifest, ...result });
+          resolvePromise(result);
+        } catch (settlementError) {
+          reject(settlementError);
         }
-        const result: NodeMessageExecutionResult = {
-          ok: true,
-          runId,
-          requesterNodeId: input.requesterNodeId,
-          executorNodeId: input.executorNodeId,
-          executorNodeLabel: input.executorNodeLabel,
-          projectId: input.project.id,
-          answer,
-          status: 'complete',
-          model: command.model,
-          effort: command.effort,
-          startedAt,
-          finishedAt,
-          durationMs: new Date(finishedAt).getTime() - new Date(startedAt).getTime(),
-          artifacts,
-        };
-        writeManifest(manifestFile, { ...baseManifest, ...result });
-        resolvePromise(result);
       };
+      const executionDeadline = setTimeout(() => stop(new Error(`Node message execution exceeded ${executionTimeout}ms.`)), executionTimeout);
+      executionDeadline.unref?.();
       child.once('error', (error) => { void settle(error, null); });
       child.once('close', (code) => { void settle(null, code); });
+      child.stdin.end(prompt);
     });
   } finally {
     release();

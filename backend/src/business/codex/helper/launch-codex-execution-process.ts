@@ -9,6 +9,7 @@ import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-e
 import { codexRunSegmentMarker, codexRunTurnStartedMarker, type CodexRunSegment, type CodexRunSegmentMetadata } from './codex-run-segment-marker.js';
 import { createTerminalCodexProcessReconciler, signalCodexProcessTree, type TerminalCodexStatus } from './reconcile-terminal-codex-process.js';
 import type { CodexCommand } from './resolve-codex-command.js';
+import { codexExecutionTimeoutMs, reportCodexBackgroundFailure } from './codex-runtime-run-store.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -55,7 +56,7 @@ export function launchCodexExecutionProcess(input: {
   onTurnStarted?: (event: { line: number }, observedAt: string) => void;
   onStdoutChunk?: (chunk: Buffer) => void;
   onStderrChunk?: (chunk: Buffer) => void;
-  onSettled: (settlement: CodexProcessSettlement) => void;
+  onSettled: (settlement: CodexProcessSettlement) => unknown;
 }): { child: ChildProcess; startedAt: string } {
   const startedAt = String(input.startedAt ?? '').trim() || new Date().toISOString();
   const child = spawn(input.command.command, input.command.args, {
@@ -67,12 +68,45 @@ export function launchCodexExecutionProcess(input: {
   const stdout = createWriteStream(input.stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(input.stderrFile, { flags: 'a' });
   let terminalStatus: TerminalCodexStatus | null = null;
+  let backgroundStopRequested = false;
+  let executionDeadline: NodeJS.Timeout | undefined;
+  let forceStopDeadline: NodeJS.Timeout | undefined;
+  const reportFailure = (operation: string, error: unknown): void => {
+    reportCodexBackgroundFailure(input.runtime, operation, error, {
+      ledgerId: input.ledgerId,
+      cardId: input.cardId,
+      runId: input.runId,
+      executionId: input.executionId,
+    });
+  };
+  const stopForFailure = (operation: string, error: unknown): void => {
+    reportFailure(operation, error);
+    if (backgroundStopRequested) return;
+    backgroundStopRequested = true;
+    signalCodexProcessTree({ child, signal: 'SIGTERM' });
+    forceStopDeadline = setTimeout(() => {
+      if (child.exitCode === null) signalCodexProcessTree({ child, signal: 'SIGKILL' });
+    }, 2_000);
+    forceStopDeadline.unref?.();
+  };
+  const invokeCallback = (operation: string, callback: () => unknown): void => {
+    try {
+      void Promise.resolve(callback()).catch((error: unknown) => reportFailure(operation, error));
+    } catch (error) {
+      reportFailure(operation, error);
+    }
+  };
   const terminalReconciler = createTerminalCodexProcessReconciler({
     child,
     closeGraceMs: input.runtime.codexTerminalCloseGraceMs,
     forceKillGraceMs: input.runtime.codexTerminalForceKillGraceMs,
     onTerminalStatus: (status) => { terminalStatus = status; },
   });
+  const executionTimeoutMs = codexExecutionTimeoutMs(input.runtime);
+  executionDeadline = setTimeout(() => {
+    stopForFailure('codex-execution-timeout', new Error(`Codex execution exceeded ${executionTimeoutMs}ms.`));
+  }, executionTimeoutMs);
+  executionDeadline.unref?.();
   const ingestor = createCardSkillRunEventIngestor({
     decisionOsRoot: input.decisionOsRoot,
     ledgerId: input.ledgerId,
@@ -85,8 +119,13 @@ export function launchCodexExecutionProcess(input: {
     runtime: input.runtime,
     onTerminalEvent: terminalReconciler.observe,
     onTurnStarted: (event, observedAt) => {
-      appendFileSync(input.stderrFile, codexRunTurnStartedMarker({ runId: input.runId, executionId: input.executionId, startedAt: observedAt, line: event.line }), 'utf8');
-      input.onTurnStarted?.({ line: event.line }, observedAt);
+      try {
+        appendFileSync(input.stderrFile, codexRunTurnStartedMarker({ runId: input.runId, executionId: input.executionId, startedAt: observedAt, line: event.line }), 'utf8');
+      } catch (error) {
+        stopForFailure('persist-codex-turn-marker', error);
+        return;
+      }
+      if (input.onTurnStarted) invokeCallback('publish-codex-turn-started', () => input.onTurnStarted?.({ line: event.line }, observedAt));
     },
   });
   try {
@@ -100,6 +139,8 @@ export function launchCodexExecutionProcess(input: {
     }), 'utf8');
     input.onSpawn(child, startedAt);
   } catch (error) {
+    clearTimeout(executionDeadline);
+    clearTimeout(forceStopDeadline);
     terminalReconciler.dispose();
     child.once('error', () => undefined);
     signalCodexProcessTree({ child, signal: 'SIGKILL' });
@@ -108,11 +149,22 @@ export function launchCodexExecutionProcess(input: {
     stderr.destroy();
     throw error;
   }
+  stdout.on('error', (error) => stopForFailure('write-codex-stdout-log', error));
+  stderr.on('error', (error) => stopForFailure('write-codex-stderr-log', error));
+  child.stdout.on('error', (error) => stopForFailure('read-codex-stdout', error));
+  child.stderr.on('error', (error) => stopForFailure('read-codex-stderr', error));
   child.stdout.on('data', (chunk: Buffer) => {
-    ingestor.ingest(chunk);
-    input.onStdoutChunk?.(chunk);
+    try {
+      ingestor.ingest(chunk);
+    } catch (error) {
+      stopForFailure('ingest-codex-output', error);
+      return;
+    }
+    if (input.onStdoutChunk) invokeCallback('observe-codex-stdout', () => input.onStdoutChunk?.(chunk));
   });
-  child.stderr.on('data', (chunk: Buffer) => input.onStderrChunk?.(chunk));
+  child.stderr.on('data', (chunk: Buffer) => {
+    if (input.onStderrChunk) invokeCallback('observe-codex-stderr', () => input.onStderrChunk?.(chunk));
+  });
   child.stdin.on('error', () => undefined);
   child.stdout.pipe(stdout, { end: false });
   child.stderr.pipe(stderr, { end: false });
@@ -124,10 +176,16 @@ export function launchCodexExecutionProcess(input: {
     // WHY: Node can emit both `error` and `close` for one failed launch.
     if (settled) return;
     settled = true;
+    clearTimeout(executionDeadline);
+    clearTimeout(forceStopDeadline);
     terminalReconciler.dispose();
     finishStreams(stdout, stderr, () => {
-      flushCardSkillRunEventIngestor(ingestor, input.runId);
-      input.onSettled(settlement);
+      try {
+        flushCardSkillRunEventIngestor(ingestor, input.runId);
+      } catch (error) {
+        reportFailure('flush-codex-output-events', error);
+      }
+      invokeCallback('settle-codex-process', () => input.onSettled(settlement));
     });
   };
   child.once('error', (error) => settle({ kind: 'error', error, exitCode: null, terminalStatus, finishedAt: new Date().toISOString() }));

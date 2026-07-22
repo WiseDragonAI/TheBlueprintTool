@@ -11,6 +11,7 @@ import {
   type NormalizedRunEvent
 } from '../helper/card-skill-run-event-types.js';
 import { persistCardSkillRunEvents } from './persist-card-skill-run-events.js';
+import { reportCodexBackgroundFailure } from '../helper/codex-runtime-run-store.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -137,9 +138,11 @@ export function createCardSkillRunEventIngestor(input: {
       try {
         persistPending();
       } catch (error) {
-        // WHAT: Report an asynchronous persistence failure without terminating the child stream.
-        // WHY: The controller still needs to receive process settlement and attempt its final flush.
-        console.error(`Could not persist Codex run events for ${input.runId}:`, error);
+        reportCodexBackgroundFailure(input.runtime ?? {}, 'persist-codex-output-events', error, {
+          ledgerId: input.ledgerId ?? '',
+          cardId: input.cardId,
+          runId: input.runId,
+        });
       }
     }, batchDelayMs);
   };

@@ -14,6 +14,7 @@ import {
 import { readCodexPipelineRunController } from './read-codex-pipeline-run-controller.js';
 import { signalCodexProcessTree } from '../helper/reconcile-terminal-codex-process.js';
 import { isSameCodexProcess } from '../helper/codex-process-queue.js';
+import { scheduleCodexRuntime } from '../helper/codex-runtime-run-store.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -73,8 +74,7 @@ export async function cancelCodexPipelineRunController(
     finishedAt: new Date().toISOString(),
   });
   if (!cancelled) return { ok: false, statusCode: 500, error: 'Pipeline cancellation could not be persisted.', runId };
-  const schedule = runtime.scheduleCodexProcesses;
-  if (typeof schedule === 'function') void schedule();
+  if (typeof runtime.scheduleCodexProcesses === 'function') scheduleCodexRuntime(runtime, 'schedule-after-pipeline-cancellation', { pipelineRunId: run.id, runId: target.runId });
   else scheduleCodexPipelineRuns({ decisionOsRoot, runtime });
   if (typeof runtime.onPipelineLedgerChange === 'function') {
     (runtime.onPipelineLedgerChange as (event: AnyRecord) => void)({

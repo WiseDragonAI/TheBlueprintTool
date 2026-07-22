@@ -61,6 +61,25 @@ test('backs up legacy project metadata before writing the versioned registry', (
   assert.equal(readFileSync(join(masterDecisionOsRoot, backup), 'utf8'), legacy);
 });
 
+test('preserves a syntactically corrupt authoritative project registry', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-registry-corrupt-'));
+  const masterDecisionOsRoot = join(root, '.decision-os');
+  const registryFile = join(masterDecisionOsRoot, 'projects.json');
+  const corruptBytes = '{not-json';
+  try {
+    mkdirSync(masterDecisionOsRoot, { recursive: true });
+    writeFileSync(registryFile, corruptBytes);
+    assert.throws(() => createProjectCatalogStore({ masterRoot: root, masterDecisionOsRoot }), (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'project_registry_corrupt');
+      return true;
+    });
+    assert.equal(readFileSync(registryFile, 'utf8'), corruptBytes);
+    assert.equal(readdirSync(masterDecisionOsRoot).some((entry) => entry.includes('.legacy-')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('previews migration without writing identities or the registry', () => {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-registry-preview-'));
   const masterDecisionOsRoot = join(root, '.decision-os');

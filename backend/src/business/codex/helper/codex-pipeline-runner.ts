@@ -25,12 +25,15 @@ import { queueLedgerProjectionPersistence } from '@backend/business/task-state/h
 import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { codexProcessIdentity } from './codex-process-queue.js';
 import { launchCodexExecutionProcess } from './launch-codex-execution-process.js';
+import { signalCodexProcessTree } from './reconcile-terminal-codex-process.js';
 import {
   attachCodexRuntimeChild as attachRuntimeChild,
   codexRuntimeRun,
   codexRuntimeStatus,
+  codexExecutionTimeoutMs,
   notifyCodexLifecycle as notify,
   publicCodexRuntimeRun,
+  scheduleCodexRuntime,
   updateCodexRuntimeRun as updateRuntimeRun,
 } from './codex-runtime-run-store.js';
 
@@ -538,8 +541,7 @@ export function spawnPipelineSkillProcess(input: {
       notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-settled', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, cardId: input.step.outputCardId, status, pipelineStatus: reassessed?.status ?? status });
       if (status === 'complete' && reassessed && !isTerminal(reassessed.status)) runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id });
       if (reassessed && isTerminal(reassessed.status)) {
-        const schedule = input.runtime.scheduleCodexProcesses;
-        if (typeof schedule === 'function') void schedule();
+        scheduleCodexRuntime(input.runtime, 'schedule-after-pipeline-settlement', { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId });
       }
       notify(input.runtime.onCodexRunSettled, { ledgerId: input.pipelineRun.ledgerId, cardId: input.step.outputCardId, outputCardId: input.step.outputCardId, threadId: `thread-${input.step.outputCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, pipelineRunId: input.pipelineRun.id, status, pipelineStatus: reassessed?.status ?? status, pipelineTerminal: Boolean(reassessed && isTerminal(reassessed.status)), exitCode });
     },
@@ -740,30 +742,72 @@ export async function executePipelineSkillInWorkspace(input: {
   const acquire = input.runtime.acquireProjectSyncCodexSlot;
   const release = typeof acquire === 'function' ? await (acquire as () => Promise<() => void>)() : () => undefined;
   return new Promise((resolvePromise, reject) => {
+    const maximumOutputBytes = 8 * 1024 * 1024;
+    const executionTimeoutMs = codexExecutionTimeoutMs(input.runtime);
     const child = spawn(command.command, command.args, {
       cwd: input.workspaceRoot,
       env: decisionOsCodexEnvironment({ runtime: input.runtime, decisionOsRoot: input.decisionOsRoot, ledgerFile: input.ledgerFile }),
       stdio: ['pipe', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
     });
     let stdout = '';
     let stderr = '';
+    let outputBytes = 0;
+    let pendingFailure: Error | null = null;
+    let settled = false;
+    let forceTimer: NodeJS.Timeout | undefined;
+    let settlementTimer: NodeJS.Timeout | undefined;
+    const finish = (error: Error | null, result?: { codexRunId: string; result: Record<string, unknown> }): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      clearTimeout(forceTimer);
+      clearTimeout(settlementTimer);
+      release();
+      if (error) reject(error);
+      else if (result) resolvePromise(result);
+    };
+    const stop = (error: Error): void => {
+      if (pendingFailure) return;
+      pendingFailure = error;
+      signalCodexProcessTree({ child, signal: 'SIGTERM' });
+      forceTimer = setTimeout(() => signalCodexProcessTree({ child, signal: 'SIGKILL' }), 2_000);
+      forceTimer.unref?.();
+      settlementTimer = setTimeout(() => finish(error), 5_000);
+      settlementTimer.unref?.();
+    };
+    const deadline = setTimeout(() => stop(new Error(`Pipeline skill ${input.skillName} exceeded ${executionTimeoutMs}ms.`)), executionTimeoutMs);
+    deadline.unref?.();
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
-    child.once('error', (error) => { release(); reject(error); });
+    const capture = (target: 'stdout' | 'stderr', chunk: string): void => {
+      if (pendingFailure) return;
+      outputBytes += Buffer.byteLength(chunk);
+      if (outputBytes > maximumOutputBytes) {
+        stop(new Error(`Pipeline skill ${input.skillName} exceeded ${maximumOutputBytes} captured output bytes.`));
+        return;
+      }
+      if (target === 'stdout') stdout += chunk;
+      else stderr += chunk;
+    };
+    child.stdout.on('data', (chunk: string) => capture('stdout', chunk));
+    child.stderr.on('data', (chunk: string) => capture('stderr', chunk));
+    child.stdin.on('error', (error) => stop(error));
+    child.stdout.on('error', (error) => stop(error));
+    child.stderr.on('error', (error) => stop(error));
+    child.once('error', (error) => finish(error));
     child.once('close', (code) => {
-      release();
-      if (code !== 0) return reject(new Error(`Pipeline skill ${input.skillName} exited with code ${code}: ${stderr.trim() || 'no diagnostic'}`));
+      if (pendingFailure) return finish(pendingFailure);
+      if (code !== 0) return finish(new Error(`Pipeline skill ${input.skillName} exited with code ${code}: ${stderr.trim() || 'no diagnostic'}`));
       const candidates = stdout.split('\n').filter(Boolean).flatMap((line) => {
         try { return nestedJsonObjects(JSON.parse(line)); } catch { return nestedJsonObjects(line); }
       });
       const result = candidates.reverse().find((entry) => 'status' in entry && ('headSha' in entry || 'blocker' in entry));
-      if (!result) return reject(new Error(`Pipeline skill ${input.skillName} did not return the required JSON evidence.`));
+      if (!result) return finish(new Error(`Pipeline skill ${input.skillName} did not return the required JSON evidence.`));
       if (!['complete', 'completed'].includes(String(result.status ?? '').toLowerCase())) {
-        return reject(new Error(String(result.blocker ?? `Pipeline skill ${input.skillName} did not complete.`)));
+        return finish(new Error(String(result.blocker ?? `Pipeline skill ${input.skillName} did not complete.`)));
       }
-      resolvePromise({ codexRunId: input.skillRunId, result });
+      finish(null, { codexRunId: input.skillRunId, result });
     });
     child.stdin.end(prompt);
   });

@@ -32,6 +32,7 @@ import {
   codexRuntimeStatus as runtimeRunStatus,
   notifyCodexLifecycle as notifyRuntimeCallback,
   publicCodexRuntimeRun as publicRun,
+  scheduleCodexRuntime,
   updateCodexRuntimeExecution as updateRuntimeExecution,
   updateCodexRuntimeRun as updateRuntimeRun,
 } from '../helper/codex-runtime-run-store.js';
@@ -341,8 +342,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
         catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
         if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
         updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
-        const schedule = runtime.scheduleCodexProcesses;
-        if (typeof schedule === 'function') void schedule();
+        scheduleCodexRuntime(runtime, 'schedule-after-continuation-failure', { runId, executionId });
         notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status: 'failed' });
         return;
       }
@@ -360,8 +360,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
       updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
-      const schedule = runtime.scheduleCodexProcesses;
-      if (typeof schedule === 'function') void schedule();
+      scheduleCodexRuntime(runtime, 'schedule-after-continuation-settlement', { runId, executionId, status });
       notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status, exitCode: settlement.exitCode });
     },
   });

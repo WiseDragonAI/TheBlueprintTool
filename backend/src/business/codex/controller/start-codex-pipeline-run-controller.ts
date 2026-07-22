@@ -16,7 +16,7 @@ import {
   createCodexPipelineRunManifest,
   type PipelineDefinition,
 } from '../helper/create-codex-pipeline-run-manifest.js';
-import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
+import { codexPipelineStoreWriteBlocker, readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { runtimeServerRoot } from '../helper/server-skill-context.js';
 import { readScopedCodexPipelineStores } from '../helper/server-pipeline-catalog.js';
@@ -104,6 +104,8 @@ export async function startPipelineRun(input: {
   // WHAT: Stop before snapshotting an invalid library default.
   // WHY: Every persisted skill run must contain executable model and effort values.
   if (invalidDefault) return { ok: false, statusCode: 400, error: invalidDefault.message, skillName: invalidDefault.skillName };
+  const corruption = codexPipelineStoreWriteBlocker(normalized);
+  if (corruption) return { ok: false, statusCode: 503, error: 'The Codex pipeline store contains data that cannot be rewritten safely and has been preserved for recovery.', detail: corruption.message };
 
   const context = resolvePipelineLedgerContext({
     decisionOsRoot: input.decisionOsRoot,

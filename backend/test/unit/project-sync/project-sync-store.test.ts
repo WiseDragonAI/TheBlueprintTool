@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createProjectSyncStore } from '../../../src/business/project-sync/helper/project-sync-store.js';
 
 test('persists symmetric participants, deduplicates active origins, and restores runs', () => {
@@ -61,6 +61,26 @@ test('retries failed runs and admits a fresh run after completion', () => {
     const next = store.admit(input);
     assert.equal(next.duplicate, false);
     assert.notEqual(next.run.syncId, first.syncId);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('preserves a corrupt synchronization store and rejects mutations', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-project-sync-corrupt-'));
+  const file = resolve(root, 'project-sync', 'runs.json');
+  const corruptBytes = '{not-json';
+  try {
+    mkdirSync(resolve(root, 'project-sync'), { recursive: true });
+    writeFileSync(file, corruptBytes);
+    const store = createProjectSyncStore({ decisionOsRoot: root });
+    assert.equal(store.corruptionError?.code, 'project_sync_store_corrupt');
+    assert.deepEqual(store.list(), []);
+    assert.throws(() => store.admit({
+      idempotencyKey: 'request-a', initiatorNodeId: 'node-a', sourceNodeId: 'node-b',
+      initiatorProjectId: '', sourceProjectId: 'project-b', sourceProjectName: 'Project B', sourceProjectColor: '#d94f70', originFingerprint: 'f'.repeat(64),
+    }), /Could not read the durable project synchronization store/);
+    assert.equal(readFileSync(file, 'utf8'), corruptBytes);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

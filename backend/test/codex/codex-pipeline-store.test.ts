@@ -177,7 +177,37 @@ test('an invalid store file is reported without corrupting or rewriting it', () 
     const loaded = readCodexPipelineStore({ decisionOsRoot });
     assert.deepEqual(loaded.store.pipelines, []);
     assert.equal(loaded.issues.some((entry) => entry.code === 'invalid-store'), true);
+    assert.throws(() => writeCodexPipelineStore({ decisionOsRoot, store: {} }), (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'codex_pipeline_store_corrupt');
+      return true;
+    });
     assert.equal(readFileSync(file, 'utf8'), '{invalid-json');
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('invalid pipeline input cannot replace a valid durable store', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-invalid-pipeline-write-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  try {
+    writeCodexPipelineStore({ decisionOsRoot, store: pipelineFixture('valid', 'valid-step') });
+    const file = pipelineStoreFile(decisionOsRoot);
+    const validBytes = readFileSync(file, 'utf8');
+    assert.throws(() => writeCodexPipelineStore({
+      decisionOsRoot,
+      store: {
+        ...pipelineFixture('duplicate', 'duplicate-step'),
+        pipelines: [
+          ...(pipelineFixture('duplicate', 'duplicate-step').pipelines as unknown[]),
+          ...(pipelineFixture('duplicate', 'second-step').pipelines as unknown[]),
+        ],
+      },
+    }), (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'codex_pipeline_store_corrupt');
+      return true;
+    });
+    assert.equal(readFileSync(file, 'utf8'), validBytes);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
