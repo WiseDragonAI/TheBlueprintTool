@@ -1253,7 +1253,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         return;
       }
       const abort = new AbortController();
-      request.once('aborted', () => abort.abort());
+      const abortExecution = (): void => abort.abort(new Error('node_message_client_disconnected'));
+      const abortOnResponseClose = (): void => { if (!response.writableEnded) abortExecution(); };
+      request.once('aborted', abortExecution);
+      response.once('close', abortOnResponseClose);
       try {
         const body = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord;
         const projectId = String(body.projectId ?? '').trim();
@@ -1292,6 +1295,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           error: error instanceof Error ? error.message : 'Node message execution failed.',
           ...(incidentId ? { incidentId } : {}),
         }));
+      } finally {
+        request.off('aborted', abortExecution);
+        response.off('close', abortOnResponseClose);
       }
       return;
     }
@@ -1302,7 +1308,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.setHeader('content-type', 'application/json');
       const targetNodeId = decodeRouteSegment(nodeMessageDispatch[1]);
       const abort = new AbortController();
-      request.once('aborted', () => abort.abort());
+      const abortExecution = (): void => abort.abort(new Error('node_message_client_disconnected'));
+      const abortOnResponseClose = (): void => { if (!response.writableEnded) abortExecution(); };
+      request.once('aborted', abortExecution);
+      response.once('close', abortOnResponseClose);
       try {
         const body = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord;
         const projectId = String(body.projectId ?? '').trim();
@@ -1360,6 +1369,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           error: error instanceof Error ? error.message : 'Node message dispatch failed.',
           ...(incidentId ? { incidentId } : {}),
         }));
+      } finally {
+        request.off('aborted', abortExecution);
+        response.off('close', abortOnResponseClose);
       }
       return;
     }

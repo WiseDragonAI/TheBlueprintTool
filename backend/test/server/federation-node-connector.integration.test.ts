@@ -401,6 +401,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     'let prompt = "";',
     'for await (const chunk of process.stdin) prompt += chunk;',
     'writeFileSync(join(process.cwd(), "node-message-prompt.txt"), prompt);',
+    'if (prompt.includes("Wait for requester cancellation.")) await new Promise(() => setInterval(() => undefined, 1000));',
     'console.log(JSON.stringify({ type: "thread.started", thread_id: "node-message-thread" }));',
     'console.log(JSON.stringify({ type: "item.completed", item: { id: "answer", type: "agent_message", text: `Inspected beta on ${process.cwd()}.` } }));',
     'console.log(JSON.stringify({ type: "turn.completed" }));',
@@ -494,6 +495,27 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const nodeMessageManifest = JSON.parse(readFileSync(join(homeB, 'beta', nodeMessage.artifacts.manifest), 'utf8')) as Record<string, unknown>;
     assert.equal(nodeMessageManifest.status, 'complete');
     assert.equal(nodeMessageManifest.requesterNodeId, 'node-a');
+    const requesterBeforeAbort = Number((runtimeA.federationNodeConnector as { status(): Record<string, unknown> }).status().requesterStreamCount ?? 0);
+    const ownerBeforeAbort = Number((runtimeB.federationNodeConnector as { status(): Record<string, unknown> }).status().ownerStreamCount ?? 0);
+    const disconnect = new AbortController();
+    const abandonedMessage = fetch(`${baseA}/api/federation/nodes/node-b/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: betaProjectId, message: 'Wait for requester cancellation.' }),
+      signal: disconnect.signal,
+    });
+    await waitFor(async () => {
+      const requester = Number((runtimeA.federationNodeConnector as { status(): Record<string, unknown> }).status().requesterStreamCount ?? 0);
+      const owner = Number((runtimeB.federationNodeConnector as { status(): Record<string, unknown> }).status().ownerStreamCount ?? 0);
+      return requester > requesterBeforeAbort && owner > ownerBeforeAbort ? true : null;
+    });
+    disconnect.abort();
+    await assert.rejects(abandonedMessage, /abort/i);
+    await waitFor(async () => {
+      const requester = Number((runtimeA.federationNodeConnector as { status(): Record<string, unknown> }).status().requesterStreamCount ?? 0);
+      const owner = Number((runtimeB.federationNodeConnector as { status(): Record<string, unknown> }).status().ownerStreamCount ?? 0);
+      return requester === requesterBeforeAbort && owner === ownerBeforeAbort ? true : null;
+    });
     let lastControlRoomA: unknown = null;
     const controlRoomA = await waitFor(async () => {
       const body = await fetch(`${baseA}/api/control-room`).then((response) => response.json()) as {
