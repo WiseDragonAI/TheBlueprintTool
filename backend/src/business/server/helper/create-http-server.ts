@@ -68,6 +68,7 @@ import { createFederationContentReplicaStore } from '../../federation/helper/fed
 import { createFederationContentScheduler } from '../../federation/helper/federation-content-scheduler.js';
 import { readTaskContentOnDemand } from '../../federation/helper/read-task-content-on-demand.js';
 import { createProjectTaskState, type ProjectTaskState } from '../../task-state/helper/project-task-state.js';
+import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import type { TaskProjectionCommand } from '../../task-state/helper/task-mutation-command.js';
 import { createRuntimeIncidentLedger, RuntimeScopePausedError, type RuntimeIncident } from './runtime-incident-ledger.js';
@@ -270,6 +271,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   };
 
   for (const incident of incidentLedger.active()) {
+    // WHAT: Reclassify diagnostics written before bootstrap gates became non-pausing.
+    // WHY: A restart after upgrading must restore ready health once state convergence is complete.
+    if (isTaskStateBootstrapGate(incident.code)
+      && (incident.scope.startsWith('http-request:') || incident.scope.startsWith('project-task-write:'))) {
+      incidentLedger.resolveScope(incident.scope, 'Transient task-state bootstrap gates do not pause runtime scopes.');
+      continue;
+    }
     if (incident.scope.startsWith('project-task-state:')) pausedTaskProjects.set(incident.scope.slice('project-task-state:'.length), incident);
     if (incident.scope.startsWith('federated-task-state:')) pausedFederatedTaskProjects.set(incident.scope.slice('federated-task-state:'.length), incident);
     if (incident.scope.startsWith('background:')) pausedBackgroundComponents.add(incident.scope.slice('background:'.length));
@@ -384,14 +392,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
 
   const recordProjectBackgroundFailure = (project: DecisionOsProject, error: unknown, operation: string): void => {
     if (error instanceof RuntimeScopePausedError) return;
-    const message = error instanceof Error ? error.message : String(error);
-    if (message === 'task_state_bootstrap_incomplete') {
-      recordIncident({
-        severity: 'warning',
+    // WHAT: Retain an expected convergence rejection as a resolved stopped operation.
+    // WHY: The watcher changed no task state, so this condition must not degrade server health.
+    if (isTaskStateBootstrapGate(error)) {
+      recordStoppedOperation({
         scope: `project-task-write:${project.id}`,
         component: 'task-current-state',
         operation,
-        code: 'task_state_bootstrap_incomplete',
         error,
         context: { projectId: project.id, projectName: project.name },
       });
@@ -2909,33 +2916,61 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     void handleRequest(request, response).catch((error: unknown) => {
       const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
       const paused = error instanceof RuntimeScopePausedError;
-      const incident = paused ? null : recordIncident({
-        scope: `http-request:${request.method ?? 'UNKNOWN'}:${requestUrl.pathname}`,
-        component: 'http-server',
-        operation: 'handle-request',
-        error,
-        context: { method: request.method ?? '', path: requestUrl.pathname },
-      });
+      const bootstrapIncomplete = isTaskStateBootstrapGate(error);
+      const scope = `http-request:${request.method ?? 'UNKNOWN'}:${requestUrl.pathname}`;
+      let incidentId = '';
+      let incidentCode = 'runtime_error';
+      // WHAT: Preserve the incident that already owns an explicitly paused runtime scope.
+      // WHY: The response must identify the original failure instead of creating a duplicate incident.
+      if (paused) {
+        incidentId = error.incidentId;
+        incidentCode = error.code;
+      }
+      // WHAT: Record the bootstrap rejection and resolve it in the same operation.
+      // WHY: Relay convergence is retryable and did not corrupt state or pause a runtime component.
+      else if (bootstrapIncomplete) {
+        incidentId = recordStoppedOperation({
+          scope,
+          component: 'http-server',
+          operation: 'handle-request',
+          error,
+          context: { method: request.method ?? '', path: requestUrl.pathname },
+        });
+        incidentCode = 'task_state_bootstrap_incomplete';
+      }
+      // WHAT: Persist unexpected request failures as active incidents.
+      // WHY: Unclassified errors still require operator-visible degraded health and diagnosis.
+      else {
+        const incident = recordIncident({
+          scope,
+          component: 'http-server',
+          operation: 'handle-request',
+          error,
+          context: { method: request.method ?? '', path: requestUrl.pathname },
+        });
+        incidentId = incident.id;
+        incidentCode = incident.code;
+      }
       telemetry('http-request-failed', {
         method: request.method ?? '',
         path: requestUrl.pathname,
-        statusCode: paused ? 503 : 500,
-        incidentId: paused ? error.incidentId : incident?.id ?? '',
-        code: paused ? error.code : incident?.code ?? 'runtime_error',
+        statusCode: paused || bootstrapIncomplete ? 503 : 500,
+        incidentId,
+        code: incidentCode,
       });
       if (response.writableEnded) return;
       if (response.headersSent) {
         response.destroy();
         return;
       }
-      response.statusCode = paused ? 503 : 500;
+      response.statusCode = paused || bootstrapIncomplete ? 503 : 500;
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({
         ok: false,
-        error: paused ? 'runtime-scope-paused' : 'internal-runtime-error',
-        incidentId: paused ? error.incidentId : incident?.id ?? '',
-        scope: paused ? error.scope : incident?.scope ?? '',
+        error: paused ? 'runtime-scope-paused' : bootstrapIncomplete ? 'task-state-bootstrap-incomplete' : 'internal-runtime-error',
+        incidentId,
+        scope: paused ? error.scope : scope,
       }));
     });
   });
