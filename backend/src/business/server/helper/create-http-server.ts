@@ -2857,6 +2857,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   server.on('listening', () => {
     const address = server.address();
     if (address && typeof address === 'object') federationServerPort = address.port;
+    incidentLedger.resolveScope('server-launcher', 'The server child started and opened its HTTP listener successfully.');
     federation.start();
   });
   server.on('error', (error: Error & { code?: string }) => {

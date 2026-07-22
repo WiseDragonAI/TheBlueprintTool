@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { traces } from '@backend/telemetry/harness.js';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createRuntimeIncidentLedger } from '@backend/business/server/helper/runtime-incident-ledger.js';
 
 test('create-http-server executes implemented behavior and records telemetry', async () => {
   traces.length = 0;
@@ -78,6 +79,40 @@ test('create-http-server acknowledges a manual restart before invoking the super
     assert.deepEqual(await response.json(), { ok: true, restarting: true });
     await new Promise((resolve) => setTimeout(resolve, 40));
     assert.equal(restarted, true);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('create-http-server resolves the retained launcher incident only after listening', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-launcher-recovery-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const incidents = createRuntimeIncidentLedger({ decisionOsRoot });
+  incidents.record({
+    severity: 'fatal',
+    scope: 'server-launcher',
+    component: 'decision-os-launcher',
+    operation: 'run-server-child',
+    code: 'server_child_exited',
+    error: new Error('injected child exit'),
+  });
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+
+  try {
+    assert.deepEqual(incidents.active('server-launcher'), []);
+    const retained = incidents.snapshot().incidents.find((incident) => incident.scope === 'server-launcher');
+    assert.equal(retained?.status, 'resolved');
+    assert.match(String(retained?.context.resolution ?? ''), /opened its HTTP listener successfully/);
   } finally {
     server.close();
     await once(server, 'close');
