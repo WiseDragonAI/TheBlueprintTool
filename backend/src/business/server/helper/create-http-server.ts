@@ -73,6 +73,7 @@ import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../t
 import type { TaskProjectionCommand } from '../../task-state/helper/task-mutation-command.js';
 import { createRuntimeIncidentLedger, RuntimeScopePausedError, type RuntimeIncident } from './runtime-incident-ledger.js';
 import { createRuntimeIncidentReviewScheduler } from './create-runtime-incident-review-scheduler.js';
+import { runtimeIncidentReviewProjectId } from './synchronize-runtime-incident-review-task.js';
 import {
   exportFederatedPipelineSnapshot,
   exportFederatedSkillManifest,
@@ -1005,7 +1006,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const runtimeIncidentReviewScheduler = createRuntimeIncidentReviewScheduler({
     incidentLedger,
     intervalMs: Number(payload.runtimeIncidentReviewIntervalMs ?? 5_000),
-    targetProject: () => projectCatalog().find((entry) => entry.available && entry.relativePath === 'admin') ?? null,
+    targetProject: () => projectCatalog().find((entry) => entry.available && entry.id === runtimeIncidentReviewProjectId) ?? null,
     taskState: taskStateForProject,
     paused: () => pausedBackgroundComponents.has('runtime-incident-review'),
     onChanged: (projectId) => controlRoomProjectionStore?.invalidate(projectId),

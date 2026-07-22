@@ -80,11 +80,14 @@ test('creates and refreshes one deterministic recurring runtime incident master 
     assert.deepEqual(firstProjection.cards[0].labels, ['master-task', 'operations', 'recurring', 'runtime-incidents']);
     assert.equal(firstProjection.annotations[0].id, runtimeIncidentReviewZoneId);
     const contentFile = join(decisionOsRoot, 'cards', 'tasks', `${runtimeIncidentReviewCardId}.md`);
+    const threadFile = join(decisionOsRoot, 'threads', 'tasks', `thread-${runtimeIncidentReviewCardId}.md`);
     assert.equal(existsSync(contentFile), true);
+    assert.equal(existsSync(join(decisionOsRoot, 'task-state', project.id, 'local', 'held', `${runtimeIncidentReviewCardId}.json`)), false);
     const firstBody = readFileSync(contentFile, 'utf8');
     assert.match(firstBody, /incident-a/);
     assert.match(firstBody, /assertWritable \(project-task-state\.ts:63:48\)/);
     assert.match(firstBody, /Central log/);
+    assert.match(readFileSync(threadFile, 'utf8'), /Recurring runtime incident review task created automatically/);
 
     const resolved = incident({
       status: 'resolved',

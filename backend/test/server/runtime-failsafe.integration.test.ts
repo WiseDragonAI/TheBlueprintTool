@@ -8,7 +8,7 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { createRuntimeIncidentLedger } from '@backend/business/server/helper/runtime-incident-ledger.js';
-import { runtimeIncidentReviewCardId } from '@backend/business/server/helper/synchronize-runtime-incident-review-task.js';
+import { runtimeIncidentReviewCardId, runtimeIncidentReviewProjectId } from '@backend/business/server/helper/synchronize-runtime-incident-review-task.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 
 async function waitUntil(assertion: () => boolean | Promise<boolean>, timeoutMs = 2_000): Promise<void> {
@@ -20,17 +20,19 @@ async function waitUntil(assertion: () => boolean | Promise<boolean>, timeoutMs 
   assert.fail('Timed out waiting for runtime incident review synchronization.');
 }
 
-test('periodically centralizes runtime incidents in one admin master task', async () => {
+test('periodically centralizes runtime incidents only in the Decision OS project', async () => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-runtime-incident-review-'));
   const adminDecisionOsRoot = join(home, 'admin', '.decision-os');
-  const tasksFile = join(adminDecisionOsRoot, 'tasks.json');
+  const projectDecisionOsRoot = join(home, 'decision-os', '.decision-os');
   const centralDecisionOsRoot = join(home, '.decision-os');
-  mkdirSync(adminDecisionOsRoot, { recursive: true });
-  writeFileSync(join(adminDecisionOsRoot, 'project.json'), JSON.stringify({ id: 'admin' }));
-  writeFileSync(join(adminDecisionOsRoot, 'state.json'), JSON.stringify({
-    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
-  }));
-  writeFileSync(tasksFile, JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {}, threadFiles: {} }));
+  for (const [decisionOsRoot, projectId] of [[adminDecisionOsRoot, 'admin'], [projectDecisionOsRoot, runtimeIncidentReviewProjectId]]) {
+    mkdirSync(decisionOsRoot, { recursive: true });
+    writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: projectId }));
+    writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+      ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+    }));
+    writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {}, threadFiles: {} }));
+  }
   const incidents = createRuntimeIncidentLedger({ decisionOsRoot: centralDecisionOsRoot });
   incidents.record({
     scope: 'http-request:POST:/api/voice-upload',
@@ -56,14 +58,15 @@ test('periodically centralizes runtime incidents in one admin master task', asyn
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
-    const cards = async (): Promise<Array<Record<string, unknown>>> => {
-      const response = await fetch(`${baseUrl}/api/ledgers/tasks/canvas`);
+    const cards = async (projectId: string): Promise<Array<Record<string, unknown>>> => {
+      const response = await fetch(`${baseUrl}/p/${projectId}/api/ledgers/tasks/canvas`);
       if (!response.ok) return [];
       return ((await response.json()) as { cards?: Array<Record<string, unknown>> }).cards ?? [];
     };
-    await waitUntil(async () => (await cards()).some((card) => card.id === runtimeIncidentReviewCardId));
-    assert.equal((await cards()).filter((card) => card.id === runtimeIncidentReviewCardId).length, 1);
-    const contentFile = join(adminDecisionOsRoot, 'cards', 'tasks', `${runtimeIncidentReviewCardId}.md`);
+    await waitUntil(async () => (await cards(runtimeIncidentReviewProjectId)).some((card) => card.id === runtimeIncidentReviewCardId));
+    assert.equal((await cards(runtimeIncidentReviewProjectId)).filter((card) => card.id === runtimeIncidentReviewCardId).length, 1);
+    assert.equal((await cards('admin')).some((card) => card.id === runtimeIncidentReviewCardId), false);
+    const contentFile = join(projectDecisionOsRoot, 'cards', 'tasks', `${runtimeIncidentReviewCardId}.md`);
     assert.match(readFileSync(contentFile, 'utf8'), /task_state_bootstrap_incomplete/);
 
     incidents.record({
@@ -73,7 +76,7 @@ test('periodically centralizes runtime incidents in one admin master task', asyn
       error: new Error('second centralized failure'),
     });
     await waitUntil(() => readFileSync(contentFile, 'utf8').includes('second centralized failure'));
-    assert.equal((await cards()).filter((card) => card.id === runtimeIncidentReviewCardId).length, 1);
+    assert.equal((await cards(runtimeIncidentReviewProjectId)).filter((card) => card.id === runtimeIncidentReviewCardId).length, 1);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     rmSync(home, { recursive: true, force: true });

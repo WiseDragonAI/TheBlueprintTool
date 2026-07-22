@@ -13,6 +13,7 @@ type AnyRecord = Record<string, unknown>;
 
 export const runtimeIncidentReviewCardId = 'card-runtime-incident-review';
 export const runtimeIncidentReviewZoneId = 'zone-runtime-incident-review';
+export const runtimeIncidentReviewProjectId = 'ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z';
 
 const reviewLabels = ['master-task', 'operations', 'recurring', 'runtime-incidents'];
 
@@ -158,9 +159,33 @@ export async function synchronizeRuntimeIncidentReviewTask(input: {
   }
 
   applyMutation({ project: input.project, ledgerPath, ledger: after, mutation });
-  const committed = await input.taskState.executeMutation(mutation, before, after);
+  let committed = await input.taskState.executeMutation(mutation, before, after);
+  if (!existingCard) {
+    // WHAT: Publish the newly held master task through one truthful thread contribution.
+    // WHY: Task creation and replicated activation are separate epoch-3 operations.
+    const noteBefore = structuredClone(committed.ledger);
+    const noteAfter = structuredClone(noteBefore);
+    const noteMutation: LedgerMutation = {
+      action: 'append-note',
+      note: {
+        id: 'note-agent-runtime-incident-review-created',
+        threadId: `thread-${runtimeIncidentReviewCardId}`,
+        role: 'agent',
+        body: 'Recurring runtime incident review task created automatically from the central incident ledger.',
+      },
+    };
+    applyMutation({ project: input.project, ledgerPath, ledger: noteAfter, mutation: noteMutation });
+    committed = await input.taskState.executeMutation(noteMutation, noteBefore, noteAfter);
+  }
   const card = (committed.ledger.cards as AnyRecord[] | undefined)?.find((entry) => String(entry.id ?? '') === runtimeIncidentReviewCardId);
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
-  await input.taskState.recordContentContribution(runtimeIncidentReviewCardId, String(comment.contentFile ?? ''));
+  const threadFiles = committed.ledger.threadFiles && typeof committed.ledger.threadFiles === 'object'
+    ? committed.ledger.threadFiles as AnyRecord
+    : {};
+  await input.taskState.recordContentContribution(runtimeIncidentReviewCardId, [
+    String(comment.contentFile ?? ''),
+    String(threadFiles[`thread-${runtimeIncidentReviewCardId}`] ?? ''),
+  ]);
+  await input.taskState.flush();
   return { changed: true, cardId: runtimeIncidentReviewCardId, zoneId: runtimeIncidentReviewZoneId };
 }
