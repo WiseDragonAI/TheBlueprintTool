@@ -7,6 +7,7 @@
 5. **Replication carries intent but not verified executor identity.** An active structural `executionIntent` suppresses node-local observations and clears `executionNodeId` plus `executionNodeLabel`. Production projection always emits `executionObservation: null`; the non-null observation paths exercised by federation tests are not produced by production code.
 6. **The current implementation is under-factored and over-modelled at the same time.** It has many representations of the same lifecycle but no shared transition kernel that owns their order. The complexity is therefore spent on reconciliation rather than on additional product capability.
 7. **The runtime-incident task ownership defect is already corrected on the pulled revision.** Commit `5fdf4ff2` changed the target from the `admin` relative path to the stable Decision OS project ID. The live Control Room now reports `card-runtime-incident-review` under project `decision-os`, project ID `ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z`. Source comments and operation names still incorrectly say `admin`.
+8. **Run rejection is silent on the served responsive card route.** A paused Decision OS Codex runtime rejects both skill and pipeline admission with HTTP `503` and `runtime-scope-paused` before any run is created. The responsive detail view writes that rejection into `.process-message`, while `setMobileCodexView()` keeps `.process-message` hidden in the same detail view. The button is re-enabled with no visible explanation.
 
 ---
 
@@ -26,6 +27,10 @@
 12. **Exact pipeline incident:** `incident-96654e43-7e4a-4bc8-b08e-70e341d7a469` was recorded at `2026-07-22T18:03:45.413Z` for `persist-codex-ledger-projection` with `task_state_bootstrap_incomplete`.
 13. **Stack traversal:** `assertWritable()` → `executeProjectionCommand()` → `persistTaskLedgerProjection()` → `persistLedgerProjection()` → `queueLedgerProjectionPersistence()` → `persistLedger()` → `projectPipelineSkillRun()` → `spawnPipelineSkillProcess()` → `runNextPipelineSkill()` → `runCodexProcessSchedule()`.
 14. **Contradicted pause evidence:** after that incident, the same pipeline completed `task-list`, `task-dependency`, and `task-group-completeness`, then launched `implementation-orchestrator` as PID `2026937` at `2026-07-22T18:15:58.361Z`.
+15. **Silent-run reproduction target:** `card-c2294c71-cb87-49d6-8886-002cd0f6b036`, titled `Design Context-First Gated Full Exec Chain`, on the operator-provided Decision OS card route. The served route returned HTTP `200` during reassessment.
+16. **No admission record:** the card has no `executionIntent`, `codexActiveRunId`, or `codexActiveExecutionId`; the Control Room reports `task-waiting`; the direct queue is empty; and no pipeline run references this source card.
+17. **Deterministic backend rejection:** `POST /api/codex/pipelines/runs` and `POST /api/codex/skills/process` both call `assertCodexRuntimeAvailable()` before their controllers. The active incident therefore makes every new run request return HTTP `503` with `error: runtime-scope-paused`, the incident ID, and the paused scope before durable admission.
+18. **Deterministic hidden feedback:** the served responsive `startPipeline()` and `startSkill()` handlers catch that response and write the error into `.process-message`. The served `setMobileCodexView()` hides `.process-message` whenever the library is in its detail view, which is the view containing the start button.
 
 ---
 
@@ -96,6 +101,8 @@
 14. **Global scheduling gate:** the global scheduler excludes project contexts whose `codexRuntimePaused` flag is true.
 15. **Pipeline bypass:** successful skill settlement invokes `runNextPipelineSkill()` directly without checking `codexRuntimePaused`.
 16. **Observed result:** pausing blocks later work admitted through the scheduler but does not stop the already-running pipeline from starting its next skill. The health endpoint and pipeline endpoint therefore report incompatible control states.
+17. **New admission behavior:** the HTTP admission routes reject while `codexRuntimePaused` is true before reading the payload and before creating pipeline, queue, card-lease, or task-intent state.
+18. **Operator feedback behavior:** responsive skill and pipeline detail views hide the only element that receives the rejection message, so a correctly rejected request is presented as a no-op.
 
 ---
 
@@ -208,6 +215,7 @@
 15. **Misleading source language:** runtime-incident code comments and error operation names still say `admin` after project ownership moved to Decision OS.
 16. **Test-only architecture:** federation observation tests exercise manually manufactured values that production projection cannot produce.
 17. **Source-pattern verification:** the responsive timer test checks text patterns in source. It does not prove the rendered interaction or transition ordering.
+18. **Hidden admission failure:** the responsive Codex detail state hides `.process-message`, but both run handlers use that node as their only rejection surface. There is no persistent run-attempt receipt because the backend correctly rejects before admission, and there is no visible incident link because the frontend discards the returned `incidentId` and `scope`.
 
 ---
 
@@ -256,7 +264,7 @@
 7. **Enforce one pause gate in the coordinator.** A paused runtime prevents every claim and chained pipeline transition; the active process settles without launching a successor until the scoped runtime is explicitly resumed.
 8. **Add executor assignment and heartbeat.** Replicate assigned node in intent, emit a matching live observation, and surface stale execution explicitly.
 9. **Replace Control Room derivation.** Consume the shared execution DTO and remove the structural-intent branch that clears executor identity.
-10. **Replace frontend status branching.** Use one phase presenter and timer for preparing, queued, starting, and running states; remove the contradictory coarse `executing` label.
+10. **Replace frontend status and admission-failure branching.** Use one phase presenter and timer for preparing, queued, starting, and running states; remove the contradictory coarse `executing` label. Keep the run feedback region visible in the detail state. Present paused-runtime HTTP `503` responses as `Decision OS execution is paused` with the returned scope and incident ID, then leave the run button available only after the runtime resumes.
 11. **Consolidate status readers and pollers.** Detailed event reads append diagnostics to the shared DTO; they do not recalculate lifecycle status.
 12. **Remove obsolete representations.** Delete direct queue runtime status, mutable pipeline skill runtime status, log-derived business status, node-local voice execution maps, legacy card execution fields, and manual status alias normalization.
 13. **Correct runtime-incident naming.** Replace remaining `admin` comments and operation labels with `Decision OS project` and add a regression over the live project name plus project ID.
@@ -283,6 +291,7 @@
 14. **Rejection:** failed admission restores server-confirmed task state and leaves no queue record, active lease, optimistic map entry, or phantom timer.
 15. **Coverage:** tests exercise rendered timers and transition ordering; no acceptance proof relies only on source-pattern assertions.
 16. **Pause:** a forced task-projection failure pauses the runtime before process spawn; a failure after spawn lets the current attempt settle and proves no successor starts until explicit resume.
+17. **Visible rejection:** from the served card route, a paused-runtime skill and pipeline admission each display the returned scope and incident ID beside the start action; neither request creates a queue item, pipeline run, card lease, or task intent.
 
 ---
 
@@ -318,3 +327,6 @@
 28. Commit `87f3706c` plus merge `68122629` — added startup Control Room invalidation after execution recovery.
 29. `backend/src/business/codex/helper/read-card-skill-run-event-lines.ts` — complete-file JSONL parsing on every detailed status read.
 30. Runtime incident `incident-96654e43-7e4a-4bc8-b08e-70e341d7a469` — verified task-state bootstrap failure and complete pipeline call stack.
+31. `backend/src/business/server/helper/create-http-server.ts:323` and admission routes at lines `2296` and `2460` — paused-runtime gate and HTTP `503` response contract.
+32. `frontend/src/app/responsive/codex.js:296` and `frontend/src/app/responsive/codex-view.js:7` — run rejection written to `.process-message` and the same node hidden in detail state.
+33. `.decision-os/tasks.json` plus `.decision-os/codex-process-queue.json` and `.decision-os/codex-pipelines.json` — no durable admission for `card-c2294c71-cb87-49d6-8886-002cd0f6b036` after the reported click.
