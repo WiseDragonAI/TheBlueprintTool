@@ -35,6 +35,8 @@ import {
   codexRuntimeStatus as runtimeRunStatus,
   notifyCodexLifecycle as notifyRuntimeCallback,
   publicCodexRuntimeRun as publicRun,
+  scheduleCodexRuntime,
+  scheduleCodexRuntimeTimer,
   updateCodexRuntimeExecution as updateRuntimeExecution,
   updateCodexRuntimeRun as updateRuntimeRun,
 } from '../helper/codex-runtime-run-store.js';
@@ -374,8 +376,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
           removeCodexProcessQueueItem(decisionOsRoot, runId);
           try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' }); }
           catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
-          const schedule = runtime.scheduleCodexProcesses;
-          if (typeof schedule === 'function') void schedule();
+          scheduleCodexRuntime(runtime, 'schedule-after-thread-start-failure', { runId, executionId });
           notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status: 'failed' });
           return;
         }
@@ -386,11 +387,11 @@ export async function startThreadCodexProcessController(input: { action_payload?
           const retryAt = new Date(Date.now() + codexCapacityResumeDelayMs).toISOString();
           appendRunStatus(runSummaryFile, 'running', `model capacity reached; resuming the same session after ${codexCapacityResumeDelayMs / 1000} seconds`);
           if (!updateRuntimeExecution(runtime, runId, executionId, { status: 'running', transientRetryAt: retryAt, exitCode: settlement.exitCode })) return;
-          setTimeout(() => {
+          scheduleCodexRuntimeTimer(runtime, `capacity-retry:${runId}:${executionId}`, codexCapacityResumeDelayMs, 'resume-thread-after-capacity-wait', () => {
             if (runtimeRunStatus(runtime, runId) !== 'running' || String(runtimeRuns(runtime)[runId]?.executionId ?? '') !== executionId) return;
             const resumeCommand = resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel: command.model, codexEffort: command.effort });
             launch(resumeCommand, 'Continue the interrupted task from the durable session context.', 'continue');
-          }, codexCapacityResumeDelayMs);
+          }, { runId, executionId, sessionId });
           return;
         }
         const status: ProcessStatus = cancelled ? 'cancelled' : settlement.terminalStatus ?? (settlement.exitCode === 0 ? 'complete' : 'failed');
@@ -401,8 +402,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         removeCodexProcessQueueItem(decisionOsRoot, runId);
         try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' }); }
         catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
-        const schedule = runtime.scheduleCodexProcesses;
-        if (typeof schedule === 'function') void schedule();
+        scheduleCodexRuntime(runtime, 'schedule-after-thread-settlement', { runId, executionId, status });
         if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
         notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status, exitCode: settlement.exitCode });
       },

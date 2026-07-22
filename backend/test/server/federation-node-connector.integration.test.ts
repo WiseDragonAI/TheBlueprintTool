@@ -169,11 +169,161 @@ test('bounds internal federation requests and cancels a missing owner response',
     await waitFor(async () => cancelledRequestId ? true : null);
     assert.ok(cancelledRequestId);
     assert.equal(connector.status().internalRequestTimeoutMs, 1_000);
+    assert.equal(connector.status().requesterStreamCount, 0);
   } finally {
     connector.stop();
     relay.close();
     relayHttp.close();
     await once(relayHttp, 'close');
+  }
+});
+
+test('bounds owner response credit waits and releases the stalled stream', async () => {
+  const ownerHttp = createServer((_request, response) => {
+    response.setHeader('content-type', 'application/octet-stream');
+    response.end(Buffer.alloc(1024 * 1024 + 64 * 1024, 1));
+  });
+  ownerHttp.listen(0, '127.0.0.1');
+  await once(ownerHttp, 'listening');
+
+  const relayHttp = createServer();
+  const relay = new WebSocketServer({ noServer: true });
+  let responseError: Record<string, unknown> | null = null;
+  const connectorErrors: Array<{ message: string; operation: string }> = [];
+  relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
+    let opened = false;
+    webSocket.on('message', (data) => {
+      const frame = JSON.parse(data.toString()) as Frame & Record<string, unknown>;
+      if (frame.type === 'manifest' && !opened) {
+        opened = true;
+        webSocket.send(JSON.stringify({ version: 1, type: 'request-open', requestId: 'held-credit', method: 'GET', path: '/large', headers: {} }));
+        webSocket.send(JSON.stringify({ version: 1, type: 'request-end', requestId: 'held-credit' }));
+      }
+      if (frame.type === 'response-error') responseError = frame;
+    });
+  }));
+  relayHttp.listen(0, '127.0.0.1');
+  await once(relayHttp, 'listening');
+  const connector = createFederationNodeConnector({
+    settings: {
+      federationRelayUrl: `http://127.0.0.1:${(relayHttp.address() as AddressInfo).port}`,
+      federationId: 'proof',
+      federationNodeId: 'owner',
+      federationNodeCredential: 'credential',
+    },
+    localProjects: () => [],
+    localServerUrl: () => `http://127.0.0.1:${(ownerHttp.address() as AddressInfo).port}`,
+    flowControlTimeoutMs: 25,
+    onError: (error, context) => connectorErrors.push({
+      message: error instanceof Error ? error.message : String(error),
+      operation: context.operation,
+    }),
+  });
+  connector.start();
+  try {
+    await waitFor(async () => responseError ? true : null);
+    assert.equal(responseError?.code, 'owner_request_failed');
+    assert.ok(connectorErrors.some((entry) => entry.operation === 'owner-request' && entry.message === 'federation_credit_timeout:25'));
+    assert.equal(connector.status().ownerStreamCount, 0);
+    assert.equal(connector.status().flowControlTimeoutMs, 25);
+    assert.equal(connector.status().ownerRequestTimeoutMs, 30 * 60_000);
+  } finally {
+    connector.stop();
+    relay.close();
+    relayHttp.close();
+    ownerHttp.close();
+    await Promise.all([once(relayHttp, 'close'), once(ownerHttp, 'close')]);
+  }
+});
+
+test('expires an owner stream that never receives its request end', async () => {
+  const relayHttp = createServer();
+  const relay = new WebSocketServer({ noServer: true });
+  let responseError: Record<string, unknown> | null = null;
+  const connectorErrors: string[] = [];
+  relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
+    webSocket.on('message', (data) => {
+      const frame = JSON.parse(data.toString()) as Frame & Record<string, unknown>;
+      if (frame.type === 'manifest') webSocket.send(JSON.stringify({ version: 1, type: 'request-open', requestId: 'never-ended', method: 'POST', path: '/held', headers: {} }));
+      if (frame.type === 'response-error') responseError = frame;
+    });
+  }));
+  relayHttp.listen(0, '127.0.0.1');
+  await once(relayHttp, 'listening');
+  const connector = createFederationNodeConnector({
+    settings: {
+      federationRelayUrl: `http://127.0.0.1:${(relayHttp.address() as AddressInfo).port}`,
+      federationId: 'proof',
+      federationNodeId: 'owner',
+      federationNodeCredential: 'credential',
+    },
+    localProjects: () => [],
+    localServerUrl: () => 'http://127.0.0.1:1',
+    ownerRequestTimeoutMs: 25,
+    onError: (error, context) => connectorErrors.push(`${context.operation}:${error instanceof Error ? error.message : String(error)}`),
+  });
+  connector.start();
+  try {
+    await waitFor(async () => responseError ? true : null);
+    assert.equal(responseError?.code, 'owner_request_timeout');
+    assert.deepEqual(connectorErrors, ['owner-request-open:federation_owner_open_timeout:25']);
+    assert.equal(connector.status().ownerStreamCount, 0);
+  } finally {
+    connector.stop();
+    relay.close();
+    relayHttp.close();
+    await once(relayHttp, 'close');
+  }
+});
+
+test('expires an HTTP proxy stream when the owner never responds', async () => {
+  const relayHttp = createServer();
+  const relay = new WebSocketServer({ noServer: true });
+  let cancelledRequestId = '';
+  relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
+    webSocket.on('message', (data) => {
+      const frame = JSON.parse(data.toString()) as Frame;
+      if (frame.type === 'manifest') webSocket.send(JSON.stringify({
+        version: 1,
+        type: 'catalog',
+        nodes: [
+          { nodeId: 'requester', online: true, projects: [] },
+          { nodeId: 'owner', online: true, projects: [] },
+        ],
+      }));
+      if (frame.type === 'cancel') cancelledRequestId = String(frame.requestId ?? '');
+    });
+  }));
+  relayHttp.listen(0, '127.0.0.1');
+  await once(relayHttp, 'listening');
+  const connector = createFederationNodeConnector({
+    settings: {
+      federationRelayUrl: `http://127.0.0.1:${(relayHttp.address() as AddressInfo).port}`,
+      federationId: 'proof',
+      federationNodeId: 'requester',
+      federationNodeCredential: 'credential',
+    },
+    localProjects: () => [],
+    localServerUrl: () => 'http://127.0.0.1:1',
+    internalRequestTimeoutMs: 25,
+  });
+  const proxyHttp = createServer((request, response) => { void connector.proxy(request, response, 'owner', 'project', '/api/state'); });
+  proxyHttp.listen(0, '127.0.0.1');
+  await once(proxyHttp, 'listening');
+  connector.start();
+  try {
+    await waitFor(async () => connector.status().peers.some((peer) => peer.nodeId === 'owner') ? true : null);
+    const response = await fetch(`http://127.0.0.1:${(proxyHttp.address() as AddressInfo).port}/held`);
+    assert.equal(response.status, 504);
+    assert.equal((await response.json() as { error: string }).error, 'federation_request_timeout');
+    await waitFor(async () => cancelledRequestId ? true : null);
+    assert.equal(connector.status().requesterStreamCount, 0);
+  } finally {
+    connector.stop();
+    relay.close();
+    relayHttp.close();
+    proxyHttp.close();
+    await Promise.all([once(relayHttp, 'close'), once(proxyHttp, 'close')]);
   }
 });
 

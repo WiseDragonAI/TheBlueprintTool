@@ -4,7 +4,7 @@
  */
 import { dirname, resolve } from 'node:path';
 import type { CodexPipeline, CodexPipelineSkill, CodexPipelineStep } from '../../../../../shared/schemas/codex-pipeline-types.js';
-import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
+import { codexPipelineStoreWriteBlocker, readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { isAllowedCodexEffort, isAllowedCodexModel } from '../helper/resolve-codex-command.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { runtimeServerRoot } from '../helper/server-skill-context.js';
@@ -108,6 +108,8 @@ export function saveCodexPipelineController(
   if (parsedSteps.error) return parsedSteps.error;
   const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) }).map((skill) => skill.name);
   const before = readCodexPipelineStore({ decisionOsRoot, availableSkillNames });
+  const corruption = codexPipelineStoreWriteBlocker(before);
+  if (corruption) return { ok: false, statusCode: 503, error: 'The Codex pipeline store is invalid and has been preserved for recovery.', detail: corruption.message };
   const existing = before.store.pipelines.find((pipeline) => pipeline.id === id);
   if (operation === 'create' && existing) return { ok: false, statusCode: 409, error: 'A pipeline with this id already exists.', pipelineId: id };
   if (operation === 'update' && !existing) return { ok: false, statusCode: 404, error: 'Pipeline not found.', pipelineId: id };

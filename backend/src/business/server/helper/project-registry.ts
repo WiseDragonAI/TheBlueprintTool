@@ -20,6 +20,13 @@ export type ProjectRegistry = {
   projects: Record<string, ProjectRegistryEntry>;
 };
 
+export class ProjectRegistryCorruptionError extends Error {
+  readonly code = 'project_registry_corrupt';
+  constructor(readonly file: string, cause: unknown) {
+    super(`Could not read the authoritative project registry ${file}: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
+}
+
 export function projectRegistryFile(masterDecisionOsRoot: string): string {
   return resolve(masterDecisionOsRoot, 'projects.json');
 }
@@ -33,14 +40,20 @@ export function backupLegacyProjectRegistry(masterDecisionOsRoot: string): strin
 }
 
 export function readProjectRegistry(masterDecisionOsRoot: string): ProjectRegistry | null {
+  const file = projectRegistryFile(masterDecisionOsRoot);
+  if (!existsSync(file)) return null;
   try {
-    const value = JSON.parse(readFileSync(projectRegistryFile(masterDecisionOsRoot), 'utf8')) as Partial<ProjectRegistry>;
+    const value = JSON.parse(readFileSync(file, 'utf8')) as Partial<ProjectRegistry>;
     // WHAT: Accept only the explicit registry schema.
     // WHY: Legacy metadata documents contain no paths and cannot safely replace discovery by themselves.
-    if (value.version !== 2 || !value.projects || typeof value.projects !== 'object') return null;
+    if (value && typeof value === 'object' && !Array.isArray(value) && value.version === undefined) return null;
+    if (value.version !== 2 || !value.projects || typeof value.projects !== 'object' || Array.isArray(value.projects)) {
+      throw new Error('Expected a version 2 registry with a projects object.');
+    }
     return { version: 2, projects: value.projects };
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof ProjectRegistryCorruptionError) throw error;
+    throw new ProjectRegistryCorruptionError(file, error);
   }
 }
 

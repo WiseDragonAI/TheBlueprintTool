@@ -236,6 +236,7 @@ test('thread-launched run reads return chronological diagnostics without changin
     assert.doesNotMatch(threadBefore, /codexRunId|Codex turn completed|Tool call/);
   } finally {
     server.close();
+    await once(server, 'close');
     process.chdir(originalCwd);
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -308,6 +309,7 @@ test('card skill run route returns command output containing thread markdown as 
     assert.equal(existsSync(threadPath), false);
   } finally {
     server.close();
+    await once(server, 'close');
     process.chdir(originalCwd);
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -464,6 +466,7 @@ test('card skill run route infers status from the latest continued JSONL segment
     assert.equal(multilineDiagnostic.diagnostics[0]?.text, multilineCommandRejection);
   } finally {
     server.close();
+    await once(server, 'close');
     process.chdir(originalCwd);
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -574,6 +577,7 @@ test('card skill continue route excludes codex artifact notes from resumed promp
     assert.doesNotMatch(prompt, /Codex turn completed\./);
   } finally {
     server.close();
+    await once(server, 'close');
     process.chdir(originalCwd);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
     else process.env.CODEX_BIN = previousCodexBin;
@@ -643,8 +647,11 @@ test('card skill run route measures active resumed segment from the latest persi
 
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
-    assert.equal(response.status, 200);
     const body = await response.json() as { ok: boolean; status: string; executionId: string; startedAt: string; elapsedMs: number; toolCallCount: number; agentMessageCount: number; fileChangeCount: number; latestEvent: unknown; events: Array<{ line: number }>; executions: Array<{ executionId: string; startLine: number; status: string; elapsedMs: number; toolCallCount: number }> };
+    if (response.status !== 200) {
+      const diagnostics = await fetch(`http://127.0.0.1:${address.port}/api/diagnostics/incidents`).then((result) => result.json());
+      assert.equal(response.status, 200, JSON.stringify({ body, diagnostics }));
+    }
     assert.equal(body.ok, true);
     assert.equal(body.status, 'running');
     assert.equal(body.executionId, 'execution-b');
@@ -664,6 +671,7 @@ test('card skill run route measures active resumed segment from the latest persi
     assert.ok(body.executions[1].elapsedMs >= 29000 && body.executions[1].elapsedMs < 45000);
   } finally {
     server.close();
+    await once(server, 'close');
     process.chdir(originalCwd);
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -748,6 +756,7 @@ test('server startup resumes a claimed thread run from its durable Codex session
     assert.equal(body.interruptedAt, null);
   } finally {
     server.close();
+    await once(server, 'close');
     process.chdir(originalCwd);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
     else process.env.CODEX_BIN = previousCodexBin;

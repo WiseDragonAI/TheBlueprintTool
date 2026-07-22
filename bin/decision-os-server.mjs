@@ -6,6 +6,7 @@
 import { spawn } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { startLauncherEmergencyServer } from './decision-os-launcher-emergency.mjs';
 
 function main() {
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -36,19 +37,55 @@ function main() {
   }
   const child = spawn(process.execPath, ['--import', loader, server, ...process.argv.slice(2)], { env, stdio: 'inherit' });
   let forwardedSignal = null;
+  let emergency = null;
+  let childSettled = false;
+  const emergencyPort = Number.isInteger(Number(process.env.PORT)) && Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 4173;
+  const emergencyHost = String(process.env.HOST ?? '127.0.0.1');
+  const enterEmergency = (error, code, childExitCode = null, childSignal = '') => {
+    if (forwardedSignal || emergency || childSettled) return;
+    childSettled = true;
+    try {
+      emergency = startLauncherEmergencyServer({
+        cwd: process.cwd(),
+        host: emergencyHost,
+        port: emergencyPort,
+        error,
+        code,
+        childExitCode,
+        childSignal,
+      });
+    } catch (emergencyError) {
+      process.stderr.write(`${JSON.stringify({ server: 'launcher-emergency', ok: false, error: emergencyError instanceof Error ? emergencyError.message : String(emergencyError) })}\n`);
+      process.exitCode = 1;
+    }
+  };
   for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
     process.once(signal, () => {
       forwardedSignal = signal;
       if (!child.killed) child.kill(signal);
+      if (emergency) emergency.server.close(() => { process.exitCode = 0; });
     });
   }
   child.once('error', (error) => {
     console.error(error);
-    process.exitCode = 1;
+    enterEmergency(error, 'server_child_spawn_failed');
   });
   child.once('exit', (code, signal) => {
-    if (forwardedSignal || signal) process.exit(0);
-    process.exit(code ?? 1);
+    if (forwardedSignal) {
+      process.exitCode = 0;
+      return;
+    }
+    if (code === 0 && !signal) {
+      childSettled = true;
+      process.exitCode = 0;
+      return;
+    }
+    enterEmergency(
+      new Error(`Decision OS server child exited before shutdown (code ${code ?? 'null'}, signal ${signal ?? 'none'}).`),
+      'server_child_exited',
+      code,
+      signal ?? '',
+    );
   });
 }
 

@@ -37,6 +37,19 @@ export async function persistLedgerProjection(input: {
 export function queueLedgerProjectionPersistence(input: Parameters<typeof persistLedgerProjection>[0]): void {
   const queued = { ...input, ledger: structuredClone(input.ledger), ...(input.command ? { command: structuredClone(input.command) } : {}) };
   void persistLedgerProjection(queued).catch((error: unknown) => {
-    if (input.runtime) input.runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error);
+    if (input.runtime) {
+      input.runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error);
+      const report = input.runtime.onCodexBackgroundError;
+      try {
+        if (typeof report === 'function') report({
+          operation: 'persist-codex-ledger-projection',
+          error,
+          context: { ledgerId: input.ledgerId ?? '', ledgerPath: input.ledgerPath },
+        });
+      } catch (reportingError) {
+        try { console.error('Could not report Codex ledger projection persistence failure:', reportingError); }
+        catch { /* Diagnostics must not become a second background failure. */ }
+      }
+    }
   });
 }

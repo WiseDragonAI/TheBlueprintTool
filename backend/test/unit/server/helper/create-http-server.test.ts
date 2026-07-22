@@ -5,13 +5,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { traces } from '@backend/telemetry/harness.js';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createRuntimeIncidentLedger } from '@backend/business/server/helper/runtime-incident-ledger.js';
+import { scheduleCodexRuntimeTimer } from '@backend/business/codex/helper/codex-runtime-run-store.js';
 
 test('create-http-server executes implemented behavior and records telemetry', async () => {
   traces.length = 0;
@@ -78,6 +80,168 @@ test('create-http-server acknowledges a manual restart before invoking the super
     assert.deepEqual(await response.json(), { ok: true, restarting: true });
     await new Promise((resolve) => setTimeout(resolve, 40));
     assert.equal(restarted, true);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('create-http-server resolves the retained launcher incident only after listening', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-launcher-recovery-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const incidents = createRuntimeIncidentLedger({ decisionOsRoot });
+  incidents.record({
+    severity: 'fatal',
+    scope: 'server-launcher',
+    component: 'decision-os-launcher',
+    operation: 'run-server-child',
+    code: 'server_child_exited',
+    error: new Error('injected child exit'),
+  });
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+
+  try {
+    assert.deepEqual(incidents.active('server-launcher'), []);
+    const retained = incidents.snapshot().incidents.find((incident) => incident.scope === 'server-launcher');
+    assert.equal(retained?.status, 'resolved');
+    assert.match(String(retained?.context.resolution ?? ''), /opened its HTTP listener successfully/);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('server close cancels project-owned Codex retry timers', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-codex-timer-cleanup-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  let fired = false;
+  scheduleCodexRuntimeTimer(runtime, 'test-close', 30, 'test-close', () => { fired = true; });
+  server.close();
+  await once(server, 'close');
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(fired, false);
+  rmSync(projectRoot, { recursive: true, force: true });
+});
+
+test('Codex background failure pauses only project Codex work and remains diagnosable over HTTP', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-codex-background-failure-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    (runtime.onCodexBackgroundError as (event: Record<string, unknown>) => void)({
+      operation: 'injected-codex-background-work',
+      error: new Error('injected Codex background failure'),
+      context: { runId: 'run-a' },
+    });
+    const health = await fetch(`${baseUrl}/api/health`);
+    assert.equal(health.status, 200);
+    const healthBody = await health.json() as { status: string; pausedBackgroundComponents: string[] };
+    assert.equal(healthBody.status, 'degraded');
+    assert.ok(healthBody.pausedBackgroundComponents.some((component) => component.startsWith('codex-runtime:')));
+    assert.equal((await fetch(`${baseUrl}/`)).status, 200);
+    const start = await fetch(`${baseUrl}/api/codex/threads/process`, { method: 'POST', body: '{}' });
+    assert.equal(start.status, 503);
+    const startBody = await start.json() as { error: string; scope: string };
+    assert.equal(startBody.error, 'runtime-scope-paused');
+    assert.match(startBody.scope, /^background:codex-runtime:/);
+    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; message: string }> };
+    assert.ok(incidents.incidents.some((incident) => incident.operation === 'injected-codex-background-work' && incident.message === 'injected Codex background failure'));
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('corrupt Codex process queue is preserved while the rest of the server remains available', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-corrupt-codex-queue-server-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  const queueFile = join(decisionOsRoot, 'codex-process-queue.json');
+  const corruptBytes = '{not-json';
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(frontendRoot + '/index.html', '<!doctype html>');
+  writeFileSync(queueFile, corruptBytes);
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    assert.equal((await fetch(`${baseUrl}/`)).status, 200);
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; pausedBackgroundComponents: string[] };
+    assert.equal(health.status, 'degraded');
+    assert.ok(health.pausedBackgroundComponents.some((component) => component.startsWith('codex-runtime:')));
+    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; code: string; message: string }> };
+    assert.ok(incidents.incidents.some((incident) => incident.operation === 'recover-durable-codex-process-queue' && incident.message.includes('codex-process-queue.json')));
+    assert.equal(readFileSync(queueFile, 'utf8'), corruptBytes);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('corrupt project synchronization store pauses only synchronization routes', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-corrupt-project-sync-server-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  const syncDirectory = join(decisionOsRoot, 'project-sync');
+  const syncFile = join(syncDirectory, 'runs.json');
+  const corruptBytes = '{not-json';
+  mkdirSync(syncDirectory, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  writeFileSync(syncFile, corruptBytes);
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    assert.equal((await fetch(`${baseUrl}/`)).status, 200);
+    const sync = await fetch(`${baseUrl}/api/project-sync`);
+    assert.equal(sync.status, 503);
+    const syncBody = await sync.json() as { error: string; scope: string };
+    assert.equal(syncBody.error, 'runtime-scope-paused');
+    assert.equal(syncBody.scope, 'background:project-sync-store');
+    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; message: string }> };
+    assert.ok(incidents.incidents.some((incident) => incident.operation === 'read-project-sync-store' && incident.message.includes('project-sync/runs.json')));
+    assert.equal(readFileSync(syncFile, 'utf8'), corruptBytes);
   } finally {
     server.close();
     await once(server, 'close');

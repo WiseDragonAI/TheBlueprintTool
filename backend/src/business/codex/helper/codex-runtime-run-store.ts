@@ -5,6 +5,17 @@
 import type { ChildProcess } from 'node:child_process';
 
 type AnyRecord = Record<string, unknown>;
+const defaultCodexExecutionTimeoutMs = 30 * 60_000;
+
+function logCodexBackgroundFailure(message: string, error: unknown): void {
+  try { console.error(message, error); }
+  catch { /* Diagnostics must not become a second background failure. */ }
+}
+
+export function codexExecutionTimeoutMs(runtime: AnyRecord): number {
+  const configured = Number(runtime.codexExecutionTimeoutMs ?? defaultCodexExecutionTimeoutMs);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : defaultCodexExecutionTimeoutMs;
+}
 
 export function codexRuntimeRuns(runtime: AnyRecord): Record<string, AnyRecord> {
   const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' && !Array.isArray(runtime.codexSkillRuns)
@@ -60,4 +71,71 @@ export function notifyCodexLifecycle(callback: unknown, event: AnyRecord): void 
   // WHAT: Publish only through an installed lifecycle boundary.
   // WHY: Tests and non-server callers intentionally omit event subscribers.
   if (typeof callback === 'function') callback(event);
+}
+
+export function reportCodexBackgroundFailure(
+  runtime: AnyRecord,
+  operation: string,
+  error: unknown,
+  context: AnyRecord = {},
+): void {
+  const normalized = error instanceof Error ? error : new Error(String(error));
+  runtime.codexBackgroundError = normalized.message;
+  const callback = runtime.onCodexBackgroundError;
+  if (typeof callback !== 'function') {
+    logCodexBackgroundFailure(`Codex background operation failed (${operation}):`, normalized);
+    return;
+  }
+  try {
+    callback({ operation, error: normalized, context });
+  } catch (reportingError) {
+    logCodexBackgroundFailure(`Could not report Codex background operation failure (${operation}):`, reportingError);
+  }
+}
+
+export function scheduleCodexRuntime(runtime: AnyRecord, operation: string, context: AnyRecord = {}): void {
+  const schedule = runtime.scheduleCodexProcesses;
+  if (typeof schedule !== 'function') return;
+  try {
+    void Promise.resolve(schedule()).catch((error: unknown) => reportCodexBackgroundFailure(runtime, operation, error, context));
+  } catch (error) {
+    reportCodexBackgroundFailure(runtime, operation, error, context);
+  }
+}
+
+export function scheduleCodexRuntimeTimer(
+  runtime: AnyRecord,
+  key: string,
+  delayMs: number,
+  operation: string,
+  callback: () => unknown,
+  context: AnyRecord = {},
+): void {
+  const timers = runtime.codexRuntimeTimers instanceof Map
+    ? runtime.codexRuntimeTimers as Map<string, NodeJS.Timeout>
+    : new Map<string, NodeJS.Timeout>();
+  if (!(runtime.codexRuntimeTimers instanceof Map)) {
+    Object.defineProperty(runtime, 'codexRuntimeTimers', { value: timers, writable: true, configurable: true, enumerable: false });
+  }
+  const previous = timers.get(key);
+  if (previous) clearTimeout(previous);
+  const timer = setTimeout(() => {
+    timers.delete(key);
+    try {
+      void Promise.resolve(callback()).catch((error: unknown) => reportCodexBackgroundFailure(runtime, operation, error, context));
+    } catch (error) {
+      reportCodexBackgroundFailure(runtime, operation, error, context);
+    }
+  }, delayMs);
+  timer.unref?.();
+  timers.set(key, timer);
+}
+
+export function stopCodexRuntimeTimers(runtime: AnyRecord): void {
+  const timers = runtime.codexRuntimeTimers instanceof Map
+    ? runtime.codexRuntimeTimers as Map<string, NodeJS.Timeout>
+    : null;
+  if (!timers) return;
+  for (const timer of timers.values()) clearTimeout(timer);
+  timers.clear();
 }

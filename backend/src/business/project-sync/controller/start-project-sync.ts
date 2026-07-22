@@ -101,6 +101,7 @@ export function createProjectSyncController(input: {
   runtimeForProject: (project: DecisionOsProject) => Record<string, unknown>;
   gitSshCommand: () => string;
   onRunChange: (run: ProjectSyncRun) => void;
+  onBackgroundError: (error: unknown, context: { syncId: string; operation: string }) => void;
 }) {
   const running = new Set<string>();
   const localProject = (projectId: string): DecisionOsProject => {
@@ -293,6 +294,16 @@ export function createProjectSyncController(input: {
       running.delete(runInput.syncId);
     }
   };
+  const launch = (run: ProjectSyncRun, source: SyncSourceProject, restartPipeline = false): void => {
+    void execute(run, source, restartPipeline).catch((error: unknown) => {
+      try {
+        input.onBackgroundError(error, { syncId: run.syncId, operation: 'execute-project-synchronization' });
+      } catch (reportingError) {
+        try { console.error('Could not report project synchronization background failure:', reportingError); }
+        catch { /* Diagnostics must not become a second background failure. */ }
+      }
+    });
+  };
   return {
     start(source: SyncSourceProject, idempotencyKey: string): { run: ProjectSyncRun; duplicate: boolean } {
       const sourceNodeId = String(source.ownerNodeId ?? input.localNodeId());
@@ -313,7 +324,7 @@ export function createProjectSyncController(input: {
       const restartPipeline = retrying && Boolean(admitted.run.pipelineRunId);
       const run = retrying ? input.store.restart(admitted.run.syncId) : admitted.run;
       input.onRunChange(run);
-      void execute(run, source, restartPipeline);
+      launch(run, source, restartPipeline);
       return { run, duplicate: admitted.duplicate };
     },
     retry(syncId: string): ProjectSyncRun {
@@ -324,13 +335,13 @@ export function createProjectSyncController(input: {
       const restartPipeline = Boolean(run.pipelineRunId);
       const restarted = input.store.restart(syncId);
       input.onRunChange(restarted);
-      void execute(restarted, source, restartPipeline);
+      launch(restarted, source, restartPipeline);
       return restarted;
     },
     resume(): void {
       for (const run of input.store.list().filter((entry) => !['complete', 'failed'].includes(entry.phase))) {
         const source = sourceForRun(run);
-        if (source) void execute(run, source);
+        if (source) launch(run, source);
       }
     },
   };

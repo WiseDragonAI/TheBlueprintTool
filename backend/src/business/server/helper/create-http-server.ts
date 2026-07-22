@@ -46,11 +46,12 @@ import { startCodexPipelineRunController } from '../../codex/controller/start-co
 import { readCodexPipelineRunController } from '../../codex/controller/read-codex-pipeline-run-controller.js';
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
-import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
-import { recoverCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
+import { resumeCodexPipelineRuns, stopAdoptedPipelineProcessMonitors } from '../../codex/helper/resume-codex-pipeline-runs.js';
+import { recoverCodexProcessQueue, stopAdoptedCodexProcessMonitors } from '../../codex/helper/codex-process-queue.js';
 import { reconcileCodexExecutionOwnership } from '../../codex/helper/reconcile-codex-execution-ownership.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
 import { createCodexCapacitySlots, type CodexSlotAcquireOptions } from '../../codex/helper/codex-capacity-slots.js';
+import { stopCodexRuntimeTimers } from '../../codex/helper/codex-runtime-run-store.js';
 import { resolveCatalogProject, tasksLedgerForProject, type DecisionOsProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
@@ -258,6 +259,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const pausedProjectRuntimes = new Set<string>();
   let globalRuntimeIncident: RuntimeIncident | null = null;
   let projectSyncController: ReturnType<typeof createProjectSyncController> | null = null;
+  let resumeProjectSyncRuntime: (() => void) | null = null;
+
+  const disposeProjectContext = (context: ProjectContext): void => {
+    stopAdoptedCodexProcessMonitors(context.runtime);
+    stopAdoptedPipelineProcessMonitors(context.runtime);
+    stopCodexRuntimeTimers(context.runtime);
+    context.watcher.close();
+    context.clients.clear();
+  };
 
   for (const incident of incidentLedger.active()) {
     if (incident.scope.startsWith('project-task-state:')) pausedTaskProjects.set(incident.scope.slice('project-task-state:'.length), incident);
@@ -280,22 +290,30 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
 
   const recordStoppedOperation = (input: {
     scope: string;
+    component: string;
     operation: string;
     error: unknown;
     context: Record<string, unknown>;
   }): string => {
     const incident = recordIncident({
       severity: 'warning',
-      component: 'federation-node-message',
       ...input,
     });
     incidentLedger.resolveScope(incident.scope, 'The failed operation stopped without changing project state.');
     return incident.id;
   };
 
-  const recordBackgroundFailure = (component: string, operation: string, error: unknown, context: Record<string, unknown> = {}): void => {
+  const recordBackgroundFailure = (component: string, operation: string, error: unknown, context: Record<string, unknown> = {}): RuntimeIncident => {
     pausedBackgroundComponents.add(component);
-    recordIncident({ scope: `background:${component}`, component, operation, error, context });
+    return recordIncident({ scope: `background:${component}`, component, operation, error, context });
+  };
+
+  const assertCodexRuntimeAvailable = (activeRuntime: AnyRecord): void => {
+    if (activeRuntime.codexRuntimePaused !== true) return;
+    const component = `codex-runtime:${String(activeRuntime.projectId ?? '')}`;
+    const incident = incidentLedger.active(`background:${component}`)[0];
+    if (incident) throw new RuntimeScopePausedError(incident.scope, incident.id);
+    throw new Error(`Codex runtime ${String(activeRuntime.projectId ?? '')} is paused without an active incident.`);
   };
 
   const pauseGlobalRuntime = (error: unknown, operation: string): void => {
@@ -478,7 +496,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         while (globalCodexRunningProcessCount() < capacity) {
           const candidate = [...projectContexts.entries()]
             .map(([root, context]) => ({ root, context, createdAt: nextPendingCodexProcessCreatedAt(root) }))
-            .filter((entry): entry is { root: string; context: ProjectContext; createdAt: string } => Boolean(entry.createdAt))
+            .filter((entry): entry is { root: string; context: ProjectContext; createdAt: string } => entry.context.runtime.codexRuntimePaused !== true && Boolean(entry.createdAt))
             .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
           if (!candidate) break;
           const result = await scheduleCodexProcesses({ decisionOsRoot: candidate.root, runtime: candidate.context.runtime, launchLimit: 1 });
@@ -504,6 +522,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const projectRuntime = activeDecisionOsRoot === masterDecisionOsRoot
       ? Object.assign(runtime, { decisionOsRoot: activeDecisionOsRoot, projectId })
       : Object.assign({}, runtime, { decisionOsRoot: activeDecisionOsRoot, projectId });
+    const codexRuntimeComponent = `codex-runtime:${projectId}`;
+    projectRuntime.codexRuntimePaused = pausedBackgroundComponents.has(codexRuntimeComponent);
+    projectRuntime.onCodexBackgroundError = (event: AnyRecord): void => {
+      projectRuntime.codexRuntimePaused = true;
+      const error = event.error instanceof Error ? event.error : new Error(String(event.error ?? 'Unknown Codex background failure.'));
+      recordBackgroundFailure(codexRuntimeComponent, String(event.operation ?? 'codex-background-operation'), error, {
+        projectId,
+        decisionOsRoot: activeDecisionOsRoot,
+        ...(event.context && typeof event.context === 'object' ? event.context as AnyRecord : {}),
+      });
+    };
     if (activeDecisionOsRoot !== masterDecisionOsRoot) {
       readDecisionOsSettings({ action_payload: { decisionOsRoot: activeDecisionOsRoot }, runtime_state: projectRuntime });
     }
@@ -635,9 +664,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     });
     const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
-    recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
+    try {
+      recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
+    } catch (error) {
+      (projectRuntime.onCodexBackgroundError as (event: AnyRecord) => void)({
+        operation: 'recover-durable-codex-process-queue',
+        error,
+        context: { projectId, decisionOsRoot: activeDecisionOsRoot },
+      });
+    }
     const startupComponent = `codex-startup-${projectId}`;
-    const startupTask = pausedTaskProjects.has(projectId) || pausedBackgroundComponents.has(startupComponent) ? Promise.resolve() : reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).then(async (ownershipReconciliation) => {
+    const startupTask = pausedTaskProjects.has(projectId) || pausedBackgroundComponents.has(startupComponent) || projectRuntime.codexRuntimePaused === true ? Promise.resolve() : reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).then(async (ownershipReconciliation) => {
       if (ownershipReconciliation.ledgersChanged > 0) console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
       await resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
     }).catch((error: unknown) => {
@@ -804,8 +841,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       for (const projectId of new Set(federation?.remoteProjects().map((project) => project.localProjectId) ?? [])) federationTaskStateReplicator?.reconcileProject('relay', projectId);
     },
     onError: (error, context) => {
-      recordIncident({
-        scope: 'federation-connector',
+      recordStoppedOperation({
+        scope: `federation-operation:${context.operation}`,
         component: 'federation-node-connector',
         operation: context.operation,
         error,
@@ -849,24 +886,46 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       throw new Error(`content_object_sources_failed:${failures.join(',') || 'none-online'}`);
     },
   });
-  const projectSyncStore = createProjectSyncStore({ decisionOsRoot: masterDecisionOsRoot });
-  projectSyncController = createProjectSyncController({
-    masterRoot,
-    localNodeId: () => federation!.localOwner().ownerNodeId,
-    projects: projectCatalog,
-    catalog: projectCatalogStore,
-    federation: federation!,
-    store: projectSyncStore,
-    runtimeForProject: (project) => projectContext(project.decisionOsRoot, project.id).runtime,
-    gitSshCommand: () => projectSyncGitSshCommand(
-      readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings,
-    ),
-    onRunChange: (run) => {
-      controlRoomProjectionStore?.invalidate();
-      for (const client of globalContentEventClients) client.write(`event: project-sync-change\ndata: ${JSON.stringify({ syncId: run.syncId, phase: run.phase, preparationPhase: run.preparationPhase })}\n\n`);
-    },
-  });
-  projectSyncController.resume();
+  let projectSyncStore = createProjectSyncStore({ decisionOsRoot: masterDecisionOsRoot });
+  const installProjectSyncRuntime = (store = createProjectSyncStore({ decisionOsRoot: masterDecisionOsRoot })): void => {
+    if (store.corruptionError) throw store.corruptionError;
+    const controller = createProjectSyncController({
+      masterRoot,
+      localNodeId: () => federation!.localOwner().ownerNodeId,
+      projects: projectCatalog,
+      catalog: projectCatalogStore,
+      federation: federation!,
+      store: projectSyncStore,
+      runtimeForProject: (project) => projectContext(project.decisionOsRoot, project.id).runtime,
+      gitSshCommand: () => projectSyncGitSshCommand(
+        readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings,
+      ),
+      onRunChange: (run) => {
+        controlRoomProjectionStore?.invalidate();
+        for (const client of globalContentEventClients) client.write(`event: project-sync-change\ndata: ${JSON.stringify({ syncId: run.syncId, phase: run.phase, preparationPhase: run.preparationPhase })}\n\n`);
+      },
+      onBackgroundError: (error, context) => {
+        projectSyncController = null;
+        recordBackgroundFailure('project-sync-runtime', context.operation, error, context);
+      },
+    });
+    controller.resume();
+    projectSyncStore = store;
+    projectSyncController = controller;
+  };
+  resumeProjectSyncRuntime = installProjectSyncRuntime;
+  if (projectSyncStore.corruptionError) {
+    recordBackgroundFailure('project-sync-store', 'read-project-sync-store', projectSyncStore.corruptionError, { file: projectSyncStore.file });
+  } else if (!pausedBackgroundComponents.has('project-sync-store') && !pausedBackgroundComponents.has('project-sync-runtime')) {
+    installProjectSyncRuntime(projectSyncStore);
+  }
+  const activeProjectSyncController = (): NonNullable<typeof projectSyncController> => {
+    if (projectSyncController) return projectSyncController;
+    const incident = incidentLedger.active('background:project-sync-store')[0]
+      ?? incidentLedger.active('background:project-sync-runtime')[0];
+    if (incident) throw new RuntimeScopePausedError(incident.scope, incident.id);
+    throw new Error('Project synchronization runtime is unavailable.');
+  };
   Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
   controlRoomProjectionStore = createControlRoomProjectionStore({
     cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
@@ -901,8 +960,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     for (const [root, context] of projectContexts) {
       if (activeRoots.has(root)) continue;
-      context.watcher.close();
-      context.clients.clear();
+      disposeProjectContext(context);
       projectContexts.delete(root);
     }
     controlRoomProjectionStore?.reconcile(registered);
@@ -938,6 +996,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (component === 'federated-library-sync') await synchronizeFederatedLibraries();
           if (component === 'codex-process-scheduler') await scheduleGlobalCodexProcesses();
           if (component === 'federation-content-scheduler') await federationContentScheduler?.drain();
+          if (component === 'project-sync-store' || component === 'project-sync-runtime') {
+            if (!resumeProjectSyncRuntime) throw new Error('Project synchronization runtime is unavailable.');
+            resumeProjectSyncRuntime();
+          }
+          if (component.startsWith('codex-runtime:')) {
+            const projectId = component.slice('codex-runtime:'.length);
+            const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
+            const context = project ? projectContexts.get(project.decisionOsRoot) : null;
+            if (!project || !context) throw new Error(`Codex runtime ${projectId} is unavailable.`);
+            try {
+              recoverCodexProcessQueue(project.decisionOsRoot, context.runtime);
+              await reconcileCodexExecutionOwnership({ decisionOsRoot: project.decisionOsRoot, runtime: context.runtime });
+              await resumeCodexPipelineRuns({ decisionOsRoot: project.decisionOsRoot, runtime: context.runtime });
+              context.runtime.codexRuntimePaused = false;
+              await scheduleGlobalCodexProcesses();
+            } catch (error) {
+              context.runtime.codexRuntimePaused = true;
+              throw error;
+            }
+          }
           if (component.startsWith('codex-startup-')) {
             const projectId = component.slice('codex-startup-'.length);
             const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
@@ -956,7 +1034,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (project) {
           pausedProjectWatchers.delete(projectId);
           const context = projectContexts.get(project.decisionOsRoot);
-          context?.watcher.close();
+          if (context) disposeProjectContext(context);
           projectContexts.delete(project.decisionOsRoot);
           resumed = Boolean(tryProjectContext(project, 'operator-resume-project-runtime'));
         }
@@ -1203,6 +1281,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const incidentId = !abort.signal.aborted && !(error instanceof RangeError)
           ? recordStoppedOperation({
             scope: `node-message-execution:${requesterNodeId}`,
+            component: 'federation-node-message',
             operation: 'execute-node-message',
             error,
             context: { requesterNodeId },
@@ -1270,6 +1349,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const incidentId = !abort.signal.aborted && !(error instanceof RangeError) && !(error instanceof SyntaxError)
           ? recordStoppedOperation({
             scope: `node-message-dispatch:${targetNodeId}`,
+            component: 'federation-node-message',
             operation: 'dispatch-node-message',
             error,
             context: { targetNodeId },
@@ -1772,6 +1852,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (url === '/api/project-sync/role' && request.method === 'POST') {
       const bodyBuffer = await readRequestBuffer(request);
       response.setHeader('content-type', 'application/json');
+      activeProjectSyncController();
       try {
         const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
         const authenticatedNodeId = String(request.headers['x-decision-os-federation-node'] ?? '');
@@ -1814,6 +1895,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (url === '/api/project-sync/lock-release' && request.method === 'POST') {
       const bodyBuffer = await readRequestBuffer(request);
       response.setHeader('content-type', 'application/json');
+      activeProjectSyncController();
       try {
         const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
         if (!String(request.headers['x-decision-os-federation-node'] ?? '')) throw new Error('Federation participant authentication failed.');
@@ -1828,6 +1910,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (url === '/api/project-sync' && request.method === 'POST') {
       const bodyBuffer = await readRequestBuffer(request);
       response.setHeader('content-type', 'application/json');
+      const syncController = activeProjectSyncController();
       try {
         const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
         const sourceId = String(body.sourceProjectId ?? '');
@@ -1844,7 +1927,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const source = allProjects.find((entry) => String(entry.localProjectId ?? entry.id) === sourceId
           && (!sourceNodeId || String(entry.ownerNodeId) === sourceNodeId));
         if (!source) throw new Error('Unknown source project.');
-        const admitted = projectSyncController.start(source, String(body.idempotencyKey ?? request.headers['idempotency-key'] ?? sourceId));
+        const admitted = syncController.start(source, String(body.idempotencyKey ?? request.headers['idempotency-key'] ?? sourceId));
         response.statusCode = admitted.duplicate ? 200 : 202;
         response.end(JSON.stringify({
           ok: true,
@@ -1862,6 +1945,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (url === '/api/project-sync' && request.method === 'GET') {
+      activeProjectSyncController();
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: true, runs: projectSyncStore.list() }));
@@ -1870,8 +1954,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (url.startsWith('/api/project-sync/') && url.endsWith('/retry') && request.method === 'POST') {
       const syncId = decodeRouteSegment(url.slice('/api/project-sync/'.length, -'/retry'.length));
       response.setHeader('content-type', 'application/json');
+      const syncController = activeProjectSyncController();
       try {
-        const run = projectSyncController.retry(syncId);
+        const run = syncController.retry(syncId);
         response.statusCode = 202;
         response.end(JSON.stringify({ ok: true, run }));
       } catch (error) {
@@ -1881,6 +1966,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (url.startsWith('/api/project-sync/') && url !== '/api/project-sync/role' && url !== '/api/project-sync/repository-status' && request.method === 'GET') {
+      activeProjectSyncController();
       const syncId = decodeRouteSegment(url.slice('/api/project-sync/'.length));
       const run = projectSyncStore.read(syncId);
       response.setHeader('cache-control', 'no-store');
@@ -2135,6 +2221,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (url === '/api/codex/pipelines/runs' && request.method === 'POST') {
+      assertCodexRuntimeAvailable(requestRuntime);
       const bodyBuffer = await readRequestBuffer(request);
       const runPayload = (() => {
         try {
@@ -2166,6 +2253,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (url.startsWith('/api/codex/pipelines/runs/') && url.endsWith('/restart') && request.method === 'POST') {
+      assertCodexRuntimeAvailable(requestRuntime);
       const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length, -'/restart'.length));
       const result = await restartCodexPipelineRunController({ action_payload: { runId }, runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
@@ -2297,6 +2385,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (url === '/api/codex/skills/process' && request.method === 'POST') {
+      assertCodexRuntimeAvailable(requestRuntime);
       const bodyBuffer = await readRequestBuffer(request);
       const processPayload = (() => {
         try {
@@ -2315,6 +2404,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (url === '/api/codex/threads/process' && request.method === 'POST') {
+      assertCodexRuntimeAvailable(requestRuntime);
       const bodyBuffer = await readRequestBuffer(request);
       const processPayload = (() => {
         try {
@@ -2387,6 +2477,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (url.startsWith('/api/codex/skills/runs/') && url.endsWith('/continue') && request.method === 'POST') {
+      assertCodexRuntimeAvailable(requestRuntime);
       const bodyBuffer = await readRequestBuffer(request);
       const continuePayload = (() => {
         try {
@@ -2843,10 +2934,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   codexQueueScanTimer.unref?.();
   server.on('close', () => {
     clearInterval(codexQueueScanTimer);
-    for (const context of projectContexts.values()) {
-      context.watcher.close();
-      context.clients.clear();
-    }
+    for (const context of projectContexts.values()) disposeProjectContext(context);
     globalContentEventClients.clear();
     federation.stop();
     process.off('uncaughtException', onUncaughtException);
@@ -2855,6 +2943,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   server.on('listening', () => {
     const address = server.address();
     if (address && typeof address === 'object') federationServerPort = address.port;
+    incidentLedger.resolveScope('server-launcher', 'The server child started and opened its HTTP listener successfully.');
     federation.start();
   });
   server.on('error', (error: Error & { code?: string }) => {

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -54,6 +56,28 @@ test('persists mixed Codex work in FIFO order and recovers a claimed thread as a
   }
 });
 
+test('preserves a corrupt durable queue and rejects new work instead of replacing it', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-corrupt-process-queue-'));
+  const file = resolve(root, 'codex-process-queue.json');
+  const corruptBytes = '{not-json';
+  try {
+    writeFileSync(file, corruptBytes);
+    assert.throws(() => readCodexProcessQueue(root), (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'codex_process_queue_corrupt');
+      return true;
+    });
+    assert.throws(() => enqueueCodexThreadProcess({
+      decisionOsRoot: root,
+      id: 'run-a',
+      createdAt: new Date().toISOString(),
+      payload: { ledgerId: 'specs', cardId: 'card-a', runId: 'run-a', executionId: 'execution-a' },
+    }), /Could not read the durable Codex process queue/);
+    assert.equal(readFileSync(file, 'utf8'), corruptBytes);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('adopts a matching live process and ignores terminal output until the process exits', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-live-process-adoption-'));
   try {
@@ -97,6 +121,44 @@ test('adopts a matching live process and ignores terminal output until the proce
     assert.equal(((runtime.codexSkillRuns as Record<string, Record<string, unknown>>)['run-a']).status, 'running');
     removeCodexProcessQueueItem(root, 'run-a');
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('adopted process monitor reports callback failure and stops without an unhandled rejection', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-adopted-monitor-failure-'));
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => process.exit(0), 300)'], { stdio: 'ignore' });
+  try {
+    const stdoutFile = resolve(root, 'run-a.jsonl');
+    const stderrFile = resolve(root, 'run-a.log');
+    writeFileSync(stdoutFile, `${JSON.stringify({ type: 'turn.completed' })}\n`);
+    writeFileSync(stderrFile, '');
+    writeFileSync(resolve(root, 'state.json'), JSON.stringify({ ledgers: [{ id: 'specs', ledgerFile: '.decision-os/specs.json' }] }));
+    writeFileSync(resolve(root, 'specs.json'), JSON.stringify({ cards: [{ id: 'card-a', codexActiveRunId: 'run-a', codexActiveExecutionId: 'execution-a' }] }));
+    enqueueCodexThreadProcess({
+      decisionOsRoot: root,
+      id: 'run-a',
+      createdAt: '2026-07-15T08:00:00.000Z',
+      payload: { ledgerId: 'specs', cardId: 'card-a', runId: 'run-a', executionId: 'execution-a' },
+    });
+    markCodexProcessQueueItemRunning(root, 'run-a');
+    recordCodexProcessQueueItemProcess({ decisionOsRoot: root, id: 'run-a', processId: child.pid ?? 0, stdoutFile, stderrFile });
+    const failures: Array<{ operation: string; error: Error }> = [];
+    const runtime: Record<string, unknown> = {
+      onCodexRunSettled: () => { throw new Error('injected adopted settlement callback failure'); },
+      onCodexBackgroundError: (event: { operation: string; error: Error }) => failures.push(event),
+    };
+
+    recoverCodexProcessQueue(root, runtime);
+    await once(child, 'exit');
+    const deadline = Date.now() + 2_000;
+    while (failures.length === 0 && Date.now() < deadline) await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
+
+    assert.equal(failures[0]?.operation, 'publish-adopted-codex-settlement');
+    assert.match(failures[0]?.error.message ?? '', /injected adopted settlement callback failure/);
+    assert.deepEqual(readCodexProcessQueue(root), []);
+  } finally {
+    if (child.exitCode === null) child.kill('SIGKILL');
     rmSync(root, { recursive: true, force: true });
   }
 });
