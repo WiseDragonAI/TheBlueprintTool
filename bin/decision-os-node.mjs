@@ -4,6 +4,12 @@
  * WHY: Agents need a stable non-browser command for cross-node federation diagnostics.
  */
 import { readFile } from 'node:fs/promises';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+
+const discoveryTimeoutMs = 30_000;
+const nodeMessageTimeoutMs = 31 * 60_000;
+const maximumResponseBytes = 32 * 1024 * 1024;
 
 function usage() {
   process.stderr.write([
@@ -42,10 +48,54 @@ async function stdinText() {
   return value.trim();
 }
 
-async function responseJson(response) {
-  const text = await response.text();
-  try { return JSON.parse(text); }
-  catch { throw new Error(`Decision OS returned invalid JSON (HTTP ${response.status}).`); }
+function requestJson(target, options = {}) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(target);
+    const transport = url.protocol === 'https:' ? httpsRequest : httpRequest;
+    const body = String(options.body ?? '');
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      options.signal?.removeEventListener('abort', abort);
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const request = transport(url, {
+      method: options.method ?? 'GET',
+      headers: {
+        accept: 'application/json',
+        ...options.headers,
+        ...(body ? { 'content-length': Buffer.byteLength(body) } : {}),
+      },
+    }, (response) => {
+      const chunks = [];
+      let bytes = 0;
+      response.on('data', (chunk) => {
+        bytes += chunk.length;
+        if (bytes > maximumResponseBytes) {
+          request.destroy(new Error(`Decision OS response exceeds ${maximumResponseBytes} bytes.`));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.once('error', (error) => finish(error));
+      response.once('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        try {
+          finish(null, { ok: response.statusCode >= 200 && response.statusCode < 300, status: response.statusCode, body: JSON.parse(text) });
+        } catch {
+          finish(new Error(`Decision OS returned invalid JSON (HTTP ${response.statusCode}).`));
+        }
+      });
+    });
+    const abort = () => request.destroy(new Error('Decision OS node request was cancelled.'));
+    options.signal?.addEventListener('abort', abort, { once: true });
+    request.setTimeout(options.timeoutMs, () => request.destroy(new Error(`Decision OS node request exceeded ${options.timeoutMs}ms.`)));
+    request.once('error', (error) => finish(error));
+    request.end(body || undefined);
+    if (options.signal?.aborted) abort();
+  });
 }
 
 const command = process.argv[2];
@@ -55,8 +105,8 @@ const server = String(options.server ?? process.env.DECISION_OS_URL ?? 'http://1
 
 try {
   if (command === 'nodes') {
-    const response = await fetch(`${server}/api/federation/nodes`, { headers: { accept: 'application/json' } });
-    const body = await responseJson(response);
+    const response = await requestJson(`${server}/api/federation/nodes`, { timeoutMs: discoveryTimeoutMs });
+    const body = response.body;
     if (!response.ok || body.ok !== true) throw new Error(String(body.error ?? `Node discovery failed with HTTP ${response.status}.`));
     if (options.json) process.stdout.write(`${JSON.stringify(body, null, 2)}\n`);
     else {
@@ -76,7 +126,7 @@ try {
     const onSignal = () => controller.abort();
     process.once('SIGINT', onSignal);
     process.once('SIGTERM', onSignal);
-    const response = await fetch(`${server}/api/federation/nodes/${encodeURIComponent(nodeId)}/messages`, {
+    const response = await requestJson(`${server}/api/federation/nodes/${encodeURIComponent(nodeId)}/messages`, {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -86,8 +136,9 @@ try {
         ...(options.effort ? { codexEffort: options.effort } : {}),
       }),
       signal: controller.signal,
+      timeoutMs: nodeMessageTimeoutMs,
     });
-    const body = await responseJson(response);
+    const body = response.body;
     if (!response.ok || body.ok !== true) throw new Error(String(body.error ?? `Node message failed with HTTP ${response.status}.`));
     process.stdout.write(options.json ? `${JSON.stringify(body, null, 2)}\n` : `${body.answer}\n`);
   }
