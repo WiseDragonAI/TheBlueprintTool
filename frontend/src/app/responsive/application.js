@@ -14,6 +14,7 @@ import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProje
 import { projectSettingsValues, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
 import { isCardEditingKeyboardTarget } from '/src/runtime/input/helper/is-card-editing-keyboard-target.js';
 import { committedProjectColor, hexToHsv, hsvToHex, projectColorPickerGradients } from './project-color-picker.js';
+import { taskFamilyCardAccent, taskFamilyCardIds } from '/src/runtime/ledger/helper/task-family-accent.js';
 import { codexProcessLimitRange, loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit } from './codex-settings.js';
 import { loadFederationSettings, saveFederationSettings } from './federation-settings.js';
 import { hydrateFederationForm } from './federation-form-hydration.js';
@@ -277,7 +278,12 @@ function closeCardDetail(options) {
   return closeMobileThread(options);
 }
 
-function openCardDetail(card) {
+function responsiveCardAccent(card, fallback = state.activeZoneColor || defaultAccent, taskIds) {
+  const projectColor = state.projects.find((project) => project.id === state.resourceProjectId)?.color || defaultAccent;
+  return taskFamilyCardAccent({ ledger: state.ledger, cardId: String(card?.id || ''), projectColor, taskIds }) || fallback;
+}
+
+function openCardDetail(card, cardAccent = responsiveCardAccent(card)) {
   const nextIdentity = cardPresentationIdentity(currentRouteSnapshot());
   const routeEntry = nextIdentity !== presentedCardIdentity;
   const subtask = (state.ledger.relationships ?? []).some((relationship) => (
@@ -287,7 +293,7 @@ function openCardDetail(card) {
   setMobileCodexContext({ projectId: state.resourceProjectId, ledgerId: state.activeLedgerId, cardId: state.activeCardId });
   setView('card-view');
   if (routeEntry) {
-    if (window.matchMedia?.('(min-width: 761px)').matches === true) openMobileThread(card, state.activeZoneColor || 'var(--accent)');
+    if (window.matchMedia?.('(min-width: 761px)').matches === true) openMobileThread(card, cardAccent);
     else closeMobileThread({ fromHistory: true });
   }
   presentedCardIdentity = nextIdentity;
@@ -2169,6 +2175,7 @@ function ledgerZones() {
 
 function renderCards(cards) {
   const query = state.query.trim().toLocaleLowerCase();
+  const taskIds = taskFamilyCardIds(state.ledger);
   const filtered = cards.filter((card) => {
     if (!query) return true;
     if (card.serverMatch === true) return true;
@@ -2183,8 +2190,9 @@ function renderCards(cards) {
     const title = document.createElement('h2');
     title.textContent = asText(card.title).trim() || `Card ${card.id}`;
     copy.append(title);
-    button.style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
-    button.style.setProperty('--accent', state.activeZoneColor || defaultAccent);
+    const cardAccent = responsiveCardAccent(card, state.activeZoneColor || defaultAccent, taskIds);
+    button.style.setProperty('--zone-color', cardAccent);
+    button.style.setProperty('--accent', cardAccent);
     const arrow = document.createElement('span');
     arrow.className = 'card-row-arrow';
     arrow.setAttribute('aria-hidden', 'true');
@@ -2292,6 +2300,7 @@ function initializeMobileCarousels(root) {
 
 function renderCard(card) {
   state.activeCardId = asText(card.id);
+  const cardAccent = responsiveCardAccent(card);
   elements['card-title'].textContent = asText(card.title).trim() || `Card ${card.id}`;
   const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' ? card.imageSizes : {};
   const markdown = ledgerCardBody(card);
@@ -2553,9 +2562,9 @@ function renderCard(card) {
     elements['card-body'].replaceChildren(overview, ...(persistenceFailure ? [persistenceFailure] : []), content);
   } else elements['card-body'].replaceChildren(...(persistenceFailure ? [persistenceFailure] : []), content);
   initializeMobileCarousels(elements['card-body']);
-  elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
-  elements['card-view'].style.setProperty('--accent', state.activeZoneColor || defaultAccent);
-  openCardDetail(card);
+  elements['card-view'].style.setProperty('--zone-color', cardAccent);
+  elements['card-view'].style.setProperty('--accent', cardAccent);
+  openCardDetail(card, cardAccent);
   document.title = `${elements['card-title'].textContent} · ${state.projectName}`;
 }
 

@@ -1,16 +1,19 @@
 import { state } from '../../state.js';
 import { clampReadableHsvColor } from '../../card/effect/render-card-zone-colors.js';
 import { resolveLedgerCardZone } from './resolve-ledger-card-zone.js';
+import { taskFamilyCardIds } from './task-family-accent.js';
 
 export type ZoneAttribution = {
   zoneId: string;
   zoneColor: string;
   readableColor: string;
+  colorSource?: 'project' | 'zone';
 };
 
 export type ZoneAttributionCache = {
   activeTab: string;
   ledger: unknown;
+  projectColor: string;
   cardById: Record<string, ZoneAttribution | null>;
   zoneById: Record<string, { color: string; readableColor: string; geometrySignature: string }>;
   cardIdsByZoneId: Record<string, string[]>;
@@ -30,9 +33,11 @@ function readableColorFor(color: string): string {
   return clampReadableHsvColor(color) ?? color;
 }
 
-export function buildZoneAttributionCache(ledger: Record<string, unknown> | null, activeTab: string): ZoneAttributionCache {
+export function buildZoneAttributionCache(ledger: Record<string, unknown> | null, activeTab: string, projectColor = String(state.projectColor ?? '')): ZoneAttributionCache {
   const cards = Array.isArray(ledger?.cards) ? ledger.cards as Array<Record<string, unknown>> : [];
   const zones = regularZones(ledger?.annotations);
+  const projectTaskIds = taskFamilyCardIds(ledger);
+  const normalizedProjectColor = projectColor.trim();
   const zoneById: ZoneAttributionCache['zoneById'] = {};
   const cardById: ZoneAttributionCache['cardById'] = {};
   const cardIdsByZoneId: ZoneAttributionCache['cardIdsByZoneId'] = {};
@@ -55,6 +60,15 @@ export function buildZoneAttributionCache(ledger: Record<string, unknown> | null
     const zone = resolveLedgerCardZone(card, zones);
     const zoneId = String(zone?.id ?? '');
     const zoneRecord = zoneId ? zoneById[zoneId] : undefined;
+    if (projectTaskIds.has(cardId) && normalizedProjectColor) {
+      cardById[cardId] = {
+        zoneId,
+        zoneColor: normalizedProjectColor,
+        readableColor: readableColorFor(normalizedProjectColor),
+        colorSource: 'project'
+      };
+      continue;
+    }
     if (!zoneRecord) {
       cardById[cardId] = null;
       continue;
@@ -62,13 +76,14 @@ export function buildZoneAttributionCache(ledger: Record<string, unknown> | null
     const attribution = {
       zoneId,
       zoneColor: zoneRecord.color,
-      readableColor: zoneRecord.readableColor
+      readableColor: zoneRecord.readableColor,
+      colorSource: 'zone' as const
     };
     cardById[cardId] = attribution;
     cardIdsByZoneId[zoneId].push(cardId);
   }
 
-  return { activeTab, ledger, cardById, zoneById, cardIdsByZoneId };
+  return { activeTab, ledger, projectColor: normalizedProjectColor, cardById, zoneById, cardIdsByZoneId };
 }
 
 export function refreshZoneAttributionCache(reason = 'refresh'): ZoneAttributionCache | null {
@@ -87,7 +102,8 @@ export function refreshZoneAttributionCache(reason = 'refresh'): ZoneAttribution
 
 export function ensureZoneAttributionCache(reason = 'ensure'): ZoneAttributionCache | null {
   const cache = state.zoneAttributionCache as ZoneAttributionCache | null;
-  if (cache && cache.activeTab === state.activeTab && cache.ledger === state.activeLedger) return cache;
+  const projectColor = String(state.projectColor ?? '').trim();
+  if (cache && cache.activeTab === state.activeTab && cache.ledger === state.activeLedger && cache.projectColor === projectColor) return cache;
   return refreshZoneAttributionCache(reason);
 }
 
@@ -95,6 +111,7 @@ export function applyZoneAttributionToCardElement(element: HTMLElement, attribut
   if (!attribution) {
     delete element.dataset.cardZoneId;
     delete element.dataset.cardZoneColor;
+    delete element.dataset.cardAccentSource;
     element.style.removeProperty('--card-zone-color');
     element.style.removeProperty('--card-code-color');
     element.style.removeProperty('--card-readable-color');
@@ -102,6 +119,7 @@ export function applyZoneAttributionToCardElement(element: HTMLElement, attribut
   }
   element.dataset.cardZoneId = attribution.zoneId;
   element.dataset.cardZoneColor = attribution.zoneColor;
+  element.dataset.cardAccentSource = attribution.colorSource ?? 'zone';
   element.style.setProperty('--card-zone-color', attribution.zoneColor);
   element.style.setProperty('--card-code-color', attribution.readableColor);
   element.style.setProperty('--card-readable-color', attribution.readableColor);
@@ -115,7 +133,8 @@ export function normalizeZoneAttribution(input: ZoneAttribution | Record<string,
   return {
     zoneId: record.id,
     zoneColor: record.color,
-    readableColor: readableColorFor(record.color)
+    readableColor: readableColorFor(record.color),
+    colorSource: 'zone'
   };
 }
 
@@ -126,7 +145,7 @@ export function previewCachedZoneColor(zoneId: string, color: string): void {
   cache.zoneById[zoneId] = { ...cache.zoneById[zoneId], color, readableColor };
   const cardIds = cache.cardIdsByZoneId[zoneId] ?? [];
   for (const cardId of cardIds) {
-    const attribution = { zoneId, zoneColor: color, readableColor };
+    const attribution = { zoneId, zoneColor: color, readableColor, colorSource: 'zone' as const };
     cache.cardById[cardId] = attribution;
     const element = document.querySelector(`[data-card-id="${CSS.escape(cardId)}"].ledger-node`) as HTMLElement | null;
     if (element) applyZoneAttributionToCardElement(element, attribution);
