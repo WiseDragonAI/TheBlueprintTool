@@ -4,6 +4,7 @@
  */
 import { content } from '../../dom.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
+import { runOptimisticActiveLedgerMutation } from '../../ledger/effect/run-optimistic-active-ledger-mutation.js';
 import { createLedgerObjectId } from '../../ledger/helper/create-ledger-object-id.js';
 import { createLedgerZoneAnnotation } from '../../ledger/helper/create-ledger-zone-annotation.js';
 import { state } from '../../state.js';
@@ -16,14 +17,28 @@ export async function createZoneFromRect(rect: { x: number; y: number; width: nu
   const zoneId = createLedgerObjectId('zone');
   // WHAT: Insert and render the zone immediately when ledger state owns the canvas.
   // WHY: The operator should not wait for a server round trip before seeing the drawn record.
+  if (state.activeLedger && state.canvasMode === 'ledger') {
+    const annotation = createLedgerZoneAnnotation({ id: zoneId, rect, color: state.zoneColor });
+    const previousSelection = structuredClone(state.selection);
+    state.selection = { cardIds: [], zoneIds: [zoneId], groupIds: [] };
+    await runOptimisticActiveLedgerMutation({
+      mutation: { action: 'create-zone', annotation },
+      apply: (ledger) => {
+        ledger.annotations = (ledger.annotations ?? []).filter((entry: Record<string, unknown>) => String(entry.id ?? '') !== zoneId).concat(structuredClone(annotation));
+      },
+      render: (outcome) => {
+        if (outcome === 'rejected') state.selection = previousSelection;
+        refreshZoneAttributionCache(`optimistic-create-zone:${outcome}`);
+        telemetry('render-zone-layer', { created: zoneId, activeTab: state.activeTab, authority: 'optimistic-client', outcome });
+        renderCanvasSurface({ renderThreadPanel: false });
+      },
+    });
+    return;
+  }
   if (state.activeLedger) {
     const annotation = createLedgerZoneAnnotation({ id: zoneId, rect, color: state.zoneColor });
     insertActiveLedgerAnnotation(annotation);
-    refreshZoneAttributionCache('optimistic-create-zone');
-    state.selection = { cardIds: [], zoneIds: [zoneId], groupIds: [] };
-    telemetry('render-zone-layer', { created: zoneId, activeTab: state.activeTab, authority: 'optimistic-client' });
-    renderCanvasSurface({ renderThreadPanel: false });
-    await commitActiveLedgerMutation({ action: 'create-zone', annotation });
+    await commitActiveLedgerMutation({ action: 'create-zone', annotation }, { render: true });
     return;
   }
   const zone = document.createElement('article');

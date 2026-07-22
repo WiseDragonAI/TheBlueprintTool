@@ -112,7 +112,8 @@ test('parks and restores master tasks through the shared card status mutation', 
   assert.match(mobile, /delayButton\.textContent = backlog \? 'Restore to queue' : 'Move to backlog'/);
   assert.doesNotMatch(mobile, /Park task|Parking task/);
   assert.match(mobile, /const nextStatus = backlog \? 'todo' : 'backlog'/);
-  assert.match(mobile, /ledgerMutation\(state\.activeLedgerId, \{ action: 'transition-card-lifecycle', cardId: card\.id, lifecycleStatus: nextStatus \}\)/);
+  assert.match(mobile, /runResponsiveLedgerTransaction\(\{[\s\S]*action: 'transition-card-lifecycle', cardId: card\.id, lifecycleStatus: nextStatus/);
+  assert.match(mobile, /applyTaskIntentLocally\(task, \{ kind: 'lifecycle', lifecycleStatus: nextStatus \}\)/);
   assert.match(mobile, /controlRoomPath\(nextStatus === 'backlog' \? 'backlog' : 'queue'\)/);
   assert.match(mobile, /backlog: 'No backlog tasks'/);
 });
@@ -192,7 +193,8 @@ test('persists optimistic Queue and Backlog placement and reconciles rejected ch
   const persistence = mobile.slice(mobile.indexOf('async function persistControlTaskPlacement'), mobile.indexOf('async function activateMasterTask'));
   assert.match(persistence, /state\.controlRoom\[sourceTab\] = source\.filter/);
   assert.match(persistence, /target\.splice\(insertionIndex, 0, task\)/);
-  assert.match(persistence, /cardId: task\.cardId,[\s\S]*lifecycleStatus: targetTab === 'backlog' \? 'backlog' : 'todo'/);
+  assert.match(persistence, /const lifecycleStatus = targetTab === 'backlog' \? 'backlog' : 'todo'/);
+  assert.match(persistence, /cardId: task\.cardId,[\s\S]*lifecycleStatus/);
   assert.match(persistence, /if \(targetTab === 'queue'\) target\.sort\(compareControlRoomQueueTasks\)/);
   assert.match(persistence, /catch \(error\)[\s\S]*await loadControlRoom\(\{ force: true \}\)[\s\S]*renderControlRoom\(\)/);
   assert.match(mobile, /dataset\.controlColumnList !== 'exec'/);
@@ -405,7 +407,7 @@ test('offers manual and configured-pipeline completion from the master-task deta
   assert.match(mobile, /pipelineCompleteButton\.disabled = card\.status === 'done' \|\| !configured/);
   assert.match(mobile, /navigate\(controlRoomPath\('exec'\), true\)/);
   assert.match(mobile, /overview\.append\(status, heading, subtasks, completion\)/);
-  assert.match(mobile, /elements\['card-body'\]\.replaceChildren\(overview, content\)/);
+  assert.match(mobile, /elements\['card-body'\]\.replaceChildren\(overview, \.\.\.\(persistenceFailure \? \[persistenceFailure\] : \[\]\), content\)/);
   assert.doesNotMatch(mobile, /complete-master-subtask|masterTaskId=|Mark task as done/);
   assert.match(styles, /\.complete-master-task-button \{ width: 100%; min-height: 52px;/);
   assert.match(styles, /\.master-task-completion-actions \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 12px;/);

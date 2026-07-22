@@ -22,6 +22,8 @@ import { installProjectRequestScope, projectScopedRequestPath } from '/src/runti
 import { projectFilterChipPresentation, projectFilterGroups, projectFilterIncludes } from './project-filter-chip.js';
 import { acceptedRunOwnsRoute, captureRouteSnapshot, cardPresentationIdentity, federationEventOwnsCard, sameRouteSnapshot } from './navigation-ownership.js';
 import { completedTaskLabels, filterCompletedTasks } from './completed-tasks.js';
+import { createOptimisticLedgerTransactionCoordinator } from '/src/runtime/ledger/helper/optimistic-ledger-transaction.js';
+import { applyTaskIntentToProjection, taskIdentity, taskIntentConfirmed } from './optimistic-task-projection.js';
 
 installProjectRequestScope();
 
@@ -60,7 +62,8 @@ const elements = Object.fromEntries([
   'done-view', 'done-summary', 'done-search', 'done-sort', 'done-project-filter-group', 'done-project-filters',
   'done-label-filter-group', 'done-label-filters', 'done-task-list', 'done-empty',
   'federation-connection-status', 'federation-state-duration', 'federation-attempt-timeout', 'federation-last-connection',
-  'federation-last-issue', 'federation-peer-list', 'federation-settings-message'
+  'federation-last-issue', 'federation-peer-list', 'federation-settings-message',
+  'mutation-error', 'mutation-error-message'
 ].map((id) => [id, document.getElementById(id)]));
 
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
@@ -117,6 +120,7 @@ let routeLoadGeneration = 0;
 let routeLoadController = null;
 let codexSettingsRequest = null;
 const optimisticExecutionIntents = new Map();
+const optimisticTaskIntents = new Map();
 
 function currentRouteSnapshot() {
   return captureRouteSnapshot(location, parseProjectScope);
@@ -593,7 +597,15 @@ async function loadProjectDirectory(path = '.') {
   }
 }
 
-async function ledgerMutation(ledgerId, mutation, projectId = state.resourceProjectId, replicaNodeId = '') {
+function responsiveLedgerScope({ projectId = state.resourceProjectId, replicaNodeId = currentRouteSnapshot().replicaNodeId, ledgerId = state.activeLedgerId } = {}) {
+  return { projectId: String(projectId || ''), replicaNodeId: String(replicaNodeId || ''), ledgerId: String(ledgerId || '') };
+}
+
+function responsiveLedgerScopeKey(scope) {
+  return JSON.stringify(responsiveLedgerScope(scope));
+}
+
+async function requestLedgerMutation(ledgerId, mutation, projectId, replicaNodeId) {
   const response = await projectFetch(`/decision-os/${encodeURIComponent(ledgerId)}`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
@@ -601,7 +613,59 @@ async function ledgerMutation(ledgerId, mutation, projectId = state.resourceProj
   }, projectId, replicaNodeId);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
-  if (!payload?.ok || projectId !== state.resourceProjectId || ledgerId !== state.activeLedgerId || !state.ledger) return payload;
+  return payload;
+}
+
+const responsiveLedgerTransactions = createOptimisticLedgerTransactionCoordinator({
+  read: () => state.ledger,
+  write: (ledger) => { state.ledger = ledger; },
+  isScopeActive: (scopeKey) => {
+    const scope = JSON.parse(scopeKey);
+    return scope.projectId === state.resourceProjectId
+      && scope.replicaNodeId === currentRouteSnapshot().replicaNodeId
+      && scope.ledgerId === state.activeLedgerId;
+  },
+  persist: async (scopeKey, mutation) => {
+    const scope = JSON.parse(scopeKey);
+    try {
+      const mutations = Array.isArray(mutation) ? mutation : [mutation];
+      const applied = [];
+      try {
+        for (const entry of mutations) {
+          await requestLedgerMutation(scope.ledgerId, entry, scope.projectId, scope.replicaNodeId);
+          applied.push(entry);
+        }
+      } catch (error) {
+        const createdCard = applied.find((entry) => entry.action === 'create-card')?.card;
+        if (createdCard?.id) {
+          await requestLedgerMutation(scope.ledgerId, { action: 'delete-card', cardId: createdCard.id }, scope.projectId, scope.replicaNodeId).catch(() => undefined);
+        }
+        throw error;
+      }
+      const response = await projectFetch(`/api/ledgers/${encodeURIComponent(scope.ledgerId)}/canvas`, { cache: 'no-store' }, scope.projectId, scope.replicaNodeId);
+      const confirmed = await response.json().catch(() => null);
+      if (!response.ok || !confirmed || typeof confirmed !== 'object' || Array.isArray(confirmed)) {
+        console.error(`Ledger confirmation refresh failed with HTTP ${response.status}; the accepted mutation remains optimistic.`);
+        return { ok: true };
+      }
+      return { ok: true, confirmed };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  },
+});
+
+function runResponsiveLedgerTransaction({ mutation, apply, scope = responsiveLedgerScope(), render, onRejected }) {
+  return responsiveLedgerTransactions.run({ scope: responsiveLedgerScopeKey(scope), mutation, apply, render, onRejected });
+}
+
+async function ledgerMutation(ledgerId, mutation, projectId = state.resourceProjectId, replicaNodeId = currentRouteSnapshot().replicaNodeId) {
+  const payload = await requestLedgerMutation(ledgerId, mutation, projectId, replicaNodeId);
+  if (!payload?.ok
+    || projectId !== state.resourceProjectId
+    || replicaNodeId !== currentRouteSnapshot().replicaNodeId
+    || ledgerId !== state.activeLedgerId
+    || !state.ledger) return payload;
   if (payload.changedCard) {
     const cards = Array.isArray(state.ledger.cards) ? state.ledger.cards : [];
     state.ledger.cards = cards.some((card) => String(card.id) === String(payload.changedCard.id))
@@ -697,8 +761,19 @@ async function createProject(name, description, directory) {
 async function createZone(name, color) {
   const rect = nextZoneRect();
   const annotation = { id: objectId('zone'), ...rect, color, label: name, comments: [] };
-  state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'create-zone', annotation });
-  navigate(zonePath(state.activeLedgerId, annotation.id));
+  const previousPath = `${location.pathname}${location.search}${location.hash}`;
+  const destination = zonePath(state.activeLedgerId, annotation.id);
+  const committed = runResponsiveLedgerTransaction({
+    mutation: { action: 'create-zone', annotation },
+    apply: (ledger) => {
+      ledger.annotations = (ledger.annotations ?? []).filter((entry) => String(entry.id) !== annotation.id).concat(structuredClone(annotation));
+    },
+    onRejected: () => {
+      if (location.pathname === new URL(destination, location.origin).pathname) navigate(previousPath, true);
+    },
+  });
+  navigate(destination);
+  if (!await committed) throw new Error('Zone creation failed and was restored.');
 }
 
 async function createCard(name, description) {
@@ -706,12 +781,11 @@ async function createCard(name, description) {
   if (!zone || zone.id === 'ungrouped') throw new Error('Choose a canvas zone before creating a card.');
   const { rect, requiredZoneHeight } = nextCardRect(zone);
   const currentHeight = Number(zone.height ?? zone.h ?? 0);
-  if (requiredZoneHeight > currentHeight) {
-    state.ledger = await ledgerMutation(state.activeLedgerId, {
+  const mutations = [{ action: 'create-card', card: null }];
+  if (requiredZoneHeight > currentHeight) mutations.push({
       action: 'patch-geometry',
       geometry: { zones: { [zone.id]: { x: Number(zone.x ?? 0), y: Number(zone.y ?? 0), width: Number(zone.width ?? zone.w ?? 1200), height: requiredZoneHeight } } }
-    });
-  }
+  });
   const card = {
     id: objectId('card'),
     title: name,
@@ -726,9 +800,27 @@ async function createCard(name, description) {
     facts: [],
     fields: []
   };
-  state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'create-card', card });
+  mutations[0].card = card;
+  const scope = responsiveLedgerScope();
+  const previousPath = `${location.pathname}${location.search}${location.hash}`;
+  const destination = cardPath(state.activeLedgerId, state.activeZoneId, card.id);
+  const committed = runResponsiveLedgerTransaction({
+    scope,
+    mutation: mutations,
+    apply: (ledger) => {
+      ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id) !== card.id).concat(structuredClone(card));
+      if (requiredZoneHeight > currentHeight) {
+        const annotation = (ledger.annotations ?? []).find((entry) => String(entry.id) === String(zone.id));
+        if (annotation) annotation.height = requiredZoneHeight;
+      }
+    },
+    onRejected: () => {
+      if (location.pathname === new URL(destination, location.origin).pathname) navigate(previousPath, true);
+    },
+  });
   syncMobileThreadContext({ projectId: state.resourceProjectId, replicaNodeId: currentRouteSnapshot().replicaNodeId, ledgerId: state.activeLedgerId, ledger: state.ledger, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
-  navigate(cardPath(state.activeLedgerId, state.activeZoneId, card.id));
+  navigate(destination);
+  if (!await committed) throw new Error('Card creation failed and was restored.');
 }
 
 async function submitCreation() {
@@ -1216,10 +1308,6 @@ function filteredControlTasks(tab = state.controlTab) {
   return state.controlFilter === 'All' ? projectTasks : projectTasks.filter((task) => task.ledgerId === state.controlFilter);
 }
 
-function taskIdentity(task) {
-  return [task.projectId, task.ledgerId, task.cardId].map((part) => encodeURIComponent(String(part))).join('--');
-}
-
 function destroyQueueSortables() {
   queueSortables.forEach((sortable) => sortable.destroy());
   queueSortables = [];
@@ -1675,6 +1763,37 @@ function persistControlRoomScrollAnchor() {
   });
 }
 
+function applyTaskIntentLocally(task, intent) {
+  if (!state.controlRoom || !task) return;
+  const identity = taskIdentity(task);
+  optimisticTaskIntents.set(identity, { ...intent, task: structuredClone(task), acknowledged: false });
+  applyTaskIntentToProjection(state.controlRoom, identity, optimisticTaskIntents.get(identity));
+  if (Array.isArray(state.controlRoom.queue)) state.controlRoom.queue.sort(compareControlRoomQueueTasks);
+}
+
+function acknowledgeTaskIntent(identity) {
+  const intent = optimisticTaskIntents.get(identity);
+  if (intent) intent.acknowledged = true;
+}
+
+function rejectTaskIntent(identity, error) {
+  if (identity) optimisticTaskIntents.delete(identity);
+  elements['mutation-error-message'].textContent = error instanceof Error ? error.message : 'The task change was rejected and confirmed state was restored.';
+  elements['mutation-error'].hidden = false;
+  void loadControlRoom({ force: true }).then(() => {
+    if (location.pathname === '/done') renderDone();
+    else if (location.pathname === '/') renderControlRoom();
+  }).catch((cause) => console.error('Task mutation reconciliation failed.', cause ?? error));
+}
+
+document.querySelector('.mutation-error-retry').addEventListener('click', () => {
+  elements['mutation-error'].hidden = true;
+  void loadControlRoom({ force: true }).then(() => location.pathname === '/done' ? renderDone() : renderControlRoom()).catch((error) => {
+    elements['mutation-error-message'].textContent = error instanceof Error ? error.message : 'Confirmed task state is still unavailable.';
+    elements['mutation-error'].hidden = false;
+  });
+});
+
 async function loadControlRoom({ force = false, deferDuringQueueDrag = false, owner = null } = {}) {
   const response = await fetch('/api/control-room', { cache: 'no-store', signal: owner?.signal, headers: !force && controlRoomEtag ? { 'if-none-match': controlRoomEtag } : {} });
   if (owner) requireRouteOwnership(owner);
@@ -1691,6 +1810,14 @@ async function loadControlRoom({ force = false, deferDuringQueueDrag = false, ow
     for (const column of ['queue', 'exec', 'backlog']) nextControlRoom[column] = (nextControlRoom[column] ?? []).filter((candidate) => taskIdentity(candidate) !== identity);
     nextControlRoom.exec = [{ ...task, ...intent }, ...(nextControlRoom.exec ?? [])];
     nextControlRoom.allTasks = (nextControlRoom.allTasks ?? []).filter((candidate) => taskIdentity(candidate) !== identity).concat({ ...task, ...intent });
+  }
+  for (const [identity, intent] of optimisticTaskIntents) {
+    const serverTask = (nextControlRoom.allTasks ?? []).find((task) => taskIdentity(task) === identity);
+    if (taskIntentConfirmed(intent, serverTask)) {
+      optimisticTaskIntents.delete(identity);
+      continue;
+    }
+    applyTaskIntentToProjection(nextControlRoom, identity, { ...intent, task: serverTask ?? intent.task });
   }
   if (Array.isArray(nextControlRoom.queue)) nextControlRoom.queue.sort(compareControlRoomQueueTasks);
   if (owner) requireRouteOwnership(owner);
@@ -1767,14 +1894,19 @@ async function persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIn
   if (targetTab === 'queue') target.sort(compareControlRoomQueueTasks);
   const canonical = state.controlRoom.allTasks.find((candidate) => taskIdentity(candidate) === taskId);
   if (canonical) canonical.status = task.status;
+  const lifecycleStatus = targetTab === 'backlog' ? 'backlog' : 'todo';
+  optimisticTaskIntents.set(taskId, { kind: 'lifecycle', lifecycleStatus, task: structuredClone(task), acknowledged: false });
   renderControlRoom();
   try {
     await ledgerMutation(task.ledgerId, {
       action: 'transition-card-lifecycle',
       cardId: task.cardId,
-      lifecycleStatus: targetTab === 'backlog' ? 'backlog' : 'todo'
+      lifecycleStatus
     }, task.projectId, task.ownerNodeId);
+    acknowledgeTaskIntent(taskId);
+    void loadControlRoom({ force: true }).then(renderControlRoom).catch((error) => console.error('Task placement confirmation failed.', error));
   } catch (error) {
+    optimisticTaskIntents.delete(taskId);
     await loadControlRoom({ force: true });
     renderControlRoom();
     console.error('Task placement persistence failed.', error);
@@ -1816,6 +1948,26 @@ async function createTaskIntake(projectId, replicaNodeId) {
   ledger.cards = [...(ledger.cards ?? []), { ...card, replicationState: 'local-only', persistenceState: 'creating' }];
   ledger.threadFiles = { ...(ledger.threadFiles ?? {}), [`thread-${cardId}`]: `.decision-os/threads/tasks/thread-${cardId}.md` };
   ledger.notes = { ...(ledger.notes ?? {}), [`thread-${cardId}`]: [] };
+  const optimisticTask = {
+    projectId,
+    projectName: state.projectName,
+    projectColor,
+    ownerNodeId: replicaNodeId,
+    ledgerId: ledgerRef.id,
+    ledgerTitle: ledgerRef.title,
+    cardId,
+    zoneId: zone.id,
+    title: card.title,
+    cardStatus: 'todo',
+    status: 'task-waiting',
+    labels: [],
+    masterTask: true,
+    subtasks: [],
+    complete: 0,
+    valid: true,
+  };
+  if (state.controlRoom) applyTaskIntentLocally(optimisticTask, { kind: 'lifecycle', lifecycleStatus: 'todo' });
+  const optimisticIdentity = taskIdentity(optimisticTask);
   state.activeZoneId = zone.id;
   state.activeZoneColor = zone.color;
   state.activeCardId = cardId;
@@ -1829,11 +1981,17 @@ async function createTaskIntake(projectId, replicaNodeId) {
     onQuickVoiceSubmitted: navigateVoiceSubmission
   });
   navigate(replicaAddress(cardPathForProject(projectId, ledgerRef.id, zone.id, cardId), replicaNodeId));
-  void ledgerMutation(ledgerRef.id, { action: 'create-task-intake', annotation: zone, card }, projectId, replicaNodeId).catch((cause) => {
+  void ledgerMutation(ledgerRef.id, { action: 'create-task-intake', annotation: zone, card }, projectId, replicaNodeId).then(() => {
+    acknowledgeTaskIntent(optimisticIdentity);
+    void loadControlRoom({ force: true }).catch((error) => console.error('Task intake confirmation failed.', error));
+  }).catch((cause) => {
+    optimisticTaskIntents.delete(optimisticIdentity);
     const localCard = state.ledger?.cards?.find((entry) => String(entry.id) === cardId);
     if (!localCard) return;
     localCard.persistenceState = 'failed';
     localCard.persistenceError = cause instanceof Error ? cause.message : 'Task creation failed.';
+    if (state.activeCardId === cardId) renderCard(localCard);
+    void loadControlRoom({ force: true }).catch((error) => console.error('Task intake rollback refresh failed.', error));
   });
 }
 
@@ -2220,6 +2378,38 @@ function renderCard(card) {
     onQuestionnairesChange: persistCardQuestionnaires,
     onGitReviewNotesChange: persistGitReviewNotes
   });
+  const persistenceFailure = card.persistenceState === 'failed' ? document.createElement('section') : null;
+  if (persistenceFailure) {
+    persistenceFailure.className = 'task-persistence-error';
+    persistenceFailure.setAttribute('role', 'alert');
+    const message = document.createElement('p');
+    message.textContent = String(card.persistenceError || 'Task creation was not saved.');
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.textContent = 'Retry saving task';
+    retry.addEventListener('click', async () => {
+      const annotation = (state.ledger?.annotations ?? []).find((entry) => String(entry.id) === String(state.activeZoneId));
+      if (!annotation) return;
+      retry.disabled = true;
+      retry.textContent = 'Retrying…';
+      card.persistenceState = 'creating';
+      const persistedCard = structuredClone(card);
+      delete persistedCard.persistenceState;
+      delete persistedCard.persistenceError;
+      delete persistedCard.replicationState;
+      try {
+        await ledgerMutation(state.activeLedgerId, { action: 'create-task-intake', annotation, card: persistedCard });
+        const confirmed = state.ledger?.cards?.find((entry) => String(entry.id) === String(card.id));
+        if (confirmed) renderCard(confirmed);
+        void loadControlRoom({ force: true }).catch((error) => console.error('Task retry confirmation failed.', error));
+      } catch (cause) {
+        card.persistenceState = 'failed';
+        card.persistenceError = cause instanceof Error ? cause.message : 'Task creation failed.';
+        renderCard(card);
+      }
+    });
+    persistenceFailure.append(message, retry);
+  }
   if (parsedTask.masterTask) {
     const overview = document.createElement('section');
     overview.className = 'task-overview';
@@ -2255,16 +2445,26 @@ function renderCard(card) {
     delayButton.disabled = card.status === 'done';
     delayButton.addEventListener('click', async () => {
       const nextStatus = backlog ? 'todo' : 'backlog';
-      delayButton.disabled = true;
-      delayButton.textContent = backlog ? 'Restoring task…' : 'Moving to backlog…';
-      try {
-        state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'transition-card-lifecycle', cardId: card.id, lifecycleStatus: nextStatus });
-        navigate(controlRoomPath(nextStatus === 'backlog' ? 'backlog' : 'queue'), true);
-      } catch (cause) {
-        delayButton.disabled = false;
-        delayButton.textContent = backlog ? 'Restore to queue' : 'Move to backlog';
-        elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task status update failed.';
-        setView('error-view');
+      const scope = responsiveLedgerScope();
+      const task = taskForCurrentRoute();
+      const identity = task ? taskIdentity(task) : '';
+      if (task) applyTaskIntentLocally(task, { kind: 'lifecycle', lifecycleStatus: nextStatus });
+      const committed = runResponsiveLedgerTransaction({
+        scope,
+        mutation: { action: 'transition-card-lifecycle', cardId: card.id, lifecycleStatus: nextStatus },
+        apply: (ledger) => {
+          const current = (ledger.cards ?? []).find((entry) => String(entry.id) === String(card.id));
+          if (current) current.status = nextStatus;
+        },
+        onRejected: (cause) => {
+          rejectTaskIntent(identity, cause);
+          elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task status update failed.';
+        },
+      });
+      navigate(controlRoomPath(nextStatus === 'backlog' ? 'backlog' : 'queue'), true);
+      if (await committed) {
+        if (identity) acknowledgeTaskIntent(identity);
+        void loadControlRoom({ force: true }).then(renderControlRoom).catch((error) => console.error('Task lifecycle confirmation failed.', error));
       }
     });
     const completionActions = document.createElement('div');
@@ -2277,19 +2477,31 @@ function renderCard(card) {
     manualCompleteButton.addEventListener('click', async () => {
       manualCompleteButton.disabled = true;
       manualCompleteButton.textContent = 'Master task complete';
-      const ledgerId = state.activeLedgerId;
-      const previous = structuredClone(state.ledger);
+      const scope = responsiveLedgerScope();
+      const task = taskForCurrentRoute();
+      const identity = task ? taskIdentity(task) : '';
       const childIds = new Set((state.ledger.relationships ?? [])
         .filter((relationship) => String(relationship.from) === String(card.id) && relationship.label === 'subtask')
         .map((relationship) => String(relationship.to)));
-      for (const candidate of state.ledger.cards ?? []) {
-        if (String(candidate.id) === String(card.id) || childIds.has(String(candidate.id))) candidate.status = 'done';
-      }
-      navigate(completionReturnPath(), true);
-      void ledgerMutation(ledgerId, { action: 'complete-master-task', masterTaskId: card.id }).catch((cause) => {
-        state.ledger = previous;
-        console.error('Master task completion failed.', cause);
+      if (task) applyTaskIntentLocally(task, { kind: 'lifecycle', lifecycleStatus: 'done' });
+      const committed = runResponsiveLedgerTransaction({
+        scope,
+        mutation: { action: 'complete-master-task', masterTaskId: card.id },
+        apply: (ledger) => {
+          for (const candidate of ledger.cards ?? []) {
+            if (String(candidate.id) === String(card.id) || childIds.has(String(candidate.id))) candidate.status = 'done';
+          }
+        },
+        onRejected: (cause) => {
+          rejectTaskIntent(identity, cause);
+          elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task completion failed.';
+        },
       });
+      navigate(completionReturnPath(), true);
+      if (await committed) {
+        if (identity) acknowledgeTaskIntent(identity);
+        void loadControlRoom({ force: true }).then(() => location.pathname === '/done' ? renderDone() : renderControlRoom()).catch((error) => console.error('Task completion confirmation failed.', error));
+      }
     });
     const pipelineCompleteButton = document.createElement('button');
     pipelineCompleteButton.type = 'button';
@@ -2338,8 +2550,8 @@ function renderCard(card) {
     overview.append(status, heading, subtasks, completion);
     // The relationship-backed task summary is the navigation surface for a master task.
     // Keep it ahead of the narrative so linked cards remain visible on long mobile cards.
-    elements['card-body'].replaceChildren(overview, content);
-  } else elements['card-body'].replaceChildren(content);
+    elements['card-body'].replaceChildren(overview, ...(persistenceFailure ? [persistenceFailure] : []), content);
+  } else elements['card-body'].replaceChildren(...(persistenceFailure ? [persistenceFailure] : []), content);
   initializeMobileCarousels(elements['card-body']);
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
   elements['card-view'].style.setProperty('--accent', state.activeZoneColor || defaultAccent);
@@ -2354,14 +2566,31 @@ document.querySelector('.confirm-delete-master-task-button').addEventListener('c
   if (!cardId) return;
   button.disabled = true;
   button.textContent = 'Deleting task…';
+  const scope = responsiveLedgerScope();
+  const task = taskForCurrentRoute();
+  const identity = task ? taskIdentity(task) : '';
+  if (task) applyTaskIntentLocally(task, { kind: 'delete' });
+  const committed = runResponsiveLedgerTransaction({
+    scope,
+    mutation: { action: 'delete-card', cardId },
+    apply: (ledger) => {
+      ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id) !== String(cardId));
+      ledger.relationships = (ledger.relationships ?? []).filter((entry) => String(entry.from) !== String(cardId) && String(entry.to) !== String(cardId));
+      if (ledger.notes && typeof ledger.notes === 'object') delete ledger.notes[`thread-${cardId}`];
+      if (ledger.threadFiles && typeof ledger.threadFiles === 'object') delete ledger.threadFiles[`thread-${cardId}`];
+    },
+    onRejected: (cause) => {
+      rejectTaskIntent(identity, cause);
+      elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task deletion failed.';
+    },
+  });
+  deleteMasterTaskModal.close();
+  navigate(controlRoomPath(state.controlTab), true);
   try {
-    state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'delete-card', cardId });
-    deleteMasterTaskModal.close();
-    navigate(controlRoomPath(state.controlTab), true);
-  } catch (cause) {
-    deleteMasterTaskModal.close();
-    elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task deletion failed.';
-    setView('error-view');
+    if (await committed) {
+      if (identity) acknowledgeTaskIntent(identity);
+      void loadControlRoom({ force: true }).then(renderControlRoom).catch((error) => console.error('Task deletion confirmation failed.', error));
+    }
   } finally {
     button.disabled = false;
     button.textContent = 'Delete master task';
@@ -2409,28 +2638,32 @@ function renderZone(zone) {
 }
 
 async function loadLedger(ledgerId, owner) {
-  const response = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/navigation`, { cache: 'no-store', signal: owner.signal }, owner.route.projectId);
+  const response = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/navigation`, { cache: 'no-store', signal: owner.signal }, owner.route.projectId, owner.route.replicaNodeId);
   requireRouteOwnership(owner);
   if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
   const ledger = await response.json();
   requireRouteOwnership(owner);
   if (!ledger || !Array.isArray(ledger.cards)) throw new Error('The ledger response does not contain a card list.');
-  state.ledger = ledger;
   state.activeLedgerId = ledgerId;
+  const ledgerScope = responsiveLedgerScope({ projectId: owner.route.projectId, replicaNodeId: owner.route.replicaNodeId, ledgerId });
+  state.ledger = responsiveLedgerTransactions.reconcile(responsiveLedgerScopeKey(ledgerScope), ledger);
   renderLedgerLinks();
   syncMobileThreadContext({
     projectId: state.resourceProjectId,
     replicaNodeId: owner.route.replicaNodeId,
     ledgerId,
-    ledger,
+    ledger: state.ledger,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
     onQuickVoiceSubmitted: navigateVoiceSubmission,
     onLedgerRefresh: async (activeLedgerId, replicaNodeId) => {
       const projectId = state.resourceProjectId;
       const refreshed = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }, projectId, replicaNodeId).then((result) => result.ok ? result.json() : null);
-      if (refreshed && projectId === state.resourceProjectId && activeLedgerId === state.activeLedgerId) state.ledger = refreshed;
-      return refreshed;
+      const reconciled = refreshed
+        ? responsiveLedgerTransactions.reconcile(responsiveLedgerScopeKey({ projectId, replicaNodeId, ledgerId: activeLedgerId }), refreshed)
+        : null;
+      if (reconciled && projectId === state.resourceProjectId && activeLedgerId === state.activeLedgerId) state.ledger = reconciled;
+      return reconciled;
     }
   });
 }

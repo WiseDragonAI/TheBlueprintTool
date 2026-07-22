@@ -120,3 +120,69 @@ test('canvas and thread read models exclude each other while preserving card bod
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('held task creation and deletion invalidate the local Control Room without federation publication', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'decision-os-held-control-room-'));
+  const decisionOsRoot = join(home, '.decision-os');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {}, threadFiles: {} }));
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'held-project' }));
+  await migrateTaskCurrentState({ decisionOsRoot, projectId: 'held-project', nodeId: 'workstation', tasksLedgerFile: join(decisionOsRoot, 'tasks.json') });
+  const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const mutationUrl = `${baseUrl}/p/held-project/decision-os/tasks`;
+  const controlRoom = async (): Promise<Record<string, any>> => fetch(`${baseUrl}/api/control-room`, { cache: 'no-store' }).then((response) => response.json());
+  const waitForTaskCount = async (count: number): Promise<Record<string, any>> => {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const projection = await controlRoom();
+      if (projection.allTasks.length === count) return projection;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return controlRoom();
+  };
+
+  try {
+    assert.equal((await controlRoom()).allTasks.length, 0);
+    const creation = await fetch(mutationUrl, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create-task-intake',
+        annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456', label: 'Held' },
+        card: { id: 'card-a', title: 'Held task', status: 'todo', labels: ['master-task'], domainId: 'tasks', x: 20, y: 20, w: 300, h: 180, comment: { what: 'Held body.' } },
+      }),
+    });
+    const creationBody = await creation.json() as Record<string, any>;
+    assert.equal(creation.status, 200, JSON.stringify(creationBody));
+    assert.equal(creationBody.changedCard?.id, 'card-a', JSON.stringify(creationBody));
+    const taskProjection = await fetch(`${baseUrl}/api/task-state/projection?projectId=held-project`).then((response) => response.json()) as Record<string, any>;
+    assert.equal(taskProjection.ledger.cards[0]?.id, 'card-a', JSON.stringify(taskProjection));
+    const createdProjection = await waitForTaskCount(1);
+    assert.equal(createdProjection.allTasks[0]?.cardId, 'card-a', JSON.stringify(createdProjection));
+
+    const deletion = await fetch(mutationUrl, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'delete-card', cardId: 'card-a' }),
+    });
+    assert.equal(deletion.status, 200, await deletion.text());
+    assert.equal((await waitForTaskCount(0)).allTasks.length, 0);
+
+    const rejected = await fetch(mutationUrl, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'transition-card-lifecycle', cardId: 'missing-card', lifecycleStatus: 'done' }),
+    });
+    assert.equal(rejected.status, 404);
+    assert.equal((await fetch(`${baseUrl}/api/health`)).status, 200);
+    assert.equal((await fetch(`${baseUrl}/`)).status, 200);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(home, { recursive: true, force: true });
+  }
+});

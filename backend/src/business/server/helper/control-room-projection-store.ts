@@ -416,6 +416,7 @@ export function createControlRoomProjectionStore(input: {
   };
   const publish = (projects: DecisionOsProject[]): Projection => {
     const incrementalPublish = !dirtyAll && [...dirtyProjects].every((projectId) => dirtyEntities.has(projectId) || dirtyTaskIds.has(projectId));
+    let rebuiltWholeProject = false;
     const projectIds = new Set(projects.map((project) => project.id));
     let removedProject = false;
     for (const projectId of slices.keys()) if (!projectIds.has(projectId)) {
@@ -477,10 +478,11 @@ export function createControlRoomProjectionStore(input: {
         ledgerIndexes.set(project.id, built.index);
         taskPositions.set(project.id, new Map(built.slice.tasks.map((task, index) => [text(task.cardId), index])));
         dirtyTaskIds.delete(project.id);
+        rebuiltWholeProject = true;
       }
     }
     const orderedSlices = projects.map((project) => slices.get(project.id)).filter((slice): slice is ProjectSlice => Boolean(slice));
-    if (!incrementalPublish || removedProject || !aggregateTaskIndex) aggregateTaskIndex = createAggregateTaskIndex(orderedSlices.flatMap((slice) => slice.tasks));
+    if (!incrementalPublish || rebuiltWholeProject || removedProject || !aggregateTaskIndex) aggregateTaskIndex = createAggregateTaskIndex(orderedSlices.flatMap((slice) => slice.tasks));
     const next = aggregateProjection({ slices: orderedSlices, revision: revision + 1, taskIndex: aggregateTaskIndex });
     // WHAT: Invalidate the disk snapshot instead of serializing every task after a scoped entity change.
     // WHY: Normal mutations must not stringify and rewrite the complete Control Room workspace cache.

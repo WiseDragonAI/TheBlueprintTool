@@ -191,6 +191,10 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .project-detail-metadata dt { color: var(--muted); }
 .project-detail-metadata dd { margin: 0; overflow-wrap: anywhere; }
 .control-room { padding-bottom: 82px; }
+.mutation-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #ff6b6b 55%, transparent); border-radius: 10px; background: color-mix(in srgb, #ff6b6b 12%, var(--surface)); color: var(--text); }
+.mutation-error[hidden] { display: none; }
+.task-persistence-error { display: grid; gap: 10px; margin-top: 16px; padding: 14px; border: 1px solid color-mix(in srgb, #ff6b6b 45%, transparent); border-radius: 10px; background: color-mix(in srgb, #ff6b6b 10%, var(--surface)); }
+.task-persistence-error p { margin: 0; }
 .control-command { display: contents; }
 .control-sticky { position: sticky; top: 64px; z-index: 15; margin: -20px -14px 16px; padding: 18px 14px 12px; border-bottom: 1px solid var(--line); background: rgba(9,10,12,.96); backdrop-filter: blur(18px); }
 .control-filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }

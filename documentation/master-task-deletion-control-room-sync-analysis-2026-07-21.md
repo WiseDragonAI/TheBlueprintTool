@@ -87,6 +87,9 @@
 
 ## I. Report Status
 
-1. **Analysis only.** No runtime implementation was changed.
-2. **Audit result.** Six server-blocking families require optimistic conversion. Three partial-optimism families and four canvas create/paste paths require state or rollback completion.
-3. **Primary production issue retained.** The deleted `New task intake` card remains the highest-priority reproduction because its tombstone is authoritative, its held marker persists, and its Control Room representation is stale.
+1. **Implemented; automated checks pass; device interaction not yet verified.** Held task mutations now invalidate the local Control Room from complete local entity identities while federation publication continues to exclude held entities. Whole-project fallback rebuilds now refresh the aggregate task index.
+2. **Optimistic architecture installed.** Canvas and responsive mutations use replica-scoped transaction coordinators with serialized persistence, pending-intent replay, stale-refresh overlays, acknowledgement reconciliation, and rejection rollback.
+3. **Interaction coverage.** Card deletion, lifecycle transitions, responsive note deletion, zone and group deletion, named card and zone creation, card-image deletion, title and description editing, zone label and color editing, Codex preferences, canvas creation, and paste now apply deterministic local state before persistence.
+4. **Control Room coverage.** Deletion and lifecycle intents use full project, owner-node, ledger, and card identity. Task intake exposes a retryable failed state. Rejected task mutations restore confirmed Control Room state without terminating the server.
+5. **Automated verification.** Frontend typecheck passes; all `520` frontend tests pass. Backend typecheck passes; all `337` backend tests pass. Focused tests cover immediate application, rollback, stale-response resistance, exact replica routing, held-state invalidation, zero held federation publication, and continued HTTP availability after rejection.
+6. **Operator-facing verification remains open.** The running operator server was not restarted or replaced. The workstation and phone surfaces still require one disposable task deletion and one rejected mutation check after the updated backend is started.

@@ -287,7 +287,7 @@ test('thread selection persists the complete default pair and synchronizes a mou
     model.focus();
     model.value = 'gpt-5.4';
     model.dispatchEvent(new Event('change'));
-    assert.equal(button.dataset.codexModel, 'gpt-5.6-sol');
+    assert.equal(button.dataset.codexModel, 'gpt-5.4');
     await waitFor(() => requests.length === 1 && state.activeLedger.cards[0].codexRunModel === 'gpt-5.4');
 
     assert.deepEqual(requests[0], {
@@ -367,7 +367,8 @@ test('rejected Codex preference mutation restores both surfaces to the durable p
   widgetEffort.value = 'medium';
   widget.append(widgetModel, widgetEffort);
   root.append(widget);
-  globalThis.fetch = (async () => new Response(JSON.stringify({ ok: false }), { status: 500 })) as typeof fetch;
+  let rejectMutation!: (response: Response) => void;
+  globalThis.fetch = (async () => new Promise<Response>((resolve) => { rejectMutation = resolve; })) as typeof fetch;
 
   try {
     renderThreadPanel();
@@ -376,14 +377,19 @@ test('rejected Codex preference mutation restores both surfaces to the durable p
     const button = actions.querySelector('.thread-codex-button') as FakeElement;
     effort.value = 'ultra';
     effort.dispatchEvent(new Event('change'));
-    await waitFor(() => state.ledgerReconciliation.failedLoadCount === 1);
+    assert.equal(effort.value, 'ultra');
+    assert.equal(widgetEffort.value, 'ultra');
+    assert.equal(button.dataset.codexEffort, 'ultra');
+    assert.equal(state.activeLedger.cards[0].codexRunEffort, 'ultra');
+    await new Promise((resolve) => setImmediate(resolve));
+    rejectMutation(new Response(JSON.stringify({ ok: false }), { status: 500 }));
+    await waitFor(() => state.activeLedger.cards[0].codexRunEffort === 'medium');
 
     assert.equal(effort.value, 'medium');
     assert.equal(widgetEffort.value, 'medium');
     assert.equal(button.dataset.codexModel, 'gpt-5.4');
     assert.equal(button.dataset.codexEffort, 'medium');
     assert.equal(state.activeLedger.cards[0].codexRunEffort, 'medium');
-    assert.equal(state.ledgerReconciliation.lastFailedLoad.reason, 'http-500');
     assert.ok(state.telemetry.some((entry: Record<string, unknown>) => entry.name === 'commit-ledger-edit-failed'));
   } finally {
     globalThis.fetch = previousFetch;

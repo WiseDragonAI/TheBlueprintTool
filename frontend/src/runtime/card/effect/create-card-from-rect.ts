@@ -5,6 +5,7 @@
 import { content } from '../../dom.js';
 import { createCardResizeHandles } from '../component/create-card-resize-handles.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
+import { runOptimisticActiveLedgerMutation } from '../../ledger/effect/run-optimistic-active-ledger-mutation.js';
 import { createLedgerObjectId } from '../../ledger/helper/create-ledger-object-id.js';
 import { createLedgerCardTitleRow } from '../../ledger/component/render-ledger-card-detail-layer.js';
 import { state } from '../../state.js';
@@ -31,15 +32,26 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
 
   // WHAT: Insert and render the card immediately when ledger state owns the canvas.
   // WHY: The operator should not wait for a server round trip before seeing the drawn record.
+  if (state.activeLedger && state.canvasMode === 'ledger') {
+    const previousSelection = structuredClone(state.selection);
+    await runOptimisticActiveLedgerMutation({
+      mutation: { action: 'create-card', card },
+      apply: (ledger) => {
+        ledger.cards = (ledger.cards ?? []).filter((entry: Record<string, unknown>) => String(entry.id ?? '') !== cardId).concat(structuredClone(card));
+      },
+      render: (outcome) => {
+        if (outcome === 'rejected') state.selection = previousSelection;
+        refreshZoneAttributionCache(`optimistic-create-card:${outcome}`);
+        telemetry('render-card-layer', { created: cardId, activeTab: state.activeTab, authority: 'optimistic-client', outcome });
+        renderCanvasSurface({ renderThreadPanel: false });
+        if (outcome === 'optimistic') selectTarget('card', cardId, false);
+      },
+    });
+    return;
+  }
   if (state.activeLedger) {
     insertActiveLedgerCard(card);
-    refreshZoneAttributionCache('optimistic-create-card');
-    telemetry('render-card-layer', { created: cardId, activeTab: state.activeTab, authority: 'optimistic-client' });
-    renderCanvasSurface({ renderThreadPanel: false });
-    // WHAT: Select only after the ledger renderer has materialized the created card.
-    // WHY: selectTarget owns thread preparation and visible selection state.
-    selectTarget('card', cardId, false);
-    await commitActiveLedgerMutation({ action: 'create-card', card });
+    await commitActiveLedgerMutation({ action: 'create-card', card }, { render: true });
     return;
   }
 
