@@ -8,6 +8,8 @@
 6. **The current implementation is under-factored and over-modelled at the same time.** It has many representations of the same lifecycle but no shared transition kernel that owns their order. The complexity is therefore spent on reconciliation rather than on additional product capability.
 7. **The runtime-incident task ownership defect is already corrected on the pulled revision.** Commit `5fdf4ff2` changed the target from the `admin` relative path to the stable Decision OS project ID. The live Control Room now reports `card-runtime-incident-review` under project `decision-os`, project ID `ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z`. Source comments and operation names still incorrectly say `admin`.
 8. **Run rejection is silent on the served responsive card route.** A paused Decision OS Codex runtime rejects both skill and pipeline admission with HTTP `503` and `runtime-scope-paused` before any run is created. The responsive detail view writes that rejection into `.process-message`, while `setMobileCodexView()` keeps `.process-message` hidden in the same detail view. The button is re-enabled with no visible explanation.
+9. **All three active incidents reduce to two fault domains.** One stale Codex-runtime incident came from a temporary task-state convergence gate. Two federated-library incidents came from the same Mobile `browser` skill-snapshot timeout and were split only because the retry path records a different operation name.
+10. **The incident policy turns transient readiness failures into indefinite subsystem outages.** Relay convergence and phone connectivity are now healthy, but neither successful convergence nor reconnection resolves the persisted incidents. Codex admission and automatic federated-library synchronization therefore remain paused after their triggering conditions have passed.
 
 ---
 
@@ -31,6 +33,9 @@
 16. **No admission record:** the card has no `executionIntent`, `codexActiveRunId`, or `codexActiveExecutionId`; the Control Room reports `task-waiting`; the direct queue is empty; and no pipeline run references this source card.
 17. **Deterministic backend rejection:** `POST /api/codex/pipelines/runs` and `POST /api/codex/skills/process` both call `assertCodexRuntimeAvailable()` before their controllers. The active incident therefore makes every new run request return HTTP `503` with `error: runtime-scope-paused`, the incident ID, and the paused scope before durable admission.
 18. **Deterministic hidden feedback:** the served responsive `startPipeline()` and `startSkill()` handlers catch that response and write the error into `.process-message`. The served `setMobileCodexView()` hides `.process-message` whenever the library is in its detail view, which is the view containing the start button.
+19. **Complete active incident inventory:** `/api/diagnostics/incidents` reports exactly three paused incidents: `incident-e8cf636d-da4b-4e93-b540-e14eb6082646`, `incident-2ed06681-bb8a-4cda-a718-05c2206719b6`, and `incident-96654e43-7e4a-4bc8-b08e-70e341d7a469`.
+20. **Current task-state readiness:** Decision OS relay convergence is `true` at root `83e31e158b1447a30401c560e1bd3c1fad865b719a61397ca7f33dbff7ec2d32`; runtime-dirty entities and pending delivery IDs are both empty.
+21. **Current federation transport readiness:** the workstation reports `configured: true`, `connected: true`, phase `connected`, and Mobile online. These live facts do not prove the failed Mobile snapshot now completes within its deadline, but they prove that neither incident is a current connection-offline diagnosis.
 
 ---
 
@@ -261,15 +266,17 @@
 4. **Introduce the coordinator behind existing endpoints.** Preserve request and response contracts while direct start, continuation, cancel, and settlement delegate to the shared lifecycle.
 5. **Move pipeline skills to the coordinator.** Keep pipeline topology; remove pipeline-specific spawn, monitor, timeout, PID, and terminal inference logic.
 6. **Make task projection awaited.** Delete fire-and-forget lifecycle persistence. Publish Control Room invalidation only after task-state durability returns the committed projection.
-7. **Enforce one pause gate in the coordinator.** A paused runtime prevents every claim and chained pipeline transition; the active process settles without launching a successor until the scoped runtime is explicitly resumed.
+7. **Enforce one pause gate and typed failure policy in the coordinator.** A paused runtime prevents every claim and chained pipeline transition. `task_state_bootstrap_incomplete` becomes a retryable readiness result that waits for verified relay-root equality without creating a paused Codex-runtime incident. Corruption, invalid state, and failed durable writes remain pausing failures.
 8. **Add executor assignment and heartbeat.** Replicate assigned node in intent, emit a matching live observation, and surface stale execution explicitly.
 9. **Replace Control Room derivation.** Consume the shared execution DTO and remove the structural-intent branch that clears executor identity.
 10. **Replace frontend status and admission-failure branching.** Use one phase presenter and timer for preparing, queued, starting, and running states; remove the contradictory coarse `executing` label. Keep the run feedback region visible in the detail state. Present paused-runtime HTTP `503` responses as `Decision OS execution is paused` with the returned scope and incident ID, then leave the run button available only after the runtime resumes.
 11. **Consolidate status readers and pollers.** Detailed event reads append diagnostics to the shared DTO; they do not recalculate lifecycle status.
 12. **Remove obsolete representations.** Delete direct queue runtime status, mutable pipeline skill runtime status, log-derived business status, node-local voice execution maps, legacy card execution fields, and manual status alias normalization.
 13. **Correct runtime-incident naming.** Replace remaining `admin` comments and operation labels with `Decision OS project` and add a regression over the live project name plus project ID.
-14. **Run migration and recovery verification.** Prove queued, running, terminal, cancelled, interrupted, adopted, pipeline-step, voice-preparation, and federation cases across restart.
-15. **Run served interaction verification.** Gate requests to prove optimistic display before response, confirmed persistence after reload, rejected-request reconciliation, exact timer continuity, node label correctness, and two-node convergence.
+14. **Repair federated-library synchronization.** Build the exportable-skill index once per catalog revision, resolve a requested skill directly from that index, preserve connector error code, node ID, path, elapsed time, and deadline, and let one single-flight runner own coalescing plus bounded retry. A remote timeout retains the last valid local library and reports retrying health; local validation and atomic-import failures pause the component.
+15. **Migrate and resolve stale incidents safely.** Reclassify the persisted Codex bootstrap incident as resolved only after verified relay-root equality. Coalesce the two Mobile `browser` timeout incidents into one resolved historical incident only after one complete skills-then-pipelines synchronization succeeds.
+16. **Run migration and recovery verification.** Prove queued, running, terminal, cancelled, interrupted, adopted, pipeline-step, voice-preparation, federated-library timeout, and federation cases across restart.
+17. **Run served interaction verification.** Gate requests to prove optimistic display before response, confirmed persistence after reload, rejected-request reconciliation, exact timer continuity, node label correctness, and two-node convergence.
 
 ---
 
@@ -292,6 +299,10 @@
 15. **Coverage:** tests exercise rendered timers and transition ordering; no acceptance proof relies only on source-pattern assertions.
 16. **Pause:** a forced task-projection failure pauses the runtime before process spawn; a failure after spawn lets the current attempt settle and proves no successor starts until explicit resume.
 17. **Visible rejection:** from the served card route, a paused-runtime skill and pipeline admission each display the returned scope and incident ID beside the start action; neither request creates a queue item, pipeline run, card lease, or task intent.
+18. **Bootstrap recovery:** a missing relay convergence record rejects the write without pausing Codex; verified root equality automatically retries the blocked projection and leaves no active incident.
+19. **Library timeout evidence:** a forced Mobile skill-snapshot deadline records node ID, node label, request path, connector code, elapsed time, and deadline in one incident.
+20. **Library retry:** concurrent catalog notifications produce one synchronization runner and one incident; bounded retry keeps the last valid local skills and pipelines readable.
+21. **Library recovery:** one successful complete skills-then-pipelines synchronization resolves the timeout incident and restores automatic synchronization without a server restart.
 
 ---
 
@@ -330,3 +341,24 @@
 31. `backend/src/business/server/helper/create-http-server.ts:323` and admission routes at lines `2296` and `2460` — paused-runtime gate and HTTP `503` response contract.
 32. `frontend/src/app/responsive/codex.js:296` and `frontend/src/app/responsive/codex-view.js:7` — run rejection written to `.process-message` and the same node hidden in detail state.
 33. `.decision-os/tasks.json` plus `.decision-os/codex-process-queue.json` and `.decision-os/codex-pipelines.json` — no durable admission for `card-c2294c71-cb87-49d6-8886-002cd0f6b036` after the reported click.
+34. `backend/src/business/federation/helper/federation-node-connector.ts:70` and `:537` — default `15,000 ms` internal request deadline and `federation_request_timeout` settlement.
+35. `backend/src/business/federation/helper/federated-library-cache.ts:91` through `:145` — every manifest and targeted snapshot rebuilds the exportable skill catalog synchronously before package collection.
+36. `backend/src/business/server/helper/create-http-server.ts:794` through `:857` — federation response detail loss, skills-before-pipelines synchronization, single-flight repeat scheduling, and duplicate incident operation names.
+37. Runtime incidents `incident-e8cf636d-da4b-4e93-b540-e14eb6082646` and `incident-2ed06681-bb8a-4cda-a718-05c2206719b6` — one Mobile `browser` skill-snapshot HTTP `504` represented as two active incidents.
+
+---
+
+## S. Active Incident Closure Set
+
+1. **Incident `incident-96654e43-7e4a-4bc8-b08e-70e341d7a469`:** scope `background:codex-runtime:ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z`, operation `persist-codex-ledger-projection`, code `task_state_bootstrap_incomplete`, first and last observation `2026-07-22T18:03:45.413Z`, one occurrence.
+2. **Codex trigger:** `assertWritable()` rejected a pipeline task projection because the configured-federation write predicate did not have confirmed relay convergence at the local root. The incident record did not retain the failed predicate members, so it cannot distinguish a missing convergence sample from a root mismatch after the fact.
+3. **Codex misclassification:** `queueLedgerProjectionPersistence()` forwarded the expected readiness rejection to `onCodexBackgroundError()`. That callback unconditionally set `codexRuntimePaused = true` and recorded a background failure, although request, watcher, and startup paths already classify the same error as a non-pausing stopped operation.
+4. **Codex persistence defect:** startup reclassification resolves bootstrap incidents under HTTP, project-task-write, and Codex-startup scopes but excludes `background:codex-runtime:*`. Current verified root equality therefore does not clear the stale pause.
+5. **Incident `incident-e8cf636d-da4b-4e93-b540-e14eb6082646`:** scope `background:federated-library-sync`, operation `catalog-change-synchronization`, code and message `Mobile skill browser returned HTTP 504.`, observations from `2026-07-22T15:39:07.886Z` through `2026-07-22T15:39:07.893Z`, two occurrences.
+6. **Incident `incident-2ed06681-bb8a-4cda-a718-05c2206719b6`:** the same scope, code, message, and stack under operation `repeat-synchronization`, observed at `2026-07-22T15:39:27.671Z`, one occurrence.
+7. **Library trigger:** workstation completed Mobile manifest comparison and requested `/api/federation/skills-snapshot?name=browser`. The internal federation request returned HTTP `504`; the connector's default internal deadline is `15,000 ms`.
+8. **Library diagnostic loss:** `parseFederationResponse()` discards the response body and throws only the label plus status. The incident therefore omits the connector error code, request ID, node ID, request path, elapsed time, response bytes, and deadline that are required to separate remote computation time from relay transport time.
+9. **Duplicate-incident cause:** a concurrent catalog notification sets `federationSyncRequested` while the first single-flight promise is active. Its `finally` block starts the repeat before the caller's rejection handler pauses the component. The two rejection handlers use different operation names, and operation participates in incident fingerprinting, producing two active incidents from one failed synchronization cycle.
+10. **Library persistence defect:** any remote snapshot failure calls `recordBackgroundFailure()`, permanently pauses `federated-library-sync`, and suppresses future catalog-triggered synchronization. The last valid local library remains readable, but no bounded automatic retry and no success-driven incident resolution exist.
+11. **Shared correction:** transient readiness and transport deadlines must retain verified prior state, expose retrying health, and retry through one owner. Only invalid local durable state, failed atomic replacement, and unrecoverable schema violations pause a component.
+12. **Closure gate:** resolve the Codex incident after relay-root equality and successful ownership reconciliation. Resolve both library incidents after one complete Mobile skills-then-pipelines synchronization and verification that a subsequent catalog notification completes without creating another incident.
