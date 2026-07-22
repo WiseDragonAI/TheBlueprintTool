@@ -146,6 +146,14 @@ test('create-http-server resolves retained transient task bootstrap incidents at
     code: 'task_state_bootstrap_incomplete',
     error: new Error('task_state_bootstrap_incomplete'),
   });
+  incidents.record({
+    severity: 'error',
+    scope: 'background:codex-startup-project-a',
+    component: 'codex-startup-project-a',
+    operation: 'reconcile-codex-startup-state',
+    code: 'task_state_bootstrap_incomplete',
+    error: new Error('task_state_bootstrap_incomplete'),
+  });
   const runtime: Record<string, unknown> = { decisionOsRoot };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
