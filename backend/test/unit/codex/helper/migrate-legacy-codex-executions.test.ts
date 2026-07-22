@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { CodexProcessQueueItem } from '@backend/business/codex/helper/codex-process-queue.js';
 import { migrateLegacyCodexExecutions, prepareLegacyCodexExecutions } from '@backend/business/codex/helper/migrate-legacy-codex-executions.js';
+import { createCodexExecutionStore } from '@backend/business/codex/helper/codex-execution-store.js';
 
 const queueItem = (status: CodexProcessQueueItem['status'] = 'running'): CodexProcessQueueItem => ({
   id: 'run-direct',
@@ -84,6 +85,72 @@ test('migrates only the next pending pipeline skill and leaves future topology i
   });
   assert.deepEqual(migrated.records.map((record) => record.executionId), ['execution-pipeline']);
   assert.equal(migrated.records[0].phase, 'queued');
+});
+
+test('migrates never-launched descendants of a terminal pipeline as cancelled', () => {
+  const original = pipelineRun();
+  const firstStep = original.steps[0];
+  const firstSkill = firstStep.skills[0];
+  const run: CodexPipelineRun = {
+    ...original,
+    status: 'cancelled',
+    finishedAt: '2026-07-23T01:00:03.000Z',
+    steps: [{
+      ...firstStep,
+      status: 'cancelled',
+      finishedAt: '2026-07-23T01:00:03.000Z',
+      skills: [{ ...firstSkill, status: 'pending', startedAt: null, finishedAt: null }],
+    }],
+  };
+  const migrated = prepareLegacyCodexExecutions({
+    projectId: 'project-a', nodeId: 'workstation', queue: [], pipelineRuns: [run], readLease: () => null,
+  });
+  assert.equal(migrated.records.length, 1);
+  assert.equal(migrated.records[0].phase, 'cancelled');
+  assert.equal(migrated.records[0].finishedAt, run.finishedAt);
+  assert.match(migrated.records[0].result?.summary ?? '', /before this skill launched/);
+});
+
+test('repairs queued descendants already migrated from a terminal pipeline', () => {
+  const workspace = mkdtempSync(resolve(tmpdir(), 'codex-migration-terminal-repair-'));
+  const decisionOsRoot = resolve(workspace, '.decision-os');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  try {
+    const original = pipelineRun();
+    const firstStep = original.steps[0];
+    const firstSkill = firstStep.skills[0];
+    const pending: CodexPipelineRun = {
+      ...original,
+      status: 'pending',
+      startedAt: null,
+      steps: [{ ...firstStep, status: 'pending', startedAt: null, skills: [{ ...firstSkill, status: 'pending', startedAt: null }] }],
+    };
+    const [queued] = prepareLegacyCodexExecutions({
+      projectId: 'project-a', nodeId: 'workstation', queue: [], pipelineRuns: [pending], readLease: () => null,
+    }).records;
+    createCodexExecutionStore({ decisionOsRoot, projectId: 'project-a' }).replace([queued]);
+    const terminal: CodexPipelineRun = {
+      ...pending,
+      status: 'cancelled',
+      finishedAt: '2026-07-23T01:00:03.000Z',
+      steps: [{
+        ...pending.steps[0],
+        status: 'cancelled',
+        finishedAt: '2026-07-23T01:00:03.000Z',
+        skills: [{ ...pending.steps[0].skills[0], status: 'pending' }],
+      }],
+    };
+    writeFileSync(resolve(decisionOsRoot, 'codex-pipelines.json'), JSON.stringify({ version: 1, pipelines: [], steps: [], runs: [terminal], skillLibrary: [], activeWorkspaceRun: null }));
+
+    const result = migrateLegacyCodexExecutions({ decisionOsRoot, projectId: 'project-a', nodeId: 'workstation', readLease: () => null });
+
+    assert.deepEqual(result, { applied: false, report: null });
+    const repaired = createCodexExecutionStore({ decisionOsRoot, projectId: 'project-a' }).find(queued.executionId);
+    assert.equal(repaired?.phase, 'cancelled');
+    assert.equal(repaired?.revision, queued.revision + 1);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
 });
 
 test('writes the canonical store only after retaining rollback sources and a migration report', () => {

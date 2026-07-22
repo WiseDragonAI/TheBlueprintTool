@@ -42,7 +42,9 @@ function relayHarness(relayStore: TaskCurrentStateStore) {
   let relaySequence = Promise.resolve();
   const deliver = (nodeId: string, frame: Omit<FederationStateFrame, 'from'>): void => {
     const node = nodes.get(nodeId);
-    if (node?.online) queueMicrotask(() => {
+    // WHAT: Deliver relay frames on a fresh event-loop turn, as a socket would.
+    // WHY: Recursive summary repair must not starve timers or accumulate an unbounded microtask chain.
+    if (node?.online) setImmediate(() => {
       const operation = node.replicator.handleFrame({ ...frame, from: 'relay' });
       pending.add(operation);
       void operation.finally(() => pending.delete(operation));

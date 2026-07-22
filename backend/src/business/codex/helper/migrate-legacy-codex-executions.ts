@@ -194,7 +194,19 @@ export function prepareLegacyCodexExecutions(input: {
 }): { records: CodexExecutionRecord[]; queueRecords: number; pipelineRecords: number } {
   const pipelineAttempts = input.pipelineRuns.flatMap((run) => {
     const flattened = run.steps.flatMap((step) => step.skills.map((skill) => ({ run, step, skill })));
-    if (run.status === 'complete' || run.status === 'failed' || run.status === 'cancelled') return flattened;
+    if (run.status === 'complete' || run.status === 'failed' || run.status === 'cancelled') return flattened.map((entry) => (
+      entry.skill.status === 'pending'
+        ? {
+            ...entry,
+            skill: {
+              ...entry.skill,
+              status: 'cancelled' as const,
+              finishedAt: run.finishedAt ?? run.updatedAt,
+              error: `Pipeline ${run.status} before this skill launched.`,
+            },
+          }
+        : entry
+    ));
     const running = flattened.filter((entry) => entry.skill.status === 'running');
     const historical = flattened.filter((entry) => entry.skill.status === 'complete' || entry.skill.status === 'failed' || entry.skill.status === 'cancelled');
     const next = running.length === 0 ? flattened.find((entry) => entry.skill.status === 'pending') : null;
@@ -219,6 +231,38 @@ export function prepareLegacyCodexExecutions(input: {
   };
 }
 
+export function repairMigratedTerminalPipelineExecutions(input: {
+  decisionOsRoot: string;
+  projectId: string;
+}): number {
+  const pipeline = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  const blocker = codexPipelineStoreWriteBlocker(pipeline);
+  if (blocker) throw new Error(`codex_execution_migration_pipeline_store_invalid:${blocker.code}:${blocker.message}`);
+  const terminalRuns = new Map(pipeline.store.runs
+    .filter((run) => run.status === 'complete' || run.status === 'failed' || run.status === 'cancelled')
+    .map((run) => [run.id, run] as const));
+  const store = createCodexExecutionStore(input);
+  const document = store.read();
+  let repaired = 0;
+  const executions = document.executions.map((record) => {
+    if ((record.phase !== 'preparing' && record.phase !== 'queued') || !record.pipelineRunId) return record;
+    const run = terminalRuns.get(record.pipelineRunId);
+    if (!run) return record;
+    const legacySkill = run.steps.flatMap((step) => step.skills).find((skill) => skill.executionId === record.executionId);
+    if (!legacySkill || legacySkill.status !== 'pending') return record;
+    repaired += 1;
+    return transitionCodexExecution({
+      record,
+      expectedExecutionId: record.executionId,
+      phase: 'cancelled',
+      changedAt: time(run.finishedAt, time(run.updatedAt, new Date().toISOString())),
+      result: { status: 'cancelled', summary: `Pipeline ${run.status} before this skill launched.` },
+    });
+  });
+  if (repaired > 0) store.replace(executions);
+  return repaired;
+}
+
 export function migrateLegacyCodexExecutions(input: {
   decisionOsRoot: string;
   projectId: string;
@@ -229,6 +273,7 @@ export function migrateLegacyCodexExecutions(input: {
 }): { applied: boolean; report: CodexExecutionMigrationReport | null } {
   if (existsSync(codexExecutionStoreFile(input.decisionOsRoot))) {
     readCodexExecutionStore(input);
+    repairMigratedTerminalPipelineExecutions(input);
     return { applied: false, report: null };
   }
   const pipeline = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
