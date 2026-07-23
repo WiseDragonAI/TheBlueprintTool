@@ -141,7 +141,15 @@
    7. Focused backend control-path result: `46/46`.
    8. Focused frontend Control Room result: `3/3`.
    9. Backend and frontend typechecks passed.
-10. **J.10 — Replace recovery:** `pending`.
+10. **J.10 — Replace recovery:** `verified`.
+    1. Startup reads locally assigned `starting`, `running`, and `cancelling` executions from replicated epoch-4 state.
+    2. Recovery adopts only a registered child whose PID and process-start identity still match.
+    3. A missing or stale process settles as `interrupted`; available local JSONL, stderr, and telemetry files are captured before the registry entry is removed.
+    4. Locally assigned queued executions wake the shared scheduler.
+    5. Server startup, operator component recovery, and pipeline settlement no longer call direct queue recovery, pipeline resume, and card ownership reconciliation.
+    6. Late legacy direct-queue entries remain inert.
+    7. Focused recovery and scheduler result: `32/32`.
+    8. Backend typecheck passed.
 11. **J.11 — Complete optimistic frontend behavior:** `pending`.
 12. **J.12 — Delete legacy authorities:** `pending`.
 13. **J.13 — Run failure and convergence verification:** `pending`.
@@ -151,9 +159,8 @@
 
 ## D. Current Verified Gaps
 
-1. Startup still runs direct queue recovery, pipeline resume, and card ownership reconciliation instead of one replicated execution recovery pass.
-2. Frontend launch behavior does not yet implement request-ID optimism, canonical reconciliation, and rejection rollback.
-3. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, temporary-pipeline lifecycle, and log-derived settlement remain until `J.12`.
+1. Frontend launch behavior does not yet implement request-ID optimism, canonical reconciliation, and rejection rollback.
+2. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, temporary-pipeline lifecycle, and log-derived settlement remain until `J.12`.
 
 ---
 
@@ -241,6 +248,16 @@
     1. Command: `node bin/decision-os-verify.mjs -- npm test --prefix backend`.
     2. Three failures assert legacy startup queue scanning and claimed-thread resumption that `J.10` replaces with replicated execution recovery.
     3. Two failures assert startup ownership reconciliation and card execution cleanup that `J.12` removes with the remaining legacy authorities.
+28. **J.10 focused recovery and scheduler:** passed `32/32`.
+    1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=<absolute-worktree-backend-tsconfig> backend/node_modules/.bin/tsx --test --test-reporter=dot backend/test/codex/recover-task-executions.test.ts backend/test/codex/codex-process-restart-recovery.test.ts backend/test/codex/read-card-skill-run-controller.test.ts backend/test/codex/epoch4-direct-execution-scheduler.test.ts backend/test/codex/start-codex-pipeline-run-controller.test.ts backend/test/codex/resume-codex-pipeline-runs.test.ts backend/test/server/project-sync.integration.test.ts backend/test/unit/server/helper/create-http-server.test.ts`.
+    2. Evidence covers exact-process adoption, stale and missing process interruption, terminal artifact capture, startup scheduling from replicated state, canonical multi-project status routing, and legacy queue exclusion.
+29. **Full backend suite after J.10:** passed `407/411` before focused classification.
+    1. Command: `node bin/decision-os-verify.mjs -- npm test --prefix backend`.
+    2. The legacy manifest-resume fixture was replaced with two replicated pipeline executions. Startup preserved the succeeded predecessor and its artifact heads, ran only the queued successor, finalized its artifacts, and left the raw manifest unchanged.
+    3. The project-sync `EPIPE` was a suite-load fixture race: the fake child now consumes stdin before completing, while production prompt-delivery failures remain fatal. Its focused integration test passed.
+    4. The remaining two deterministic failures assert card ownership and `executionIntent` cleanup removed by `J.12`.
+30. **J.10 backend typecheck:** passed.
+    1. Command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`.
 
 ---
 

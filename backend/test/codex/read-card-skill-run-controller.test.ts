@@ -13,6 +13,8 @@ import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
 import { enqueueCodexContinuation, readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
+import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
+import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
 
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
@@ -677,7 +679,7 @@ test('card skill run route measures active resumed segment from the latest persi
   }
 });
 
-test('server startup resumes a claimed thread run from its durable Codex session', async () => {
+test('server startup interrupts a replicated running execution whose process registry is missing', async () => {
   const originalCwd = process.cwd();
   const previousCodexBin = process.env.CODEX_BIN;
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-interrupted-thread-run-'));
@@ -689,17 +691,17 @@ test('server startup resumes a claimed thread run from its durable Codex session
   const fakeCodex = join(workspace, 'fake-codex.mjs');
   const invocationFile = join(workspace, 'invoked.txt');
   mkdirSync(runDirectory, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'restart-project', name: 'Restart project' }));
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
-    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+    ledgers: [
+      { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
+      { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' },
+    ]
   }, null, 2));
   writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({
     cards: [{
       id: cardId,
       title: 'Interrupted thread run',
-      codexThreadRunId: runId,
-      codexActiveRunId: runId,
-      codexActiveExecutionId: executionId,
-      codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`,
       comment: { what: 'Thread body.' },
       facts: [],
       fields: []
@@ -714,17 +716,38 @@ test('server startup resumes a claimed thread run from its durable Codex session
   ].join('\n'));
   writeFileSync(join(runDirectory, `${runId}.log`), '');
   writeFileSync(join(runDirectory, `${runId}.md`), '# Thread Codex Run\n\nStatus: processing\n');
-  writeFileSync(join(decisionOsRoot, 'codex-process-queue.json'), JSON.stringify({
-    version: 1,
-    items: [{
-      id: runId,
-      kind: 'thread',
-      status: 'running',
-      createdAt: new Date(Date.now() - 2000).toISOString(),
-      startedAt: new Date(Date.now() - 1000).toISOString(),
-      payload: { ledgerId: 'specs', threadId: `thread-${cardId}`, cardId, runId, executionId },
-    }],
-  }, null, 2));
+  const tasksLedgerFile = join(decisionOsRoot, 'tasks.json');
+  writeFileSync(tasksLedgerFile, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  const taskState = createProjectTaskState({
+    projectId: 'restart-project',
+    writerId: 'local',
+    decisionOsRoot,
+    tasksLedgerFile,
+    initialize: true,
+  });
+  const metadata: TaskExecutionMetadata = {
+    executionId,
+    requestId: 'request-restart1',
+    sessionId: runId,
+    projectId: 'restart-project',
+    ledgerId: 'specs',
+    taskId: '',
+    sourceCardId: cardId,
+    ownerCardId: cardId,
+    kind: 'thread',
+    requestedAt: new Date(Date.now() - 2000).toISOString(),
+    model: null,
+    effort: null,
+    pipelineRunId: null,
+    pipelineStepId: null,
+    pipelineSkillRunId: null,
+    predecessorExecutionId: null,
+    restartOfExecutionId: null,
+  };
+  await taskState.executions.admit({ metadata, executorNodeId: 'local' });
+  await taskState.executions.transition(executionId, { phase: 'queued' });
+  await taskState.executions.transition(executionId, { phase: 'starting' });
+  await taskState.executions.transition(executionId, { phase: 'running' });
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
     'import { writeFileSync } from "node:fs";',
@@ -741,19 +764,15 @@ test('server startup resumes a claimed thread run from its durable Codex session
   const address = server.address() as AddressInfo;
 
   try {
-    await waitForText(invocationFile, 'relaunched');
-    assert.equal(readFileSync(invocationFile, 'utf8'), 'relaunched');
-    const queueDeadline = Date.now() + 10000;
-    while (Date.now() < queueDeadline && readCodexProcessQueue(decisionOsRoot).length > 0) await new Promise((resolve) => setTimeout(resolve, 50));
-    assert.deepEqual(readCodexProcessQueue(decisionOsRoot), []);
-
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${cardId}`);
     assert.equal(response.status, 200);
-    const body = await response.json() as { status: string; active: boolean; queuePosition: number | null; interruptedAt: string | null; error: string };
-    assert.equal(body.status, 'complete');
+    const body = await response.json() as { status: string; phase: string; active: boolean; queuePosition: number | null };
+    assert.equal(body.status, 'failed');
+    assert.equal(body.phase, 'interrupted');
     assert.equal(body.active, false);
     assert.equal(body.queuePosition, null);
-    assert.equal(body.interruptedAt, null);
+    assert.equal(existsSync(invocationFile), false);
+    assert.equal(existsSync(join(decisionOsRoot, 'codex-process-queue.json')), false);
   } finally {
     server.close();
     await once(server, 'close');

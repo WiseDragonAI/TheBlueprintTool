@@ -46,9 +46,9 @@ import { startCodexPipelineRunController } from '../../codex/controller/start-co
 import { readCodexPipelineRunController } from '../../codex/controller/read-codex-pipeline-run-controller.js';
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
-import { resumeCodexPipelineRuns, stopAdoptedPipelineProcessMonitors } from '../../codex/helper/resume-codex-pipeline-runs.js';
-import { recoverCodexProcessQueue, stopAdoptedCodexProcessMonitors } from '../../codex/helper/codex-process-queue.js';
-import { reconcileCodexExecutionOwnership } from '../../codex/helper/reconcile-codex-execution-ownership.js';
+import { stopAdoptedPipelineProcessMonitors } from '../../codex/helper/resume-codex-pipeline-runs.js';
+import { stopAdoptedCodexProcessMonitors } from '../../codex/helper/codex-process-queue.js';
+import { recoverTaskExecutions } from '../../codex/helper/recover-task-executions.js';
 import { CodexExecutionProjectionPendingError, createCodexExecutionCoordinator } from '../../codex/helper/codex-execution-coordinator.js';
 import { codexExecutionCoordinator, installCodexExecutionCoordinator } from '../../codex/helper/codex-execution-runtime.js';
 import { migrateLegacyCodexExecutions } from '../../codex/helper/migrate-legacy-codex-executions.js';
@@ -1056,8 +1056,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           threadId: String(event.threadId ?? '')
         });
       }
-      if (event.pipelineRunId) void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime })
-        .catch((error: unknown) => recordBackgroundFailure('codex-pipeline-resume', 'resume-after-run-settled', error, { projectId, pipelineRunId: String(event.pipelineRunId) }));
       if (!event.pipelineRunId || event.pipelineTerminal === true) void continueQueuedVoiceCodexAfterRun({
         runtime: projectRuntime, ledgerId: String(event.ledgerId ?? ''), cardId: String(event.cardId ?? event.outputCardId ?? ''),
         threadId: String(event.threadId ?? ''), runId: String(event.runId ?? ''), onCardContentChange: publishCard, onLedgerChange: publishLedger
@@ -1082,31 +1080,16 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     });
     const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
-    let processQueueRecovery = Promise.resolve();
-    try {
-      if (projectRuntime.codexRuntimePaused !== true) processQueueRecovery = recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
-    } catch (error) {
-      (projectRuntime.onCodexBackgroundError as (event: AnyRecord) => void)({
-        operation: 'recover-durable-codex-process-queue',
-        error,
-        context: { projectId, decisionOsRoot: activeDecisionOsRoot },
-      });
-    }
     const startupComponent = `codex-startup-${projectId}`;
-    const reconcileCodexStartup = async (recordBootstrapGate = true): Promise<void> => {
+    const recoverCodexStartup = async (recordBootstrapGate = true): Promise<void> => {
       try {
-        const ownershipReconciliation = await reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
-        if (ownershipReconciliation.ledgersChanged > 0) {
-          controlRoomProjectionStore?.invalidate(projectId);
-          console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
-        }
-        await resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
+        await recoverTaskExecutions(projectRuntime);
         const codexScope = `background:${codexRuntimeComponent}`;
         const retainedRecoverableIncidents = incidentLedger.active().filter((incident) => incident.scope === codexScope);
         if (retainedRecoverableIncidents.length > 0 && retainedRecoverableIncidents.every((incident) => (
           isTaskStateBootstrapGate(incident.code) || isExecutionScopedCodexFailure(incident.operation)
         ))) {
-          incidentLedger.resolveScope(codexScope, 'Relay-root equality and Codex ownership reconciliation completed; execution-scoped failures no longer pause the project runtime.');
+          incidentLedger.resolveScope(codexScope, 'Replicated execution recovery completed; execution-scoped failures no longer pause the project runtime.');
           pausedBackgroundComponents.delete(codexRuntimeComponent);
           projectRuntime.codexRuntimePaused = false;
         }
@@ -1128,7 +1111,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             'task-state-bootstrap-recovery',
             1_000,
             'retry-codex-startup-state',
-            () => reconcileCodexStartup(false),
+            () => recoverCodexStartup(false),
             { projectId, decisionOsRoot: activeDecisionOsRoot },
           );
           return;
@@ -1136,11 +1119,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         recordBackgroundFailure(startupComponent, 'reconcile-codex-startup-state', error, { projectId, decisionOsRoot: activeDecisionOsRoot });
       }
     };
-    const startupTask = processQueueRecovery.then(() => (
-      pausedTaskProjects.has(projectId) || pausedBackgroundComponents.has(startupComponent) || projectRuntime.codexRuntimePaused === true
-        ? undefined
-        : reconcileCodexStartup()
-    ));
+    const startupTask = pausedTaskProjects.has(projectId) || pausedBackgroundComponents.has(startupComponent) || projectRuntime.codexRuntimePaused === true
+      ? Promise.resolve()
+      : recoverCodexStartup();
     startupProjectTasks.push(startupTask);
     return context;
   };
@@ -1661,9 +1642,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             const context = project ? projectContexts.get(project.decisionOsRoot) : null;
             if (!project || !context) throw new Error(`Codex runtime ${projectId} is unavailable.`);
             try {
-              await recoverCodexProcessQueue(project.decisionOsRoot, context.runtime);
-              await reconcileCodexExecutionOwnership({ decisionOsRoot: project.decisionOsRoot, runtime: context.runtime });
-              await resumeCodexPipelineRuns({ decisionOsRoot: project.decisionOsRoot, runtime: context.runtime });
+              await recoverTaskExecutions(context.runtime);
               context.runtime.codexRuntimePaused = false;
               await scheduleGlobalCodexProcesses();
             } catch (error) {
@@ -1676,8 +1655,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
             const context = project ? projectContexts.get(project.decisionOsRoot) : null;
             if (!project || !context) throw new Error(`Project runtime ${projectId} is unavailable.`);
-            await reconcileCodexExecutionOwnership({ decisionOsRoot: project.decisionOsRoot, runtime: context.runtime });
-            await resumeCodexPipelineRuns({ decisionOsRoot: project.decisionOsRoot, runtime: context.runtime });
+            await recoverTaskExecutions(context.runtime);
           }
           resumed = true;
         } catch (error) {

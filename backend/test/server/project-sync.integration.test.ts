@@ -50,6 +50,7 @@ test('exposes origin identity and fixed repository status while protecting feder
   const fakeCodex = join(home, 'fake-codex');
   writeFileSync(fakeCodex, [
     '#!/bin/sh',
+    'cat >/dev/null',
     'git add -A',
     'if ! git diff --cached --quiet; then git commit -m "synchronize decision os state" >/dev/null && git push >/dev/null; fi',
     'sha=$(git rev-parse HEAD)',
