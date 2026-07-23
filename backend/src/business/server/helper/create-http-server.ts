@@ -52,6 +52,13 @@ import { reconcileCodexExecutionOwnership } from '../../codex/helper/reconcile-c
 import { CodexExecutionProjectionPendingError, createCodexExecutionCoordinator } from '../../codex/helper/codex-execution-coordinator.js';
 import { codexExecutionCoordinator, installCodexExecutionCoordinator } from '../../codex/helper/codex-execution-runtime.js';
 import { migrateLegacyCodexExecutions } from '../../codex/helper/migrate-legacy-codex-executions.js';
+import {
+  TaskExecutionAdmissionError,
+  createTaskExecutionRouter,
+  isTaskExecutionReceipt,
+  type TaskExecutionLaunchRequest,
+  type TaskExecutionRouter,
+} from '../../codex/helper/task-execution-router.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
 import { createCodexCapacitySlots, type CodexSlotAcquireOptions } from '../../codex/helper/codex-capacity-slots.js';
 import { scheduleCodexRuntimeTimer, stopCodexRuntimeTimers } from '../../codex/helper/codex-runtime-run-store.js';
@@ -285,6 +292,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const federationContentStore = createFederationContentReplicaStore({ decisionOsRoot: masterDecisionOsRoot });
   let federationContentScheduler: ReturnType<typeof createFederationContentScheduler> | null = null;
   const projectTaskStates = new Map<string, ProjectTaskState>();
+  const taskExecutionRouters = new Map<string, TaskExecutionRouter>();
   const federatedTaskStores = new Map<string, TaskCurrentStateStore>();
   const federatedExecutionObservations = new Map<string, CodexExecutionObservation>();
   const pausedTaskProjects = new Map<string, RuntimeIncident>();
@@ -418,12 +426,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         tasksLedgerFile,
         publish: (delta) => federationTaskStateReplicator?.publishDelta(delta),
         onPersistenceError: (error) => { pauseTaskProject(project, error, 'materialize-local-task-state'); },
-        canWrite: () => {
-          if (!federation?.status().configured) return true;
-          const state = projectTaskStates.get(project.id);
-          const convergence = federationTaskStateReplicator?.diagnostics().convergence.find((entry) => entry.peerId === 'relay' && entry.projectId === project.id);
-          return Boolean(state && convergence?.converged && convergence.root === state.store.rootHash());
-        },
         initialize,
       });
       projectTaskStates.set(project.id, value);
@@ -432,6 +434,76 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (error instanceof RuntimeScopePausedError) throw error;
       throw pauseTaskProject(project, error, 'open-local-task-state');
     }
+  };
+
+  const taskExecutionRouterForProject = (project: DecisionOsProject): TaskExecutionRouter => {
+    const existing = taskExecutionRouters.get(project.id);
+    if (existing) return existing;
+    const router = createTaskExecutionRouter({
+      projectId: project.id,
+      state: () => taskStateForProject(project),
+      localNodeId: () => federation?.localOwner().ownerNodeId
+        ?? String((runtime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId ?? 'local'),
+      peer: (nodeId) => federation?.nodes().find((node) => node.nodeId === nodeId) ?? null,
+      localCapacity: globalCodexProcessCapacity,
+      dispatchRemote: async (nodeId, launch) => {
+        if (!federation) {
+          throw new TaskExecutionAdmissionError('assigned_node_unreachable', 503, { assignedNodeId: nodeId });
+        }
+        const remote = await federation.request(
+          nodeId,
+          `/p/${encodeURIComponent(project.id)}/api/internal/task-executions/admit`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: Buffer.from(JSON.stringify(launch)),
+          },
+        );
+        let body: AnyRecord = {};
+        try {
+          body = JSON.parse(remote.body.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          throw new TaskExecutionAdmissionError(
+            'task_execution_remote_response_invalid',
+            502,
+            { assignedNodeId: nodeId, remoteStatus: remote.status },
+          );
+        }
+        if (remote.status < 200 || remote.status >= 300 || body.ok === false) {
+          const remoteCode = String(body.error ?? 'task_execution_remote_admission_failed');
+          const code = remoteCode === 'owner_offline' || remoteCode === 'federation_request_timeout'
+            ? 'assigned_node_unreachable'
+            : remoteCode;
+          throw new TaskExecutionAdmissionError(code, code !== remoteCode ? 503 : remote.status || 502, {
+            assignedNodeId: nodeId,
+            ...(code !== remoteCode ? { remoteError: remoteCode } : {}),
+            ...(body.context && typeof body.context === 'object' && !Array.isArray(body.context) ? body.context as AnyRecord : {}),
+          });
+        }
+        if (!isTaskExecutionReceipt(body.receipt)) {
+          throw new TaskExecutionAdmissionError(
+            'task_execution_remote_response_invalid',
+            502,
+            { assignedNodeId: nodeId, remoteStatus: remote.status },
+          );
+        }
+        return body.receipt;
+      },
+      onCommitted: (record) => {
+        controlRoomProjectionStore?.invalidate(project.id, [{ entityType: 'execution', entityId: record.metadata.executionId }]);
+      },
+      onFailure: (error, context) => {
+        recordStoppedOperation({
+          scope: `codex-execution-admission:${project.id}:${String(context.executionId ?? 'unknown')}`,
+          component: 'task-execution-router',
+          operation: String(context.operation ?? 'task-execution-admission'),
+          error,
+          context: { projectId: project.id, ...context },
+        });
+      },
+    });
+    taskExecutionRouters.set(project.id, router);
+    return router;
   };
 
   const recordProjectBackgroundFailure = (project: DecisionOsProject, error: unknown, operation: string): void => {
@@ -701,6 +773,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         ?? (runtime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId
         ?? 'local').trim() || 'local';
       const taskProjection = (): ProjectTaskState => taskStateForProject(project);
+      Object.defineProperty(projectRuntime, 'taskExecutionRouter', {
+        value: taskExecutionRouterForProject(project),
+        configurable: true,
+        enumerable: false,
+      });
       if (!pausedTaskProjects.has(projectId)) {
         try {
           migrateLegacyCodexExecutions({
@@ -1589,6 +1666,45 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.statusCode = 503;
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: false, error: activeProject.diagnostic, projectId: activeProject.id }));
+      return;
+    }
+    if (projectScope
+      && activeProject
+      && url === '/api/internal/task-executions/admit'
+      && request.method === 'POST') {
+      response.setHeader('content-type', 'application/json');
+      const requesterNodeId = String(request.headers['x-decision-os-federation-node'] ?? '').trim();
+      const peer = federation.nodes().find((node) => node.nodeId === requesterNodeId && node.online);
+      if (!requesterNodeId || !peer) {
+        response.statusCode = 403;
+        response.end(JSON.stringify({ ok: false, error: 'federation_node_authentication_failed' }));
+        return;
+      }
+      try {
+        const launch = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as TaskExecutionLaunchRequest;
+        const receipt = await taskExecutionRouterForProject(activeProject).admitLocal(launch);
+        response.statusCode = 202;
+        response.end(JSON.stringify({ ok: true, receipt }));
+      } catch (error) {
+        const expected = error instanceof TaskExecutionAdmissionError;
+        const syntax = error instanceof SyntaxError;
+        response.statusCode = expected ? error.statusCode : syntax ? 400 : 500;
+        const incidentId = !expected && !syntax
+          ? recordStoppedOperation({
+            scope: `task-execution-admission:${activeProject.id}:${requesterNodeId}`,
+            component: 'task-execution-router',
+            operation: 'admit-federated-task-execution',
+            error,
+            context: { projectId: activeProject.id, requesterNodeId },
+          })
+          : '';
+        response.end(JSON.stringify({
+          ok: false,
+          error: expected ? error.code : syntax ? 'invalid_json' : 'task_execution_admission_failed',
+          ...(expected ? { context: error.context } : {}),
+          ...(incidentId ? { incidentId } : {}),
+        }));
+      }
       return;
     }
     if (!projectScope && url === '/api/federation/nodes' && request.method === 'GET') {

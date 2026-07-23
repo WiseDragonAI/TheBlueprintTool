@@ -14,6 +14,8 @@ import { traces } from '@backend/telemetry/harness.js';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { createRuntimeIncidentLedger } from '@backend/business/server/helper/runtime-incident-ledger.js';
 import { scheduleCodexRuntimeTimer } from '@backend/business/codex/helper/codex-runtime-run-store.js';
+import { createTaskExecutionLaunchRequest, type TaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
+import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 
 test('create-http-server executes implemented behavior and records telemetry', async () => {
   traces.length = 0;
@@ -180,17 +182,37 @@ test('create-http-server resolves retained transient task bootstrap incidents at
   }
 });
 
-test('transient task bootstrap rejection returns 503 without degrading server health', async () => {
+test('server admits local assigned execution while its configured relay is unreachable', async () => {
   const originalCwd = process.cwd();
-  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-bootstrap-http-gate-'));
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-local-execution-relay-outage-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
   const frontendRoot = join(projectRoot, 'frontend');
   mkdirSync(decisionOsRoot, { recursive: true });
   mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'project-a', name: 'Project A' }));
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
     ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
   }));
-  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {} }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{
+      id: 'master',
+      title: 'Local task',
+      status: 'todo',
+      labels: ['master-task'],
+      assignment: { nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+  }));
+  const migratedState = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot,
+    tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
+    initialize: true,
+  });
+  await migratedState.flush();
   writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
   process.chdir(projectRoot);
   const runtime: Record<string, unknown> = {
@@ -208,27 +230,29 @@ test('transient task bootstrap rejection returns 503 without degrading server he
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
-    const form = new FormData();
-    form.append('audio', new Blob(['voice-bytes'], { type: 'audio/webm' }), 'voice.webm');
-    form.append('ledgerId', 'tasks');
-    form.append('threadId', 'thread-card-a');
-    form.append('cardId', 'card-a');
-    form.append('noteId', 'note-a');
-    form.append('queueCodex', 'false');
-    form.append('transcriptionText', 'Transient bootstrap test.');
-    form.append('awaitCompletion', 'true');
-    const rejection = await fetch(`${baseUrl}/api/voice-upload`, { method: 'POST', body: form });
-    assert.equal(rejection.status, 503);
-    const rejectionBody = await rejection.json() as { error: string; incidentId: string };
-    assert.equal(rejectionBody.error, 'task-state-bootstrap-incomplete');
-    assert.match(rejectionBody.incidentId, /^incident-/);
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    const unauthenticated = await fetch(`${baseUrl}/p/project-a/api/internal/task-executions/admit`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    assert.equal(unauthenticated.status, 403);
+    assert.equal((await unauthenticated.json() as { error: string }).error, 'federation_node_authentication_failed');
+    const router = runtime.taskExecutionRouter as TaskExecutionRouter;
+    assert.ok(router);
+    const admitted = await router.route(createTaskExecutionLaunchRequest({
+      requestId: 'request-local',
+      executionId: 'execution-local',
+      projectId: 'project-a',
+      ledgerId: 'tasks',
+      sessionId: 'session-local',
+      sourceCardId: 'master',
+      requestedAt: '2026-07-23T01:01:00.000Z',
+    }));
+    assert.equal(admitted.phase, 'queued');
+    assert.equal(admitted.executorNodeId, 'workstation');
     const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; activeIncidentCount: number };
     assert.equal(health.status, 'ready');
     assert.equal(health.activeIncidentCount, 0);
-    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ code: string; scope: string; status: string }> };
-    assert.ok(incidents.incidents.some((incident) => incident.code === 'task_state_bootstrap_incomplete' && incident.status === 'resolved'));
-    assert.ok(incidents.incidents.some((incident) => incident.scope.startsWith('project-task-write:') && incident.status === 'resolved'));
   } finally {
     server.close();
     await once(server, 'close');

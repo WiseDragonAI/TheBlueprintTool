@@ -4,7 +4,7 @@
 2. **Implementation branch:** `feature/epoch4-task-execution`.
 3. **Base commit:** `0c72b4ed95c12bcfb0a27ddcbf56f4ecfdba5df7`.
 4. **Production branch:** `main`.
-5. **Current phase:** `J.5 — Install assignment-aware admission`.
+5. **Current phase:** `J.6 — Replace direct execution authority`.
 6. **Overall state:** `in-progress`.
 7. **Production state:** epoch `3` remains active. Epoch `4` is not admitted for production use.
 
@@ -83,7 +83,18 @@
    8. Offline migration now emits the required all-null artifact lane for executions without captured files; the repository indexes every migrated execution.
    9. Focused backend result: `76/76`.
    10. Backend typecheck passed.
-5. **J.5 — Install assignment-aware admission:** `pending`.
+5. **J.5 — Install assignment-aware admission:** `verified`.
+   1. One `TaskExecutionRouter` resolves every task source to its master and reads the master’s conflict-free assignment before choosing a destination.
+   2. Local admission serially persists `preparing`, validates the lineage, active-execution fence, predecessor, session policy hook, and capacity policy hook, then persists `queued`.
+   3. Local retries return the original durable receipt by `projectId`, `taskId`, and `requestId`; concurrent direct admissions allow exactly one queued execution.
+   4. Connected remote assignment uses the connector’s authenticated node request and the assigned node’s identical local admission path.
+   5. Offline assigned nodes return `assigned_node_unreachable` with `assignedNodeId` and create no execution on the requesting node.
+   6. Assignment conflict blocks before admission. A local post-`preparing` validation rejection is retained as one durable failed execution.
+   7. Non-task execution binds directly to the current node and creates no task assignment state.
+   8. The internal admission route requires a currently online authenticated federation peer.
+   9. The server no longer includes relay-root equality in the project task-state write predicate.
+   10. Focused router and server result: `20/20`.
+   11. Backend typecheck passed.
 6. **J.6 — Replace direct execution authority:** `pending`.
 7. **J.7 — Replace pipeline execution authority:** `pending`.
 8. **J.8 — Move exceptional launch paths:** `pending`.
@@ -98,12 +109,11 @@
 
 ## D. Current Verified Gaps
 
-1. The current task-state write predicate requires relay-root convergence.
-2. Direct execution admission writes `.decision-os/codex-executions.json` before the scheduler-visible legacy queue.
-3. The scheduler reads `.decision-os/codex-process-queue.json` and mutable pipeline manifests instead of the replicated execution entities.
-4. Pipeline and direct spawn callbacks can publish `spawned()` without awaiting durable lifecycle settlement.
-5. The installed legacy coordinator still writes `.decision-os/codex-executions.json` and projects card execution intent until gates `J.6` through `J.8` move its callers.
-6. Runtime pause policy can block unrelated admissions after one execution failure.
+1. Direct execution launch surfaces still bypass `TaskExecutionRouter` and write `.decision-os/codex-executions.json` before the scheduler-visible legacy queue.
+2. The scheduler reads `.decision-os/codex-process-queue.json` and mutable pipeline manifests instead of the replicated execution entities.
+3. Pipeline and direct spawn callbacks can publish `spawned()` without awaiting durable lifecycle settlement.
+4. The installed legacy coordinator still writes `.decision-os/codex-executions.json` and projects card execution intent until gates `J.6` through `J.8` move its callers.
+5. Runtime pause policy can block unrelated admissions after one execution failure.
 
 ---
 
@@ -142,6 +152,10 @@
 15. **Replicated execution repository:** passed `76/76`.
     1. Command from `backend/`: `node ../bin/decision-os-verify.mjs -- node --test --import tsx test/unit/task-state/task-current-state-core-v4.test.ts test/unit/task-state/task-current-state-join.test.ts test/unit/task-state/task-current-state-store.test.ts test/unit/federation/federation-task-state-replicator.test.ts test/unit/task-state/task-execution-repository.test.ts test/unit/server/helper/control-room-projection-store.test.ts test/unit/task-state/project-task-state.test.ts test/unit/task-state/task-current-state-migration.test.ts`.
     2. Evidence covers live federation, offline anti-entropy, deterministic joins, repository idempotency, all derived indexes, awaited transitions, conflicts, migration loading, Control Room projection, and bounded execution invalidation.
+    3. Backend typecheck passed.
+16. **Assignment-aware admission:** passed `20/20`.
+    1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=<absolute-worktree-backend-tsconfig> node --test --import <tsx-loader> backend/test/unit/codex/task-execution-router.test.ts backend/test/unit/server/helper/create-http-server.test.ts`.
+    2. Evidence covers master resolution, local relay-independent admission, authenticated remote boundary, exact retry receipts, offline peer rejection without requester state, explicit assignment conflict, contained failed validation, direct-run serialization, complete pipeline topology admission, non-task locality, server installation, and health during relay outage.
     3. Backend typecheck passed.
 
 ---
