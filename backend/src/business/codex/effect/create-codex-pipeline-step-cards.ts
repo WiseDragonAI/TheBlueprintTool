@@ -28,6 +28,7 @@ export async function createCodexPipelineStepCards(input: {
   const synchronizationRun = input.run.pipelineId === 'project-synchronization';
   for (const [index, step] of input.run.steps.entries()) {
     const firstSkill = step.skills[0];
+    const projectLegacyLifecycle = input.run.temporary;
     const card = {
       id: step.outputCardId,
       title: input.run.temporary && input.run.steps.length === 1
@@ -46,8 +47,10 @@ export async function createCodexPipelineStepCards(input: {
       codexPipelineStepName: step.name,
       codexPipelineName: input.run.pipelineName,
       codexRunId: firstSkill?.runId ?? '',
-      codexActiveRunId: firstSkill?.runId ?? '',
-      codexActiveExecutionId: firstSkill?.executionId ?? '',
+      ...(projectLegacyLifecycle ? {
+        codexActiveRunId: firstSkill?.runId ?? '',
+        codexActiveExecutionId: firstSkill?.executionId ?? '',
+      } : {}),
       codexSkillName: firstSkill?.skillName ?? '',
       codexRunModel: firstSkill?.codexModel ?? '',
       codexRunEffort: firstSkill?.codexEffort ?? '',
@@ -84,16 +87,18 @@ export async function createCodexPipelineStepCards(input: {
     previousCardId = step.outputCardId;
   }
   const firstSkill = input.run.steps[0]?.skills[0];
-  input.source.codexQueuedPipelineRunId = input.run.id;
-  input.source.codexQueuedRunId = firstSkill?.runId ?? '';
-  input.source.codexActiveRunId = firstSkill?.runId ?? '';
-  input.source.codexActiveExecutionId = firstSkill?.executionId ?? '';
-  if (input.context.ledgerId === 'tasks') projectCardExecutionIntent({
-    card: input.source,
-    intentId: input.run.id,
-    state: 'queued',
-    changedAt: input.run.createdAt,
-  });
+  if (input.run.temporary) {
+    input.source.codexQueuedPipelineRunId = input.run.id;
+    input.source.codexQueuedRunId = firstSkill?.runId ?? '';
+    input.source.codexActiveRunId = firstSkill?.runId ?? '';
+    input.source.codexActiveExecutionId = firstSkill?.executionId ?? '';
+    if (input.context.ledgerId === 'tasks') projectCardExecutionIntent({
+      card: input.source,
+      intentId: input.run.id,
+      state: 'queued',
+      changedAt: input.run.createdAt,
+    });
+  }
   stripHydratedThreadNotes(input.context.ledger);
   await persistLedgerProjection({
     decisionOsRoot: input.decisionOsRoot,

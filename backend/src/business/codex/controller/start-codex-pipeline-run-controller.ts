@@ -2,7 +2,7 @@
  * WHAT: Orchestrates validation, durable setup, event publication, and first-skill launch for one Codex pipeline.
  * WHY: The full pending pipeline must be visible and durable before asynchronous execution begins.
  */
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type {
   CodexEffort,
@@ -21,6 +21,8 @@ import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { runtimeServerRoot } from '../helper/server-skill-context.js';
 import { readScopedCodexPipelineStores } from '../helper/server-pipeline-catalog.js';
 import {
+  maxConcurrentCodexProcesses,
+  reassessPipelineAfterSkill,
   resolvePipelineLedgerContext,
   type PipelineLedgerContext,
 } from '../helper/codex-pipeline-runner.js';
@@ -29,6 +31,11 @@ import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
+import {
+  createTaskExecutionLaunchRequest,
+  TaskExecutionAdmissionError,
+} from '../helper/task-execution-router.js';
+import { taskExecutionNodeId, taskExecutionRouter, taskExecutionState } from '../helper/task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -81,6 +88,7 @@ export async function startPipelineRun(input: {
   definition: PipelineDefinition;
   onLedgerChange?: unknown;
   admissionLocked?: boolean;
+  restartOfRun?: CodexPipelineRun | null;
 }): Promise<AnyRecord> {
   if (!input.admissionLocked) {
     return withCardCodexAdmission(
@@ -118,6 +126,45 @@ export async function startPipelineRun(input: {
   if (!context) return { ok: false, statusCode: 404, error: 'Ledger not found.', ledgerId: input.ledgerId };
   const source = sourceCard(context, input.sourceCardId);
   if (!source) return { ok: false, statusCode: 404, error: 'Source card not found.', cardId: input.sourceCardId };
+  const replicatedState = taskExecutionState(input.runtime);
+  if (!input.definition.temporary && !input.restartOfRun && replicatedState) {
+    const existing = normalized.store.runs.find((candidate) => (
+      candidate.pipelineId === input.definition.pipelineId
+      && candidate.ledgerId === input.ledgerId
+      && candidate.sourceCardId === input.sourceCardId
+      && replicatedState.executions.byPipelineRunId(candidate.id).some((execution) => (
+        execution.lifecycle.phase === 'preparing'
+        || execution.lifecycle.phase === 'queued'
+        || execution.lifecycle.phase === 'starting'
+        || execution.lifecycle.phase === 'running'
+        || execution.lifecycle.phase === 'cancelling'
+      ))
+    ));
+    if (existing) {
+      const projected = reassessPipelineAfterSkill({
+        decisionOsRoot: input.decisionOsRoot,
+        runtime: input.runtime,
+        pipelineRunId: existing.id,
+      }) ?? existing;
+      const first = replicatedState.executions.byPipelineRunId(existing.id)
+        .find((execution) => execution.lifecycle.phase === 'queued');
+      return {
+        ok: true,
+        statusCode: 202,
+        run: projected,
+        skillRun: null,
+        queuePosition: first
+          ? unifiedCodexQueuePosition({
+            decisionOsRoot: input.decisionOsRoot,
+            id: first.metadata.executionId,
+            createdAt: first.metadata.requestedAt,
+            runtime: input.runtime,
+          })
+          : null,
+        maxConcurrentCodexProcesses: maxConcurrentCodexProcesses(input.runtime),
+      };
+    }
+  }
   const ownership = cardCodexExecutionOwnership(source);
   if (ownership.state === 'contradictory') return { ok: false, statusCode: 409, error: 'Source card has contradictory Codex execution ownership.', ...ownership };
   const activeRunId = ownership.state === 'active' ? ownership.lease.runId : '';
@@ -158,6 +205,7 @@ export async function startPipelineRun(input: {
       sourceCardId: input.sourceCardId,
       sourceCardTitle: String(source.title ?? input.sourceCardId),
       ledgerPath: context.ledgerPath,
+      restartOfPipelineRunId: input.restartOfRun?.id ?? null,
     });
   } catch (error) {
     // WHAT: Surface option-resolution errors as request failures.
@@ -183,6 +231,93 @@ export async function startPipelineRun(input: {
     // WHAT: Report manifest persistence failure before launching Codex.
     // WHY: An untracked child process could not be resumed or cancelled safely.
     return { ok: false, statusCode: 500, error: 'Could not persist the pipeline run manifest.' };
+  }
+  const router = taskExecutionRouter(input.runtime);
+  if (!run.temporary && run.executionMode !== 'federated' && router) {
+    if (typeof input.onLedgerChange === 'function') input.runtime.onPipelineLedgerChange = input.onLedgerChange;
+    const previousExecutions = input.restartOfRun
+      ? input.restartOfRun.steps.flatMap((step) => step.skills)
+      : [];
+    const topology = run.steps.flatMap((step) => step.skills.map((skill) => ({ step, skill })));
+    const requests = topology.map(({ step, skill }, index) => createTaskExecutionLaunchRequest({
+      requestId: `pipeline:${run.id}:${skill.executionId}`,
+      executionId: skill.executionId,
+      projectId: String(input.runtime.projectId ?? ''),
+      ledgerId: run.ledgerId,
+      sessionId: skill.runId,
+      sourceCardId: run.sourceCardId,
+      ownerCardId: step.outputCardId,
+      kind: 'pipeline-skill',
+      requestedAt: run.createdAt,
+      model: skill.codexModel,
+      effort: skill.codexEffort,
+      pipelineRunId: run.id,
+      pipelineStepId: step.id,
+      pipelineSkillRunId: skill.runId,
+      predecessorExecutionId: index === 0 ? null : topology[index - 1].skill.executionId,
+      restartOfExecutionId: previousExecutions[index]?.executionId ?? null,
+    }));
+    try {
+      const receipts = await router.routeBatch(requests);
+      const projected = reassessPipelineAfterSkill({
+        decisionOsRoot: input.decisionOsRoot,
+        runtime: input.runtime,
+        pipelineRunId: run.id,
+      }) ?? run;
+      if (typeof input.onLedgerChange === 'function') {
+        (input.onLedgerChange as (event: AnyRecord) => void)({
+          reason: 'pipeline-enqueued',
+          ledgerId: input.ledgerId,
+          pipelineRunId: run.id,
+          runId: topology[0]?.skill.runId ?? '',
+          executionId: topology[0]?.skill.executionId ?? '',
+          status: 'pending',
+          cardId: input.sourceCardId,
+          cardIds: run.steps.map((step) => step.outputCardId),
+        });
+      }
+      return {
+        ok: true,
+        statusCode: 202,
+        run: projected,
+        receipts,
+        skillRun: null,
+        queuePosition: receipts[0]?.executorNodeId === taskExecutionNodeId(input.runtime)
+          ? unifiedCodexQueuePosition({
+            decisionOsRoot: input.decisionOsRoot,
+            id: receipts[0].executionId,
+            createdAt: receipts[0].requestedAt,
+            runtime: input.runtime,
+          })
+          : null,
+        maxConcurrentCodexProcesses: maxConcurrentCodexProcesses(input.runtime),
+      };
+    } catch (error) {
+      const current = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
+      writeCodexPipelineStore({
+        decisionOsRoot: input.decisionOsRoot,
+        availableSkillNames,
+        store: { ...current.store, runs: current.store.runs.filter((entry) => entry.id !== run.id) },
+      });
+      await rollbackPipelineCards({
+        decisionOsRoot: input.decisionOsRoot,
+        context,
+        ledgerBefore,
+        sourceCardId: input.sourceCardId,
+        outputCardIds: run.steps.map((step) => step.outputCardId),
+      });
+      if (error instanceof TaskExecutionAdmissionError) {
+        return {
+          ok: false,
+          statusCode: error.statusCode,
+          code: error.code,
+          retryable: error.statusCode >= 500,
+          error: error.message,
+          context: error.context,
+        };
+      }
+      throw error;
+    }
   }
   const executionCoordinator = codexExecutionCoordinator(input.runtime);
   const firstStep = run.steps[0];

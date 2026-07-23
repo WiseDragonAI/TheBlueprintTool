@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import {
   pipelineRuntimeRun,
+  cancelPipelineDependents,
   reassessPipelineAfterSkill,
   scheduleCodexPipelineRuns,
 } from '../helper/codex-pipeline-runner.js';
@@ -16,6 +17,7 @@ import { signalCodexProcessTree } from '../helper/reconcile-terminal-codex-proce
 import { isSameCodexProcess } from '../helper/codex-process-queue.js';
 import { scheduleCodexRuntime } from '../helper/codex-runtime-run-store.js';
 import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
+import { taskExecutionProcess, taskExecutionState } from '../helper/task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -36,6 +38,53 @@ export async function cancelCodexPipelineRunController(
   const store = readCodexPipelineStore({ decisionOsRoot }).store;
   const run = store.runs.find((entry) => entry.id === runId);
   if (!run) return { ok: false, statusCode: 404, error: 'Pipeline run not found.', runId };
+  const replicatedState = taskExecutionState(runtime);
+  const replicatedExecution = replicatedState?.executions.find(executionId) ?? null;
+  if (replicatedState && replicatedExecution?.metadata.pipelineRunId === run.id) {
+    const current = replicatedExecution.lifecycle.phase;
+    if (current === 'succeeded' || current === 'failed' || current === 'cancelled' || current === 'interrupted') {
+      return readCodexPipelineRunController({ action_payload: { runId }, runtime_state: runtime });
+    }
+    if (current === 'preparing' || current === 'queued') {
+      await replicatedState.executions.transition(executionId, {
+        phase: 'cancelled',
+        result: { status: 'cancelled', summary: 'terminated by operator' },
+      });
+      await cancelPipelineDependents({ runtime, pipelineRunId: run.id, executionId });
+      const detail = await readCodexPipelineRunController({ action_payload: { runId }, runtime_state: runtime });
+      return { ...detail, status: 'cancelled', statusCode: 202, cancellationRequested: true };
+    }
+    if (current === 'cancelling') {
+      return { ok: true, statusCode: 202, status: 'running', cancellationRequested: true, runId, executionId };
+    }
+    const process = taskExecutionProcess(runtime, executionId);
+    if (!process || process.child.exitCode !== null) {
+      return {
+        ok: false,
+        statusCode: 409,
+        error: 'Pipeline run could not be cancelled from its live process identity.',
+        runId,
+        executionId,
+      };
+    }
+    await replicatedState.executions.transition(executionId, { phase: 'cancelling' });
+    const runtimeRun = pipelineRuntimeRun(runtime, replicatedExecution.metadata.sessionId);
+    if (runtimeRun) runtimeRun.cancelRequestedAt = new Date().toISOString();
+    const signalled = signalCodexProcessTree({ child: process.child, signal: 'SIGTERM' });
+    if (!signalled) {
+      await replicatedState.executions.transition(executionId, {
+        phase: 'failed',
+        error: { code: 'codex_pipeline_cancel_signal_failed', message: 'Could not signal the live pipeline process.' },
+        result: { status: 'failed', summary: 'Could not signal the live pipeline process.' },
+      });
+      return { ok: false, statusCode: 500, error: 'Could not signal the live pipeline process.', runId, executionId };
+    }
+    const forceStop = setTimeout(() => {
+      if (process.child.exitCode === null) signalCodexProcessTree({ child: process.child, signal: 'SIGKILL' });
+    }, 2_000);
+    forceStop.unref?.();
+    return { ok: true, statusCode: 202, status: 'running', cancellationRequested: true, runId, executionId };
+  }
   if (run.status === 'complete' || run.status === 'failed' || run.status === 'cancelled') {
     return readCodexPipelineRunController({ action_payload: { runId }, runtime_state: runtime });
   }

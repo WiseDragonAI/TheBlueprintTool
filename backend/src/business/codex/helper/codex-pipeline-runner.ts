@@ -39,6 +39,11 @@ import {
   updateCodexRuntimeRun as updateRuntimeRun,
 } from './codex-runtime-run-store.js';
 import { codexExecutionCoordinator } from './codex-execution-runtime.js';
+import {
+  registerTaskExecutionProcess,
+  removeTaskExecutionProcess,
+  taskExecutionState,
+} from './task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type TerminalStatus = 'complete' | 'failed' | 'cancelled';
@@ -275,6 +280,16 @@ export function derivePipelineSkillStatus(input: {
   skill: CodexPipelineRunSkill;
   runtime?: AnyRecord;
 }): CodexPipelineStatus {
+  const replicated = input.runtime
+    ? taskExecutionState(input.runtime)?.executions.find(input.skill.executionId)
+    : null;
+  if (replicated) {
+    if (replicated.lifecycle.phase === 'preparing' || replicated.lifecycle.phase === 'queued') return 'pending';
+    if (replicated.lifecycle.phase === 'starting' || replicated.lifecycle.phase === 'running' || replicated.lifecycle.phase === 'cancelling') return 'running';
+    if (replicated.lifecycle.phase === 'succeeded') return 'complete';
+    if (replicated.lifecycle.phase === 'cancelled') return 'cancelled';
+    return 'failed';
+  }
   const canonical = input.runtime ? codexExecutionCoordinator(input.runtime)?.store.find(input.skill.executionId) : null;
   if (canonical) {
     if (canonical.phase === 'preparing' || canonical.phase === 'queued') return 'pending';
@@ -289,16 +304,16 @@ export function derivePipelineSkillStatus(input: {
 }
 
 function stepStatus(skills: readonly CodexPipelineRunSkill[]): CodexPipelineStatus {
-  if (skills.some((skill) => skill.status === 'cancelled')) return 'cancelled';
   if (skills.some((skill) => skill.status === 'failed')) return 'failed';
+  if (skills.some((skill) => skill.status === 'cancelled')) return 'cancelled';
   if (skills.length > 0 && skills.every((skill) => skill.status === 'complete')) return 'complete';
   if (skills.some((skill) => skill.status === 'running' || skill.status === 'complete')) return 'running';
   return 'pending';
 }
 
 function runStatus(steps: readonly CodexPipelineRunStep[], previous: CodexPipelineStatus): CodexPipelineStatus {
-  if (previous === 'cancelled' || steps.some((step) => step.status === 'cancelled')) return 'cancelled';
   if (steps.some((step) => step.status === 'failed')) return 'failed';
+  if (previous === 'cancelled' || steps.some((step) => step.status === 'cancelled')) return 'cancelled';
   if (steps.length > 0 && steps.every((step) => step.status === 'complete')) return 'complete';
   if (steps.some((step) => step.status === 'running' || step.status === 'complete')) return 'running';
   return 'pending';
@@ -306,6 +321,57 @@ function runStatus(steps: readonly CodexPipelineRunStep[], previous: CodexPipeli
 
 function isTerminal(status: CodexPipelineStatus): status is TerminalStatus {
   return status === 'complete' || status === 'failed' || status === 'cancelled';
+}
+
+function replicatedPipelineRun(run: CodexPipelineRun, runtime: AnyRecord): CodexPipelineRun | null {
+  const state = taskExecutionState(runtime);
+  const executions = state?.executions.byPipelineRunId(run.id) ?? [];
+  if (executions.length === 0) return null;
+  const byId = new Map(executions.map((record) => [record.metadata.executionId, record]));
+  const steps = run.steps.map((step) => {
+    const skills = step.skills.map((skill) => {
+      const execution = byId.get(skill.executionId);
+      if (!execution) return skill;
+      const status = derivePipelineSkillStatus({ skill, runtime });
+      return {
+        ...skill,
+        status,
+        processId: undefined,
+        processStartTime: undefined,
+        startedAt: execution.lifecycle.startedAt,
+        finishedAt: execution.lifecycle.finishedAt,
+        error: execution.lifecycle.error?.message ?? '',
+      };
+    });
+    const status = stepStatus(skills);
+    const timestamps = skills.map((skill) => skill.startedAt).filter((value): value is string => Boolean(value)).sort();
+    const finished = skills.map((skill) => skill.finishedAt).filter((value): value is string => Boolean(value)).sort();
+    return {
+      ...step,
+      skills,
+      status,
+      startedAt: timestamps[0] ?? null,
+      finishedAt: isTerminal(status) ? finished.at(-1) ?? null : null,
+      error: skills.find((skill) => skill.status === 'failed')?.error
+        ?? skills.find((skill) => skill.status === 'cancelled')?.error
+        ?? '',
+    };
+  });
+  const status = runStatus(steps, 'pending');
+  const started = executions.map((record) => record.lifecycle.startedAt).filter((value): value is string => Boolean(value)).sort();
+  const finished = executions.map((record) => record.lifecycle.finishedAt).filter((value): value is string => Boolean(value)).sort();
+  const changed = executions.map((record) => record.lifecycle.phaseSince).sort();
+  return {
+    ...run,
+    steps,
+    status,
+    updatedAt: changed.at(-1) ?? run.updatedAt,
+    startedAt: started[0] ?? null,
+    finishedAt: isTerminal(status) ? finished.at(-1) ?? null : null,
+    error: steps.find((step) => step.status === 'failed')?.error
+      ?? steps.find((step) => step.status === 'cancelled')?.error
+      ?? '',
+  };
 }
 
 export function reassessPipelineAfterSkill(input: {
@@ -321,6 +387,16 @@ export function reassessPipelineAfterSkill(input: {
   const before = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
   const prior = before.store.runs.find((run) => run.id === input.pipelineRunId);
   if (!prior) return null;
+  const replicated = replicatedPipelineRun(prior, input.runtime);
+  if (replicated) {
+    const context = resolvePipelineLedgerContext({
+      decisionOsRoot: input.decisionOsRoot,
+      runtime: input.runtime,
+      ledgerId: replicated.ledgerId,
+    });
+    if (context) hydrateLedgerCardContent(context.ledger, input.decisionOsRoot);
+    return replicated;
+  }
   const now = input.finishedAt ?? new Date().toISOString();
   const steps = prior.steps.map((step) => {
     const skills = step.skills.map((skill) => {
@@ -455,6 +531,40 @@ function priorInput(input: {
   };
 }
 
+export async function cancelPipelineDependents(input: {
+  runtime: AnyRecord;
+  pipelineRunId: string;
+  executionId: string;
+}): Promise<void> {
+  const state = taskExecutionState(input.runtime);
+  if (!state) return;
+  const records = state.executions.byPipelineRunId(input.pipelineRunId);
+  const dependentIds = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const record of records) {
+      const predecessor = record.metadata.predecessorExecutionId;
+      if (!predecessor || (!dependentIds.has(predecessor) && predecessor !== input.executionId)) continue;
+      if (!dependentIds.has(record.metadata.executionId)) {
+        dependentIds.add(record.metadata.executionId);
+        changed = true;
+      }
+    }
+  }
+  for (const executionId of dependentIds) {
+    const current = state.executions.find(executionId);
+    if (current?.lifecycle.phase !== 'preparing' && current?.lifecycle.phase !== 'queued') continue;
+    await state.executions.transition(executionId, {
+      phase: 'cancelled',
+      result: {
+        status: 'cancelled',
+        summary: 'pipeline_dependency_failed',
+      },
+    });
+  }
+}
+
 export async function spawnPipelineSkillProcess(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
@@ -471,7 +581,11 @@ export async function spawnPipelineSkillProcess(input: {
   if (!context) throw new Error(`Ledger ${input.pipelineRun.ledgerId} could not be loaded for pipeline run ${input.pipelineRun.id}.`);
   const outputFile = outputFileForCard(context, input.decisionOsRoot, input.step.outputCardId);
   if (!outputFile) throw new Error(`Output card ${input.step.outputCardId} has no Markdown file.`);
-  await projectPipelineSkillRun({ decisionOsRoot: input.decisionOsRoot, context, step: input.step, skill: input.skill, pipelineRun: input.pipelineRun });
+  const replicatedState = taskExecutionState(input.runtime);
+  const replicatedExecution = replicatedState?.executions.find(input.skill.executionId) ?? null;
+  if (!replicatedExecution) {
+    await projectPipelineSkillRun({ decisionOsRoot: input.decisionOsRoot, context, step: input.step, skill: input.skill, pipelineRun: input.pipelineRun });
+  }
   const stageInput = priorInput({
     run: input.pipelineRun,
     step: input.step,
@@ -523,7 +637,7 @@ export async function spawnPipelineSkillProcess(input: {
     startLine: 0,
     startedAt,
     metadata: { sourceCardTitle: input.pipelineRun.sourceCardTitle, codexModel: command.model, codexEffort: command.effort },
-    onSpawn: (child, launchedAt) => {
+    onSpawn: async (child, launchedAt) => {
       runtimeRun = updateRuntimeRun(input.runtime, input.skill.runId, {
         id: input.skill.runId,
         executionId: input.skill.executionId,
@@ -547,24 +661,44 @@ export async function spawnPipelineSkillProcess(input: {
         startedAt: launchedAt,
       });
       attachRuntimeChild(input.runtime, input.skill.runId, child);
-      recordPipelineSkillProcess({ decisionOsRoot: input.decisionOsRoot, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, processId: child.pid ?? 0 });
-      if (executionCoordinator) void executionCoordinator.spawned(input.skill.executionId, {
-        processId: child.pid ?? null,
-        processStartTime: codexProcessIdentity(child.pid ?? 0) || null,
-        stdoutFile: input.skill.stdoutFile,
-        stderrFile: input.skill.stderrFile,
-      }).catch((error: unknown) => {
-        if (typeof input.runtime.onCodexBackgroundError === 'function') input.runtime.onCodexBackgroundError({ operation: 'project-canonical-pipeline-spawn', error, context: { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId } });
-      });
+      if (replicatedState && replicatedExecution) {
+        const processId = child.pid ?? 0;
+        const processStartTime = codexProcessIdentity(processId);
+        registerTaskExecutionProcess(input.runtime, {
+          executionId: input.skill.executionId,
+          sessionId: input.skill.runId,
+          child,
+          processId,
+          processStartTime,
+          startedAt: launchedAt,
+          stdoutFile: input.skill.stdoutFile,
+          stderrFile: input.skill.stderrFile,
+        });
+        try {
+          await replicatedState.executions.transition(input.skill.executionId, { phase: 'running' });
+        } catch (error) {
+          removeTaskExecutionProcess(input.runtime, input.skill.executionId);
+          throw error;
+        }
+      } else {
+        recordPipelineSkillProcess({ decisionOsRoot: input.decisionOsRoot, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, processId: child.pid ?? 0 });
+        if (executionCoordinator) await executionCoordinator.spawned(input.skill.executionId, {
+          processId: child.pid ?? null,
+          processStartTime: codexProcessIdentity(child.pid ?? 0) || null,
+          stdoutFile: input.skill.stdoutFile,
+          stderrFile: input.skill.stderrFile,
+        });
+      }
       notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-started', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', cardId: input.step.outputCardId });
     },
     onTurnStarted: (_event, observedAt) => {
-      if (executionCoordinator) void executionCoordinator.heartbeat(input.skill.executionId).catch((error: unknown) => {
+      if (!replicatedExecution && executionCoordinator) void executionCoordinator.heartbeat(input.skill.executionId).catch((error: unknown) => {
         if (typeof input.runtime.onCodexBackgroundError === 'function') input.runtime.onCodexBackgroundError({ operation: 'publish-canonical-pipeline-heartbeat', error, context: { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId } });
       });
       notify(input.runtime.onCodexTurnStarted, { ledgerId: input.pipelineRun.ledgerId, cardId: input.pipelineRun.sourceCardId, outputCardId: input.step.outputCardId, threadId: `thread-${input.pipelineRun.sourceCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', startedAt: observedAt });
     },
     onSettled: async (settlement) => {
+      if (replicatedExecution) removeTaskExecutionProcess(input.runtime, input.skill.executionId);
       const cancelled = pipelineRuntimeRun(input.runtime, input.skill.runId)?.cancelRequestedAt || runtimeStatus(input.runtime, input.skill.runId) === 'cancelled';
       const status: TerminalStatus = cancelled
         ? 'cancelled'
@@ -579,11 +713,29 @@ export async function spawnPipelineSkillProcess(input: {
       if (status === 'cancelled') appendFileSync(input.skill.stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       if (status === 'failed') appendFileSync(input.skill.stderrFile, `Codex run failed: ${detail}\n`, 'utf8');
       appendFileSync(input.skill.stderrFile, codexRunExecutionFinishedMarker({ runId: input.skill.runId, executionId: input.skill.executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
-      if (executionCoordinator) await executionCoordinator.settle(input.skill.executionId, {
-        phase: status === 'complete' ? 'succeeded' : status,
-        result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
-        error: status === 'failed' ? { code: 'codex_pipeline_skill_failed', message: detail } : null,
-      });
+      if (replicatedState && replicatedExecution) {
+        const current = replicatedState.executions.find(input.skill.executionId);
+        if (current && (current.lifecycle.phase === 'starting' || current.lifecycle.phase === 'running' || current.lifecycle.phase === 'cancelling')) {
+          await replicatedState.executions.transition(input.skill.executionId, {
+            phase: status === 'complete' ? 'succeeded' : status,
+            result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
+            error: status === 'failed' ? { code: 'codex_pipeline_skill_failed', message: detail } : null,
+          });
+        }
+        if (status === 'failed' || status === 'cancelled') {
+          await cancelPipelineDependents({
+            runtime: input.runtime,
+            pipelineRunId: input.pipelineRun.id,
+            executionId: input.skill.executionId,
+          });
+        }
+      } else if (executionCoordinator) {
+        await executionCoordinator.settle(input.skill.executionId, {
+          phase: status === 'complete' ? 'succeeded' : status,
+          result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
+          error: status === 'failed' ? { code: 'codex_pipeline_skill_failed', message: detail } : null,
+        });
+      }
       const reassessed = reassessPipelineAfterSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, settledStatus: status, error, exitCode, finishedAt: settlement.finishedAt });
       updateRuntimeRun(input.runtime, input.skill.runId, { settledAt: new Date().toISOString() });
       notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-settled', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, cardId: input.step.outputCardId, status, pipelineStatus: reassessed?.status ?? status });
@@ -592,6 +744,75 @@ export async function spawnPipelineSkillProcess(input: {
     },
   });
   return publicPipelineSkillRuntimeRun(runtimeRun);
+}
+
+export async function runPipelineExecution(input: {
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+  executionId: string;
+}): Promise<AnyRecord> {
+  const state = taskExecutionState(input.runtime);
+  const execution = state?.executions.find(input.executionId) ?? null;
+  if (!state || !execution) return { ok: false, statusCode: 404, error: 'Pipeline execution not found.', executionId: input.executionId };
+  if (execution.metadata.kind !== 'pipeline-skill' || !execution.metadata.pipelineRunId) {
+    return { ok: false, statusCode: 409, error: 'Execution is not a pipeline skill.', executionId: input.executionId };
+  }
+  if (execution.lifecycle.phase !== 'starting') {
+    return { ok: false, statusCode: 409, error: 'Pipeline execution was not claimed.', executionId: input.executionId };
+  }
+  const manifest = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs
+    .find((run) => run.id === execution.metadata.pipelineRunId);
+  const located = manifest?.steps.flatMap((step) => step.skills.map((skill) => ({ step, skill })))
+    .find((entry) => entry.skill.executionId === input.executionId);
+  if (!manifest || !located) {
+    const message = `Pipeline manifest ${execution.metadata.pipelineRunId} does not contain execution ${input.executionId}.`;
+    await state.executions.transition(input.executionId, {
+      phase: 'failed',
+      error: { code: 'pipeline_execution_manifest_missing', message },
+      result: { status: 'failed', summary: message },
+    });
+    await cancelPipelineDependents({
+      runtime: input.runtime,
+      pipelineRunId: execution.metadata.pipelineRunId,
+      executionId: input.executionId,
+    });
+    return { ok: false, statusCode: 409, error: message, executionId: input.executionId };
+  }
+  try {
+    const skillRun = await spawnPipelineSkillProcess({
+      decisionOsRoot: input.decisionOsRoot,
+      runtime: input.runtime,
+      pipelineRun: manifest,
+      step: located.step,
+      skill: located.skill,
+    });
+    return {
+      ok: true,
+      statusCode: 202,
+      run: reassessPipelineAfterSkill({
+        decisionOsRoot: input.decisionOsRoot,
+        runtime: input.runtime,
+        pipelineRunId: manifest.id,
+      }) ?? manifest,
+      skillRun,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const current = state.executions.find(input.executionId);
+    if (current?.lifecycle.phase === 'starting' || current?.lifecycle.phase === 'running') {
+      await state.executions.transition(input.executionId, {
+        phase: 'failed',
+        error: { code: 'codex_pipeline_skill_start_failed', message },
+        result: { status: 'failed', summary: message },
+      });
+    }
+    await cancelPipelineDependents({
+      runtime: input.runtime,
+      pipelineRunId: execution.metadata.pipelineRunId,
+      executionId: input.executionId,
+    });
+    return { ok: false, statusCode: 500, error: message, executionId: input.executionId };
+  }
 }
 
 export async function runNextPipelineSkill(input: {

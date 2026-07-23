@@ -87,6 +87,7 @@ export type CodexPipelineRunStep = {
 
 export type CodexPipelineRun = {
   readonly id: string;
+  readonly restartOfPipelineRunId?: string | null;
   readonly pipelineId: string | null;
   readonly pipelineName: string;
   readonly temporary: boolean;

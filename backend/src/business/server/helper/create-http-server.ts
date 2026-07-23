@@ -490,6 +490,50 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
         return body.receipt;
       },
+      dispatchRemoteBatch: async (nodeId, launches) => {
+        if (!federation) {
+          throw new TaskExecutionAdmissionError('assigned_node_unreachable', 503, { assignedNodeId: nodeId });
+        }
+        const remote = await federation.request(
+          nodeId,
+          `/p/${encodeURIComponent(project.id)}/api/internal/task-executions/admit-batch`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: Buffer.from(JSON.stringify({ requests: launches })),
+          },
+        );
+        let body: AnyRecord = {};
+        try {
+          body = JSON.parse(remote.body.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          throw new TaskExecutionAdmissionError(
+            'task_execution_remote_response_invalid',
+            502,
+            { assignedNodeId: nodeId, remoteStatus: remote.status },
+          );
+        }
+        if (remote.status < 200 || remote.status >= 300 || body.ok === false) {
+          const remoteCode = String(body.error ?? 'task_execution_remote_admission_failed');
+          const code = remoteCode === 'owner_offline' || remoteCode === 'federation_request_timeout'
+            ? 'assigned_node_unreachable'
+            : remoteCode;
+          throw new TaskExecutionAdmissionError(code, code !== remoteCode ? 503 : remote.status || 502, {
+            assignedNodeId: nodeId,
+            ...(code !== remoteCode ? { remoteError: remoteCode } : {}),
+            ...(body.context && typeof body.context === 'object' && !Array.isArray(body.context) ? body.context as AnyRecord : {}),
+          });
+        }
+        const receipts = Array.isArray(body.receipts) ? body.receipts : [];
+        if (receipts.length !== launches.length || !receipts.every(isTaskExecutionReceipt)) {
+          throw new TaskExecutionAdmissionError(
+            'task_execution_remote_response_invalid',
+            502,
+            { assignedNodeId: nodeId, remoteStatus: remote.status },
+          );
+        }
+        return receipts;
+      },
       onCommitted: (record) => {
         controlRoomProjectionStore?.invalidate(project.id, [{ entityType: 'execution', entityId: record.metadata.executionId }]);
         if (!pausedBackgroundComponents.has('codex-process-scheduler')) {
@@ -1689,7 +1733,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (projectScope
       && activeProject
-      && url === '/api/internal/task-executions/admit'
+      && (url === '/api/internal/task-executions/admit' || url === '/api/internal/task-executions/admit-batch')
       && request.method === 'POST') {
       response.setHeader('content-type', 'application/json');
       const requesterNodeId = String(request.headers['x-decision-os-federation-node'] ?? '').trim();
@@ -1700,10 +1744,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         return;
       }
       try {
-        const launch = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as TaskExecutionLaunchRequest;
-        const receipt = await taskExecutionRouterForProject(activeProject).admitLocal(launch);
+        const body = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord;
+        const batch = url.endsWith('/admit-batch');
+        const receipts = batch
+          ? await taskExecutionRouterForProject(activeProject).admitLocalBatch(
+            Array.isArray(body.requests) ? body.requests as TaskExecutionLaunchRequest[] : [],
+          )
+          : [await taskExecutionRouterForProject(activeProject).admitLocal(body as TaskExecutionLaunchRequest)];
         response.statusCode = 202;
-        response.end(JSON.stringify({ ok: true, receipt }));
+        response.end(JSON.stringify(batch
+          ? { ok: true, receipts }
+          : { ok: true, receipt: receipts[0] }));
       } catch (error) {
         const expected = error instanceof TaskExecutionAdmissionError;
         const syntax = error instanceof SyntaxError;

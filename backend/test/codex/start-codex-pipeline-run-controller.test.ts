@@ -9,6 +9,7 @@ import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
 import { discoverDecisionOsProjects } from '@backend/business/server/helper/project-catalog.js';
+import { taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
 
 async function closeServer(server: Server): Promise<void> {
   if (!server.listening) return;
@@ -20,6 +21,16 @@ async function waitFor<T>(read: () => T | null, label: string): Promise<T> {
   const started = Date.now();
   while (Date.now() - started < 30000) {
     const value = read();
+    if (value !== null) return value;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.fail(`Timed out waiting for ${label}`);
+}
+
+async function waitForAsync<T>(read: () => Promise<T | null>, label: string): Promise<T> {
+  const started = Date.now();
+  while (Date.now() - started < 30000) {
+    const value = await read();
     if (value !== null) return value;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
@@ -126,21 +137,25 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
     assert.equal(queuedResponse.status, 202);
     const queuedBody = await queuedResponse.json() as Record<string, any>;
     assert.equal(queuedBody.run.id, pipelineRunId);
-    assert.equal(queuedBody.run.status, 'running');
-    assert.equal(queuedBody.queuePosition, null);
+    assert.equal(queuedBody.run.status, 'pending');
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.length, 1);
     const pendingLedger = JSON.parse(readFileSync(join(decisionOsRoot, 'specs.json'), 'utf8')) as Record<string, any>;
     const pendingSourceCard = pendingLedger.cards.find((card: Record<string, any>) => card.id === 'source-card');
     assert.equal(pendingSourceCard.executionStatus, undefined);
     assert.equal(pendingSourceCard.executionRunId, undefined);
-    assert.equal(pendingSourceCard.codexActiveRunId, started.run.steps[0].skills[0].runId);
-    assert.equal(pendingSourceCard.codexActiveExecutionId, started.run.steps[0].skills[0].executionId);
+    assert.equal(pendingSourceCard.codexActiveRunId, undefined);
+    assert.equal(pendingSourceCard.codexActiveExecutionId, undefined);
 
-    const completed = await waitFor(() => {
-      const run = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === pipelineRunId);
-      return run?.status === 'complete' ? run : null;
+    const completed = await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(pipelineRunId)}`)
+        .then((response) => response.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? detail.run : null;
     }, 'pipeline completion');
     assert.equal(completed.steps.every((step) => step.status === 'complete'), true);
+    const immutableManifest = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === pipelineRunId);
+    assert.equal(immutableManifest?.status, 'pending');
+    assert.equal(immutableManifest?.steps.every((step) => step.skills.every((skill) => skill.status === 'pending')), true);
+    assert.equal(immutableManifest?.steps.every((step) => step.skills.every((skill) => skill.processId === undefined && skill.processStartTime === undefined)), true);
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, null);
     const allSkills = completed.steps.flatMap((step) => step.skills);
     assert.equal(new Set(allSkills.map((skill) => skill.runId)).size, 5);
@@ -164,6 +179,157 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
     assert.equal(sourceCard.codexQueuedRunId, undefined);
     assert.equal(generated.every((card: Record<string, any>) => card.w === 700), true);
     assert.deepEqual(ledger.relationships.slice(-3).map((relationship: Record<string, any>) => relationship.label), ['One', 'Two', 'Three']);
+  } finally {
+    await closeServer(server);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('saved pipeline failure cancels every dependent execution without launching it', async () => {
+  const previousCodexBin = process.env.CODEX_BIN;
+  const { workspace, decisionOsRoot } = createWorkspace('decision-os-pipeline-failure-');
+  const fakeCodex = join(workspace, 'fake-codex.mjs');
+  const invocations = join(workspace, 'invocations.txt');
+  for (const name of ['fails', 'blocked']) createSkill(workspace, name);
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { appendFileSync } from "node:fs";',
+    'let prompt = "";',
+    'process.stdin.on("data", (chunk) => { prompt += chunk; });',
+    'process.stdin.on("end", () => {',
+    '  const skill = (prompt.match(/Current skill: (.+)/) || [])[1] || "missing";',
+    `  appendFileSync(${JSON.stringify(invocations)}, skill + "\\n");`,
+    '  console.log(JSON.stringify({ type: "turn.failed", error: { message: "injected failure" } }));',
+    '  process.exitCode = 7;',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  const now = '2026-07-10T00:00:00.000Z';
+  writeCodexPipelineStore({
+    decisionOsRoot,
+    availableSkillNames: ['fails', 'blocked'],
+    store: {
+      pipelines: [{ id: 'failure-pipeline', name: 'Failure pipeline', purpose: '', stepIds: ['step'], createdAt: now, updatedAt: now }],
+      steps: [{ id: 'step', name: 'Step', purpose: '', createdAt: now, updatedAt: now, skills: [
+        { id: 'fails-config', skillName: 'fails', codexModel: null, codexEffort: null },
+        { id: 'blocked-config', skillName: 'blocked', codexModel: null, codexEffort: null },
+      ] }],
+      runs: [], skillLibrary: [], activeWorkspaceRun: null,
+    },
+  });
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const response = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', sourceCardId: 'source-card', pipelineId: 'failure-pipeline' }),
+    });
+    assert.equal(response.status, 202);
+    const started = await response.json() as Record<string, any>;
+    const [firstExecution, secondExecution] = started.run.steps[0].skills as Array<Record<string, any>>;
+    await waitFor(() => {
+      const executions = taskExecutionState(runtime)?.executions.byPipelineRunId(started.run.id) ?? [];
+      return executions.find((execution) => execution.metadata.executionId === firstExecution.executionId)?.lifecycle.phase === 'failed'
+        && executions.find((execution) => execution.metadata.executionId === secondExecution.executionId)?.lifecycle.phase === 'cancelled'
+        ? true
+        : null;
+    }, 'dependent cancellation');
+    const failed = await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(started.run.id)}`)
+        .then((entry) => entry.json()) as Record<string, any>;
+      return detail.run?.status === 'failed' ? detail.run : null;
+    }, 'failed pipeline settlement');
+    assert.deepEqual(failed.steps[0].skills.map((skill: Record<string, unknown>) => skill.status), ['failed', 'cancelled']);
+    assert.deepEqual(readFileSync(invocations, 'utf8').trim().split('\n'), ['fails']);
+    const executions = taskExecutionState(runtime)?.executions.byPipelineRunId(started.run.id) ?? [];
+    assert.equal(executions.find((execution) => execution.metadata.executionId === firstExecution.executionId)?.lifecycle.phase, 'failed');
+    const dependent = executions.find((execution) => execution.metadata.executionId === secondExecution.executionId);
+    assert.equal(dependent?.lifecycle.phase, 'cancelled');
+    assert.equal(dependent?.lifecycle.result?.summary, 'pipeline_dependency_failed');
+  } finally {
+    await closeServer(server);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('saved pipeline restart creates linked immutable run and execution history', async () => {
+  const previousCodexBin = process.env.CODEX_BIN;
+  const { workspace, decisionOsRoot } = createWorkspace('decision-os-pipeline-replacement-');
+  const fakeCodex = join(workspace, 'fake-codex.mjs');
+  createSkill(workspace, 'alpha');
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { writeFileSync } from "node:fs";',
+    'let prompt = "";',
+    'process.stdin.on("data", (chunk) => { prompt += chunk; });',
+    'process.stdin.on("end", () => {',
+    '  const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    '  writeFileSync(output.trim(), "# immutable result\\n");',
+    '  console.log(JSON.stringify({ type: "turn.completed" }));',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  const now = '2026-07-10T00:00:00.000Z';
+  writeCodexPipelineStore({
+    decisionOsRoot,
+    availableSkillNames: ['alpha'],
+    store: {
+      pipelines: [{ id: 'restart-pipeline', name: 'Restart pipeline', purpose: '', stepIds: ['step'], createdAt: now, updatedAt: now }],
+      steps: [{ id: 'step', name: 'Step', purpose: '', createdAt: now, updatedAt: now, skills: [
+        { id: 'alpha-config', skillName: 'alpha', codexModel: null, codexEffort: null },
+      ] }],
+      runs: [], skillLibrary: [], activeWorkspaceRun: null,
+    },
+  });
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const firstResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', sourceCardId: 'source-card', pipelineId: 'restart-pipeline' }),
+    });
+    const first = await firstResponse.json() as Record<string, any>;
+    await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(first.run.id)}`)
+        .then((entry) => entry.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? detail.run : null;
+    }, 'first pipeline completion');
+    const priorManifestBytes = readFileSync(join(decisionOsRoot, 'codex-pipelines.json'), 'utf8');
+    const restartResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(first.run.id)}/restart`, { method: 'POST' });
+    assert.equal(restartResponse.status, 202);
+    const replacement = await restartResponse.json() as Record<string, any>;
+    assert.notEqual(replacement.run.id, first.run.id);
+    assert.equal(replacement.run.restartOfPipelineRunId, first.run.id);
+    assert.notEqual(replacement.run.steps[0].skills[0].executionId, first.run.steps[0].skills[0].executionId);
+    const store = readCodexPipelineStore({ decisionOsRoot }).store;
+    assert.equal(store.runs.length, 2);
+    assert.equal(store.runs[0].id, first.run.id);
+    assert.equal(store.runs[1].restartOfPipelineRunId, first.run.id);
+    assert.match(priorManifestBytes, new RegExp(first.run.id));
+    const replacementExecutions = taskExecutionState(runtime)?.executions.byPipelineRunId(replacement.run.id) ?? [];
+    assert.equal(replacementExecutions[0].metadata.restartOfExecutionId, first.run.steps[0].skills[0].executionId);
+    await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(replacement.run.id)}`)
+        .then((entry) => entry.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? detail.run : null;
+    }, 'replacement pipeline completion');
+    const original = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(first.run.id)}`)
+      .then((entry) => entry.json()) as Record<string, any>;
+    assert.equal(original.run.status, 'complete');
   } finally {
     await closeServer(server);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
@@ -390,9 +556,10 @@ test('one catalog-level server skill executes directly and in saved pipelines fr
       });
       assert.equal(pipelineResponse.status, 202);
       const pipeline = await pipelineResponse.json() as Record<string, any>;
-      const completed = await waitFor(() => {
-        const run = readCodexPipelineStore({ decisionOsRoot: project.decisionOsRoot }).store.runs.find((entry) => entry.id === pipeline.run.id);
-        return run?.status === 'complete' ? run : null;
+      const completed = await waitForAsync(async () => {
+        const detail = await fetch(`${scoped}/api/codex/pipelines/runs/${encodeURIComponent(pipeline.run.id)}`)
+          .then((response) => response.json()) as Record<string, any>;
+        return detail.run?.status === 'complete' ? detail.run : null;
       }, 'shared saved pipeline');
       const pipelineInput = join(project.decisionOsRoot, 'cards', 'specs', `${completed.steps[0].outputCardId}.md.input`);
       assert.match(readFileSync(pipelineInput, 'utf8'), /Decision OS server skill package:/);

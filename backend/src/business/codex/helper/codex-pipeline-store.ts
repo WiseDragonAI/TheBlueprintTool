@@ -222,6 +222,8 @@ function normalizeRunSkill(input: AnyRecord, stepId: string, index: number): Cod
       }
     : undefined;
   const runId = text(input.runId);
+  const processId = Math.max(0, Math.floor(Number(input.processId ?? 0) || 0));
+  const processStartTime = text(input.processStartTime);
   return {
     id: text(input.id) || `${stepId}-run-skill-${index + 1}`,
     pipelineSkillId: text(input.pipelineSkillId),
@@ -233,8 +235,8 @@ function normalizeRunSkill(input: AnyRecord, stepId: string, index: number): Cod
     codexEffort: text(input.codexEffort),
     stdoutFile: text(input.stdoutFile),
     stderrFile: text(input.stderrFile),
-    processId: Math.max(0, Math.floor(Number(input.processId ?? 0) || 0)),
-    processStartTime: text(input.processStartTime),
+    ...(processId > 0 ? { processId } : {}),
+    ...(processStartTime ? { processStartTime } : {}),
     startedAt: nullableText(input.startedAt),
     finishedAt: nullableText(input.finishedAt),
     error: text(input.error),
@@ -274,6 +276,7 @@ function normalizeRuns(raw: unknown, issues: CodexPipelineStoreIssue[]): CodexPi
     seen.add(id);
     normalized.push({
       id,
+      restartOfPipelineRunId: nullableText(input.restartOfPipelineRunId),
       pipelineId: nullableText(input.pipelineId),
       pipelineName: text(input.pipelineName),
       temporary: input.temporary === true,

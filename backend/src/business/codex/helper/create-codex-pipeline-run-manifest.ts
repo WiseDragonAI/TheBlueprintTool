@@ -33,6 +33,7 @@ export function createCodexPipelineRunManifest(input: {
   sourceCardId: string;
   sourceCardTitle: string;
   ledgerPath: string;
+  restartOfPipelineRunId?: string | null;
 }): CodexPipelineRun {
   // WHAT: Preserve the legacy skill-run identifier for one-step temporary pipelines.
   // WHY: Existing direct-skill status and cancellation routes address that identifier.
@@ -93,6 +94,7 @@ export function createCodexPipelineRunManifest(input: {
   });
   return {
     id: runId,
+    restartOfPipelineRunId: input.restartOfPipelineRunId ?? null,
     pipelineId: input.definition.pipelineId,
     pipelineName: input.definition.pipelineName,
     temporary: input.definition.temporary,

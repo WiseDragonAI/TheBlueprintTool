@@ -4,7 +4,7 @@
 2. **Implementation branch:** `feature/epoch4-task-execution`.
 3. **Base commit:** `0c72b4ed95c12bcfb0a27ddcbf56f4ecfdba5df7`.
 4. **Production branch:** `main`.
-5. **Current phase:** `J.7 — Replace pipeline execution authority`.
+5. **Current phase:** `J.8 — Move exceptional launch paths`.
 6. **Overall state:** `in-progress`.
 7. **Production state:** epoch `3` remains active. Epoch `4` is not admitted for production use.
 
@@ -107,7 +107,18 @@
    9. Focused direct and compatibility result: `42/42`.
    10. Router and federation regression result: `17/17`.
    11. Backend typecheck passed.
-7. **J.7 — Replace pipeline execution authority:** `pending`.
+7. **J.7 — Replace pipeline execution authority:** `verified`.
+   1. Saved pipeline admission creates every skill execution in one serialized batch and publishes scheduler callbacks only after the complete topology is durable at `queued`.
+   2. Every skill records its immediate predecessor. The scheduler claims only a local dependency-ready execution and persists `starting` before process creation.
+   3. Spawn registration writes the node-local process registry and awaits replicated `running`; settlement removes the process entry and awaits one replicated terminal phase.
+   4. Pipeline, step, and skill status are derived from replicated execution entities. The saved run manifest remains byte-stable with initial `pending` lifecycle fields during execution.
+   5. Saved pipelines no longer project card execution leases, task `executionIntent`, background lifecycle persistence, PID, process start identity, and terminal status into the pipeline manifest.
+   6. A failed or cancelled execution settles every downstream queued execution as `cancelled` with `pipeline_dependency_failed`.
+   7. Exact local cancellation persists `cancelling` before signalling the registered process and applies a bounded `SIGKILL` escalation.
+   8. Restart creates a new pipeline run, new execution IDs, `restartOfPipelineRunId`, and per-execution `restartOfExecutionId`. Prior cards, logs, records, and output bytes remain unchanged.
+   9. Focused pipeline result: `8/8`.
+   10. Scheduler, router, store, and direct regression result: `21/21`.
+   11. Backend typecheck passed.
 8. **J.8 — Move exceptional launch paths:** `pending`.
 9. **J.9 — Replace control paths:** `pending`.
 10. **J.10 — Replace recovery:** `pending`.
@@ -120,12 +131,12 @@
 
 ## D. Current Verified Gaps
 
-1. Saved pipelines still schedule from mutable pipeline manifests and persist lifecycle through the legacy coordinator.
-2. Direct skill, voice handoff, and project-sync launch paths have not moved to the replicated execution scheduler.
-3. Cancellation, session deletion, compact status, remaining detailed status branches, live logs, SSE, and Control Room still contain legacy execution authority.
+1. Direct skill, voice handoff, and project-sync launch paths have not moved to the replicated execution scheduler.
+2. Remote saved-pipeline admission transports execution requests but does not yet install and validate the immutable run manifest on the assigned executor. Cross-node pipeline launch remains unproved until the exceptional federation path is completed.
+3. Remote cancellation, session deletion, compact status, remaining detailed status branches, live logs, SSE, and Control Room still contain legacy execution authority.
 4. Startup still runs direct queue recovery, pipeline resume, and card ownership reconciliation instead of one replicated execution recovery pass.
 5. Frontend launch behavior does not yet implement request-ID optimism, canonical reconciliation, and rejection rollback.
-6. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, mutable pipeline lifecycle, and log-derived settlement remain until `J.12`.
+6. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, temporary-pipeline lifecycle, and log-derived settlement remain until `J.12`.
 
 ---
 
@@ -143,7 +154,11 @@
    1. Command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`.
 6. **Frontend typecheck:** passed.
    1. Command: `node bin/decision-os-verify.mjs -- npm --prefix frontend run typecheck`.
-7. **Full repository suite:** not run.
+7. **Full backend suite:** failed `389/400`; the `11` failures remain open and map to later gates.
+   1. Three legacy direct-queue restart and scan expectations require `J.10`.
+   2. Three voice launch expectations and one project-sync launch expectation require `J.8`.
+   3. Control Room card-intent projection, startup ownership reconciliation, and card execution cleanup expectations require `J.12`.
+   4. The runtime-failsafe incident-count expectation is affected by the remaining startup ownership path and requires reassessment with `J.10` and `J.12`.
 8. **Offline migration fixture proof:** passed `11/11`.
    1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=backend/tsconfig.json node --test --import ./backend/node_modules/tsx/dist/esm/index.mjs backend/test/unit/task-state/task-current-state-migration.test.ts backend/test/unit/task-state/migrate-node-task-current-state.test.ts`.
    2. Evidence includes corrupt execution-state byte preservation, epoch-3 shard admission, deterministic assignment, all legacy execution sources, artifact objects, zero journals, complete backup, and legacy-authority retirement.
@@ -177,6 +192,17 @@
     2. Evidence includes configured local identity without relay transport, full federation connector behavior, local and remote routing, idempotency, and rejection containment.
 19. **J.6 backend typecheck:** passed.
     1. Command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`.
+20. **Replicated saved-pipeline authority:** passed `8/8`.
+    1. Commands: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsx --tsconfig backend/tsconfig.json --test backend/test/codex/start-codex-pipeline-run-controller.test.ts` and `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsx --tsconfig backend/tsconfig.json --test backend/test/codex/resume-codex-pipeline-runs.test.ts`.
+    2. Evidence covers topology-wide admission, strict five-skill dependency order, immutable status projection, failure containment, downstream cancellation, exact local cancellation, linked restart history, retained prior artifacts, server catalog pipelines, and temporary-pipeline compatibility.
+21. **Pipeline scheduler and compatibility:** passed `21/21`.
+    1. Command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsx --tsconfig backend/tsconfig.json --test backend/test/codex/epoch4-direct-execution-scheduler.test.ts backend/test/unit/codex/task-execution-router.test.ts backend/test/codex/codex-pipeline-store.test.ts backend/test/codex/codex-pipeline-restart-adoption.test.ts`.
+    2. Evidence covers atomic batch idempotency, dependency metadata, direct scheduler compatibility, dispatch failure isolation, store normalization, and retained legacy process adoption.
+22. **J.7 backend typecheck:** passed.
+    1. Command: `node bin/decision-os-verify.mjs -- npm run typecheck --prefix backend`.
+23. **Full backend suite:** failed `389/400`.
+    1. Command: `node bin/decision-os-verify.mjs -- npm test --prefix backend`.
+    2. The exact remaining failure classes are retained in section `D` and evidence item `7`; no full-suite completion claim is made.
 
 ---
 

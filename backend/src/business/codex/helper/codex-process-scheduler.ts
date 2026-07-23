@@ -1,31 +1,37 @@
 /**
- * WHAT: Selects the oldest runnable epoch-4 execution or legacy pipeline skill across one project.
- * WHY: Direct work must be claimed from replicated execution entities while the pipeline authority remains isolated until J.7.
+ * WHAT: Selects the oldest dependency-ready epoch-4 execution across one project.
+ * WHY: Direct and saved-pipeline work must share one replicated queue; only temporary legacy runs remain isolated until J.8.
  */
 import { readCodexPipelineStore } from './codex-pipeline-store.js';
-import { maxConcurrentCodexProcesses, runNextPipelineSkill } from './codex-pipeline-runner.js';
+import { maxConcurrentCodexProcesses, runNextPipelineSkill, runPipelineExecution } from './codex-pipeline-runner.js';
 import { startThreadCodexProcessController } from '../controller/start-thread-codex-process-controller.js';
 import { continueCardSkillRunController } from '../controller/continue-card-skill-run-controller.js';
 import { taskExecutionNodeId, taskExecutionState } from './task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
-function runnablePipelineRuns(decisionOsRoot: string) {
+function runnableLegacyPipelineRuns(decisionOsRoot: string, runtime?: AnyRecord) {
+  const state = runtime ? taskExecutionState(runtime) : null;
   return readCodexPipelineStore({ decisionOsRoot }).store.runs.filter((run) => (
     run.executionMode !== 'federated'
+    && (run.temporary || (state?.executions.byPipelineRunId(run.id).length ?? 0) === 0)
     && (run.status === 'pending' || run.status === 'running')
     && run.steps.some((step) => step.skills.some((skill) => skill.status === 'pending'))
     && !run.steps.some((step) => step.skills.some((skill) => skill.status === 'running'))
   ));
 }
 
-function runnableDirectExecutions(runtime: AnyRecord) {
+function runnableExecutions(runtime: AnyRecord) {
   const state = taskExecutionState(runtime);
   if (!state) return [];
   return state.executions.byPhase('queued')
     .filter((record) => (
       record.lifecycle.executorNodeId === taskExecutionNodeId(runtime)
-      && (record.metadata.kind === 'thread' || record.metadata.kind === 'continuation')
+      && (
+        record.metadata.kind === 'thread'
+        || record.metadata.kind === 'continuation'
+        || record.metadata.kind === 'pipeline-skill'
+      )
       && (!record.metadata.predecessorExecutionId
         || state.executions.find(record.metadata.predecessorExecutionId)?.lifecycle.phase === 'succeeded')
     ))
@@ -43,8 +49,8 @@ export function runningCodexProcessCount(runtime: AnyRecord): number {
 }
 
 export function nextPendingCodexProcessCreatedAt(decisionOsRoot: string, runtime?: AnyRecord): string | null {
-  const pipeline = runnablePipelineRuns(decisionOsRoot)[0];
-  const execution = runtime ? runnableDirectExecutions(runtime)[0] : null;
+  const pipeline = runnableLegacyPipelineRuns(decisionOsRoot, runtime)[0];
+  const execution = runtime ? runnableExecutions(runtime)[0] : null;
   if (!pipeline) return execution?.metadata.requestedAt ?? null;
   if (!execution) return pipeline.createdAt;
   return execution.metadata.requestedAt <= pipeline.createdAt ? execution.metadata.requestedAt : pipeline.createdAt;
@@ -52,8 +58,8 @@ export function nextPendingCodexProcessCreatedAt(decisionOsRoot: string, runtime
 
 export function pendingCodexProcessEntries(decisionOsRoot: string, runtime?: AnyRecord): Array<{ id: string; createdAt: string; order: number }> {
   return [
-    ...runnablePipelineRuns(decisionOsRoot).map((run, order) => ({ id: run.id, createdAt: run.createdAt, order })),
-    ...(runtime ? runnableDirectExecutions(runtime).map((record, order) => ({
+    ...runnableLegacyPipelineRuns(decisionOsRoot, runtime).map((run, order) => ({ id: run.id, createdAt: run.createdAt, order })),
+    ...(runtime ? runnableExecutions(runtime).map((record, order) => ({
       id: record.metadata.executionId,
       createdAt: record.metadata.requestedAt,
       order: 1_000_000 + order,
@@ -106,14 +112,14 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
   const capacity = maxConcurrentCodexProcesses(input.runtime);
   const launchLimit = Math.max(1, input.launchLimit ?? Number.POSITIVE_INFINITY);
   while (runningCodexProcessCount(input.runtime) < capacity && launched.length < launchLimit) {
-    const pipeline = runnablePipelineRuns(input.decisionOsRoot)[0];
-    const direct = runnableDirectExecutions(input.runtime)[0];
-    if (!pipeline && !direct) break;
-    const launchDirect = Boolean(direct && (!pipeline || direct.metadata.requestedAt <= pipeline.createdAt));
-    if (launchDirect && direct) {
+    const pipeline = runnableLegacyPipelineRuns(input.decisionOsRoot, input.runtime)[0];
+    const execution = runnableExecutions(input.runtime)[0];
+    if (!pipeline && !execution) break;
+    const launchExecution = Boolean(execution && (!pipeline || execution.metadata.requestedAt <= pipeline.createdAt));
+    if (launchExecution && execution) {
       const state = taskExecutionState(input.runtime);
       if (!state) break;
-      const claimed = await state.executions.transition(direct.metadata.executionId, { phase: 'starting' });
+      const claimed = await state.executions.transition(execution.metadata.executionId, { phase: 'starting' });
       const launchPayload = {
         ledgerId: claimed.metadata.ledgerId,
         cardId: claimed.metadata.sourceCardId,
@@ -128,7 +134,13 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
       let result: AnyRecord;
       let dispatchFailureReported = false;
       try {
-        result = claimed.metadata.kind === 'continuation'
+        result = claimed.metadata.kind === 'pipeline-skill'
+          ? await runPipelineExecution({
+            decisionOsRoot: input.decisionOsRoot,
+            runtime: input.runtime,
+            executionId: claimed.metadata.executionId,
+          })
+          : claimed.metadata.kind === 'continuation'
           ? await continueCardSkillRunController({ action_payload: launchPayload, runtime_state: input.runtime })
           : await startThreadCodexProcessController({ action_payload: launchPayload, runtime_state: input.runtime });
       } catch (error) {

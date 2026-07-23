@@ -276,6 +276,104 @@ test('blocks a second active direct run while allowing all skills in one pipelin
   );
 });
 
+test('admits a complete pipeline topology before publishing schedulable callbacks', async (context) => {
+  const workstation = fixture('workstation');
+  context.after(() => dispose(workstation));
+  const callbackSnapshots: string[][] = [];
+  const router = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => workstation.state,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+    onCommitted: () => {
+      callbackSnapshots.push(
+        workstation.state.executions.byPipelineRunId('pipeline-b')
+          .map((record) => record.lifecycle.phase),
+      );
+    },
+  });
+  const requests = ['a', 'b', 'c'].map((suffix, index) => request({
+    requestId: `request-${suffix}`,
+    executionId: `execution-${suffix}`,
+    sessionId: `session-${suffix}`,
+    kind: 'pipeline-skill',
+    pipelineRunId: 'pipeline-b',
+    pipelineStepId: `step-${suffix}`,
+    pipelineSkillRunId: `skill-${suffix}`,
+    predecessorExecutionId: index === 0 ? null : `execution-${['a', 'b'][index - 1]}`,
+  }));
+
+  const receipts = await router.routeBatch(requests);
+  const retried = await router.routeBatch(requests);
+
+  assert.deepEqual(retried, receipts);
+  assert.deepEqual(receipts.map((entry) => entry.phase), ['queued', 'queued', 'queued']);
+  assert.equal(callbackSnapshots.length, 3);
+  assert.deepEqual(callbackSnapshots[0], ['queued', 'queued', 'queued']);
+  assert.deepEqual(callbackSnapshots.at(-1), ['queued', 'queued', 'queued']);
+});
+
+test('rejects an invalid pipeline topology before admission and settles a post-admission policy rejection', async (context) => {
+  const workstation = fixture('workstation');
+  context.after(() => dispose(workstation));
+  const router = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => workstation.state,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+  });
+  const cyclic = ['a', 'b'].map((suffix, index) => request({
+    requestId: `cycle-request-${suffix}`,
+    executionId: `cycle-execution-${suffix}`,
+    sessionId: `cycle-session-${suffix}`,
+    kind: 'pipeline-skill',
+    pipelineRunId: 'pipeline-cycle',
+    pipelineStepId: `step-${suffix}`,
+    pipelineSkillRunId: `skill-${suffix}`,
+    predecessorExecutionId: `cycle-execution-${index === 0 ? 'b' : 'a'}`,
+  }));
+  await assert.rejects(
+    router.routeBatch(cyclic),
+    (error: unknown) => error instanceof TaskExecutionAdmissionError && error.code === 'task_execution_topology_cycle',
+  );
+  assert.deepEqual(workstation.state.executions.byPipelineRunId('pipeline-cycle'), []);
+
+  const rejectedFixture = fixture('workstation');
+  context.after(() => dispose(rejectedFixture));
+  const rejected = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => rejectedFixture.state,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+    validateLocal: ({ request: launch }) => {
+      if (launch.executionId === 'execution-b') {
+        throw new TaskExecutionAdmissionError('pipeline_policy_rejected', 409);
+      }
+    },
+  });
+  const topology = ['a', 'b'].map((suffix, index) => request({
+    requestId: `request-${suffix}`,
+    executionId: `execution-${suffix}`,
+    sessionId: `session-${suffix}`,
+    kind: 'pipeline-skill',
+    pipelineRunId: 'pipeline-rejected',
+    pipelineStepId: `step-${suffix}`,
+    pipelineSkillRunId: `skill-${suffix}`,
+    predecessorExecutionId: index === 0 ? null : 'execution-a',
+  }));
+  await assert.rejects(
+    rejected.routeBatch(topology),
+    (error: unknown) => error instanceof TaskExecutionAdmissionError && error.code === 'pipeline_policy_rejected',
+  );
+  assert.deepEqual(
+    rejectedFixture.state.executions.byPipelineRunId('pipeline-rejected').map((record) => record.lifecycle.phase),
+    ['failed', 'failed'],
+  );
+});
+
 test('serializes concurrent local admission so exactly one direct execution reaches the queue', async (context) => {
   const workstation = fixture('workstation');
   context.after(() => dispose(workstation));

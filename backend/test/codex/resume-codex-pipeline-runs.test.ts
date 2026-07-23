@@ -29,6 +29,16 @@ async function waitFor<T>(read: () => T | null, label: string): Promise<T> {
   assert.fail(`Timed out waiting for ${label}`);
 }
 
+async function waitForAsync<T>(read: () => Promise<T | null>, label: string): Promise<T> {
+  const started = Date.now();
+  while (Date.now() - started < 5000) {
+    const value = await read();
+    if (value !== null) return value;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.fail(`Timed out waiting for ${label}`);
+}
+
 function skill(workspace: string, name: string): void {
   const directory = join(workspace, '.skills', name);
   mkdirSync(directory, { recursive: true });
@@ -50,7 +60,7 @@ function baseWorkspace(prefix: string): { workspace: string; decisionOsRoot: str
   return { workspace, decisionOsRoot, ledgerPath };
 }
 
-test('cancellation stops downstream work and restart clears generated card and thread content before relaunch', async () => {
+test('cancellation stops downstream work and restart preserves prior artifacts in linked immutable history', async () => {
   const previousCodexBin = process.env.CODEX_BIN;
   const { workspace, decisionOsRoot, ledgerPath } = baseWorkspace('decision-os-pipeline-cancel-');
   const fakeCodex = join(workspace, 'fake-codex.mjs');
@@ -115,12 +125,17 @@ test('cancellation stops downstream work and restart clears generated card and t
     const cancelRequested = await cancelResponse.json() as { status: string; cancellationRequested: boolean };
     assert.equal(cancelRequested.status, 'running');
     assert.equal(cancelRequested.cancellationRequested, true);
-    const cancelled = await waitFor(
-      () => readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === runId && run.status === 'cancelled') ?? null,
-      'pipeline cancellation settlement',
-    );
+    const cancelled = await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(runId)}`)
+        .then((response) => response.json()) as Record<string, any>;
+      return detail.run?.status === 'cancelled'
+        && detail.run.steps.every((step: Record<string, any>) => step.skills.every((skill: Record<string, any>) => skill.status === 'cancelled'))
+        ? detail.run
+        : null;
+    }, 'pipeline cancellation settlement');
     assert.equal(cancelled?.status, 'cancelled');
-    assert.equal(cancelled?.steps[0].skills[1].status, 'pending');
+    assert.equal(cancelled?.steps[0].skills[1].status, 'cancelled');
+    assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === runId)?.status, 'pending');
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, null);
     assert.deepEqual(readFileSync(invocations, 'utf8').trim().split('\n'), ['slow:1']);
 
@@ -136,16 +151,26 @@ test('cancellation stops downstream work and restart clears generated card and t
 
     const restartResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs/${runId}/restart`, { method: 'POST' });
     assert.equal(restartResponse.status, 202);
-    await waitFor(() => readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === runId)?.status === 'complete' ? true : null, 'restarted completion');
+    const replacement = await restartResponse.json() as Record<string, any>;
+    assert.notEqual(replacement.run.id, runId);
+    assert.equal(replacement.run.restartOfPipelineRunId, runId);
+    const replacementRun = await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(replacement.run.id)}`)
+        .then((response) => response.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? detail.run : null;
+    }, 'replacement completion');
     assert.deepEqual(readFileSync(invocations, 'utf8').trim().split('\n'), ['slow:1', 'slow:2', 'fast:3']);
-    assert.doesNotMatch(readFileSync(outputFile, 'utf8'), /old generated body/);
-    assert.doesNotMatch(readFileSync(threadFile, 'utf8'), /old thread note/);
+    assert.match(readFileSync(outputFile, 'utf8'), /old generated body/);
+    assert.match(readFileSync(threadFile, 'utf8'), /old thread note/);
+    const replacementOutput = join(decisionOsRoot, 'cards', 'specs', `${replacementRun.steps[0].outputCardId}.md`);
+    assert.doesNotMatch(readFileSync(replacementOutput, 'utf8'), /old generated body/);
+    assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.length, 2);
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, null);
 
     const detailResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs/${runId}`);
     assert.equal(detailResponse.status, 200);
     const detail = await detailResponse.json() as Record<string, any>;
-    assert.equal(detail.run.status, 'complete');
+    assert.equal(detail.run.status, 'cancelled');
     assert.equal(detail.run.steps[0].skills[0].logAvailable, true);
     assert.equal(detail.run.steps[0].skills[0].codexModel, cancelled?.steps[0].skills[0].codexModel);
   } finally {
