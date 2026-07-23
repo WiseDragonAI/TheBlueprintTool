@@ -144,6 +144,36 @@ test('merges the federation Queue only by newest waiting time instead of owner n
   ]);
 });
 
+test('projects one durable assignment independently from the replica serving the task', () => {
+  const task = {
+    cardId: 'card-assigned', projectId: 'project-1', ledgerId: 'tasks', title: 'Assigned task',
+    cardStatus: 'todo', status: 'task-waiting', assignedNodeId: 'phone',
+    assignment: { nodeId: 'phone', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
+  };
+  const result = federatedControlRoomProjection({
+    localProjection: {
+      fingerprint: 'local', projects: [{ id: 'project-1', name: 'Project' }],
+      queue: [task], exec: [], backlog: [], done: [], allTasks: [task], diagnostics: [], ledgers: ['Tasks'],
+    },
+    localOwner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: false },
+    remoteProjections: [{
+      owner: { nodeId: 'phone', nodeLabel: 'Mobile', remote: true, online: false },
+      projection: {
+        fingerprint: 'phone', projects: [{ id: 'project-1', name: 'Project' }],
+        queue: [task], exec: [], backlog: [], done: [], allTasks: [task], diagnostics: [], ledgers: ['Tasks'],
+      },
+    }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  assert.equal(result.allTasks.length, 1);
+  assert.equal(result.allTasks[0].ownerNodeId, 'workstation');
+  assert.equal(result.allTasks[0].assignedNodeId, 'phone');
+  assert.equal(result.allTasks[0].assignedNodeLabel, 'Mobile');
+  assert.equal(result.allTasks[0].assignedNodeOnline, false);
+  assert.equal(result.allTasks[0].conflict, false);
+});
+
 test('changes the projection fingerprint when retained remote replicas change presence', () => {
   const project = { id: 'project-remote', name: 'Remote project' };
   const task = { cardId: 'card-remote', projectId: project.id, ledgerId: 'specs', cardStatus: 'backlog', status: 'task-backlog' };

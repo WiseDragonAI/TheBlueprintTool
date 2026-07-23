@@ -171,6 +171,10 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
     const id = String(mutation.cardId);
     activationTaskId = id;
     changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
+  } else if (action === 'reassign-task' && mutation.cardId) {
+    const id = String(mutation.cardId);
+    activationTaskId = id;
+    changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
   } else if (action === 'patch-card' && mutation.cardPatch?.id) {
     const id = String(mutation.cardPatch.id);
     activationTaskId = id;

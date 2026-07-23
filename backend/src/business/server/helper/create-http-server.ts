@@ -1310,6 +1310,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     intervalMs: Number(payload.runtimeIncidentReviewIntervalMs ?? 5_000),
     targetProject: () => projectCatalog().find((entry) => entry.available && entry.id === runtimeIncidentReviewProjectId) ?? null,
     taskState: taskStateForProject,
+    assignedNodeId: () => federation.localOwner().ownerNodeId,
     paused: () => pausedBackgroundComponents.has('runtime-incident-review'),
     onChanged: (projectId) => controlRoomProjectionStore?.invalidate(projectId),
     onBootstrapGate: (error, context) => {
@@ -1886,6 +1887,16 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (error instanceof Error && error.message.startsWith('task_lifecycle_conflict:')) {
           activeResponse.statusCode = 409;
           activeResponse.end(JSON.stringify({ ok: false, error: 'task-conflict', cardIds: error.message.slice('task_lifecycle_conflict:'.length).split(',').filter(Boolean) }));
+          return;
+        }
+        if (error instanceof Error && error.message.startsWith('task_execution_active:')) {
+          activeResponse.statusCode = 409;
+          activeResponse.end(JSON.stringify({ ok: false, error: 'task_execution_active', cardId: error.message.slice('task_execution_active:'.length) }));
+          return;
+        }
+        if (error instanceof Error && error.message === 'invalid_task_assignment') {
+          activeResponse.statusCode = 400;
+          activeResponse.end(JSON.stringify({ ok: false, error: 'invalid_task_assignment' }));
           return;
         }
         throw error;

@@ -37,6 +37,7 @@ test('contains task-state lookup failures inside the periodic incident review bo
     const scheduler = createRuntimeIncidentReviewScheduler({
       incidentLedger,
       intervalMs: 60_000,
+      assignedNodeId: () => 'workstation',
       targetProject: () => project(root),
       taskState: () => { throw new Error('injected task-state lookup failure'); },
       paused: () => false,
@@ -70,6 +71,7 @@ test('records one transient bootstrap rejection while continuing to retry the sa
     const scheduler = createRuntimeIncidentReviewScheduler({
       incidentLedger,
       intervalMs: 60_000,
+      assignedNodeId: () => 'workstation',
       targetProject: () => project(root),
       taskState: () => {
         attempts += 1;

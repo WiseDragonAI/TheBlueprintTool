@@ -104,6 +104,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const jsonLabels = Array.isArray(input.card.labels) ? input.card.labels.map(String) : [];
   if (!jsonLabels.includes('master-task')) return null;
   const lifecycle = input.card.lifecycle && typeof input.card.lifecycle === 'object' && !Array.isArray(input.card.lifecycle) ? input.card.lifecycle as AnyRecord : {};
+  const assignment = input.card.assignment && typeof input.card.assignment === 'object' && !Array.isArray(input.card.assignment) ? input.card.assignment as AnyRecord : {};
   const cards = input.index?.cards ?? new Map(records(input.ledger.cards).map((card) => [text(card.id), card]));
   const relationships = input.index?.relationshipsByMaster.get(text(input.card.id)) ?? records(input.ledger.relationships)
     .filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask')
@@ -135,7 +136,10 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   }
   const taskIds = new Set([text(input.card.id), ...relationships.map((relationship) => text(relationship.to))]);
   const taskConflicts = records(input.conflicts).filter((conflict) => conflict.kind === 'task-conflict' && conflict.path === 'lifecycle' && taskIds.has(text(conflict.entityId)));
+  const assignmentConflicts = records(input.conflicts).filter((conflict) => conflict.kind === 'assignment-conflict' && conflict.path === 'assignment' && text(conflict.entityId) === text(input.card.id));
   if (taskConflicts.length > 0) diagnostics.push(...taskConflicts.map((conflict) => `task-conflict:${text(conflict.entityId)}`));
+  if (assignmentConflicts.length > 0) diagnostics.push(`assignment-conflict:${text(input.card.id)}`);
+  if (!text(assignment.nodeId)) diagnostics.push('missing_assignment');
   const complete = subtasks.filter((subtask) => subtask.status === 'complete').length;
   const executionSince = executionActive ? text(executionIntent.phaseSince) || text(executionIntent.startedAt) || text(executionIntent.changedAt) : '';
   const executionCard = execution?.card as AnyRecord | undefined;
@@ -146,7 +150,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   return {
     valid: diagnostics.length === 0, masterTask: true, diagnostics,
     cardId: text(input.card.id), title: text(input.card.title) || `Card ${text(input.card.id)}`, labels,
-    cardStatus: lifecycleStatus, createdAt: text(input.card.createdAt), lifecycle: structuredClone(lifecycle), executionIntent: structuredClone(executionIntent), taskConflict: taskConflicts.length > 0,
+    cardStatus: lifecycleStatus, createdAt: text(input.card.createdAt), lifecycle: structuredClone(lifecycle), assignment: structuredClone(assignment), taskConflict: taskConflicts.length > 0, assignmentConflict: assignmentConflicts.length > 0,
     projectId: input.project.id, projectName: input.project.name, projectColor: input.project.color,
     ledgerId: input.ledgerEntry.id, ledgerTitle: input.ledgerEntry.title, ledger: input.ledgerEntry.title,
     zoneId: zoneIdFor(input.card, input.ledger), status,
@@ -156,6 +160,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     transcribingBeforeLaunch: executionState === 'preparing' && canonicalExecution?.kind === 'voice',
     codexProcessing: executionState === 'starting' || executionState === 'running', codexQueued: executionState === 'queued', codexQueuePosition: null,
     executionNodeId: observation?.executorNodeId ?? '', executionNodeLabel: '',
+    assignedNodeId: text(assignment.nodeId), assignedNodeLabel: '', assignedNodeOnline: null,
     waitingSince,
     waitingTime, executionSince,
     executionTime: Date.parse(executionSince),

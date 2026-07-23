@@ -96,6 +96,7 @@ function applyMutation(input: {
 export async function synchronizeRuntimeIncidentReviewTask(input: {
   project: DecisionOsProject;
   taskState: ProjectTaskState;
+  assignedNodeId: string;
   updatedAt: string;
   incidents: RuntimeIncident[];
   incidentLedgerFile: string;
@@ -121,6 +122,7 @@ export async function synchronizeRuntimeIncidentReviewTask(input: {
     const x = rightEdge + 80;
     mutation = {
       action: 'create-master-task',
+      assignedNodeId: input.assignedNodeId,
       annotation: {
         id: runtimeIncidentReviewZoneId,
         variant: 'zone',

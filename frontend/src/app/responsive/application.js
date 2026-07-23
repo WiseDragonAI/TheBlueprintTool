@@ -1484,8 +1484,8 @@ function taskRow(task, tab, index) {
         : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
   const taskOwner = executing
-    ? task.executionNodeLabel || task.executionNodeId || task.ownerNodeLabel || task.ownerNodeId || 'This server'
-    : task.ownerNodeLabel || task.ownerNodeId || state.projects.find((project) => project.id === task.projectId)?.ownerNodeLabel || 'This server';
+    ? task.executionNodeLabel || task.executionNodeId || task.assignedNodeLabel || task.assignedNodeId || 'This server'
+    : task.assignedNodeLabel || task.assignedNodeId || 'Unassigned';
   if (summary.querySelector('.task-meta')) {
     summary.querySelector('.task-meta').textContent = `${task.projectName} · ${taskOwner} · ${task.ledger} · ${age}${process}`;
   }
@@ -1929,7 +1929,7 @@ function parseMasterCandidate(card) {
   return labels.includes('master-task');
 }
 
-async function createTaskIntake(projectId, replicaNodeId) {
+async function createTaskIntake(projectId, assignedNodeId, replicaNodeId = assignedNodeId) {
   setResourceProject(projectId);
   if (state.resourceProjectId !== projectId) throw new Error('The project is no longer available.');
   const ledgerRef = state.ledgers.find((entry) => entry.id === 'tasks');
@@ -1945,7 +1945,8 @@ async function createTaskIntake(projectId, replicaNodeId) {
   const cardId = objectId('card');
   const timestamp = new Date().toISOString();
   const markdown = '## A. Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, and create actionable subtask cards in this zone.\n';
-  const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', createdAt: timestamp, labels: ['master-task'], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
+  const assignment = { nodeId: assignedNodeId, changedAt: timestamp, revision: 1 };
+  const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', createdAt: timestamp, assignment, labels: ['master-task'], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
   ledger.annotations = [...(ledger.annotations ?? []), zone];
   ledger.cards = [...(ledger.cards ?? []), { ...card, replicationState: 'local-only', persistenceState: 'creating' }];
   ledger.threadFiles = { ...(ledger.threadFiles ?? {}), [`thread-${cardId}`]: `.decision-os/threads/tasks/thread-${cardId}.md` };
@@ -1955,6 +1956,10 @@ async function createTaskIntake(projectId, replicaNodeId) {
     projectName: state.projectName,
     projectColor,
     ownerNodeId: replicaNodeId,
+    assignedNodeId,
+    assignedNodeLabel: state.projects.flatMap((project) => project.replicas ?? []).find((replica) => replica.nodeId === assignedNodeId)?.nodeLabel || assignedNodeId,
+    assignedNodeOnline: state.projects.flatMap((project) => project.replicas ?? []).find((replica) => replica.nodeId === assignedNodeId)?.online !== false,
+    assignment,
     ledgerId: ledgerRef.id,
     ledgerTitle: ledgerRef.title,
     cardId,
@@ -1983,7 +1988,7 @@ async function createTaskIntake(projectId, replicaNodeId) {
     onQuickVoiceSubmitted: navigateVoiceSubmission
   });
   navigate(replicaAddress(cardPathForProject(projectId, ledgerRef.id, zone.id, cardId), replicaNodeId));
-  void ledgerMutation(ledgerRef.id, { action: 'create-task-intake', annotation: zone, card }, projectId, replicaNodeId).then(() => {
+  void ledgerMutation(ledgerRef.id, { action: 'create-task-intake', assignedNodeId, annotation: zone, card }, projectId, replicaNodeId).then(() => {
     acknowledgeTaskIntent(optimisticIdentity);
     void loadControlRoom({ force: true }).catch((error) => console.error('Task intake confirmation failed.', error));
   }).catch((cause) => {
@@ -2006,7 +2011,7 @@ function openNewTaskProjectModal() {
     for (const replica of project.replicas ?? []) {
       const nodeId = replica.nodeId;
       const existing = groups.get(nodeId);
-      const routedProject = { ...project, selectedReplicaNodeId: nodeId };
+      const routedProject = { ...project, selectedAssignedNodeId: nodeId, replicaNodeId: nodeId };
       if (existing) existing.projects.push(routedProject);
       else groups.set(nodeId, {
         nodeId,
@@ -2035,7 +2040,7 @@ function openNewTaskProjectModal() {
     button.setAttribute('aria-busy', 'true');
     error.hidden = true;
     try {
-      await createTaskIntake(project.id, project.selectedReplicaNodeId);
+      await createTaskIntake(project.id, project.selectedAssignedNodeId, project.replicaNodeId);
       delete newTaskProjectModal.dataset.busy;
       newTaskProjectModal.close();
     } catch (cause) {
@@ -2403,7 +2408,12 @@ function renderCard(card) {
       delete persistedCard.persistenceError;
       delete persistedCard.replicationState;
       try {
-        await ledgerMutation(state.activeLedgerId, { action: 'create-task-intake', annotation, card: persistedCard });
+        await ledgerMutation(state.activeLedgerId, {
+          action: 'create-task-intake',
+          assignedNodeId: String(card.assignment?.nodeId || ''),
+          annotation,
+          card: persistedCard,
+        });
         const confirmed = state.ledger?.cards?.find((entry) => String(entry.id) === String(card.id));
         if (confirmed) renderCard(confirmed);
         void loadControlRoom({ force: true }).catch((error) => console.error('Task retry confirmation failed.', error));

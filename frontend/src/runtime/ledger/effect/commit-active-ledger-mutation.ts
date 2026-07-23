@@ -18,9 +18,10 @@ import type { CardQuestionnaires } from '../../../../../shared/schemas/questionn
 import type { GitReviewNote } from '../../../../../shared/schemas/git-review-types.js';
 
 export type ActiveLedgerMutation = {
-  action: 'create-card' | 'create-task-intake' | 'create-execution-intent' | 'transition-card-lifecycle' | 'patch-card' | 'delete-card' | 'delete-card-image' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-viewport' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
+  action: 'create-card' | 'create-task-intake' | 'reassign-task' | 'create-execution-intent' | 'transition-card-lifecycle' | 'patch-card' | 'delete-card' | 'delete-card-image' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-viewport' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
   card?: Record<string, unknown>;
   cardId?: string;
+  assignedNodeId?: string;
   lifecycleStatus?: 'todo' | 'backlog' | 'done';
   imageSrc?: string;
   cardPatch?: {

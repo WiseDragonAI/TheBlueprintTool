@@ -51,6 +51,10 @@ export function federatedControlRoomProjection(input: {
   remoteProjections: Array<{ projection: AnyRecord; owner: Owner }>;
   diagnostics: AnyRecord[];
 }): AnyRecord {
+  const nodeCatalog = new Map([
+    [input.localOwner.nodeId, { label: input.localOwner.nodeLabel, online: true }],
+    ...input.remoteProjections.map(({ owner }) => [owner.nodeId, { label: owner.nodeLabel, online: owner.online !== false }] as const),
+  ]);
   const qualify = (projection: AnyRecord, owner: Owner): AnyRecord => {
     const projects = records(projection.projects).map((project) => {
       const localProjectId = text(project.id);
@@ -209,6 +213,8 @@ export function federatedControlRoomProjection(input: {
         message: 'Multiple replicas report verified execution for the same logical card.',
       });
     }
+    const assignedNodeId = text(authority.assignedNodeId);
+    const assignedNode = nodeCatalog.get(assignedNodeId);
     return {
       ...authority,
       status,
@@ -231,6 +237,9 @@ export function federatedControlRoomProjection(input: {
       transcribingBeforeLaunch: structuralExecution ? intentPhase === 'preparing' && authority.transcribingBeforeLaunch === true : observation?.kind === 'voice-transcription',
       executionNodeId: observation ? text(observation.executorNodeId) || text(observation.nodeId) : '',
       executionNodeLabel: observation ? text(observation.nodeLabel) || text(executionMember.ownerNodeLabel) : '',
+      assignedNodeId,
+      assignedNodeLabel: assignedNode?.label ?? assignedNodeId,
+      assignedNodeOnline: assignedNode?.online ?? false,
       conflict,
       replicaCount: members.length,
       replicas: [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId))).map((member) => ({

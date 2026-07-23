@@ -91,6 +91,39 @@ export function createProjectTaskState(input: {
     if (conflicted.length > 0) throw new Error(`task_lifecycle_conflict:${conflicted.join(',')}`);
   };
 
+  const assignmentCandidates = (taskId: string): AnyRecord[] => {
+    const register = store.entity('card', taskId)?.fields.assignment;
+    if (!register) return [];
+    const values = new Map<string, AnyRecord>();
+    for (const candidate of register.candidates) {
+      if (candidate.operation !== 'set' || !candidate.value || typeof candidate.value !== 'object' || Array.isArray(candidate.value)) continue;
+      const value = candidate.value as AnyRecord;
+      values.set(JSON.stringify(value), value);
+    }
+    return [...values.values()];
+  };
+
+  const taskHasActiveExecution = (taskId: string): boolean => {
+    const activePhases = new Set(['preparing', 'queued', 'starting', 'running', 'cancelling']);
+    return store.activeDelta().entities.some((entity) => {
+      if (entity.entityType !== 'execution') return false;
+      const ownsTask = entity.fields.metadata?.candidates.some((candidate) => (
+        candidate.operation === 'set'
+        && candidate.value
+        && typeof candidate.value === 'object'
+        && !Array.isArray(candidate.value)
+        && String((candidate.value as AnyRecord).taskId ?? '') === taskId
+      ));
+      return ownsTask && entity.fields.lifecycle?.candidates.some((candidate) => (
+        candidate.operation === 'set'
+        && candidate.value
+        && typeof candidate.value === 'object'
+        && !Array.isArray(candidate.value)
+        && activePhases.has(String((candidate.value as AnyRecord).phase ?? ''))
+      ));
+    });
+  };
+
   const activateTask = async (taskId: string): Promise<TaskStateDelta> => {
     if (!taskId) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     const released = await store.activate(taskId);
@@ -134,6 +167,22 @@ export function createProjectTaskState(input: {
       assertLifecycleConflictFree([masterTaskId, ...subtaskIds]);
     }
     if (mutation.action === 'create-execution-intent' && mutation.cardId) assertLifecycleConflictFree([String(mutation.cardId)]);
+    if (mutation.action === 'reassign-task' && mutation.cardId) {
+      const taskId = String(mutation.cardId);
+      const nodeId = String(mutation.assignedNodeId ?? '');
+      if (!/^[a-zA-Z0-9_-]+$/.test(nodeId)) throw new Error('invalid_task_assignment');
+      if (taskHasActiveExecution(taskId)) throw new Error(`task_execution_active:${taskId}`);
+      const card = Array.isArray(after.cards) ? (after.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === taskId) : null;
+      if (!card) throw new Error(`task_card_not_found:${taskId}`);
+      const candidates = assignmentCandidates(taskId);
+      const nodeIds = new Set(candidates.map((candidate) => String(candidate.nodeId ?? '')));
+      if (candidates.length === 1 && nodeIds.size === 1 && nodeIds.has(nodeId)) {
+        card.assignment = structuredClone(candidates[0]);
+      } else {
+        const revision = Math.max(0, ...candidates.map((candidate) => Number(candidate.revision) || 0)) + 1;
+        card.assignment = { nodeId, changedAt: new Date().toISOString(), revision };
+      }
+    }
     const command = taskCommandForMutation({ mutation, before, after });
     const priorHashes = command.changes.map(entityHash);
     const delta = await persistChanges(command.changes, { activationTaskId: command.activationTaskId, replication: command.replication });

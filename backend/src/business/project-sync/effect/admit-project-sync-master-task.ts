@@ -11,6 +11,7 @@ type AnyRecord = Record<string, unknown>;
 export async function admitProjectSyncMasterTask(input: {
   project: DecisionOsProject;
   runtime: AnyRecord;
+  assignedNodeId: string;
   sourceProjectId: string;
   sourceProjectName: string;
   sourceProjectColor: string;
@@ -47,6 +48,7 @@ export async function admitProjectSyncMasterTask(input: {
       createdAt: input.waitingSince,
       cardType: 'note',
       labels: ['master-task', 'synchronization'],
+      assignment: { nodeId: input.assignedNodeId, changedAt: input.waitingSince, revision: 1 },
       x: x + 60,
       y: 140,
       w: 360,

@@ -15,6 +15,7 @@ export type LedgerMutation = {
   card?: Record<string, unknown>;
   cards?: Array<Record<string, unknown>>;
   cardId?: string;
+  assignedNodeId?: string;
   lifecycleStatus?: 'todo' | 'backlog' | 'done';
   masterTaskId?: string;
   imageSrc?: string;
@@ -39,6 +40,17 @@ type MutationError = { statusCode: number; body: Record<string, unknown> };
 function finiteNumber(value: unknown, fallback: number): number {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function validAssignedNodeId(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-zA-Z0-9_-]+$/.test(value);
+}
+
+function assignment(nodeId: string, changedAt: unknown, revision: number): Record<string, unknown> {
+  const candidate = typeof changedAt === 'string' && Number.isFinite(Date.parse(changedAt))
+    ? new Date(changedAt).toISOString()
+    : new Date().toISOString();
+  return { nodeId, changedAt: candidate, revision };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,6 +117,39 @@ export function applyLedgerMutation(input: {
     hydrateLedgerThreadNotesFor(ledger, decisionOsRoot, mutation.note.threadId);
   }
   let mutationError: MutationError | undefined;
+  if (mutation.action === 'create-task-intake' || mutation.action === 'create-master-task') {
+    if (!validAssignedNodeId(mutation.assignedNodeId)) {
+      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'assigned_node_id_required' } } };
+    }
+    if (!mutation.card?.id || !mutation.annotation?.id) {
+      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'invalid_task_creation_payload' } } };
+    }
+    mutation.card.assignment = assignment(mutation.assignedNodeId, mutation.card.createdAt, 1);
+    if (mutation.action === 'create-master-task') {
+      const cards = [mutation.card, ...(mutation.cards ?? [])];
+      const ids = cards.map((card) => String(card.id ?? '')).filter(Boolean);
+      const invalidSubtaskRelationship = !Array.isArray(mutation.relationships) || mutation.relationships.some((relationship) => (
+        relationship.label !== 'subtask'
+        || !Number.isInteger(Number(relationship.position))
+        || Number(relationship.position) < 0
+      ));
+      if (ids.length !== cards.length || new Set(ids).size !== cards.length || invalidSubtaskRelationship) {
+        return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'Invalid master-task creation payload.' } } };
+      }
+      for (const card of mutation.cards ?? []) delete card.assignment;
+    }
+  }
+  if (mutation.action === 'reassign-task') {
+    const cardId = String(mutation.cardId ?? '');
+    const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+    const inherited = (ledger.relationships ?? []).some((relationship) => relationship.label === 'subtask' && String(relationship.to ?? '') === cardId);
+    if (!cardId || !card || !validAssignedNodeId(mutation.assignedNodeId)) {
+      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'invalid_task_assignment' } } };
+    }
+    if (inherited) return { ok: false, ledger, error: { statusCode: 409, body: { ok: false, error: 'task_assignment_inherited' } } };
+    const current = card.assignment && typeof card.assignment === 'object' && !Array.isArray(card.assignment) ? card.assignment as Record<string, unknown> : {};
+    card.assignment = assignment(mutation.assignedNodeId, new Date().toISOString(), Math.max(0, Number(current.revision) || 0) + 1);
+  }
 
   const voiceMetadata = (note: Record<string, unknown> | undefined): Record<string, unknown> => ({
     voiceFileRef: note?.voiceFileRef ?? '',

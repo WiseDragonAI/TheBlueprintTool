@@ -22,6 +22,13 @@ test('pending lifecycle transition moves a task over stale server status', () =>
   assert.equal(next.allTasks[0]?.cardStatus, 'backlog');
 });
 
+test('logical task identity is stable across serving replicas and assignment changes', () => {
+  assert.equal(
+    taskIdentity(task),
+    taskIdentity({ ...task, ownerNodeId: 'workstation', assignedNodeId: 'workstation' }),
+  );
+});
+
 test('intent confirmation requires acknowledgement plus matching authoritative state', () => {
   assert.equal(taskIntentConfirmed({ kind: 'delete', acknowledged: false }, undefined), false);
   assert.equal(taskIntentConfirmed({ kind: 'delete', acknowledged: true }, undefined), true);

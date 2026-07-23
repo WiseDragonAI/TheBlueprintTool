@@ -13,6 +13,7 @@ export function createRuntimeIncidentReviewScheduler(input: {
   intervalMs: number;
   targetProject: () => DecisionOsProject | null;
   taskState: (project: DecisionOsProject) => ProjectTaskState;
+  assignedNodeId: () => string;
   paused: () => boolean;
   onChanged: (projectId: string) => void;
   onBootstrapGate: (error: unknown, context: Record<string, unknown>) => void;
@@ -52,6 +53,7 @@ export function createRuntimeIncidentReviewScheduler(input: {
       const result = await synchronizeRuntimeIncidentReviewTask({
         project,
         taskState: input.taskState(project),
+        assignedNodeId: input.assignedNodeId(),
         updatedAt: snapshot.updatedAt,
         incidents,
         incidentLedgerFile: input.incidentLedger.file,

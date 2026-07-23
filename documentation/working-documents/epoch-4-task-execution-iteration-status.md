@@ -4,7 +4,7 @@
 2. **Implementation branch:** `feature/epoch4-task-execution`.
 3. **Base commit:** `0c72b4ed95c12bcfb0a27ddcbf56f4ecfdba5df7`.
 4. **Production branch:** `main`.
-5. **Current phase:** `J.3 — Persist task assignment`.
+5. **Current phase:** `J.4 — Install the replicated execution repository`.
 6. **Overall state:** `in-progress`.
 7. **Production state:** epoch `3` remains active. Epoch `4` is not admitted for production use.
 
@@ -61,7 +61,17 @@
    7. Reports protocol, schema, epoch, assignment coverage, execution-index validity, missing artifacts, missing objects, semantic inventory, zero journals, checksums, roots, and external rollback paths.
    8. Focused migration result: `11` tests passed.
    9. Backend typecheck passed.
-3. **J.3 — Persist task assignment:** `pending`.
+3. **J.3 — Persist task assignment:** `verified`.
+   1. The existing creation modal keeps its node tabs, presence, project selection, keyboard behavior, and request routing while persisting the selected node as `assignedNodeId`.
+   2. Optimistic task identity is now `projectId`, `ledgerId`, and `cardId`; serving-replica ownership no longer splits one logical task.
+   3. Master tasks persist one atomic assignment lane. Subtasks inherit that assignment and reject direct reassignment.
+   4. The project-scoped `reassign-task` command resolves assignment conflicts by writing one revision above every observed candidate and rejects non-terminal execution with `task_execution_active`.
+   5. CLI-created master tasks require an explicit assignment and retain the separate publication operation.
+   6. Internal project-sync and runtime-incident master-task creation supply the local configured node assignment.
+   7. The Control Room joins replicas into one task identity and displays assignment label plus online state independently from replica provenance.
+   8. Focused backend result: `24` distinct assignment and supporting tests passed.
+   9. Focused frontend result: `47` tests passed.
+   10. Backend and frontend typechecks passed.
 4. **J.4 — Install the replicated execution repository:** `pending`.
 5. **J.5 — Install assignment-aware admission:** `pending`.
 6. **J.6 — Replace direct execution authority:** `pending`.
@@ -78,14 +88,12 @@
 
 ## D. Current Verified Gaps
 
-1. Task creation passes the selected node as `replicaNodeId` and optimistic `ownerNodeId`; no assignment lane is persisted.
-2. The current task-state write predicate requires relay-root convergence.
-3. Direct execution admission writes `.decision-os/codex-executions.json` before the scheduler-visible legacy queue.
-4. The scheduler reads `.decision-os/codex-process-queue.json` and mutable pipeline manifests instead of the replicated execution entities.
-5. Pipeline and direct spawn callbacks can publish `spawned()` without awaiting durable lifecycle settlement.
-6. Control Room still derives active placement from legacy card execution fields; a migrated epoch-4 fixture therefore cannot expose runtime-only active state until gates `J.4` and `J.8`.
-7. Control Room task identity contains projection-source ownership.
-8. Runtime pause policy can block unrelated admissions after one execution failure.
+1. The current task-state write predicate requires relay-root convergence.
+2. Direct execution admission writes `.decision-os/codex-executions.json` before the scheduler-visible legacy queue.
+3. The scheduler reads `.decision-os/codex-process-queue.json` and mutable pipeline manifests instead of the replicated execution entities.
+4. Pipeline and direct spawn callbacks can publish `spawned()` without awaiting durable lifecycle settlement.
+5. Control Room still derives active placement from legacy card execution fields; a migrated epoch-4 fixture therefore cannot expose runtime-only active state until gates `J.4` and `J.8`.
+6. Runtime pause policy can block unrelated admissions after one execution failure.
 
 ---
 
@@ -94,13 +102,15 @@
 1. **Documentation structure:** verified in commit `e39c73df`.
 2. **Focused backend tests:** passed `30/30`.
    1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=backend/tsconfig.json node --test --import ./backend/node_modules/tsx/dist/esm/index.mjs backend/test/unit/task-state/task-current-state-core-v4.test.ts backend/test/unit/task-state/task-current-state-join.test.ts backend/test/unit/task-state/task-current-state-store.test.ts backend/test/unit/codex/helper/codex-execution-transition.test.ts`.
-3. **Focused frontend tests:** not run.
+3. **Focused frontend tests:** passed `47/47`.
+   1. Command: `node bin/decision-os-verify.mjs -- node --test frontend/test-responsive/optimistic-task-projection.test.mjs frontend/test-responsive/mobile-control-room.test.mjs`.
 4. **Relay tests:** passed `8/8`.
    1. Command from `federation-relay/`: `node ../bin/decision-os-verify.mjs -- node_modules/.bin/vitest run`.
    2. Discarded command: invoking the relay Vitest binary from repository root selected every repository test and executed no relay test. The corrected working-directory command above passed.
 5. **Backend typecheck:** passed.
    1. Command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`.
-6. **Frontend typecheck:** not run.
+6. **Frontend typecheck:** passed.
+   1. Command: `node bin/decision-os-verify.mjs -- npm --prefix frontend run typecheck`.
 7. **Full repository suite:** not run.
 8. **Offline migration fixture proof:** passed `11/11`.
    1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=backend/tsconfig.json node --test --import ./backend/node_modules/tsx/dist/esm/index.mjs backend/test/unit/task-state/task-current-state-migration.test.ts backend/test/unit/task-state/migrate-node-task-current-state.test.ts`.
@@ -114,6 +124,11 @@
 13. **Dependent compatibility sample:** passed `26/33`; not a gate claim.
     1. Six failures are isolated-worktree child-process loader failures because the temporary fixture resolves `TSX_TSCONFIG_PATH` below its own root.
     2. One substantive failure is the expected open `J.4`/`J.8` gap: Control Room still reads card execution fields removed by epoch-4 migration.
+14. **Assignment and reassignment tests:** passed.
+    1. Assignment-specific project-state and federated-projection result: `4/4`.
+    2. Master-task HTTP creation, required assignment, inherited-subtask rejection, reassignment, project-sync creation, runtime-incident creation, and federated Control Room result: `20/20`.
+    3. Held Control Room assignment projection result: `1/1`.
+    4. Backend typecheck passed after all assignment changes.
 
 ---
 

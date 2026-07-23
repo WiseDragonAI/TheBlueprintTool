@@ -158,6 +158,7 @@ test('held task creation and deletion invalidate the local Control Room without 
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         action: 'create-task-intake',
+        assignedNodeId: 'workstation',
         annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456', label: 'Held' },
         card: { id: 'card-a', title: 'Held task', status: 'todo', labels: ['master-task'], domainId: 'tasks', x: 20, y: 20, w: 300, h: 180, comment: { what: 'Held body.' } },
       }),
@@ -169,6 +170,7 @@ test('held task creation and deletion invalidate the local Control Room without 
     assert.equal(taskProjection.ledger.cards[0]?.id, 'card-a', JSON.stringify(taskProjection));
     const createdProjection = await waitForTaskCount(1);
     assert.equal(createdProjection.allTasks[0]?.cardId, 'card-a', JSON.stringify(createdProjection));
+    assert.equal(createdProjection.allTasks[0]?.assignedNodeId, 'workstation', JSON.stringify(createdProjection));
 
     const deletion = await fetch(mutationUrl, {
       method: 'PATCH',

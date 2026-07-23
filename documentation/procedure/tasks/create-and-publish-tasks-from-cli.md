@@ -2,11 +2,11 @@
 
 ## A. Purpose And Authority
 
-1. Use this runbook to create a task or master-task graph from a shell against a running Decision OS epoch-3 project.
+1. Use this runbook to create a task or master-task graph from a shell against a running Decision OS epoch-4 project.
 2. The project-scoped command endpoint `PATCH /p/:projectId/decision-os/tasks` owns structural task mutations.
 3. `.decision-os/cards/tasks/*.md` and `.decision-os/threads/tasks/*.md` own versionable bodies.
 4. `.decision-os/task-state/<projectId>/current/` and `objects/` are runtime-owned causal state. Never edit or stage them directly.
-5. `.decision-os/tasks.json` is a retired aggregate for epoch-3 Tasks. Never use `ledger-cli` or direct JSON editing to create an epoch-3 task.
+5. `.decision-os/tasks.json` is a retired aggregate for epoch-4 Tasks. Never use `ledger-cli` or direct JSON editing to create an epoch-4 task.
 
 ---
 
@@ -21,6 +21,7 @@
 export TASK_PROJECT_ROOT=/absolute/path/to/project
 export TASK_SERVER_URL=http://127.0.0.1:50150
 export TASK_PROJECT_ID=replace-with-project-id
+export TASK_ASSIGNED_NODE_ID=workstation
 
 cd "$TASK_PROJECT_ROOT"
 curl -sS -I "$TASK_SERVER_URL/"
@@ -54,10 +55,11 @@ const { randomUUID } = require('node:crypto');
 
 const serverUrl = String(process.env.TASK_SERVER_URL || '').replace(/\/$/, '');
 const projectId = String(process.env.TASK_PROJECT_ID || '');
+const assignedNodeId = String(process.env.TASK_ASSIGNED_NODE_ID || '');
 const zoneX = Number(process.env.TASK_ZONE_X);
 const zoneY = Number(process.env.TASK_ZONE_Y);
-if (!serverUrl || !projectId || !Number.isFinite(zoneX) || !Number.isFinite(zoneY)) {
-  throw new Error('TASK_SERVER_URL, TASK_PROJECT_ID, TASK_ZONE_X, and TASK_ZONE_Y are required.');
+if (!serverUrl || !projectId || !/^[a-zA-Z0-9_-]+$/.test(assignedNodeId) || !Number.isFinite(zoneX) || !Number.isFinite(zoneY)) {
+  throw new Error('TASK_SERVER_URL, TASK_PROJECT_ID, TASK_ASSIGNED_NODE_ID, TASK_ZONE_X, and TASK_ZONE_Y are required.');
 }
 
 const title = 'Replace with the master-task title';
@@ -117,6 +119,7 @@ const request = async (payload) => {
 (async () => {
   const creation = await request({
     action: 'create-master-task',
+    assignedNodeId,
     annotation: {
       id: zoneId,
       x: zoneX,
@@ -167,6 +170,7 @@ const request = async (payload) => {
 
   process.stdout.write(`${JSON.stringify({
     projectId,
+    assignedNodeId,
     zoneId,
     masterId,
     subtaskIds: subtasks.map((subtask) => subtask.id),
@@ -201,7 +205,7 @@ NODE
 export TASK_MASTER_ID=card-replace-with-printed-id
 ```
 
-2. Verify the master card is readable from the canonical projection.
+2. Verify the master card is readable from the canonical projection and contains `assignment.nodeId = TASK_ASSIGNED_NODE_ID`.
 
 ```bash
 curl -sS "$TASK_SERVER_URL/p/$TASK_PROJECT_ID/api/ledgers/tasks/cards/$TASK_MASTER_ID"

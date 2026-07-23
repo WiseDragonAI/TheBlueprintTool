@@ -34,7 +34,7 @@ test('admits one deterministic synchronization-labeled master task', async () =>
     taskState = createProjectTaskState({ projectId: 'project-a', writerId: 'test', decisionOsRoot, tasksLedgerFile: ledgerPath, initialize: true });
     runtime.readTaskLedgerProjection = () => taskState!.projection().ledger;
     runtime.persistTaskLedgerProjection = (ledger: Record<string, unknown>, command: TaskProjectionCommand) => taskState!.executeProjectionCommand(command, ledger);
-    const input = { project, runtime, sourceProjectId: 'source-b', sourceProjectName: 'Source B', sourceProjectColor: '#d94f70', originFingerprint: 'f'.repeat(64), syncId: 'sync-1', waitingSince: '2026-07-18T06:00:00.000Z' };
+    const input = { project, runtime, assignedNodeId: 'workstation', sourceProjectId: 'source-b', sourceProjectName: 'Source B', sourceProjectColor: '#d94f70', originFingerprint: 'f'.repeat(64), syncId: 'sync-1', waitingSince: '2026-07-18T06:00:00.000Z' };
     const first = await admitProjectSyncMasterTask(input);
     const duplicate = await admitProjectSyncMasterTask(input);
     assert.deepEqual(duplicate, first);
