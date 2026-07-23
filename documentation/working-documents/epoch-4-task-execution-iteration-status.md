@@ -182,10 +182,10 @@
     7. Served row `37` remains pending because the registered server is running `main` at `369d4158`, not this refactor branch.
 14. **J.14 — Execute the epoch-4 production cutover:** `preflight`.
     1. The feature branch includes current `main` at merge commit `742d23c3` and is pushed to `origin/feature/epoch4-task-execution`.
-    2. Workstation preflight verified the registered MultiTerm process, epoch-3 health, zero active incidents, seven valid registered projects, zero staged project changes, configured federation credentials, matching relay roots, and no live Decision OS-owned child.
+    2. Before the Mobile disconnect, Workstation preflight verified the registered MultiTerm process, epoch-3 health, zero active incidents, seven valid registered projects, zero staged project changes, configured federation credentials, matching relay roots, and no live Decision OS-owned child.
     3. Relay credential admission and the epoch-4 Wrangler dry-run passed without deployment.
     4. Workstation migration requires an explicit backup root on `/media/jbb/57af6506-cd41-47dd-bcb1-5280ec4da1e7`; the migrator default resolves below unwritable `/home`.
-    5. The Mobile read-only preflight ended with `federation_outcome_unknown` when Mobile disconnected. Its exact repository state, registered service commands, catalog root, and external backup path remain unverified.
+    5. The Mobile read-only preflight ended with `federation_outcome_unknown` when Mobile disconnected. Its exact repository state, registered service commands, catalog root, and external backup path remain unverified. Workstation stayed online with no paused scope; three background federated-library incidents now retain the failed Mobile manifest and skill-snapshot requests.
     6. No node process, relay deployment, repository installation, migration state, or durable project state changed during preflight.
 
 ---
@@ -195,7 +195,7 @@
 1. Served Workstation and Mobile interaction verification remains for `J.13`.
 2. No artifact garbage collector exists under `backend/src`; tombstone replication and artifact retention ordering are verified, while an actual deletion pass does not exist.
 3. Production migration, relay namespace deployment, node restart, and three-party convergence proof remain for `J.14`.
-4. Mobile must reconnect and complete the read-only cutover preflight before the production maintenance window is admitted.
+4. Mobile must reconnect, complete the read-only cutover preflight, and clear the three retained federated-library incidents before the production maintenance window is admitted.
 5. Operator authorization is required before either registered server process changes.
 
 ---

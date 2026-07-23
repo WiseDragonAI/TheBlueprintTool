@@ -19,6 +19,7 @@
 7. Every project repository has no staged operator work.
 8. Workstation uses an explicit backup path below `/media/jbb/57af6506-cd41-47dd-bcb1-5280ec4da1e7/decision-os-epoch4-rollbacks`. The migrator's default path resolves below `/home`, which is not writable by the Workstation operator.
 9. Require at least `12 GiB` free at the Workstation backup mount before migration.
+10. Require both node health routes ready, zero active incidents, and zero paused scopes before quiescence.
 
 ---
 
