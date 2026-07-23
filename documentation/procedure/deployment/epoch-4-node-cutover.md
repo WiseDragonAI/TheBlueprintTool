@@ -1,42 +1,76 @@
 ## A. Admission State
 
-1. **Current state:** blocked by local implementation gates `J.1` through `J.13`.
-2. Do not run this procedure until the progress ledger marks those gates `verified`.
-3. Epoch `3` remains the production rollback authority until section `N` passes.
+1. **Current state:** local implementation and automated verification rows `1` through `36` pass. Served verification row `37` remains open.
+2. Keep both node servers unchanged until the operator explicitly authorizes the production maintenance window.
+3. Do not start migration until the progress ledger records the exact reviewed commit installed on both stopped nodes.
+4. Do not admit the maintenance window until Mobile reports its exact registered stop and start commands, repository state, catalog root, and external backup path.
+5. Epoch `3` remains the production rollback authority until section `O` passes.
 
 ---
 
 ## B. Preconditions
 
-1. Workstation and Mobile use the same reviewed epoch-4 commit.
+1. Record one reviewed epoch-4 commit for installation on Workstation and Mobile.
 2. The relay deployment uses the matching epoch-4 protocol.
-3. Both Decision OS servers and all Codex child processes are stopped.
+3. Both Decision OS servers and all Decision OS-owned child processes are stopped.
 4. Automatic restart is disabled on both nodes.
 5. Each node has its configured federation identity and credential.
 6. The repository `.env` contains `ADMIN_SECRET`; verify presence without printing it.
 7. Every project repository has no staged operator work.
+8. Workstation uses an explicit backup path below `/media/jbb/57af6506-cd41-47dd-bcb1-5280ec4da1e7/decision-os-epoch4-rollbacks`. The migrator's default path resolves below `/home`, which is not writable by the Workstation operator.
+9. Require at least `12 GiB` free at the Workstation backup mount before migration.
 
 ---
 
-## C. Offline Node Migration
+## C. Quiescence
+
+1. Disable Workstation automatic restart and stop its registered server:
+
+   ```bash
+   /home/jbb/dev/multiterm/bin/multiwezterm-process disable \
+     --cwd /home/jbb \
+     --port 50150
+   ```
+
+2. Run Mobile's preflight-recorded registered stop command. A missing exact command blocks this section.
+3. Require both `50150` listeners to be closed.
+4. Require no Decision OS-owned child execution to remain live.
+5. Keep both nodes stopped through sections `D`, `E`, and `F`.
+
+---
+
+## D. Reviewed Commit Installation
+
+1. Merge the reviewed feature branch into Workstation `main` with a merge commit containing `WHAT:` and `WHY:`, then push `main`.
+2. Install the pushed `origin/main` commit on Mobile.
+3. Require `git rev-parse HEAD` to return the same recorded commit on both nodes.
+4. Do not modify either repository while its Decision OS server is running; the frontend is served directly from the checkout and would otherwise diverge from the loaded backend.
+
+---
+
+## E. Offline Node Migration
 
 1. Workstation runs:
 
    ```bash
+   epoch4_backup_root="/media/jbb/57af6506-cd41-47dd-bcb1-5280ec4da1e7/decision-os-epoch4-rollbacks/workstation-$(date -u +%Y%m%dT%H%M%SZ)"
+   test ! -e "$epoch4_backup_root"
    node /home/jbb/dev/EditorBP/decision-os/bin/decision-os-migrate-node.mjs \
      --catalog-root /home/jbb \
      --node-id workstation \
      --target-epoch 4 \
-     --default-assigned-node workstation
+     --default-assigned-node workstation \
+     --backup-root "$epoch4_backup_root"
    ```
 
 2. Mobile runs the same installed command with its exact Termux catalog root, `--node-id phone`, `--target-epoch 4`, and `--default-assigned-node workstation`.
-3. Keep both servers stopped until both reports pass section `D`.
-4. Do not copy migrated state between nodes.
+3. Mobile supplies one explicit writable backup path outside its catalog root.
+4. Keep both servers stopped until both reports pass section `F`.
+5. Do not copy migrated state between nodes.
 
 ---
 
-## D. Migration Admission
+## F. Migration Admission
 
 1. Require protocol `decision-os-task-state/4`.
 2. Require schema `4`.
@@ -51,7 +85,7 @@
 
 ---
 
-## E. Relay Deployment
+## G. Relay Deployment
 
 1. Deploy epoch-4 relay code against the versioned epoch-4 Durable Object namespace.
 2. Preserve the epoch-3 namespace unchanged.
@@ -60,7 +94,7 @@
 
 ---
 
-## F. Workstation Publication
+## H. Workstation Publication
 
 1. Start only Workstation through its registered MultiTerm process.
 2. Require HTTP `200` from `/`.
@@ -70,9 +104,9 @@
 
 ---
 
-## G. Mobile Join
+## I. Mobile Join
 
-1. Start Mobile through its registered Termux process.
+1. Run Mobile's preflight-recorded registered start command.
 2. Require federation phase `connected` on both nodes.
 3. Require Workstation, Mobile, and relay roots to match for every project.
 4. Require identical task counts, assignment labels, execution histories, and canonical projections.
@@ -80,7 +114,7 @@
 
 ---
 
-## H. Execution Ownership Proof
+## J. Execution Ownership Proof
 
 1. Disconnect Workstation from the relay.
 2. Launch a Workstation-assigned task on Workstation.
@@ -96,7 +130,7 @@
 
 ---
 
-## I. Content and Restart Proof
+## K. Content and Restart Proof
 
 1. Read a Mobile-owned terminal artifact from Workstation by exact hash.
 2. Read a Workstation-owned terminal artifact from Mobile by exact hash.
@@ -107,7 +141,7 @@
 
 ---
 
-## J. Failure Containment Proof
+## L. Failure Containment Proof
 
 1. Reject one execution admission and require visible frontend reconciliation.
 2. Time out one execution and require exact child termination.
@@ -117,7 +151,7 @@
 
 ---
 
-## K. Rollback
+## M. Rollback
 
 1. Stop both nodes.
 2. Repoint the relay deployment to the retained epoch-3 namespace.
@@ -129,7 +163,7 @@
 
 ---
 
-## L. Closeout Evidence
+## N. Closeout Evidence
 
 1. Reviewed code commit installed on both nodes.
 2. Redacted credential-presence checks.
@@ -146,8 +180,8 @@
 
 ---
 
-## M. Production Gate
+## O. Production Gate
 
-1. Do not close the cutover while any section `L` evidence is missing.
+1. Do not close the cutover while any section `N` evidence is missing.
 2. Do not delete epoch-3 backups and namespace while the gate remains open.
 3. Do not mark the implementation goal complete before production evidence proves the complete plan.
