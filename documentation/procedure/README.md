@@ -13,6 +13,7 @@
 2. [Testing](./testing/README.md) contains the repository verification contract.
 3. [Deployment](./deployment/README.md) contains offline migration, production admission, relay convergence, restart, and rollback procedures.
 4. [Tasks](./tasks/README.md) contains CLI task creation, activation, synchronization verification, commit, and push procedures.
+5. [Implementation](./implementation/README.md) contains multi-gate architecture implementation, evidence publication, and merge-admission procedures.
 
 ---
 
