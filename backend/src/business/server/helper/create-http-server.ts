@@ -60,8 +60,12 @@ import {
   type TaskExecutionRouter,
 } from '../../codex/helper/task-execution-router.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
-import { createCodexCapacitySlots, type CodexSlotAcquireOptions } from '../../codex/helper/codex-capacity-slots.js';
 import { scheduleCodexRuntimeTimer, stopCodexRuntimeTimers } from '../../codex/helper/codex-runtime-run-store.js';
+import { installFederatedPipelineRun, installRemotePipelineRun, removeInstalledRemotePipelineRun } from '../../codex/helper/install-remote-pipeline-run.js';
+import { taskExecutionState } from '../../codex/helper/task-execution-runtime.js';
+import { executeFederatedPipelineSkill } from '../../codex/helper/codex-pipeline-runner.js';
+import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import type { TaskExecutionMetadata } from '../../task-state/helper/task-current-state-types.js';
 import { resolveCatalogProject, tasksLedgerForProject, type DecisionOsProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
@@ -285,6 +289,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     watcher: ReturnType<typeof watchProjectFiles>;
   };
   const projectContexts = new Map<string, ProjectContext>();
+  const federatedSchedulerContexts = new Map<string, { root: string; runtime: AnyRecord }>();
   const startupProjectTasks: Promise<void>[] = [];
   const projectCatalogStore = createProjectCatalogStore({ masterRoot, masterDecisionOsRoot });
   let controlRoomProjectionStore: ReturnType<typeof createControlRoomProjectionStore> | null = null;
@@ -295,6 +300,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const projectTaskStates = new Map<string, ProjectTaskState>();
   const taskExecutionRouters = new Map<string, TaskExecutionRouter>();
   const federatedTaskStores = new Map<string, TaskCurrentStateStore>();
+  const federatedExecutionStates = new Map<string, Pick<ProjectTaskState, 'executions'>>();
   const federatedExecutionObservations = new Map<string, CodexExecutionObservation>();
   const pausedTaskProjects = new Map<string, RuntimeIncident>();
   const pausedFederatedTaskProjects = new Map<string, RuntimeIncident>();
@@ -490,7 +496,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
         return body.receipt;
       },
-      dispatchRemoteBatch: async (nodeId, launches) => {
+      dispatchRemoteBatch: async (nodeId, launches, context) => {
         if (!federation) {
           throw new TaskExecutionAdmissionError('assigned_node_unreachable', 503, { assignedNodeId: nodeId });
         }
@@ -500,7 +506,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: Buffer.from(JSON.stringify({ requests: launches })),
+            body: Buffer.from(JSON.stringify({ requests: launches, pipelineRun: context.pipelineRun })),
           },
         );
         let body: AnyRecord = {};
@@ -639,17 +645,45 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (localProject) return tryTaskStateForProject(localProject)?.store ?? null;
     return federatedTaskStoreForProject(projectId, ownerNodeId);
   };
+  const executionStateForProject = (
+    projectId: string,
+    ownerNodeId: string,
+  ): Pick<ProjectTaskState, 'executions'> | null => {
+    const localProject = projectCatalogStore.projects().find((project) => project.id === projectId && project.available);
+    if (localProject) return tryTaskStateForProject(localProject);
+    const current = federatedExecutionStates.get(projectId);
+    if (current) return current;
+    const store = federatedTaskStoreForProject(projectId, ownerNodeId);
+    if (!store) return null;
+    const state = {
+      executions: createTaskExecutionRepository({
+        store,
+        writerId: federation?.localOwner().ownerNodeId ?? 'local',
+        projectId,
+        persist: async (changes, emittedAt) => {
+          const result = await store.mutate({
+            replicaId: federation?.localOwner().ownerNodeId ?? 'local',
+            changes,
+            emittedAt,
+          });
+          federationTaskStateReplicator?.publishDelta(result.delta);
+          return result.delta;
+        },
+      }),
+    };
+    federatedExecutionStates.set(projectId, state);
+    return state;
+  };
   const globalCodexProcessCapacity = (): number => {
     const settings = runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object' ? runtime.decisionOsSettings as AnyRecord : {};
     return normalizedConcurrentCodexProcesses(process.env.CODEX_MAX_CONCURRENT_PROCESSES ?? settings.maxConcurrentCodexProcesses ?? 1) ?? 1;
   };
   const scheduledCodexRunningProcessCount = (): number => [...projectContexts.values()]
-    .reduce((count, context) => count + runningCodexProcessCount({ codexSkillRuns: context.runtime.codexSkillRuns }), 0);
-  const projectSyncCodexSlots = createCodexCapacitySlots({
-    capacity: globalCodexProcessCapacity,
-    externalRunningCount: scheduledCodexRunningProcessCount,
-  });
-  const globalCodexRunningProcessCount = (): number => scheduledCodexRunningProcessCount() + projectSyncCodexSlots.reservedCount();
+    .reduce((count, context) => count + runningCodexProcessCount({
+      codexSkillRuns: context.runtime.codexSkillRuns,
+      taskExecutionProcesses: context.runtime.taskExecutionProcesses,
+    }), 0);
+  const globalCodexRunningProcessCount = (): number => scheduledCodexRunningProcessCount();
   const globalCodexQueuePosition = (id: string): number => {
     const pending = [...projectContexts.entries()].flatMap(([root, context], rootOrder) => pendingCodexProcessEntries(root, context.runtime)
       .map((entry) => ({ ...entry, order: rootOrder * 2_000_000 + entry.order })))
@@ -672,6 +706,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         while (globalCodexRunningProcessCount() < capacity) {
           const candidate = [...projectContexts.entries()]
             .map(([root, context]) => ({ root, context, createdAt: nextPendingCodexProcessCreatedAt(root, context.runtime) }))
+            .concat([...federatedSchedulerContexts.values()].map(({ root, runtime: scopedRuntime }) => ({
+              root,
+              context: { runtime: scopedRuntime } as ProjectContext,
+              createdAt: nextPendingCodexProcessCreatedAt(root, scopedRuntime),
+            })))
             .filter((entry): entry is { root: string; context: ProjectContext; createdAt: string } => entry.context.runtime.codexRuntimePaused !== true && Boolean(entry.createdAt))
             .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
           if (!candidate) break;
@@ -765,17 +804,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (!project) throw new Error(`Task-state authority has no project ${projectId}.`);
       return taskStateForProject(project).projection().ledger;
     };
-    projectRuntime.acquireProjectSyncCodexSlot = async (options: CodexSlotAcquireOptions = {}): Promise<() => void> => {
-      const releaseSlot = await projectSyncCodexSlots.acquire(options);
-      let released = false;
-      return () => {
-        if (released) return;
-        released = true;
-        releaseSlot();
-        if (!pausedBackgroundComponents.has('codex-process-scheduler')) void scheduleGlobalCodexProcesses()
-          .catch((error: unknown) => recordBackgroundFailure('codex-process-scheduler', 'release-project-sync-slot', error, { projectId }));
-      };
-    };
     let watcher: ReturnType<typeof watchProjectFiles> | null = null;
     const broadcast = (message: string): void => {
       for (const client of clients) client.write(message);
@@ -831,16 +859,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         configurable: true,
         enumerable: false,
       });
-      Object.defineProperty(projectRuntime, 'taskExecutionRouter', {
-        value: taskExecutionRouterForProject(project),
-        configurable: true,
-        enumerable: false,
-      });
-      Object.defineProperty(projectRuntime, 'taskExecutionState', {
-        value: taskProjection(),
-        configurable: true,
-        enumerable: false,
-      });
+      const activeTaskState = pausedTaskProjects.has(projectId) ? null : tryTaskStateForProject(project);
+      if (activeTaskState) {
+        Object.defineProperty(projectRuntime, 'taskExecutionRouter', {
+          value: taskExecutionRouterForProject(project),
+          configurable: true,
+          enumerable: false,
+        });
+        Object.defineProperty(projectRuntime, 'taskExecutionState', {
+          value: activeTaskState,
+          configurable: true,
+          enumerable: false,
+        });
+      }
       if (!pausedTaskProjects.has(projectId)) {
         try {
           migrateLegacyCodexExecutions({
@@ -1029,6 +1060,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (pausedProjectWatchers.has(project.id) || pausedProjectRuntimes.has(project.id)) return null;
     try { return projectContext(project.decisionOsRoot, project.id); }
     catch (error) {
+      // WHAT: Preserve the incident boundary that already paused the owning task-state scope.
+      // WHY: Promoting a contained project-state failure into a second runtime incident
+      // misreports one root cause as two unavailable components.
+      if (error instanceof RuntimeScopePausedError) return null;
       recordIncident({
         scope: `project-runtime:${project.id}`,
         component: 'project-runtime',
@@ -1268,6 +1303,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     onStateFrame: async (frame) => {
       try {
         await federationTaskStateReplicator?.handleFrame(frame);
+        if (!pausedBackgroundComponents.has('codex-process-scheduler')) {
+          void scheduleGlobalCodexProcesses().catch((error: unknown) => {
+            recordBackgroundFailure('codex-process-scheduler', 'schedule-after-federated-state-frame', error, {
+              projectId: frame.projectId,
+              frameType: frame.type,
+            });
+          });
+        }
         if (!pausedBackgroundComponents.has('federation-content-scheduler')) void federationContentScheduler?.drain()
           .catch((error: unknown) => recordBackgroundFailure('federation-content-scheduler', 'drain-after-state-frame', error, { projectId: frame.projectId, frameType: frame.type }));
       } catch (error) {
@@ -1498,6 +1541,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       } else if (scope.startsWith('federated-task-state:')) {
         const projectId = scope.slice('federated-task-state:'.length);
         pausedFederatedTaskProjects.delete(projectId);
+        federatedExecutionStates.delete(projectId);
         federatedTaskStores.delete(projectId);
         resumed = Boolean(federatedTaskStoreForProject(projectId, 'operator-resume'));
         if (resumed) federationTaskStateReplicator?.reconcileProject('relay', projectId);
@@ -1743,12 +1787,34 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         response.end(JSON.stringify({ ok: false, error: 'federation_node_authentication_failed' }));
         return;
       }
+      let installedPipelineRunId = '';
       try {
         const body = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord;
         const batch = url.endsWith('/admit-batch');
+        const requests = Array.isArray(body.requests) ? body.requests as TaskExecutionLaunchRequest[] : [];
+        if (batch) {
+          try {
+            const installed = installRemotePipelineRun({
+              decisionOsRoot: activeProject.decisionOsRoot,
+              runtime: projectContext(activeProject.decisionOsRoot, activeProject.id).runtime,
+              run: body.pipelineRun as CodexPipelineRun,
+              requests,
+            });
+            if (installed.installed) installedPipelineRunId = installed.run.id;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'task_execution_pipeline_manifest_invalid';
+            const code = message.split(':')[0] || 'task_execution_pipeline_manifest_invalid';
+            throw new TaskExecutionAdmissionError(
+              code,
+              code.endsWith('_conflict') ? 409 : 400,
+              { pipelineRunId: String((body.pipelineRun as AnyRecord | undefined)?.id ?? '') },
+              message,
+            );
+          }
+        }
         const receipts = batch
           ? await taskExecutionRouterForProject(activeProject).admitLocalBatch(
-            Array.isArray(body.requests) ? body.requests as TaskExecutionLaunchRequest[] : [],
+            requests,
           )
           : [await taskExecutionRouterForProject(activeProject).admitLocal(body as TaskExecutionLaunchRequest)];
         response.statusCode = 202;
@@ -1756,6 +1822,22 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           ? { ok: true, receipts }
           : { ok: true, receipt: receipts[0] }));
       } catch (error) {
+        if (installedPipelineRunId) {
+          try {
+            removeInstalledRemotePipelineRun({
+              decisionOsRoot: activeProject.decisionOsRoot,
+              runId: installedPipelineRunId,
+            });
+          } catch (cleanupError) {
+            recordStoppedOperation({
+              scope: `task-execution-manifest-cleanup:${activeProject.id}:${installedPipelineRunId}`,
+              component: 'task-execution-router',
+              operation: 'remove-rejected-remote-pipeline-manifest',
+              error: cleanupError,
+              context: { projectId: activeProject.id, requesterNodeId, pipelineRunId: installedPipelineRunId },
+            });
+          }
+        }
         const expected = error instanceof TaskExecutionAdmissionError;
         const syntax = error instanceof SyntaxError;
         response.statusCode = expected ? error.statusCode : syntax ? 400 : 500;
@@ -2468,26 +2550,108 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (String(body.originFingerprint ?? '') !== snapshot.originFingerprint) throw new Error('Project synchronization origin lock identity mismatch.');
         projectSyncStore.acquireLock(snapshot.originFingerprint, String(body.syncId ?? ''));
         const masterTask = body.masterTask && typeof body.masterTask === 'object' ? body.masterTask as AnyRecord : {};
-        const codex = await executeProjectSyncPipelineSkill({
-          projectRoot: project.root,
-          runtime: projectContext(project.decisionOsRoot, project.id).runtime,
-          ledgerFile: resolve(project.decisionOsRoot, tasksLedgerForProject(project).ledgerFile.replace(/^\.decision-os\//, '')),
-          syncId: String(body.syncId ?? ''),
-          nodeId: federation.localOwner().ownerNodeId,
-          initiatorNodeId: String(body.initiatorNodeId ?? ''),
-          role,
-          requiredSha: String(body.requiredSha ?? '') || undefined,
-          snapshot,
-          codexRunId: String(body.pipelineSkillRunId ?? ''),
-          pipelineRunId: String(body.pipelineRunId ?? ''),
-          masterTask: {
-            projectId: String(masterTask.projectId ?? ''),
-            ledgerId: String(masterTask.ledgerId ?? ''),
-            cardId: String(masterTask.cardId ?? ''),
-          },
+        const executionId = String(body.executionId ?? '');
+        if (!executionId) throw new Error('Project synchronization execution identity is required.');
+        const projectRuntime = projectContext(project.decisionOsRoot, project.id).runtime;
+        const pipelineRun = body.pipelineRun as CodexPipelineRun;
+        const installed = installFederatedPipelineRun({
+          decisionOsRoot: project.decisionOsRoot,
+          runtime: projectRuntime,
+          run: pipelineRun,
+        }).run;
+        const locatedSkill = installed.steps.flatMap((step) => step.skills)
+          .find((skill) => skill.executionId === executionId);
+        const localNodeId = federation.localOwner().ownerNodeId;
+        if (!locatedSkill?.executor
+          || locatedSkill.executor.nodeId !== localNodeId
+          || locatedSkill.executor.projectId !== project.id
+          || locatedSkill.executor.role !== role) {
+          throw new Error('Project synchronization executor plan does not target this node and project.');
+        }
+        const metadata = body.executionMetadata as TaskExecutionMetadata;
+        if (!metadata || metadata.executionId !== executionId
+          || metadata.pipelineRunId !== installed.id
+          || metadata.pipelineSkillRunId !== locatedSkill.runId) {
+          throw new Error('Project synchronization execution metadata does not match its pipeline plan.');
+        }
+        const taskProjectId = String(masterTask.projectId ?? '');
+        if (!taskProjectId || metadata.projectId !== taskProjectId) {
+          throw new Error('Project synchronization task project does not match its execution metadata.');
+        }
+        const state = executionStateForProject(taskProjectId, authenticatedNodeId);
+        if (!state) throw new Error('Project synchronization task execution state is unavailable.');
+        let execution = state.executions.find(executionId);
+        if (!execution) {
+          execution = await state.executions.admit({ metadata, executorNodeId: localNodeId });
+        }
+        if (execution.lifecycle.executorNodeId !== localNodeId) {
+          throw new Error('Project synchronization execution belongs to another node.');
+        }
+        if (execution.lifecycle.phase === 'preparing') {
+          await state.executions.transition(executionId, { phase: 'queued' });
+        }
+        if (metadata.predecessorExecutionId) {
+          const predecessorDeadline = Date.now() + 15_000;
+          while (state.executions.find(metadata.predecessorExecutionId)?.lifecycle.phase !== 'succeeded'
+            && Date.now() < predecessorDeadline) {
+            await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+          }
+          if (state.executions.find(metadata.predecessorExecutionId)?.lifecycle.phase !== 'succeeded') {
+            throw new Error('Project synchronization predecessor did not converge on the selected executor.');
+          }
+        }
+        // WHAT: Execute role-local files against the replicated state of the task project.
+        // WHY: A source role can run in another project, but its execution identity still
+        // belongs to the initiator's master task and must converge in that project lane.
+        const executionRuntime = Object.create(projectRuntime) as AnyRecord;
+        Object.defineProperty(executionRuntime, 'taskExecutionState', {
+          value: state,
+          configurable: true,
+          enumerable: false,
         });
-        const verified = verifyProjectSyncPhase({ projectRoot: project.root, role, requiredSha: String(body.requiredSha ?? '') || undefined, result: codex.result });
-        response.end(JSON.stringify({ ok: true, ...codex, snapshot: verified }));
+        federatedSchedulerContexts.set(executionId, { root: project.decisionOsRoot, runtime: executionRuntime });
+        try {
+          const executed = await executeFederatedPipelineSkill({
+            decisionOsRoot: project.decisionOsRoot,
+            runtime: executionRuntime,
+            pipelineRunId: installed.id,
+            executionId,
+            executor: locatedSkill.executor,
+            execute: async (skill) => {
+              const codex = await executeProjectSyncPipelineSkill({
+                projectRoot: project.root,
+                runtime: executionRuntime,
+                ledgerFile: resolve(project.decisionOsRoot, tasksLedgerForProject(project).ledgerFile.replace(/^\.decision-os\//, '')),
+                syncId: String(body.syncId ?? ''),
+                nodeId: localNodeId,
+                initiatorNodeId: String(body.initiatorNodeId ?? ''),
+                role,
+                requiredSha: String(body.requiredSha ?? '') || undefined,
+                snapshot,
+                codexRunId: skill.runId,
+                executionId: skill.executionId,
+                stdoutFile: skill.stdoutFile,
+                stderrFile: skill.stderrFile,
+                pipelineRunId: installed.id,
+                masterTask: {
+                  projectId: String(masterTask.projectId ?? ''),
+                  ledgerId: String(masterTask.ledgerId ?? ''),
+                  cardId: String(masterTask.cardId ?? ''),
+                },
+              });
+              const verified = verifyProjectSyncPhase({
+                projectRoot: project.root,
+                role,
+                requiredSha: String(body.requiredSha ?? '') || undefined,
+                result: codex.result,
+              });
+              return { ...codex, snapshot: verified, executorNodeId: localNodeId };
+            },
+          });
+          response.end(JSON.stringify({ ok: true, ...executed.result }));
+        } finally {
+          federatedSchedulerContexts.delete(executionId);
+        }
       } catch (error) {
         response.statusCode = 409;
         response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Project synchronization role failed.' }));

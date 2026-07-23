@@ -3,6 +3,7 @@
  * WHY: Status reads, continuations, and lifecycle ingestion must share one ownership contract.
  */
 import { hydrateLedgerCardContent } from '@backend/business/ledger/helper/card-content-file.js';
+import { readCodexPipelineStore } from './codex-pipeline-store.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -45,6 +46,16 @@ export function resolveCardSkillRunOwnership(input: {
   // WHAT: Accept the ordinary card-run field without the thread-launched classification.
   // WHY: Generated skill cards share run artifacts but retain card-owned presentation.
   if (String(card.codexRunId ?? '') === input.runId) return { found: true, threadLaunched: false };
+  const pipelineRun = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs.find((run) => (
+    run.steps.some((step) => step.skills.some((skill) => skill.runId === input.runId))
+  ));
+  if (pipelineRun && (
+    pipelineRun.sourceCardId === input.cardId
+    || pipelineRun.steps.some((step) => step.outputCardId === input.cardId
+      && step.skills.some((skill) => skill.runId === input.runId))
+  )) {
+    return { found: true, threadLaunched: false };
+  }
   // WHAT: Recover ownership from the deterministic generated-card identity.
   // WHY: Older generated cards may predate explicit run fields.
   if (input.cardId === `card-${safeSegment(input.runId)}`) return { found: true, threadLaunched: false };

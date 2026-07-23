@@ -64,6 +64,11 @@ export async function restartCodexPipelineRunController(
     },
     restartOfRun: run,
     onLedgerChange: runtime.onPipelineLedgerChange,
+    plannedExecutors: run.executionMode === 'federated'
+      ? run.steps.flatMap((step) => step.skills.map((skill) => skill.executor)).filter(
+        (executor): executor is NonNullable<typeof executor> => Boolean(executor),
+      )
+      : undefined,
   });
   return {
     ...replacement,

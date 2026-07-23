@@ -34,15 +34,31 @@ test('exposes origin identity and fixed repository status while protecting feder
   mkdirSync(join(project, '.decision-os'));
   writeFileSync(join(project, '.decision-os', 'state.json'), '{"ledgers":[{"id":"specs","title":"Specs","ledgerFile":".decision-os/specs.json"}]}\n');
   writeFileSync(join(project, '.decision-os', 'specs.json'), '{"cards":[],"annotations":[],"relationships":[]}\n');
+  writeFileSync(join(project, '.gitignore'), [
+    '.decision-os-codex-execution-rollback/',
+    '.decision-os/codex-executions.json',
+    '.decision-os/codex-pipeline-runs/',
+    '.decision-os/runs/',
+    '.decision-os/task-state/',
+    '',
+  ].join('\n'));
   for (const skillName of ['project-sync-source-publisher', 'project-sync-initiator-reconciler', 'project-sync-source-finalizer']) {
     const skillRoot = join(home, '.skills', skillName);
     mkdirSync(skillRoot, { recursive: true });
     writeFileSync(join(skillRoot, 'SKILL.md'), `---\nname: ${skillName}\ndescription: test\n---\n\nReturn JSON evidence.\n`);
   }
   const fakeCodex = join(home, 'fake-codex');
-  writeFileSync(fakeCodex, '#!/bin/sh\nsha=$(git rev-parse HEAD)\nprintf \'{"status":"complete","headSha":"%s","originSha":"%s"}\\n\' "$sha" "$sha"\n');
+  writeFileSync(fakeCodex, [
+    '#!/bin/sh',
+    'git add -A',
+    'if ! git diff --cached --quiet; then git commit -m "synchronize decision os state" >/dev/null && git push >/dev/null; fi',
+    'sha=$(git rev-parse HEAD)',
+    'printf \'{"status":"complete","headSha":"%s","originSha":"%s","requiredSha":"%s"}\\n\' "$sha" "$sha" "$sha"',
+    '',
+  ].join('\n'));
   chmodSync(fakeCodex, 0o755);
-  git(project, 'add', '.decision-os/state.json', '.decision-os/specs.json');
+  writeFileSync(join(project, '.decision-os', '.settings.json'), `${JSON.stringify({ codexBin: fakeCodex })}\n`);
+  git(project, 'add', '.gitignore', '.decision-os/state.json', '.decision-os/specs.json', '.decision-os/.settings.json');
   git(project, 'commit', '-m', 'initialize project');
   git(project, 'push', '-u', 'origin', 'HEAD');
   const runtime: Record<string, unknown> = { decisionOsSettings: { codexBin: fakeCodex } };
@@ -106,9 +122,26 @@ test('exposes origin identity and fixed repository status while protecting feder
     const pipelineStore = JSON.parse(readFileSync(join(project, '.decision-os', 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
     assert.equal(pipelineStore.runs.length, 1);
     assert.equal(pipelineStore.runs[0].sourceCardId, attached.masterCardId);
-    // Let watcher-triggered task contributions drain before deleting the temporary repository.
-    // The federated pipeline intentionally remains active while it waits for its remote role.
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
+    const completed = await waitFor(async () => {
+      const body = await fetch(`${base}/api/project-sync/${encodeURIComponent(admission.run.syncId)}`).then((response) => response.json()) as Record<string, any>;
+      if (body.run?.phase === 'failed') throw new Error(`Project synchronization failed during execution: ${JSON.stringify(body.run.error ?? {})}`);
+      return body.run?.phase === 'complete' ? body.run : null;
+    }, 15_000);
+    assert.equal(completed.pipelineRunId, attached.pipelineRunId);
+    const pipelineDetail = await fetch(
+      `${base}/p/${encodeURIComponent(catalog.projects[0].id)}/api/codex/pipelines/runs/${encodeURIComponent(attached.pipelineRunId)}`,
+    ).then((response) => response.json()) as Record<string, any>;
+    assert.equal(pipelineDetail.run.status, 'complete');
+    assert.deepEqual(
+      pipelineDetail.run.steps.map((step: Record<string, any>) => step.skills[0].status),
+      ['complete', 'complete', 'complete'],
+    );
+    const immutablePipelineStore = JSON.parse(readFileSync(join(project, '.decision-os', 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
+    assert.equal(immutablePipelineStore.runs[0].status, 'pending');
+    assert.deepEqual(
+      immutablePipelineStore.runs[0].steps.map((step: Record<string, any>) => step.skills[0].executor.nodeId),
+      ['local', 'local', 'local'],
+    );
   } finally {
     server.close();
     await once(server, 'close');

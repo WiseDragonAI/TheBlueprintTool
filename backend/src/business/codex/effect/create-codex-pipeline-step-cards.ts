@@ -16,6 +16,7 @@ export async function createCodexPipelineStepCards(input: {
   context: PipelineLedgerContext;
   source: AnyRecord;
   run: CodexPipelineRun;
+  projectLegacyLifecycle?: boolean;
 }): Promise<AnyRecord | null> {
   const sourceX = Number(input.source.x ?? 0);
   const sourceY = Number(input.source.y ?? 0);
@@ -28,7 +29,7 @@ export async function createCodexPipelineStepCards(input: {
   const synchronizationRun = input.run.pipelineId === 'project-synchronization';
   for (const [index, step] of input.run.steps.entries()) {
     const firstSkill = step.skills[0];
-    const projectLegacyLifecycle = input.run.temporary;
+    const projectLegacyLifecycle = input.projectLegacyLifecycle ?? input.run.temporary;
     const card = {
       id: step.outputCardId,
       title: input.run.temporary && input.run.steps.length === 1
@@ -87,7 +88,7 @@ export async function createCodexPipelineStepCards(input: {
     previousCardId = step.outputCardId;
   }
   const firstSkill = input.run.steps[0]?.skills[0];
-  if (input.run.temporary) {
+  if (input.projectLegacyLifecycle ?? input.run.temporary) {
     input.source.codexQueuedPipelineRunId = input.run.id;
     input.source.codexQueuedRunId = firstSkill?.runId ?? '';
     input.source.codexActiveRunId = firstSkill?.runId ?? '';

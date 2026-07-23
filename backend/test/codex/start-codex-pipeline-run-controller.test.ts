@@ -380,7 +380,11 @@ test('direct temporary runs inherit skill defaults, preserve snapshots, and hono
     const inherited = await inheritedResponse.json() as Record<string, any>;
     assert.equal(inherited.run.codexModel, 'gpt-5.4');
     assert.equal(inherited.run.codexEffort, 'high');
-    await waitFor(() => readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === inherited.pipelineRun.id)?.status === 'complete' ? true : null, 'inherited direct run');
+    await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(inherited.pipelineRun.id)}`)
+        .then((response) => response.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? true : null;
+    }, 'inherited direct run');
     const afterFirst = readCodexPipelineStore({ decisionOsRoot }).store;
     writeCodexPipelineStore({
       decisionOsRoot,
@@ -402,7 +406,11 @@ test('direct temporary runs inherit skill defaults, preserve snapshots, and hono
     const explicit = await explicitResponse.json() as Record<string, any>;
     assert.equal(explicit.run.codexModel, 'gpt-5.6-sol');
     assert.equal(explicit.run.codexEffort, 'ultra');
-    await waitFor(() => readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === explicit.pipelineRun.id)?.status === 'complete' ? true : null, 'explicit direct run');
+    await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(explicit.pipelineRun.id)}`)
+        .then((response) => response.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? true : null;
+    }, 'explicit direct run');
   } finally {
     await closeServer(server);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
@@ -459,22 +467,22 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
       assert.equal(response.status, 202);
       starts.push(await response.json() as Record<string, any>);
     }
-    assert.deepEqual(starts.map((entry) => entry.pipelineRun.status), ['running', 'running', 'pending']);
-    assert.deepEqual(starts.map((entry) => entry.queuePosition), [null, null, 1]);
-    let lastStatuses: string[] = [];
-    try {
-      await waitFor(() => {
-        const runs = readCodexPipelineStore({ decisionOsRoot }).store.runs;
-        lastStatuses = runs.map((run) => run.status);
-        return runs.length === 3 && runs.every((run) => run.status === 'complete') ? runs : null;
-      }, 'capacity queue completion');
-    } catch {
-      assert.fail(`Capacity queue did not settle: ${lastStatuses.join(',')}`);
-    }
+    assert.deepEqual(starts.map((entry) => entry.pipelineRun.status), ['pending', 'pending', 'pending']);
+    assert.equal(starts.every((entry) => Number.isInteger(entry.queuePosition) && entry.queuePosition >= 1), true);
+    await Promise.all(starts.map((entry) => waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(entry.pipelineRun.id)}`)
+        .then((response) => response.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? detail.run : null;
+    }, 'capacity queue completion')));
+    assert.deepEqual(
+      readCodexPipelineStore({ decisionOsRoot }).store.runs.map((run) => run.status),
+      ['pending', 'pending', 'pending'],
+    );
     const lifecycle = readFileSync(lifecycleFile, 'utf8').trim().split('\n');
     assert.deepEqual(lifecycle.slice(0, 2), ['start', 'start']);
     assert.equal(lifecycle.filter((line) => line === 'start').length, 3);
     assert.equal(lifecycle.filter((line) => line === 'end').length, 3);
+    assert.ok(lifecycle.findIndex((line, index) => line === 'start' && index >= 2) > lifecycle.indexOf('end'));
   } finally {
     await closeServer(server);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
@@ -547,7 +555,16 @@ test('one catalog-level server skill executes directly and in saved pipelines fr
       });
       assert.equal(directResponse.status, 202);
       const direct = await directResponse.json() as Record<string, any>;
-      await waitFor(() => readCodexPipelineStore({ decisionOsRoot: project.decisionOsRoot }).store.runs.find((run) => run.id === direct.pipelineRun.id)?.status === 'complete' ? true : null, 'shared direct run');
+      await waitForAsync(async () => {
+        const detail = await fetch(`${scoped}/api/codex/pipelines/runs/${encodeURIComponent(direct.pipelineRun.id)}`)
+          .then((response) => response.json()) as Record<string, any>;
+        return detail.run?.status === 'complete' ? true : null;
+      }, 'shared direct run');
+      assert.equal(
+        readCodexPipelineStore({ decisionOsRoot: project.decisionOsRoot }).store.runs
+          .find((run) => run.id === direct.pipelineRun.id)?.status,
+        'pending',
+      );
       const directInput = join(project.decisionOsRoot, 'cards', 'specs', `${direct.run.outputCardId}.md.input`);
       assert.match(readFileSync(directInput, 'utf8'), /# Server-only instruction/);
       const pipelineResponse = await fetch(`${scoped}/api/codex/pipelines/runs`, {

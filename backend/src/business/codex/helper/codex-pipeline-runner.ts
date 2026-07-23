@@ -47,6 +47,26 @@ import {
 
 type AnyRecord = Record<string, unknown>;
 type TerminalStatus = 'complete' | 'failed' | 'cancelled';
+type FederatedPipelineExecutor = {
+  executor: NonNullable<CodexPipelineRunSkill['executor']>;
+  execute: (skill: CodexPipelineRunSkill) => Promise<Record<string, unknown>>;
+};
+
+function federatedPipelineExecutors(runtime: AnyRecord): Map<string, FederatedPipelineExecutor> {
+  const current = runtime.federatedPipelineExecutors;
+  if (current instanceof Map) return current as Map<string, FederatedPipelineExecutor>;
+  const executors = new Map<string, FederatedPipelineExecutor>();
+  Object.defineProperty(runtime, 'federatedPipelineExecutors', {
+    value: executors,
+    configurable: true,
+    enumerable: false,
+  });
+  return executors;
+}
+
+export function federatedPipelineExecutionReady(runtime: AnyRecord, executionId: string): boolean {
+  return federatedPipelineExecutors(runtime).has(executionId);
+}
 
 export function publicPipelineSkillRuntimeRun(run: AnyRecord): AnyRecord {
   return publicCodexRuntimeRun(run);
@@ -211,7 +231,7 @@ function cardContent(input: { context: PipelineLedgerContext; decisionOsRoot: st
   return String(comment.what ?? comment.body ?? comment.description ?? '');
 }
 
-function outputFileForCard(context: PipelineLedgerContext, decisionOsRoot: string, cardId: string): string {
+export function outputFileForPipelineCard(context: PipelineLedgerContext, decisionOsRoot: string, cardId: string): string {
   const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
   return resolveCardContentFile(decisionOsRoot, comment.contentFile) ?? '';
@@ -224,7 +244,7 @@ async function projectPipelineSkillRun(input: {
   skill: CodexPipelineRunSkill;
   pipelineRun: CodexPipelineRun;
 }): Promise<void> {
-  const outputFile = outputFileForCard(input.context, input.decisionOsRoot, input.step.outputCardId);
+  const outputFile = outputFileForPipelineCard(input.context, input.decisionOsRoot, input.step.outputCardId);
   const outputFileRef = outputFile ? relative(dirname(input.decisionOsRoot), outputFile) : '';
   const projection = {
     ledger: input.context.ledger,
@@ -579,7 +599,7 @@ export async function spawnPipelineSkillProcess(input: {
     ledgerId: input.pipelineRun.ledgerId,
   });
   if (!context) throw new Error(`Ledger ${input.pipelineRun.ledgerId} could not be loaded for pipeline run ${input.pipelineRun.id}.`);
-  const outputFile = outputFileForCard(context, input.decisionOsRoot, input.step.outputCardId);
+  const outputFile = outputFileForPipelineCard(context, input.decisionOsRoot, input.step.outputCardId);
   if (!outputFile) throw new Error(`Output card ${input.step.outputCardId} has no Markdown file.`);
   const replicatedState = taskExecutionState(input.runtime);
   const replicatedExecution = replicatedState?.executions.find(input.skill.executionId) ?? null;
@@ -778,6 +798,70 @@ export async function runPipelineExecution(input: {
     });
     return { ok: false, statusCode: 409, error: message, executionId: input.executionId };
   }
+  if (manifest.executionMode === 'federated') {
+    const planned = located.skill.executor;
+    const registered = federatedPipelineExecutors(input.runtime).get(input.executionId);
+    if (!planned || !registered
+      || planned.nodeId !== registered.executor.nodeId
+      || planned.projectId !== registered.executor.projectId
+      || planned.role !== registered.executor.role) {
+      const message = `Federated execution ${input.executionId} has no matching runtime executor.`;
+      await state.executions.transition(input.executionId, {
+        phase: 'failed',
+        error: { code: 'federated_pipeline_executor_unavailable', message },
+        result: { status: 'failed', summary: message },
+      });
+      await cancelPipelineDependents({
+        runtime: input.runtime,
+        pipelineRunId: execution.metadata.pipelineRunId,
+        executionId: input.executionId,
+      });
+      return { ok: false, statusCode: 503, error: message, executionId: input.executionId };
+    }
+    try {
+      const result = await registered.execute(located.skill);
+      writeFileSync(located.skill.stdoutFile, `${JSON.stringify(result)}\n`, 'utf8');
+      // WHAT: Let the durable transition guard prove that the child reached `running`.
+      // WHY: CRDT projection reads can lag the repository's accepted local transition;
+      // a direct `running -> succeeded` write rejects a missing process boundary
+      // without inventing a second lifecycle read authority.
+      await state.executions.transition(input.executionId, {
+        phase: 'succeeded',
+        result: {
+          status: 'succeeded',
+          summary: `federated executor ${planned.nodeId}`,
+        },
+      });
+      return { ok: true, statusCode: 200, run: reassessPipelineAfterSkill({
+        decisionOsRoot: input.decisionOsRoot,
+        runtime: input.runtime,
+        pipelineRunId: manifest.id,
+      }) ?? manifest, result };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      writeFileSync(located.skill.stderrFile, `${message}\n`, 'utf8');
+      const latest = state.executions.find(input.executionId);
+      if (latest && (latest.lifecycle.phase === 'starting' || latest.lifecycle.phase === 'running')) {
+        await state.executions.transition(input.executionId, {
+          phase: 'failed',
+          error: { code: 'federated_pipeline_skill_failed', message },
+          result: { status: 'failed', summary: message },
+        });
+      }
+      await cancelPipelineDependents({
+        runtime: input.runtime,
+        pipelineRunId: manifest.id,
+        executionId: input.executionId,
+      });
+      return { ok: false, statusCode: 500, error: message, executionId: input.executionId };
+    } finally {
+      federatedPipelineExecutors(input.runtime).delete(input.executionId);
+      scheduleCodexRuntime(input.runtime, 'schedule-after-federated-pipeline-settlement', {
+        pipelineRunId: manifest.id,
+        executionId: input.executionId,
+      });
+    }
+  }
   try {
     const skillRun = await spawnPipelineSkillProcess({
       decisionOsRoot: input.decisionOsRoot,
@@ -930,6 +1014,7 @@ export async function executeFederatedPipelineSkill(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
   pipelineRunId: string;
+  executionId?: string;
   executor: NonNullable<CodexPipelineRunSkill['executor']>;
   execute: (skill: CodexPipelineRunSkill) => Promise<Record<string, unknown>>;
 }): Promise<{ run: CodexPipelineRun; skill: CodexPipelineRunSkill; result: Record<string, unknown> }> {
@@ -939,8 +1024,77 @@ export async function executeFederatedPipelineSkill(input: {
     pipelineRunId: input.pipelineRunId,
   });
   if (!current || current.executionMode !== 'federated') throw new Error('Federated pipeline run not found.');
-  const next = findNextSkill(current);
+  const next = input.executionId
+    ? current.steps.flatMap((step) => step.skills.map((skill) => ({ step, skill })))
+      .find(({ skill }) => skill.executionId === input.executionId)
+    : findNextSkill(current);
   if (!next) throw new Error('Federated pipeline has no pending skill.');
+  const replicatedState = taskExecutionState(input.runtime);
+  if (replicatedState) {
+    const executorNodeId = String(input.executor.nodeId ?? '').trim();
+    if (!/^[a-zA-Z0-9_-]+$/.test(executorNodeId)) throw new Error('Federated pipeline executor node is invalid.');
+    const storedSkill = current.steps.flatMap((step) => step.skills).find((skill) => skill.executionId === next.skill.executionId);
+    if (!storedSkill) throw new Error('Federated pipeline manifest is incomplete.');
+    if (!storedSkill.executor || (
+      storedSkill.executor.nodeId !== input.executor.nodeId
+      || storedSkill.executor.projectId !== input.executor.projectId
+      || storedSkill.executor.role !== input.executor.role
+    )) {
+      throw new Error(`Federated execution ${next.skill.executionId} has a different planned executor.`);
+    }
+    const execution = replicatedState.executions.find(next.skill.executionId);
+    if (!execution) throw new Error(`Federated execution ${next.skill.executionId} was not admitted with its pipeline topology.`);
+    if (execution.lifecycle.executorNodeId !== executorNodeId) {
+      throw new Error(`Federated execution ${next.skill.executionId} belongs to executor ${execution.lifecycle.executorNodeId}.`);
+    }
+    if (execution.lifecycle.phase === 'succeeded') {
+      try {
+        const result = JSON.parse(readFileSync(next.skill.stdoutFile, 'utf8').trim()) as Record<string, unknown>;
+        return {
+          run: reassessPipelineAfterSkill({
+            decisionOsRoot: input.decisionOsRoot,
+            runtime: input.runtime,
+            pipelineRunId: current.id,
+          }) ?? current,
+          skill: { ...next.skill, executor: input.executor },
+          result,
+        };
+      } catch {
+        throw new Error(`Federated execution ${next.skill.executionId} succeeded without readable result evidence.`);
+      }
+    }
+    if (execution.lifecycle.phase !== 'queued') {
+      throw new Error(`Federated execution ${next.skill.executionId} cannot start from ${execution.lifecycle.phase}.`);
+    }
+    mkdirSync(dirname(next.skill.stdoutFile), { recursive: true });
+    const executors = federatedPipelineExecutors(input.runtime);
+    if (executors.has(next.skill.executionId)) throw new Error(`Federated execution ${next.skill.executionId} is already active.`);
+    executors.set(next.skill.executionId, { executor: input.executor, execute: input.execute });
+    try {
+      const schedule = input.runtime.scheduleCodexProcesses;
+      if (typeof schedule !== 'function') throw new Error('Shared Codex scheduler is unavailable.');
+      await schedule();
+      const settled = replicatedState.executions.find(next.skill.executionId);
+      if (settled?.lifecycle.phase !== 'succeeded') {
+        throw new Error(settled?.lifecycle.error?.message ?? `Federated execution ${next.skill.executionId} did not succeed.`);
+      }
+      const result = JSON.parse(readFileSync(next.skill.stdoutFile, 'utf8').trim()) as Record<string, unknown>;
+      const run = reassessPipelineAfterSkill({
+        decisionOsRoot: input.decisionOsRoot,
+        runtime: input.runtime,
+        pipelineRunId: current.id,
+      });
+      if (!run) throw new Error('Federated pipeline completion could not be projected.');
+      return {
+        run,
+        skill: run.steps.flatMap((step) => step.skills).find((skill) => skill.executionId === next.skill.executionId)
+          ?? { ...next.skill, executor: input.executor },
+        result,
+      };
+    } finally {
+      executors.delete(next.skill.executionId);
+    }
+  }
   const targetedStore = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
   writeCodexPipelineStore({
     decisionOsRoot: input.decisionOsRoot,
@@ -969,7 +1123,7 @@ export async function executeFederatedPipelineSkill(input: {
   if (!context) throw new Error('Federated pipeline ledger could not be loaded.');
   projectPipelineSkillRun({ decisionOsRoot: input.decisionOsRoot, context, step, skill, pipelineRun: started });
   mkdirSync(dirname(skill.stdoutFile), { recursive: true });
-  const outputFile = outputFileForCard(context, input.decisionOsRoot, step.outputCardId);
+  const outputFile = outputFileForPipelineCard(context, input.decisionOsRoot, step.outputCardId);
   try {
     const result = await input.execute(skill);
     writeFileSync(skill.stdoutFile, `${JSON.stringify(result)}\n`, 'utf8');
@@ -1023,6 +1177,11 @@ export async function executePipelineSkillInWorkspace(input: {
   skillRunId: string;
   ledgerFile: string;
   context: AnyRecord;
+  executionId?: string;
+  stdoutFile?: string;
+  stderrFile?: string;
+  manageTaskExecutionLifecycle?: boolean;
+  onSpawned?: (value: { processId: number; startedAt: string }) => void;
 }): Promise<{ codexRunId: string; result: Record<string, unknown> }> {
   const serverSkill = resolveServerSkillContext({
     decisionOsRoot: input.decisionOsRoot,
@@ -1039,9 +1198,15 @@ export async function executePipelineSkillInWorkspace(input: {
     'Execute this pipeline step in the current repository. Treat this JSON as authoritative runtime input:',
     JSON.stringify(input.context, null, 2),
   ].join('\n');
-  const acquire = input.runtime.acquireProjectSyncCodexSlot;
-  const release = typeof acquire === 'function' ? await (acquire as () => Promise<() => void>)() : () => undefined;
+  const stdoutFile = input.stdoutFile ?? resolve(input.decisionOsRoot, 'project-sync', 'codex-runs', `${input.skillRunId}.jsonl`);
+  const stderrFile = input.stderrFile ?? resolve(input.decisionOsRoot, 'project-sync', 'codex-runs', `${input.skillRunId}.log`);
+  mkdirSync(dirname(stdoutFile), { recursive: true });
+  mkdirSync(dirname(stderrFile), { recursive: true });
   return new Promise((resolvePromise, reject) => {
+    // WHAT: Retain the bounded JSON-evidence parser while moving admission, capacity,
+    // process identity, and lifecycle ownership to the shared execution scheduler.
+    // WHY: Project-sync roles have a stricter result contract than ordinary Codex
+    // streams; replacing that validation would weaken the Git verification boundary.
     const maximumOutputBytes = 8 * 1024 * 1024;
     const executionTimeoutMs = codexExecutionTimeoutMs(input.runtime);
     const child = spawn(command.command, command.args, {
@@ -1057,13 +1222,14 @@ export async function executePipelineSkillInWorkspace(input: {
     let settled = false;
     let forceTimer: NodeJS.Timeout | undefined;
     let settlementTimer: NodeJS.Timeout | undefined;
+    const startedAt = new Date().toISOString();
     const finish = (error: Error | null, result?: { codexRunId: string; result: Record<string, unknown> }): void => {
       if (settled) return;
       settled = true;
       clearTimeout(deadline);
       clearTimeout(forceTimer);
       clearTimeout(settlementTimer);
-      release();
+      if (input.executionId) removeTaskExecutionProcess(input.runtime, input.executionId);
       if (error) reject(error);
       else if (result) resolvePromise(result);
     };
@@ -1087,8 +1253,13 @@ export async function executePipelineSkillInWorkspace(input: {
         stop(new Error(`Pipeline skill ${input.skillName} exceeded ${maximumOutputBytes} captured output bytes.`));
         return;
       }
-      if (target === 'stdout') stdout += chunk;
-      else stderr += chunk;
+      if (target === 'stdout') {
+        stdout += chunk;
+        appendFileSync(stdoutFile, chunk, 'utf8');
+      } else {
+        stderr += chunk;
+        appendFileSync(stderrFile, chunk, 'utf8');
+      }
     };
     child.stdout.on('data', (chunk: string) => capture('stdout', chunk));
     child.stderr.on('data', (chunk: string) => capture('stderr', chunk));
@@ -1099,9 +1270,7 @@ export async function executePipelineSkillInWorkspace(input: {
     child.once('close', (code) => {
       if (pendingFailure) return finish(pendingFailure);
       if (code !== 0) return finish(new Error(`Pipeline skill ${input.skillName} exited with code ${code}: ${stderr.trim() || 'no diagnostic'}`));
-      const candidates = stdout.split('\n').filter(Boolean).flatMap((line) => {
-        try { return nestedJsonObjects(JSON.parse(line)); } catch { return nestedJsonObjects(line); }
-      });
+      const candidates = stdout.split('\n').filter(Boolean).flatMap((line) => nestedJsonObjects(line));
       const result = candidates.reverse().find((entry) => 'status' in entry && ('headSha' in entry || 'blocker' in entry));
       if (!result) return finish(new Error(`Pipeline skill ${input.skillName} did not return the required JSON evidence.`));
       if (!['complete', 'completed'].includes(String(result.status ?? '').toLowerCase())) {
@@ -1109,7 +1278,37 @@ export async function executePipelineSkillInWorkspace(input: {
       }
       finish(null, { codexRunId: input.skillRunId, result });
     });
-    child.stdin.end(prompt);
+    const registerAndStart = async (): Promise<void> => {
+      if (input.executionId) {
+        registerTaskExecutionProcess(input.runtime, {
+          executionId: input.executionId,
+          sessionId: input.skillRunId,
+          child,
+          processId: child.pid ?? 0,
+          processStartTime: codexProcessIdentity(child.pid ?? 0),
+          startedAt,
+          stdoutFile,
+          stderrFile,
+        });
+        if (input.manageTaskExecutionLifecycle !== false) {
+          const state = taskExecutionState(input.runtime);
+          const execution = state?.executions.find(input.executionId);
+          if (!state || execution?.lifecycle.phase !== 'starting') {
+            removeTaskExecutionProcess(input.runtime, input.executionId);
+            throw new Error(`Federated execution ${input.executionId} was not durably claimed before spawn.`);
+          }
+          try {
+            await state.executions.transition(input.executionId, { phase: 'running' });
+          } catch (error) {
+            removeTaskExecutionProcess(input.runtime, input.executionId);
+            throw error;
+          }
+        }
+      }
+      input.onSpawned?.({ processId: child.pid ?? 0, startedAt });
+      child.stdin.end(prompt);
+    };
+    void registerAndStart().catch((error: unknown) => stop(error instanceof Error ? error : new Error(String(error))));
   });
 }
 

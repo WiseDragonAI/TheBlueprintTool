@@ -3,6 +3,7 @@
  * WHY: UI location and relay availability must never choose the executor or create competing execution authorities.
  */
 import { randomUUID } from 'node:crypto';
+import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { TaskExecutionKind, TaskExecutionMetadata } from '../../task-state/helper/task-current-state-types.js';
 import type { ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import type { ReplicatedTaskExecutionRecord } from '../../task-state/helper/task-execution-repository.js';
@@ -41,6 +42,10 @@ export type TaskExecutionReceipt = {
   phase: ReplicatedTaskExecutionRecord['lifecycle']['phase'];
   revision: number;
   requestedAt: string;
+};
+
+export type TaskExecutionBatchContext = {
+  pipelineRun: CodexPipelineRun;
 };
 
 export function isTaskExecutionReceipt(value: unknown): value is TaskExecutionReceipt {
@@ -236,7 +241,11 @@ export function createTaskExecutionRouter(input: {
   localNodeId: () => string;
   peer: (nodeId: string) => { online: boolean } | null;
   dispatchRemote: (nodeId: string, request: TaskExecutionLaunchRequest) => Promise<TaskExecutionReceipt>;
-  dispatchRemoteBatch?: (nodeId: string, requests: TaskExecutionLaunchRequest[]) => Promise<TaskExecutionReceipt[]>;
+  dispatchRemoteBatch?: (
+    nodeId: string,
+    requests: TaskExecutionLaunchRequest[],
+    context: TaskExecutionBatchContext,
+  ) => Promise<TaskExecutionReceipt[]>;
   localCapacity?: () => number;
   validateLocal?: (context: {
     request: TaskExecutionLaunchRequest;
@@ -534,7 +543,10 @@ export function createTaskExecutionRouter(input: {
     }
     return input.dispatchRemote(resolved.assignedNodeId, request);
   };
-  const routeBatch = async (requests: TaskExecutionLaunchRequest[]): Promise<TaskExecutionReceipt[]> => {
+  const routeBatch = async (
+    requests: TaskExecutionLaunchRequest[],
+    context?: TaskExecutionBatchContext,
+  ): Promise<TaskExecutionReceipt[]> => {
     if (!Array.isArray(requests) || requests.length === 0) {
       throw new TaskExecutionAdmissionError('task_execution_topology_empty', 400);
     }
@@ -560,7 +572,10 @@ export function createTaskExecutionRouter(input: {
     if (!input.dispatchRemoteBatch) {
       throw new TaskExecutionAdmissionError('task_execution_remote_topology_unsupported', 502, { assignedNodeId });
     }
-    return input.dispatchRemoteBatch(assignedNodeId, requests);
+    if (!context?.pipelineRun) {
+      throw new TaskExecutionAdmissionError('task_execution_pipeline_manifest_missing', 400, { assignedNodeId });
+    }
+    return input.dispatchRemoteBatch(assignedNodeId, requests, context);
   };
 
   return { route, routeBatch, admitLocal: localAdmission, admitLocalBatch: localBatchAdmission };

@@ -3,7 +3,14 @@
  * WHY: Direct and saved-pipeline work must share one replicated queue; only temporary legacy runs remain isolated until J.8.
  */
 import { readCodexPipelineStore } from './codex-pipeline-store.js';
-import { maxConcurrentCodexProcesses, runNextPipelineSkill, runPipelineExecution } from './codex-pipeline-runner.js';
+import {
+  maxConcurrentCodexProcesses,
+  federatedPipelineExecutionReady,
+  outputFileForPipelineCard,
+  resolvePipelineLedgerContext,
+  runNextPipelineSkill,
+  runPipelineExecution,
+} from './codex-pipeline-runner.js';
 import { startThreadCodexProcessController } from '../controller/start-thread-codex-process-controller.js';
 import { continueCardSkillRunController } from '../controller/continue-card-skill-run-controller.js';
 import { taskExecutionNodeId, taskExecutionState } from './task-execution-runtime.js';
@@ -14,16 +21,34 @@ function runnableLegacyPipelineRuns(decisionOsRoot: string, runtime?: AnyRecord)
   const state = runtime ? taskExecutionState(runtime) : null;
   return readCodexPipelineStore({ decisionOsRoot }).store.runs.filter((run) => (
     run.executionMode !== 'federated'
-    && (run.temporary || (state?.executions.byPipelineRunId(run.id).length ?? 0) === 0)
+    && (state?.executions.byPipelineRunId(run.id).length ?? 0) === 0
     && (run.status === 'pending' || run.status === 'running')
     && run.steps.some((step) => step.skills.some((skill) => skill.status === 'pending'))
     && !run.steps.some((step) => step.skills.some((skill) => skill.status === 'running'))
   ));
 }
 
-function runnableExecutions(runtime: AnyRecord) {
+function runnableExecutions(decisionOsRoot: string, runtime: AnyRecord) {
   const state = taskExecutionState(runtime);
   if (!state) return [];
+  const pipelineRuns = new Map(readCodexPipelineStore({ decisionOsRoot }).store.runs.map((run) => [run.id, run]));
+  const contexts = new Map<string, ReturnType<typeof resolvePipelineLedgerContext>>();
+  const pipelineReady = (record: ReturnType<typeof state.executions.find>): boolean => {
+    if (!record || record.metadata.kind !== 'pipeline-skill') return true;
+    const run = pipelineRuns.get(record.metadata.pipelineRunId ?? '');
+    const member = run?.steps
+      .flatMap((step) => step.skills.map((skill) => ({ step, skill })))
+      .find(({ skill }) => skill.executionId === record.metadata.executionId);
+    if (!run || !member) return false;
+    if (run.executionMode === 'federated'
+      && !federatedPipelineExecutionReady(runtime, record.metadata.executionId)) return false;
+    if (run.executionMode === 'federated') return true;
+    if (!contexts.has(run.ledgerId)) {
+      contexts.set(run.ledgerId, resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId: run.ledgerId }));
+    }
+    const context = contexts.get(run.ledgerId);
+    return Boolean(context && outputFileForPipelineCard(context, decisionOsRoot, member.step.outputCardId));
+  };
   return state.executions.byPhase('queued')
     .filter((record) => (
       record.lifecycle.executorNodeId === taskExecutionNodeId(runtime)
@@ -34,6 +59,7 @@ function runnableExecutions(runtime: AnyRecord) {
       )
       && (!record.metadata.predecessorExecutionId
         || state.executions.find(record.metadata.predecessorExecutionId)?.lifecycle.phase === 'succeeded')
+      && pipelineReady(record)
     ))
     .sort((left, right) => (
       left.metadata.requestedAt.localeCompare(right.metadata.requestedAt)
@@ -45,12 +71,19 @@ export function runningCodexProcessCount(runtime: AnyRecord): number {
   const sharedCount = runtime.globalCodexRunningProcessCount;
   if (typeof sharedCount === 'function') return Math.max(0, Number(sharedCount()) || 0);
   const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? runtime.codexSkillRuns as Record<string, AnyRecord> : {};
-  return Object.values(runs).filter((run) => run.status === 'running').length;
+  const registry = runtime.taskExecutionProcesses instanceof Map
+    ? runtime.taskExecutionProcesses as Map<string, unknown>
+    : new Map<string, unknown>();
+  const unregisteredLegacyRuns = Object.values(runs).filter((run) => (
+    run.status === 'running'
+    && !registry.has(String(run.executionId ?? ''))
+  )).length;
+  return registry.size + unregisteredLegacyRuns;
 }
 
 export function nextPendingCodexProcessCreatedAt(decisionOsRoot: string, runtime?: AnyRecord): string | null {
   const pipeline = runnableLegacyPipelineRuns(decisionOsRoot, runtime)[0];
-  const execution = runtime ? runnableExecutions(runtime)[0] : null;
+  const execution = runtime ? runnableExecutions(decisionOsRoot, runtime)[0] : null;
   if (!pipeline) return execution?.metadata.requestedAt ?? null;
   if (!execution) return pipeline.createdAt;
   return execution.metadata.requestedAt <= pipeline.createdAt ? execution.metadata.requestedAt : pipeline.createdAt;
@@ -59,7 +92,7 @@ export function nextPendingCodexProcessCreatedAt(decisionOsRoot: string, runtime
 export function pendingCodexProcessEntries(decisionOsRoot: string, runtime?: AnyRecord): Array<{ id: string; createdAt: string; order: number }> {
   return [
     ...runnableLegacyPipelineRuns(decisionOsRoot, runtime).map((run, order) => ({ id: run.id, createdAt: run.createdAt, order })),
-    ...(runtime ? runnableExecutions(runtime).map((record, order) => ({
+    ...(runtime ? runnableExecutions(decisionOsRoot, runtime).map((record, order) => ({
       id: record.metadata.executionId,
       createdAt: record.metadata.requestedAt,
       order: 1_000_000 + order,
@@ -113,7 +146,7 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
   const launchLimit = Math.max(1, input.launchLimit ?? Number.POSITIVE_INFINITY);
   while (runningCodexProcessCount(input.runtime) < capacity && launched.length < launchLimit) {
     const pipeline = runnableLegacyPipelineRuns(input.decisionOsRoot, input.runtime)[0];
-    const execution = runnableExecutions(input.runtime)[0];
+    const execution = runnableExecutions(input.decisionOsRoot, input.runtime)[0];
     if (!pipeline && !execution) break;
     const launchExecution = Boolean(execution && (!pipeline || execution.metadata.requestedAt <= pipeline.createdAt));
     if (launchExecution && execution) {

@@ -351,6 +351,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const metadata = {
     ...runtimeRunMetadata(fencedRuntime, runId),
     ...codexRunSegmentMetadata({ log: stderrLog, runId }),
+    ...(persistedPipelineRun ? { sourceCardTitle: persistedPipelineRun.sourceCardTitle } : {}),
     ...(persistedSkill ? { codexModel: persistedSkill.codexModel, codexEffort: persistedSkill.codexEffort } : {}),
   };
   logCodexContinueDebug('read-controller-result', {

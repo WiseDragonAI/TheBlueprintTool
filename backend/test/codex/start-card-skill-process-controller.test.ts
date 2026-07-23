@@ -15,6 +15,7 @@ import { parseThreadMarkdown } from '@backend/business/ledger/helper/thread-cont
 import { persistCardSkillRunEvents } from '@backend/business/codex/effect/persist-card-skill-run-events.js';
 import { normalizeCardSkillRunEvent } from '@backend/business/codex/helper/normalize-card-skill-run-event.js';
 import { readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
+import { taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 
 type ContentChangeEvent = {
@@ -177,7 +178,7 @@ test('card skill process route creates a linked output card and launches codex',
       body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'test-skill', codexModel: 'gpt-5.4', codexEffort: 'xhigh' })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { ok: boolean; run: { id: string; outputCardId: string; outputFile: string; stdoutFile: string; codexModel: string; codexEffort: string } };
+    const body = await response.json() as { ok: boolean; run: { id: string; executionId: string; pipelineRunId: string; outputCardId: string; outputFile: string; stdoutFile: string; codexModel: string; codexEffort: string } };
     assert.equal(body.ok, true);
     assert.ok(body.run.outputCardId);
     assert.ok(body.run.outputFile.endsWith(`${body.run.outputCardId}.md`));
@@ -207,12 +208,17 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(outputCard?.codexRunModel, 'gpt-5.4');
     assert.equal(outputCard?.codexRunEffort, 'xhigh');
     const sourceCard = ledger.cards.find((card) => card.id === 'source-card');
-    assert.equal(sourceCard?.codexActiveRunId, body.run.id);
-    assert.equal(sourceCard?.codexRunId, body.run.id);
-    assert.equal(sourceCard?.codexRunOutputFile, outputCard?.comment?.contentFile);
-    assert.equal(sourceCard?.codexPipelineRunId, body.run.id);
-    assert.equal(sourceCard?.codexPipelineName, 'test-skill run');
-    assert.equal(sourceCard?.codexSkillName, 'test-skill');
+    assert.equal(sourceCard?.codexActiveRunId, undefined);
+    assert.equal(sourceCard?.codexRunId, undefined);
+    assert.equal(sourceCard?.codexRunOutputFile, undefined);
+    assert.equal(sourceCard?.codexPipelineRunId, undefined);
+    assert.equal(sourceCard?.codexPipelineName, undefined);
+    assert.equal(sourceCard?.codexSkillName, undefined);
+    const execution = taskExecutionState(runtime)?.executions.find(body.run.executionId);
+    assert.equal(execution?.metadata.pipelineRunId, body.run.pipelineRunId);
+    assert.equal(execution?.metadata.pipelineSkillRunId, body.run.id);
+    assert.equal(execution?.metadata.sourceCardId, 'source-card');
+    assert.equal(execution?.lifecycle.executorNodeId, 'local');
 
     const sourceStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=source-card&since=0`);
     assert.equal(sourceStatusResponse.status, 200);
@@ -227,7 +233,7 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(sourceStatus.pipelineName, 'test-skill run');
     assert.equal(sourceStatus.pipelineStepName, 'test-skill');
     assert.equal(sourceStatus.skillName, 'test-skill');
-    assert.equal(sourceStatus.pipelineStatus, 'running');
+    assert.equal(sourceStatus.pipelineStatus, 'pending');
 
     const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=${body.run.outputCardId}&since=0`);
     assert.equal(statusResponse.status, 200);
@@ -241,9 +247,8 @@ test('card skill process route creates a linked output card and launches codex',
     await waitForText(body.run.outputFile, 'ledgerFile=');
     await waitForText(body.run.stdoutFile, '"type":"turn.completed"');
     await waitForCondition(() => {
-      const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
-      return runs?.[body.run.id]?.status === 'complete';
-    }, 'the generated card-skill run to complete');
+      return taskExecutionState(runtime)?.executions.find(body.run.executionId)?.lifecycle.phase === 'succeeded';
+    }, 'the replicated card-skill execution to complete');
     const output = readFileSync(body.run.outputFile, 'utf8');
     assert.match(output, /ledgerFile=.*\.decision-os\/specs\.json/);
     assert.doesNotMatch(output, /^Status: processing$/m);

@@ -119,7 +119,18 @@
    9. Focused pipeline result: `8/8`.
    10. Scheduler, router, store, and direct regression result: `21/21`.
    11. Backend typecheck passed.
-8. **J.8 — Move exceptional launch paths:** `pending`.
+8. **J.8 — Move exceptional launch paths:** `verified`.
+   1. Direct skills use the same temporary-pipeline admission, replicated execution topology, global capacity, node-local process registry, and terminal settlement as saved pipelines.
+   2. Voice upload persists one retry-stable request identity plus launch mode, card, pipeline, execution, and run topology before handoff. Retry reconstructs the launch from the durable note and creates no frontend execution authority.
+   3. Voice failure retains transcript and audio evidence, exposes the server-owned execution error, and remains retryable after reconciliation.
+   4. Project synchronization pre-admits its complete three-role executor plan and runs every role through the shared scheduler. It has no role-specific capacity semaphore or manual lifecycle transition chain.
+   5. A selected remote node installs and validates the immutable federated manifest before execution. Executor-local artifact paths do not alter logical topology identity.
+   6. A remote project-sync role executes against its selected checkout while mutating the replicated execution lane of the initiator’s master-task project.
+   7. Federated role runtimes participate in the same global scheduler candidate set and running-process capacity count.
+   8. Project runtime creation preserves the existing task-state incident boundary and keeps catalog, diagnostics, and Control Room reads online when one task-state scope is paused.
+   9. Focused backend result: `32/32`.
+   10. Focused frontend voice and thread result: `44/44`.
+   11. Backend typecheck passed.
 9. **J.9 — Replace control paths:** `pending`.
 10. **J.10 — Replace recovery:** `pending`.
 11. **J.11 — Complete optimistic frontend behavior:** `pending`.
@@ -131,12 +142,10 @@
 
 ## D. Current Verified Gaps
 
-1. Direct skill, voice handoff, and project-sync launch paths have not moved to the replicated execution scheduler.
-2. Remote saved-pipeline admission transports execution requests but does not yet install and validate the immutable run manifest on the assigned executor. Cross-node pipeline launch remains unproved until the exceptional federation path is completed.
-3. Remote cancellation, session deletion, compact status, remaining detailed status branches, live logs, SSE, and Control Room still contain legacy execution authority.
-4. Startup still runs direct queue recovery, pipeline resume, and card ownership reconciliation instead of one replicated execution recovery pass.
-5. Frontend launch behavior does not yet implement request-ID optimism, canonical reconciliation, and rejection rollback.
-6. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, temporary-pipeline lifecycle, and log-derived settlement remain until `J.12`.
+1. Remote cancellation, session deletion, compact status, remaining detailed status branches, live logs, SSE, and Control Room still contain legacy execution authority.
+2. Startup still runs direct queue recovery, pipeline resume, and card ownership reconciliation instead of one replicated execution recovery pass.
+3. Frontend launch behavior does not yet implement request-ID optimism, canonical reconciliation, and rejection rollback.
+4. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, temporary-pipeline lifecycle, and log-derived settlement remain until `J.12`.
 
 ---
 
@@ -154,24 +163,32 @@
    1. Command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`.
 6. **Frontend typecheck:** passed.
    1. Command: `node bin/decision-os-verify.mjs -- npm --prefix frontend run typecheck`.
-7. **Full backend suite:** failed `389/400`; the `11` failures remain open and map to later gates.
-   1. Three legacy direct-queue restart and scan expectations require `J.10`.
-   2. Three voice launch expectations and one project-sync launch expectation require `J.8`.
-   3. Control Room card-intent projection, startup ownership reconciliation, and card execution cleanup expectations require `J.12`.
-   4. The runtime-failsafe incident-count expectation is affected by the remaining startup ownership path and requires reassessment with `J.10` and `J.12`.
-8. **Offline migration fixture proof:** passed `11/11`.
+7. **Full backend suite:** ran once after J.8 and reported `395/403`.
+   1. The voice durable-identity shape assertion and duplicate runtime-incident boundary were corrected afterward; their focused tests pass.
+   2. One compact-status failure requires `J.9`.
+   3. Three legacy direct-queue restart and scan expectations require `J.10`.
+   4. Startup ownership reconciliation and card execution-intent cleanup expectations require `J.12`.
+8. **J.8 focused backend:** passed `32/32`.
+   1. Coverage includes direct skill, saved pipeline, federated pipeline runner, local project sync, two-node selected-executor project sync, voice handoff, and remote manifest installation.
+9. **J.8 focused frontend:** passed `44/44`.
+   1. Coverage includes upload persistence before request settlement, retry-stable project routing, absence of frontend execution-intent creation, and retryable durable execution failure.
+10. **Two-node selected-executor proof:** passed.
+   1. Node A sent the authenticated role request through the relay.
+   2. Node B installed the immutable manifest, used executor-local artifact paths, ran the child in the selected repository, and settled the execution in Node A’s replicated task-project lane.
+   3. The canonical pipeline projection converged to `complete` on Node A and Node B retained a clean repository.
+11. **Offline migration fixture proof:** passed `11/11`.
    1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=backend/tsconfig.json node --test --import ./backend/node_modules/tsx/dist/esm/index.mjs backend/test/unit/task-state/task-current-state-migration.test.ts backend/test/unit/task-state/migrate-node-task-current-state.test.ts`.
    2. Evidence includes corrupt execution-state byte preservation, epoch-3 shard admission, deterministic assignment, all legacy execution sources, artifact objects, zero journals, complete backup, and legacy-authority retirement.
-9. **Two-node convergence proof:** migration fixture passed.
+12. **Two-node convergence proof:** migration fixture passed.
    1. Independently migrated Workstation and Mobile fixtures join to one root, retain content ownership, deduplicate identical assignment and execution effects, and preserve real conflicts.
-10. **Served browser proof:** not run.
-11. **Restart durability proof:** not run.
-12. **Relay typecheck:** passed.
+13. **Served browser proof:** not run.
+14. **Restart durability proof:** not run.
+15. **Relay typecheck:** passed.
     1. Command from `federation-relay/`: `node ../bin/decision-os-verify.mjs -- node_modules/.bin/tsc -p tsconfig.json --noEmit`.
-13. **Dependent compatibility sample:** passed `26/33`; not a gate claim.
+16. **Dependent compatibility sample:** passed `26/33`; not a gate claim.
     1. Six failures are isolated-worktree child-process loader failures because the temporary fixture resolves `TSX_TSCONFIG_PATH` below its own root.
-    2. One substantive failure is the expected open `J.4`/`J.8` gap: Control Room still reads card execution fields removed by epoch-4 migration.
-14. **Assignment and reassignment tests:** passed.
+    2. One substantive failure is the expected open `J.9` gap: compact status still requires card execution fields removed by epoch-4 migration.
+17. **Assignment and reassignment tests:** passed.
     1. Assignment-specific project-state and federated-projection result: `4/4`.
     2. Master-task HTTP creation, required assignment, inherited-subtask rejection, reassignment, project-sync creation, runtime-incident creation, and federated Control Room result: `20/20`.
     3. Held Control Room assignment projection result: `1/1`.

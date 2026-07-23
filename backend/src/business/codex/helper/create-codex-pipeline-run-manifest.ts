@@ -34,11 +34,13 @@ export function createCodexPipelineRunManifest(input: {
   sourceCardTitle: string;
   ledgerPath: string;
   restartOfPipelineRunId?: string | null;
+  reservedRunId?: string;
+  reservedFirstExecutionId?: string;
 }): CodexPipelineRun {
   // WHAT: Preserve the legacy skill-run identifier for one-step temporary pipelines.
   // WHY: Existing direct-skill status and cancellation routes address that identifier.
   const runPrefix = input.definition.temporary ? 'codex-skill' : 'codex-pipeline';
-  const runId = `${runPrefix}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  const runId = input.reservedRunId || `${runPrefix}-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const directory = resolveCodexPipelineRunDirectory(input.decisionOsRoot, input.ledgerPath);
   const defaultsBySkill = new Map(input.store.skillLibrary.map((record) => [record.skillName, record]));
   const now = new Date().toISOString();
@@ -60,8 +62,14 @@ export function createCodexPipelineRunManifest(input: {
         // WHY: Direct-skill clients treat the returned run id as both pipeline and skill identity.
         const skillRunId = input.definition.temporary && stepIndex === 0 && skillIndex === 0
           ? runId
-          : `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
-        const executionId = `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
+          : input.reservedRunId
+            ? `${runId}-skill-${stepIndex + 1}-${skillIndex + 1}`
+            : `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
+        const executionId = input.reservedFirstExecutionId
+          ? stepIndex === 0 && skillIndex === 0
+            ? input.reservedFirstExecutionId
+            : `${input.reservedFirstExecutionId}-${stepIndex + 1}-${skillIndex + 1}`
+          : `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
         const defaults = defaultsBySkill.get(skill.skillName);
         const resolved = resolveSkillRunOptions({
           workspaceRoot: input.workspaceRoot,

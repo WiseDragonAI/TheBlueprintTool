@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -9,8 +10,10 @@ import { join } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { createFederationNodeConnector } from '@backend/business/federation/helper/federation-node-connector.js';
-import { writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
+import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
+import { readRepositorySyncStatus } from '@backend/business/project-sync/helper/repository-sync-status.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
+import type { CodexPipelineRun } from '../../../shared/schemas/codex-pipeline-types.js';
 
 type Frame = { type: string; requestId?: string; to?: string; projects?: unknown[] };
 
@@ -418,13 +421,51 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
   const homeB = await projectHome('beta');
   federatedLibraryFixture(homeA, 'alpha');
   federatedLibraryFixture(homeB, 'beta');
+  const betaRoot = join(homeB, 'beta');
+  const betaOrigin = join(homeB, 'beta-origin.git');
+  execFileSync('git', ['init', '--bare', betaOrigin]);
+  execFileSync('git', ['-C', betaRoot, 'init', '-b', 'main']);
+  execFileSync('git', ['-C', betaRoot, 'config', 'user.name', 'Decision OS Test']);
+  execFileSync('git', ['-C', betaRoot, 'config', 'user.email', 'test@decision-os.invalid']);
+  writeFileSync(join(betaRoot, '.gitignore'), [
+    '.decision-os-codex-execution-rollback/',
+    '.decision-os/codex-executions.json',
+    '.decision-os/codex-pipelines.json',
+    '.decision-os/runs/',
+    '.decision-os/task-state/',
+    '',
+  ].join('\n'));
+  execFileSync('git', ['-C', betaRoot, 'add', '.']);
+  execFileSync('git', ['-C', betaRoot, 'commit', '-m', 'initialize beta project']);
+  execFileSync('git', ['-C', betaRoot, 'remote', 'add', 'origin', betaOrigin]);
+  execFileSync('git', ['-C', betaRoot, 'push', '-u', 'origin', 'main']);
+  execFileSync('git', ['-C', betaRoot, 'remote', 'set-url', 'origin', `git://127.0.0.1:${(relayHttp.address() as AddressInfo).port}/beta.git`]);
+  const projectSyncSkill = join(homeB, '.skills', 'project-sync-initiator-reconciler');
+  mkdirSync(projectSyncSkill, { recursive: true });
+  writeFileSync(join(projectSyncSkill, 'SKILL.md'), [
+    '---',
+    'name: project-sync-initiator-reconciler',
+    'description: Reconcile a federated project synchronization.',
+    '---',
+    '',
+    'Return the verified repository SHA evidence as JSON.',
+    '',
+  ].join('\n'));
   const fakeCodex = join(homeB, 'fake-codex.mjs');
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
+    'import { execFileSync } from "node:child_process";',
     'import { writeFileSync } from "node:fs";',
     'import { join } from "node:path";',
     'let prompt = "";',
     'for await (const chunk of process.stdin) prompt += chunk;',
+    'if (prompt.includes("initiator-reconciler")) {',
+    '  const sha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();',
+    '  console.log(JSON.stringify({ type: "thread.started", thread_id: "project-sync-thread" }));',
+    '  console.log(JSON.stringify({ type: "item.completed", item: { id: "evidence", type: "agent_message", text: JSON.stringify({ status: "complete", headSha: sha, originSha: sha }) } }));',
+    '  console.log(JSON.stringify({ type: "turn.completed" }));',
+    '  process.exit(0);',
+    '}',
     'writeFileSync(join(process.cwd(), "node-message-prompt.txt"), prompt);',
     'if (prompt.includes("Wait for requester cancellation.")) await new Promise(() => setInterval(() => undefined, 1000));',
     'console.log(JSON.stringify({ type: "thread.started", thread_id: "node-message-thread" }));',
@@ -477,6 +518,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     });
     const catalogB = await fetch(`${baseB}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string; name: string; replicas: Array<{ nodeId: string }> }> };
     const remoteBeta = catalogA.find((project) => project.name === 'beta')!;
+    const alphaProjectId = catalogA.find((project) => project.name === 'alpha')!.id;
     assert.equal(remoteBeta.id.includes(':'), false);
     assert.ok(catalogB.projects.some((project) => project.name === 'alpha' && project.replicas.some((replica) => replica.nodeId === 'node-a')));
     const betaProjectId = catalogB.projects.find((project) => project.name === 'beta')!.id;
@@ -487,6 +529,129 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     assert.equal(nodeCatalog.ok, true);
     assert.ok(nodeCatalog.nodes.some((node) => node.nodeId === 'node-a' && node.local));
     assert.ok(nodeCatalog.nodes.some((node) => node.nodeId === 'node-b' && !node.local && node.projects.some((project) => project.projectId === betaProjectId)));
+    const projectSyncSnapshot = readRepositorySyncStatus(betaRoot);
+    const createdAt = '2026-07-23T07:00:00.000Z';
+    const pipelineRunId = 'federated-project-sync-proof';
+    const pipelineStepId = 'federated-project-sync-proof-step';
+    const pipelineSkillRunId = 'federated-project-sync-proof-skill-run';
+    const executionId = 'federated-project-sync-proof-execution';
+    const pipelineRun: CodexPipelineRun = {
+      id: pipelineRunId,
+      restartOfPipelineRunId: null,
+      pipelineId: 'project-sync',
+      pipelineName: 'Federated project synchronization proof',
+      temporary: true,
+      executionMode: 'federated',
+      ledgerId: 'tasks',
+      sourceCardId: 'alpha-card',
+      sourceCardTitle: 'alpha card',
+      status: 'pending',
+      createdAt,
+      updatedAt: createdAt,
+      startedAt: null,
+      finishedAt: null,
+      resumedAt: null,
+      error: '',
+      steps: [{
+        id: pipelineStepId,
+        stepId: 'project-sync-initiator-reconciler',
+        name: 'Initiator reconciler',
+        purpose: 'Prove selected-node execution through the shared scheduler.',
+        outputCardId: 'alpha-card',
+        status: 'pending',
+        startedAt: null,
+        finishedAt: null,
+        error: '',
+        skills: [{
+          id: 'federated-project-sync-proof-skill',
+          pipelineSkillId: 'project-sync-initiator-reconciler',
+          skillName: 'project-sync-initiator-reconciler',
+          runId: pipelineSkillRunId,
+          executionId,
+          status: 'pending',
+          codexModel: 'gpt-5.6-sol',
+          codexEffort: 'medium',
+          stdoutFile: '/requester-only/project-sync.jsonl',
+          stderrFile: '/requester-only/project-sync.log',
+          startedAt: null,
+          finishedAt: null,
+          error: '',
+          executor: {
+            kind: 'federated',
+            nodeId: 'node-b',
+            projectId: betaProjectId,
+            role: 'initiator-reconciler',
+          },
+        }],
+      }],
+    };
+    const executionMetadata = {
+      executionId,
+      requestId: `pipeline:${pipelineRunId}:${executionId}`,
+      sessionId: pipelineSkillRunId,
+      projectId: alphaProjectId,
+      ledgerId: 'tasks',
+      taskId: 'alpha-card',
+      sourceCardId: 'alpha-card',
+      ownerCardId: 'alpha-card',
+      kind: 'pipeline-skill',
+      requestedAt: createdAt,
+      model: 'gpt-5.6-sol',
+      effort: 'medium',
+      pipelineRunId,
+      pipelineStepId,
+      pipelineSkillRunId,
+      predecessorExecutionId: null,
+      restartOfExecutionId: null,
+    };
+    const alphaDecisionOsRoot = join(homeA, 'alpha', '.decision-os');
+    const alphaPipelineStore = readCodexPipelineStore({ decisionOsRoot: alphaDecisionOsRoot }).store;
+    writeCodexPipelineStore({
+      decisionOsRoot: alphaDecisionOsRoot,
+      store: { ...alphaPipelineStore, runs: [...alphaPipelineStore.runs, pipelineRun] },
+    });
+    const selectedNodeResponse = await (runtimeA.federationNodeConnector as {
+      request(nodeId: string, path: string, options: {
+        method: string;
+        headers: Record<string, string>;
+        body: Buffer;
+        timeoutMs: number;
+      }): Promise<{ status: number; body: Buffer }>;
+    }).request('node-b', '/api/project-sync/role', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      timeoutMs: 10_000,
+      body: Buffer.from(JSON.stringify({
+        syncId: 'federated-project-sync-proof',
+        initiatorNodeId: 'node-a',
+        projectId: betaProjectId,
+        role: 'initiator-reconciler',
+        originFingerprint: projectSyncSnapshot.originFingerprint,
+        snapshot: projectSyncSnapshot,
+        pipelineRunId,
+        pipelineSkillRunId,
+        executionId,
+        executionMetadata,
+        pipelineRun,
+        masterTask: { projectId: alphaProjectId, ledgerId: 'tasks', cardId: 'alpha-card' },
+      })),
+    });
+    const selectedNodeBody = JSON.parse(selectedNodeResponse.body.toString('utf8')) as Record<string, any>;
+    assert.equal(selectedNodeResponse.status, 200, JSON.stringify(selectedNodeBody));
+    assert.equal(selectedNodeBody.ok, true);
+    assert.equal(selectedNodeBody.executorNodeId, 'node-b');
+    assert.equal(selectedNodeBody.codexRunId, pipelineSkillRunId);
+    const selectedNodePipeline = await waitFor(async () => {
+      const body = await fetch(
+        `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/pipelines/runs/${pipelineRunId}`,
+      ).then((response) => response.json()) as Record<string, any>;
+      return body.run?.status === 'complete' ? body : null;
+    });
+    assert.equal(selectedNodePipeline.run.status, 'complete');
+    assert.equal(selectedNodePipeline.run.steps[0].skills[0].status, 'complete');
+    assert.equal(selectedNodePipeline.run.steps[0].skills[0].executor.nodeId, 'node-b');
+    assert.ok(existsSync(join(betaRoot, '.decision-os', 'runs', 'codex-skills', 'tasks', `${pipelineSkillRunId}.jsonl`)));
+    assert.equal(execFileSync('git', ['-C', betaRoot, 'status', '--porcelain=v1'], { encoding: 'utf8' }).trim(), '');
     const unauthenticatedExecution = await fetch(`${baseB}/api/federation/node-message-executions`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId: betaProjectId, message: 'bypass' }),
     });
@@ -577,6 +742,13 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     });
     assert.equal(lifecycleMutation.status, 200);
     const localBetaId = catalogB.projects.find((project) => project.name === 'beta')!.id;
+    const synchronizedBeforeControlRoom = await waitFor(async () => {
+      const body = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, {
+        headers: { 'x-decision-os-replica-node': 'node-b' },
+      }).then((response) => response.json()) as { cards?: Array<{ id: string; status: string }> };
+      return body.cards?.find((card) => card.id === 'beta-card' && card.status === 'backlog') ?? null;
+    });
+    assert.equal(synchronizedBeforeControlRoom.id, 'beta-card');
     const locallyAuthoritative = await fetch(`${baseB}/p/${encodeURIComponent(localBetaId)}/decision-os/state?replica=node-a`, {
       headers: { 'x-decision-os-replica-node': 'node-a' },
     });
