@@ -172,7 +172,14 @@
     9. Full backend result: `371/371`.
     10. Full frontend result: `533/533`.
     11. Backend and frontend typechecks passed.
-13. **J.13 — Run failure and convergence verification:** `pending`.
+13. **J.13 — Run failure and convergence verification:** `implemented`.
+    1. Automated verification rows `1` through `36` have focused passing evidence.
+    2. Five first-boundary defects were corrected: voice launch-failure state, deterministic projection clock ordering, mixed direct-child capacity accounting, server-close capacity-wait cancellation, and journal persistence-failure reporting.
+    3. Backend typecheck passed.
+    4. Frontend typecheck passed.
+    5. Backend suite reported `377/378`; its only failure was the new capacity test's fixed child-start delay. The corrected failing scope passed `2/2`.
+    6. Frontend suite passed `534/534`.
+    7. Served row `37` remains pending because the registered server is running `main` at `369d4158`, not this refactor branch.
 14. **J.14 — Execute the epoch-4 production cutover:** `pending`.
 
 ---
@@ -180,7 +187,8 @@
 ## D. Current Verified Gaps
 
 1. Served Workstation and Mobile interaction verification remains for `J.13`.
-2. Production migration, relay namespace deployment, node restart, and three-party convergence proof remain for `J.14`.
+2. No artifact garbage collector exists under `backend/src`; tombstone replication and artifact retention ordering are verified, while an actual deletion pass does not exist.
+3. Production migration, relay namespace deployment, node restart, and three-party convergence proof remain for `J.14`.
 
 ---
 

@@ -93,6 +93,70 @@ test('task intake publishes no state until its first durable content contributio
   assert.equal(state.store.entity('card', 'card-a')?.fields.replicationState, undefined);
 });
 
+test('assigned held task activates and reloads with one logical identity on both replicas', async (context) => {
+  const workstationRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-assigned-held-workstation-'));
+  const phoneRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-assigned-held-phone-'));
+  const workstationLedger = resolve(workstationRoot, 'tasks.json');
+  const phoneLedger = resolve(phoneRoot, 'tasks.json');
+  const emptyLedger = { modelName: 'tasks', cards: [], annotations: [], relationships: [], threadFiles: {} };
+  writeFileSync(workstationLedger, JSON.stringify(emptyLedger));
+  writeFileSync(phoneLedger, JSON.stringify(emptyLedger));
+  const published: TaskStateDelta[] = [];
+  const workstation = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: workstationRoot,
+    tasksLedgerFile: workstationLedger,
+    initialize: true,
+    publish: (delta) => { published.push(delta); },
+  });
+  const phone = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'phone',
+    decisionOsRoot: phoneRoot,
+    tasksLedgerFile: phoneLedger,
+    initialize: true,
+  });
+  context.after(async () => {
+    await Promise.all([workstation.flush(), phone.flush()]);
+    rmSync(workstationRoot, { recursive: true, force: true });
+    rmSync(phoneRoot, { recursive: true, force: true });
+  });
+  const execute = async (mutation: LedgerMutation) => {
+    const before = structuredClone(workstation.projection().ledger);
+    const after = structuredClone(before);
+    assert.equal(applyLedgerMutation({ decisionOsRoot: workstationRoot, ledgerPath: workstationLedger, ledger: after, mutation }).ok, true);
+    return workstation.executeMutation(mutation, before, after);
+  };
+
+  await execute({
+    action: 'create-task-intake',
+    assignedNodeId: 'phone',
+    annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' },
+    card: { id: 'card-a', title: 'Phone task', status: 'todo', labels: ['master-task'], domainId: 'tasks', comment: { what: 'Task' } },
+  });
+  assert.equal(published.length, 0);
+
+  await execute({ action: 'append-note', note: { id: 'note-a', threadId: 'thread-card-a', body: 'Publish it.', role: 'agent' } });
+  assert.ok(published.length > 0);
+  for (const delta of published) await phone.store.merge(delta);
+  await Promise.all([workstation.flush(), phone.flush()]);
+
+  for (const state of [workstation, phone]) {
+    const cards = state.projection().ledger.cards as Array<Record<string, any>>;
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0].id, 'card-a');
+    assert.equal(cards[0].assignment.nodeId, 'phone');
+  }
+
+  const reopenedWorkstation = createTaskCurrentStateStore({ decisionOsRoot: workstationRoot, projectId: 'project-a' });
+  const reopenedPhone = createTaskCurrentStateStore({ decisionOsRoot: phoneRoot, projectId: 'project-a' });
+  assert.equal((reopenedWorkstation.projection().ledger.cards as Array<Record<string, any>>).length, 1);
+  assert.equal((reopenedPhone.projection().ledger.cards as Array<Record<string, any>>).length, 1);
+  assert.equal((reopenedWorkstation.projection().ledger.cards as Array<Record<string, any>>)[0].assignment.nodeId, 'phone');
+  assert.equal((reopenedPhone.projection().ledger.cards as Array<Record<string, any>>)[0].assignment.nodeId, 'phone');
+});
+
 test('held deletion reports local projection changes without publishing federation state', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-held-delete-'));
   context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
@@ -197,7 +261,7 @@ test('reassignment resolves concurrent assignment candidates and advances their 
   assert.equal(state.store.entity('card', 'master')?.fields.assignment?.candidates.length, 1);
 });
 
-test('reassignment rejects inherited subtasks and tasks with an active execution', async (context) => {
+test('reassignment rejects inherited subtasks and tasks in every active execution phase', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-assignment-fences-'));
   const ledgerPath = resolve(root, 'tasks.json');
   const ledger = {
@@ -223,32 +287,42 @@ test('reassignment rejects inherited subtasks and tasks with an active execution
   assert.equal(inherited.error?.statusCode, 409);
   assert.equal(inherited.error?.body.error, 'task_assignment_inherited');
 
+  const executionId = 'execution-active';
   await state.store.mutate({
     replicaId: 'workstation',
     changes: [{
       entityType: 'execution',
-      entityId: 'execution-a',
+      entityId: executionId,
       changes: [
         { path: 'metadata', operation: 'set', value: {
-          executionId: 'execution-a', requestId: 'request-a', sessionId: 'session-a', projectId: 'project-a', ledgerId: 'tasks',
+          executionId, requestId: 'request-active', sessionId: 'session-active', projectId: 'project-a', ledgerId: 'tasks',
           taskId: 'master', sourceCardId: 'master', ownerCardId: 'master', kind: 'thread', requestedAt: '2026-07-23T03:00:00.000Z',
           model: null, effort: null, pipelineRunId: null, pipelineStepId: null, pipelineSkillRunId: null,
           predecessorExecutionId: null, restartOfExecutionId: null,
         } },
         { path: 'lifecycle', operation: 'set', value: {
-          phase: 'running', phaseSince: '2026-07-23T03:00:01.000Z', startedAt: '2026-07-23T03:00:01.000Z', finishedAt: null,
+          phase: 'starting', phaseSince: '2026-07-23T03:00:01.000Z', startedAt: null, finishedAt: null,
           executorNodeId: 'workstation', providerSessionId: null, result: null, error: null, revision: 3,
+        } },
+        { path: 'artifacts', operation: 'set', value: {
+          jsonl: null, stderr: null, telemetry: null, result: null, changedAt: '2026-07-23T03:00:00.000Z', revision: 1,
         } },
       ],
     }],
   });
-  const before = structuredClone(state.projection().ledger);
-  const after = structuredClone(before);
-  const mutation: LedgerMutation = { action: 'reassign-task', cardId: 'master', assignedNodeId: 'phone' };
-  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
-  await assert.rejects(state.executeMutation(mutation, before, after), /task_execution_active:master/);
-  const master = (state.projection().ledger.cards as AnyRecord[]).find((card) => card.id === 'master');
-  assert.equal((master?.assignment as AnyRecord).nodeId, 'workstation');
+  for (const phase of ['starting', 'running', 'cancelling'] as const) {
+    if (phase !== 'starting') {
+      await state.executions.transition(executionId, { phase });
+    }
+    assert.equal(state.executions.find(executionId)?.lifecycle.phase, phase);
+    const before = structuredClone(state.projection().ledger);
+    const after = structuredClone(before);
+    const mutation: LedgerMutation = { action: 'reassign-task', cardId: 'master', assignedNodeId: 'phone' };
+    assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
+    await assert.rejects(state.executeMutation(mutation, before, after), /task_execution_active:master/);
+    const master = (state.projection().ledger.cards as AnyRecord[]).find((card) => card.id === 'master');
+    assert.equal((master?.assignment as AnyRecord).nodeId, 'workstation');
+  }
 });
 
 test('unchanged content bytes do not create a second resource mutation when file metadata changes', async (context) => {

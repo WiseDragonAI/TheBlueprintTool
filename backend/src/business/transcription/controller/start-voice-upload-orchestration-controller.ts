@@ -366,7 +366,32 @@ async function finishVoiceUploadOrchestration(input: {
     lifecycleTelemetry({ noteId: input.noteId, phase: 'completed', at: completedAt, previousAt: providerSettledAt });
     if (input.launchMode !== 'send' && input.cardId) {
       const result = input.launchMode === 'pipeline' ? await runQueuedVoicePipeline(input) : await runQueuedThreadCodex(input);
-      if (result.ok === false) return;
+      if (result.ok === false) {
+        // WHAT: Persist the post-transcription launch failure without discarding retry inputs.
+        // WHY: A transcript is complete evidence even when its assigned execution owner is unavailable.
+        applyNotePatch({
+          runtime: input.runtime,
+          ledgerId: input.ledgerId,
+          threadId: input.threadId,
+          note: {
+            id: input.noteId,
+            body: text,
+            voiceFileRef: input.voiceFileRef,
+            status: 'execution launch failed',
+            providerSettledAt,
+            completedAt,
+            revision: input.revisionBase + 4,
+            error: String(result.error ?? 'execution_launch_failed'),
+            codexQueueRequestId: `voice:${input.noteId}`,
+            codexQueueLaunchMode: input.launchMode,
+            codexQueueCardId: input.cardId,
+            codexQueuePipelineId: input.launchMode === 'pipeline' ? input.pipelineId : ''
+          },
+          onCardContentChange: input.onCardContentChange,
+          reason: 'voice-execution-launch-failed'
+        });
+        return;
+      }
     }
     return;
   }

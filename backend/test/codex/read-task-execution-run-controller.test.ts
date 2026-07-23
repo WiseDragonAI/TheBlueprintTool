@@ -68,6 +68,8 @@ test('reads a terminal execution from immutable artifact heads', async () => {
       result: { status: 'succeeded', summary: 'Done.' },
     });
     await state.finalizeExecutionArtifacts('execution-a', { jsonl: stdoutFile, stderr: stderrFile });
+    rmSync(stdoutFile);
+    rmSync(stderrFile);
     const runtime = {
       decisionOsRoot,
       taskExecutionNodeId: 'workstation',

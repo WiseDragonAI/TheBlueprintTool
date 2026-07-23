@@ -3,11 +3,12 @@
  * WHY: The replicated repository must be complete before launch and recovery paths can abandon legacy execution files.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import type { TaskExecutionMetadata } from '../../../src/business/task-state/helper/task-current-state-types.js';
+import { taskCurrentStateVersion } from '../../../src/business/task-state/helper/task-current-state-types.js';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { createTaskExecutionRepository } from '../../../src/business/task-state/helper/task-execution-repository.js';
 
@@ -124,9 +125,18 @@ test('indexes pipeline identity and preserves legal awaited lifecycle plus termi
 
 test('publishes execution tombstones and session deletion state atomically after terminal settlement', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-execution-session-delete-'));
+  const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-execution-session-delete-remote-'));
   const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: { cards: [], annotations: [], relationships: [] } });
+  const remoteStore = createTaskCurrentStateStore({ decisionOsRoot: remoteRoot, projectId: 'project-a', initializeLedger: { cards: [], annotations: [], relationships: [] } });
   const repository = createTaskExecutionRepository({ store, writerId: 'workstation', projectId: 'project-a' });
-  context.after(async () => { await store.flush(); rmSync(root, { recursive: true, force: true }); });
+  const artifact = resolve(root, 'runs', 'session-a.jsonl');
+  mkdirSync(resolve(root, 'runs'), { recursive: true });
+  writeFileSync(artifact, '{"type":"turn.completed"}\n');
+  context.after(async () => {
+    await Promise.all([store.flush(), remoteStore.flush()]);
+    rmSync(root, { recursive: true, force: true });
+    rmSync(remoteRoot, { recursive: true, force: true });
+  });
 
   await repository.admit({ metadata: metadata(), executorNodeId: 'workstation' });
   await repository.transition('execution-a', { phase: 'queued' });
@@ -147,6 +157,14 @@ test('publishes execution tombstones and session deletion state atomically after
   assert.equal(sessionDeletion?.fields.kind.candidates[0].value, 'codex-session-deletion');
   assert.equal(sessionDeletion?.fields.deletedAt.candidates[0].value, '2026-07-23T01:01:00.000Z');
   assert.deepEqual(sessionDeletion?.fields.executionIds.candidates[0].value, ['execution-a']);
+  await remoteStore.merge({
+    version: taskCurrentStateVersion,
+    projectId: 'project-a',
+    entities: [executionTombstone!, sessionDeletion!],
+  });
+  assert.equal(remoteStore.entity('execution', 'execution-a')?.fields.$entity.candidates[0].operation, 'tombstone');
+  assert.equal(remoteStore.entity('resource', 'codex-session:session-a')?.fields.kind.candidates[0].value, 'codex-session-deletion');
+  assert.equal(existsSync(artifact), true);
 });
 
 test('rebuild exposes concurrent lifecycle candidates as an explicit execution conflict', async (context) => {

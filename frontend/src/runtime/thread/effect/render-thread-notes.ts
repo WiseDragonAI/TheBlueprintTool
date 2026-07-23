@@ -132,7 +132,7 @@ export function renderThreadNotes(): void {
     const failed = normalizedStatus.endsWith('failed');
     const busy = /committing|uploading|queued|transcribing|finalizing|retrying/.test(normalizedStatus);
     const localVoiceUploadId = String(note.localVoiceUploadId ?? '');
-    const retryable = (Boolean(note.voiceFileRef) && normalizedStatus === 'transcription failed')
+    const retryable = (Boolean(note.voiceFileRef) && ['transcription failed', 'execution launch failed'].includes(normalizedStatus))
       || (Boolean(localVoiceUploadId) && normalizedStatus === 'upload failed');
     const voiceOwned = Boolean(note.voiceFileRef);
     const phaseLabel = voiceOwned ? voicePhaseLabel(status) : status;

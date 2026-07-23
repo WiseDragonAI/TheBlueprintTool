@@ -55,6 +55,7 @@ import {
   type TaskExecutionRouter,
 } from '../../codex/helper/task-execution-router.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
+import { createCodexCapacitySlots, type CodexSlotAcquireOptions } from '../../codex/helper/codex-capacity-slots.js';
 import { scheduleCodexRuntimeTimer, stopCodexRuntimeTimers } from '../../codex/helper/codex-runtime-run-store.js';
 import { installFederatedPipelineRun, installRemotePipelineRun, removeInstalledRemotePipelineRun } from '../../codex/helper/install-remote-pipeline-run.js';
 import { taskExecutionState } from '../../codex/helper/task-execution-runtime.js';
@@ -306,6 +307,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const pausedProjectWatchers = new Set<string>();
   const pausedProjectRuntimes = new Set<string>();
   let serverClosing = false;
+  const serverCloseAbort = new AbortController();
   let globalRuntimeIncident: RuntimeIncident | null = null;
   let projectSyncController: ReturnType<typeof createProjectSyncController> | null = null;
   let resumeProjectSyncRuntime: (() => void) | null = null;
@@ -726,7 +728,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       codexSkillRuns: context.runtime.codexSkillRuns,
       taskExecutionProcesses: context.runtime.taskExecutionProcesses,
     }), 0);
-  const globalCodexRunningProcessCount = (): number => scheduledCodexRunningProcessCount();
+  // WHAT: Reserve one shared capacity lane for direct children outside the persisted execution scheduler.
+  // WHY: Node-message and project-sync work must count against the same process ceiling as task executions.
+  const sharedCodexCapacitySlots = createCodexCapacitySlots({
+    capacity: globalCodexProcessCapacity,
+    externalRunningCount: scheduledCodexRunningProcessCount,
+  });
+  const globalCodexRunningProcessCount = (): number => scheduledCodexRunningProcessCount() + sharedCodexCapacitySlots.reservedCount();
   const globalCodexQueuePosition = (id: string): number => {
     const pending = [...projectContexts.entries()].flatMap(([root, context], rootOrder) => pendingCodexProcessEntries(root, context.runtime)
       .map((entry) => ({ ...entry, order: rootOrder * 2_000_000 + entry.order })))
@@ -826,6 +834,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     projectRuntime.globalCodexProcessCapacity = globalCodexProcessCapacity;
     projectRuntime.globalCodexRunningProcessCount = globalCodexRunningProcessCount;
     projectRuntime.globalCodexQueuePosition = globalCodexQueuePosition;
+    // WHAT: Bind every direct-child capacity wait to the owning server lifecycle.
+    // WHY: Server close must settle waits even when the caller supplied no cancellation signal.
+    projectRuntime.acquireProjectSyncCodexSlot = (options: CodexSlotAcquireOptions = {}) => sharedCodexCapacitySlots.acquire({
+      ...options,
+      signal: options.signal
+        ? AbortSignal.any([options.signal, serverCloseAbort.signal])
+        : serverCloseAbort.signal,
+    });
     projectRuntime.persistTaskLedgerProjection = async (ledger: AnyRecord, command: TaskProjectionCommand): Promise<{ ledger: AnyRecord }> => {
       const project = projectCatalogStore.projects().find((entry) => entry.id === projectId);
       if (!project) throw new Error(`Task-state authority has no project ${projectId}.`);
@@ -3851,6 +3867,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   codexQueueScanTimer.unref?.();
   server.on('close', () => {
     serverClosing = true;
+    serverCloseAbort.abort(new Error('server_closed'));
     clearInterval(codexQueueScanTimer);
     if (federationSyncRetryTimer) clearTimeout(federationSyncRetryTimer);
     runtimeIncidentReviewScheduler.stop();

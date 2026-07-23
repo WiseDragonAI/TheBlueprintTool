@@ -143,6 +143,9 @@ export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, 
       projection.clock[replicaId] = Math.max(projection.clock[replicaId] ?? 0, counter);
     }
   }
+  // WHAT: Reinsert clock entries in replica-id order after every incremental materialization.
+  // WHY: Equal CRDT state must serialize byte-identically even when replicas receive entities in different orders.
+  projection.clock = Object.fromEntries(Object.entries(projection.clock).sort(([left], [right]) => left.localeCompare(right)));
 
   const materialized: AnyRecord = entity.entityType === 'ledger' ? projection.ledger : { id: entity.entityId };
   const entityTombstone = selectedCandidate(entity.fields.$entity?.candidates ?? []);

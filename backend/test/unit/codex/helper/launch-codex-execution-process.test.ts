@@ -125,6 +125,31 @@ test('execution deadline stops a non-terminating Codex process and reports the s
     assert.match(observed.error.message, /exceeded 25ms/);
     await settlement;
     assert.equal(processExists(childPid), false);
+    let unrelatedPid = 0;
+    let resolveUnrelatedSettlement!: () => void;
+    const unrelatedSettlement = new Promise<void>((resolve) => { resolveUnrelatedSettlement = resolve; });
+    await launchCodexExecutionProcess({
+      decisionOsRoot: root,
+      runtime: { codexExecutionTimeoutMs: 1_000 },
+      workspaceRoot: root,
+      ledgerId: 'specs',
+      ledgerPath: join(root, 'specs.json'),
+      cardId: 'card-b',
+      runId: 'run-b',
+      executionId: 'execution-b',
+      command: { command: process.execPath, args: ['-e', 'process.exit(0)'], model: 'test', effort: 'test' },
+      env: { ...process.env },
+      prompt: '',
+      stdoutFile: join(root, 'unrelated.jsonl'),
+      stderrFile: join(root, 'unrelated.log'),
+      segment: 'start',
+      startLine: 0,
+      onSpawn(child) { unrelatedPid = child.pid ?? 0; },
+      onSettled() { resolveUnrelatedSettlement(); },
+    });
+    await unrelatedSettlement;
+    assert.ok(unrelatedPid > 0);
+    assert.equal(processExists(unrelatedPid), false);
   } finally {
     if (childPid && processExists(childPid)) {
       try { process.kill(process.platform === 'win32' ? childPid : -childPid, 'SIGKILL'); } catch { /* already exited */ }

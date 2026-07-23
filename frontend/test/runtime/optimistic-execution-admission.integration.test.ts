@@ -26,6 +26,33 @@ test('responsive execution launches create identity before admission and reconci
   assert.match(canvasModal, /requestCodexPipelineRun\(\{[\s\S]*requestId: createExecutionRequestId\('pipeline'\)/);
 });
 
+test('responsive optimism precedes settlement and success or rejection forces canonical reconciliation', () => {
+  const application = source('frontend/src/app/responsive/application.js');
+  const thread = source('frontend/src/app/responsive/thread.js');
+  const begin = application.slice(
+    application.indexOf('function beginOptimisticExecution'),
+    application.indexOf('function acknowledgeOptimisticExecution'),
+  );
+  const acknowledge = application.slice(
+    application.indexOf('function acknowledgeOptimisticExecution'),
+    application.indexOf('function rejectOptimisticExecution'),
+  );
+  const reject = application.slice(
+    application.indexOf('function rejectOptimisticExecution'),
+    application.indexOf('async function navigateVoiceSubmission'),
+  );
+  const runStart = thread.indexOf("window.dispatchEvent(new CustomEvent('decision-os:codex-run-preparing'");
+  const run = thread.slice(runStart, thread.indexOf("window.dispatchEvent(new CustomEvent('decision-os:codex-run-rejected'", runStart));
+
+  assert.ok(run.indexOf("decision-os:codex-run-preparing") < run.indexOf('await requestCardSkillRunContinue'));
+  assert.match(begin, /optimisticExecutionIntents\.set\(identity, intent\);[\s\S]*applyOptimisticExecutionIntent\(state\.controlRoom, intent\)/);
+  assert.match(acknowledge, /intent\.requestId = String\(detail\.requestId[\s\S]*intent\.executionId = String\(detail\.executionId[\s\S]*intent\.revision = Math\.max/);
+  assert.match(acknowledge, /loadControlRoom\(\{ force: true \}\)/);
+  assert.match(reject, /optimisticExecutionIntents\.delete\(identity\)/);
+  assert.ok(reject.indexOf('optimisticExecutionIntents.delete(identity)') < reject.indexOf("loadControlRoom({ force: true })"));
+  assert.match(reject, /mutation-error-message[\s\S]*mutation-error'\]\.hidden = false/);
+});
+
 test('voice handoff uses its durable note request identity and preserves it through rejection', () => {
   const transcription = source('frontend/src/runtime/voice/effect/request-transcription.ts');
   const execution = source('frontend/src/runtime/voice/controller/execute-voice-action.ts');

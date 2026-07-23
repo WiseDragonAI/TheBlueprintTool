@@ -951,6 +951,13 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       return body.title === 'mutated by node-a' && body.state?.status === 'offline' ? body : null;
     });
     assert.equal(offlineCard.title, 'mutated by node-a', 'card detail remains readable from the local replica after owner disconnect');
+    const offlineTerminalDetail = await fetch(
+      `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/skills/runs/${cancellationSkillRunId}?ledgerId=tasks&cardId=alpha-card`,
+    ).then((response) => response.json()) as Record<string, any>;
+    assert.equal(offlineTerminalDetail.ok, true, JSON.stringify(offlineTerminalDetail));
+    assert.equal(offlineTerminalDetail.phase, 'cancelled');
+    assert.equal(offlineTerminalDetail.executorNodeId, 'node-b');
+    assert.match(String(offlineTerminalDetail.artifacts?.stderr?.hash ?? ''), /^[a-f0-9]{64}$/);
     const retainedSkills = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => project.name === 'alpha')!.id)}/api/codex/skills`).then((response) => response.json()) as { skills: Array<{ name: string }> };
     const retainedPipelines = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => project.name === 'alpha')!.id)}/api/codex/pipelines`).then((response) => response.json()) as { pipelines: Array<{ id: string }> };
     assert.ok(retainedSkills.skills.some((skill) => skill.name === 'beta-skill'), 'Process Card skill catalog remains local after beta disconnects');

@@ -101,7 +101,7 @@ test('admits a local assigned task without a peer or relay round trip and retrie
   assert.equal(dispatchCount, 0);
 });
 
-test('dispatches once to the connected assigned peer and creates state only on that node', async (context) => {
+test('remote retry after a lost response preserves one assigned-node execution and no local execution', async (context) => {
   const workstation = fixture('workstation', 'phone');
   const phone = fixture('phone', 'phone');
   context.after(() => dispose(workstation, phone));
@@ -121,18 +121,27 @@ test('dispatches once to the connected assigned peer and creates state only on t
     dispatchRemote: async (nodeId, launch) => {
       assert.equal(nodeId, 'phone');
       dispatchCount += 1;
-      return phoneRouter.admitLocal(launch);
+      const receipt = await phoneRouter.admitLocal(launch);
+      if (dispatchCount === 1) {
+        throw new TaskExecutionAdmissionError('assigned_node_unreachable', 503, { assignedNodeId: 'phone' });
+      }
+      return receipt;
     },
   });
 
+  await assert.rejects(workstationRouter.route(request()), (error: unknown) => (
+    error instanceof TaskExecutionAdmissionError && error.code === 'assigned_node_unreachable'
+  ));
   const admitted = await workstationRouter.route(request());
   const retried = await workstationRouter.route(request());
 
   assert.deepEqual(retried, admitted);
-  assert.equal(dispatchCount, 2);
+  assert.equal(dispatchCount, 3);
   assert.deepEqual(workstation.state.executions.all(), []);
+  assert.equal(workstation.state.executions.byTaskId('master').length, 0);
   assert.equal(phone.state.executions.find('execution-a')?.lifecycle.phase, 'queued');
   assert.equal(phone.state.executions.find('execution-a')?.lifecycle.executorNodeId, 'phone');
+  assert.equal(phone.state.executions.byTaskId('master').length, 1);
 });
 
 test('returns assigned_node_unreachable and creates no execution when the assigned peer is offline', async (context) => {
@@ -154,6 +163,7 @@ test('returns assigned_node_unreachable and creates no execution when the assign
     return true;
   });
   assert.deepEqual(workstation.state.executions.all(), []);
+  assert.equal(workstation.state.executions.byTaskId('master').length, 0);
 });
 
 test('blocks an assignment conflict before admission and preserves the explicit conflict', async (context) => {
