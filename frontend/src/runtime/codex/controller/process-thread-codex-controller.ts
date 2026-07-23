@@ -11,6 +11,7 @@ import { resumeExternallyStartedCardSkillRun } from '../effect/poll-card-skill-r
 import { bindThreadCodexRunLog } from '../effect/bind-thread-codex-run-log.js';
 import { threadCodexCardId } from '../helper/thread-codex-card-id.js';
 import { cardCodexThreadRunId } from '../helper/card-codex-thread-run-id.js';
+import { createExecutionRequestId } from '../helper/create-execution-request-id.js';
 
 export async function processThreadCodexController(input: { threadId?: string; cardId?: string; runId?: string; codexModel?: string; codexEffort?: string } = {}): Promise<boolean> {
   const ledgerId = String(state.activeTab ?? '').trim();
@@ -20,9 +21,10 @@ export async function processThreadCodexController(input: { threadId?: string; c
   telemetry('codex-thread-process-start', { ledgerId, threadId, cardId, codexModel: input.codexModel ?? '', codexEffort: input.codexEffort ?? '' });
   const card = state.activeLedger?.cards?.find((entry: Record<string, unknown>) => String(entry.id ?? '') === cardId);
   const existingRunId = String(input.runId ?? '').trim() || cardCodexThreadRunId(card);
+  const requestId = createExecutionRequestId('thread');
   const result = existingRunId
-    ? await requestCardSkillRunContinue({ ledgerId, cardId, runId: existingRunId, codexModel: input.codexModel, codexEffort: input.codexEffort })
-    : await requestThreadCodexProcess({ ledgerId, threadId, cardId, codexModel: input.codexModel, codexEffort: input.codexEffort });
+    ? await requestCardSkillRunContinue({ ledgerId, cardId, runId: existingRunId, requestId, codexModel: input.codexModel, codexEffort: input.codexEffort })
+    : await requestThreadCodexProcess({ ledgerId, threadId, cardId, requestId, codexModel: input.codexModel, codexEffort: input.codexEffort });
   if (!result.ok) {
     telemetry('codex-thread-process-failed', { ledgerId, threadId, cardId, codexModel: input.codexModel ?? '', codexEffort: input.codexEffort ?? '', error: result.error ?? '' });
     return false;

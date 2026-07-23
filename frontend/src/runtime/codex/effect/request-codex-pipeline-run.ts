@@ -11,12 +11,14 @@ export type CodexPipelineRunRequest = {
   ledgerId: string;
   sourceCardId: string;
   pipelineId: string;
+  requestId?: string;
 };
 
 export type CodexPipelineRunResult = {
   ok: boolean;
   statusCode: number;
   run?: CodexPipelineRun;
+  receipts?: readonly Record<string, unknown>[];
   skillRun?: Record<string, unknown> | null;
   invalidReferences: readonly CodexPipelineInvalidReference[];
   activeRunId?: string;
@@ -27,6 +29,7 @@ export type CodexPipelineRunResult = {
 
 type PipelineRunResponse = Partial<CodexPipelineRunResult> & {
   run?: CodexPipelineRun;
+  receipts?: Record<string, unknown>[];
   skillRun?: Record<string, unknown> | null;
   invalidReferences?: CodexPipelineInvalidReference[];
 };
@@ -45,6 +48,7 @@ export async function requestCodexPipelineRun(input: CodexPipelineRunRequest): P
     ok,
     statusCode: response.status,
     run: body.run,
+    receipts: Array.isArray(body.receipts) ? body.receipts : [],
     skillRun: body.skillRun,
     invalidReferences: Array.isArray(body.invalidReferences) ? body.invalidReferences : [],
     activeRunId: body.activeRunId,

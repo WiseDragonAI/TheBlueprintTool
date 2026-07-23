@@ -418,7 +418,11 @@ test('offers manual and configured-pipeline completion from the master-task deta
   assert.match(mobile, /return returnPath\.startsWith\('\/'\) \? returnPath : controlRoomPath\('queue'\)/);
   assert.match(mobile, /manualCompleteButton\.textContent = card\.status === 'done' \? 'Master task complete' : 'Complete manually'/);
   assert.match(mobile, /pipelineCompleteButton\.textContent = 'Complete with pipeline'/);
-  assert.match(mobile, /requestCodexPipelineRun\(\{ ledgerId: state\.activeLedgerId, sourceCardId: String\(card\.id\), pipelineId \}\)/);
+  assert.match(mobile, /const requestId = createExecutionRequestId\('pipeline'\)/);
+  assert.match(mobile, /beginOptimisticExecution\(executionDetail\)/);
+  assert.match(mobile, /requestCodexPipelineRun\(\{ ledgerId: state\.activeLedgerId, sourceCardId: String\(card\.id\), pipelineId, requestId \}\)/);
+  assert.match(mobile, /const receipt = result\.receipts\?\.\[0\] \?\? \{\}/);
+  assert.match(mobile, /acknowledgeOptimisticExecution\(\{ \.\.\.executionDetail, clientRequestId: executionDetail\.requestId, \.\.\.receipt \}\)/);
   assert.match(mobile, /pipelineCompleteButton\.disabled = card\.status === 'done' \|\| !configured/);
   assert.match(mobile, /navigate\(controlRoomPath\('exec'\), true\)/);
   assert.match(mobile, /overview\.append\(status, heading, subtasks, completion\)/);

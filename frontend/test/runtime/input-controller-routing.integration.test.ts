@@ -231,7 +231,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(processThreadCodex, /threadSelectedRunIdByThreadId\[threadId\] = runId/);
   assert.match(processThreadCodex, /const expectedStatus = resultStatus === 'pending' \|\| resultStatus === 'running' \? resultStatus : undefined/);
   assert.match(processThreadCodex, /bindThreadCodexRunLog\(\{ ledgerId, threadId, cardId, runId, expectedExecutionId, expectedStatus \}\);[\s\S]*await refreshRuntimeState\(\)/);
-  assert.match(processThreadCodex, /requestThreadCodexProcess\(\{ ledgerId, threadId, cardId, codexModel: input\.codexModel, codexEffort: input\.codexEffort \}\)/);
+  assert.match(processThreadCodex, /requestThreadCodexProcess\(\{ ledgerId, threadId, cardId, requestId, codexModel: input\.codexModel, codexEffort: input\.codexEffort \}\)/);
   assert.match(threadCss, /\.thread-codex-select\s*{[^}]*height:\s*28px;[^}]*font-family:\s*var\(--mono\);/s);
 
   const canvasLayerCss = source('frontend/assets/canvas/canvas-layer.css');

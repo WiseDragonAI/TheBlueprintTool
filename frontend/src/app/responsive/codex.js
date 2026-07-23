@@ -301,20 +301,32 @@ function processLaunchOwned(launch) {
 async function startSkill(skill, codexModel, codexEffort) {
   const submit = el('.process-start'); setBusy(submit, true); message('.process-detail-message', 'Submitting skill run…');
   const launch = captureProcessLaunch();
+  const requestId = createExecutionRequestId('skill');
+  const executionDetail = { ...launch, requestId, acceptedAt: new Date().toISOString(), kind: 'skill' };
+  window.dispatchEvent(new CustomEvent('decision-os:codex-run-preparing', { detail: executionDetail }));
   try {
-    const payload = { ledgerId: launch.ledgerId, cardId: launch.cardId, skillName: skill.name };
+    const payload = { ledgerId: launch.ledgerId, cardId: launch.cardId, skillName: skill.name, requestId };
     if (codexModel) payload.codexModel = codexModel; if (codexEffort) payload.codexEffort = codexEffort;
     const body = await jsonRequest('/api/codex/skills/process', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }, launch.projectId);
-    finishProcessLaunch({ pipelineRunId: body.pipelineRun?.id || '', queuePosition: body.queuePosition }, launch);
-  } catch (error) { message('.process-detail-message', formatProcessLaunchError(error), true); setBusy(submit, false); }
+    finishProcessLaunch({ ...executionDetail, clientRequestId: executionDetail.requestId, ...(body.receipts?.[0] ?? {}), pipelineRunId: body.pipelineRun?.id || '', queuePosition: body.queuePosition }, launch);
+  } catch (error) {
+    window.dispatchEvent(new CustomEvent('decision-os:codex-run-rejected', { detail: { ...executionDetail, error: formatProcessLaunchError(error) } }));
+    message('.process-detail-message', formatProcessLaunchError(error), true); setBusy(submit, false);
+  }
 }
 async function startPipeline(pipeline) {
   const submit = el('.process-start'); setBusy(submit, true); message('.process-detail-message', 'Submitting pipeline run…');
   const launch = captureProcessLaunch();
+  const requestId = createExecutionRequestId('pipeline');
+  const executionDetail = { ...launch, requestId, acceptedAt: new Date().toISOString(), kind: 'pipeline' };
+  window.dispatchEvent(new CustomEvent('decision-os:codex-run-preparing', { detail: executionDetail }));
   try {
-    const body = await jsonRequest('/api/codex/pipelines/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ledgerId: launch.ledgerId, sourceCardId: launch.cardId, pipelineId: pipeline.id }) }, launch.projectId);
-    finishProcessLaunch({ pipelineRunId: body.run?.id || '', queuePosition: body.queuePosition }, launch);
-  } catch (error) { message('.process-detail-message', formatProcessLaunchError(error), true); setBusy(submit, false); }
+    const body = await jsonRequest('/api/codex/pipelines/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ledgerId: launch.ledgerId, sourceCardId: launch.cardId, pipelineId: pipeline.id, requestId }) }, launch.projectId);
+    finishProcessLaunch({ ...executionDetail, clientRequestId: executionDetail.requestId, ...(body.receipts?.[0] ?? {}), pipelineRunId: body.run?.id || '', queuePosition: body.queuePosition }, launch);
+  } catch (error) {
+    window.dispatchEvent(new CustomEvent('decision-os:codex-run-rejected', { detail: { ...executionDetail, error: formatProcessLaunchError(error) } }));
+    message('.process-detail-message', formatProcessLaunchError(error), true); setBusy(submit, false);
+  }
 }
 function finishProcessLaunch(detail, launch) {
   const actionOwned = processLaunchOwned(launch);
@@ -551,3 +563,4 @@ import { renderSkillLibraryItemContent } from '/src/runtime/codex/component/rend
 import { renderCodexLibrary } from '/src/runtime/codex/component/render-codex-library.js';
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { setMobileCodexView } from './codex-view.js';
+import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';

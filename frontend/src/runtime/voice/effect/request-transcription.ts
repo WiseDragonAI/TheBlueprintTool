@@ -13,6 +13,15 @@ import { submitPendingVoiceUpload } from './submit-pending-voice-upload.js';
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
 import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
 
+export type VoiceExecutionHandoff = {
+  requestId: string;
+  projectId: string;
+  ledgerId: string;
+  cardId: string;
+  acceptedAt: string;
+  kind: 'voice';
+};
+
 export type VoiceTranscriptionRequest = {
   projectId?: string;
   replicaNodeId?: string;
@@ -21,7 +30,7 @@ export type VoiceTranscriptionRequest = {
   cardId?: string;
   launchMode?: VoiceLaunchMode;
   reviewContext?: Record<string, string>;
-  onPersisted?: () => void;
+  onPersisted?: (detail: VoiceExecutionHandoff) => void;
 };
 
 function requestOptions(input: VoiceTranscriptionRequest | string | undefined): VoiceTranscriptionRequest {
@@ -44,18 +53,22 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
   telemetry('request-transcription', { configured: true, model: 'gpt-4o-mini-transcribe', threadId, launchMode });
   renderVoiceStatus();
   const noteId = appendOptimisticThreadNote({ threadId, body: 'Voice note captured. Uploading audio...', status: 'uploading', source: 'voice' });
+  const projectId = voiceProjectId(options.projectId);
+  const ledgerId = options.ledgerId || currentLedgerStateId();
+  const cardId = options.cardId ?? '';
+  const acceptedAt = new Date().toISOString();
   try {
     await persistPendingVoiceUpload({
       noteId,
-      projectId: voiceProjectId(options.projectId),
+      projectId,
       replicaNodeId: voiceReplicaNodeId(options.replicaNodeId),
       threadId,
-      ledgerId: options.ledgerId || currentLedgerStateId(),
-      cardId: options.cardId ?? '',
+      ledgerId,
+      cardId,
       launchMode,
       reviewContext: options.reviewContext,
       audio,
-      createdAt: new Date().toISOString()
+      createdAt: acceptedAt
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -67,6 +80,13 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
   }
   patchOptimisticThreadNote({ threadId, noteId, localVoiceUploadId: noteId });
   telemetry('voice-upload-persisted', { noteId, threadId, size: audio.size, type: audio.type });
-  options.onPersisted?.();
+  options.onPersisted?.({
+    requestId: `voice:${noteId}`,
+    projectId,
+    ledgerId,
+    cardId,
+    acceptedAt,
+    kind: 'voice',
+  });
   return submitPendingVoiceUpload(noteId);
 }

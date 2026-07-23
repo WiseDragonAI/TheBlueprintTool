@@ -25,7 +25,7 @@ test('mobile thread composer defaults to a voice-first dock and expands text ent
   assert.match(responsiveThread, /action === 'voice-stop'\) await stopQuickVoiceComment\(button\.dataset\.launchMode \|\| 'send'\)/);
   assert.match(responsiveThread, /executeVoiceAction\(\{[\s\S]*launchMode: parseVoiceLaunchMode\(launchMode\)/);
   assert.doesNotMatch(responsiveThread, /quickVoiceCapture \? 'run' : launchMode/);
-  assert.match(responsiveThread, /onDurableHandoff: \(\) => \{[\s\S]*void finishQueuedVoiceSubmission\(true\)/);
+  assert.match(responsiveThread, /onDurableHandoff: \(detail\) => \{[\s\S]*void finishQueuedVoiceSubmission\(true, detail\)/);
   assert.match(controlsCss, /@media \(max-width: 760px\)[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\) 14px/);
   assert.match(controlsCss, /\.agent-chat \.wave-panel \{ grid-column: 2 \/ 4; grid-row: 1; \}/);
   assert.match(controlsCss, /\.agent-chat \.meter-panel \{ grid-column: 4; grid-row: 1 \/ 3; \}/);

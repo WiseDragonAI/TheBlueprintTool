@@ -6,17 +6,18 @@ export type CardSkillProcessRequest = {
   ledgerId: string;
   cardId: string;
   skillName: string;
+  requestId?: string;
   codexModel?: string;
   codexEffort?: string;
 };
 
-export async function requestCardSkillProcess(input: CardSkillProcessRequest): Promise<{ ok: boolean; run?: Record<string, unknown>; queuePosition?: number | null; error?: string }> {
+export async function requestCardSkillProcess(input: CardSkillProcessRequest): Promise<{ ok: boolean; run?: Record<string, unknown>; receipts?: readonly Record<string, unknown>[]; queuePosition?: number | null; error?: string }> {
   const response = await fetch('/api/codex/skills/process', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),
   }).catch(() => undefined);
   if (!response) return { ok: false, error: 'Request failed.' };
-  const body = await response.json().catch(() => ({})) as { ok?: boolean; run?: Record<string, unknown>; queuePosition?: number | null; error?: string };
-  return { ok: response.ok && body.ok !== false, run: body.run, queuePosition: body.queuePosition, error: body.error };
+  const body = await response.json().catch(() => ({})) as { ok?: boolean; run?: Record<string, unknown>; receipts?: Record<string, unknown>[]; queuePosition?: number | null; error?: string };
+  return { ok: response.ok && body.ok !== false, run: body.run, receipts: body.receipts, queuePosition: body.queuePosition, error: body.error };
 }

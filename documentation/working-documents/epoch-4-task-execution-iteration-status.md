@@ -150,7 +150,16 @@
     6. Late legacy direct-queue entries remain inert.
     7. Focused recovery and scheduler result: `32/32`.
     8. Backend typecheck passed.
-11. **J.11 — Complete optimistic frontend behavior:** `pending`.
+11. **J.11 — Complete optimistic frontend behavior:** `verified`.
+    1. Thread, continuation, direct-skill, pipeline, master-completion, and voice launches create an idempotency request identity before admission.
+    2. Responsive launches immediately project the owning master task into Exec as `preparing`, using its durable assigned node and a local phase timestamp.
+    3. Admission receipts rekey pipeline request prefixes to the exact replicated request ID and retain the optimistic projection until the returned execution revision is canonical.
+    4. Rejected admission removes only the matching optimistic request, reloads canonical Control Room state, and exposes the server error in the active application surface.
+    5. Voice handoff derives `voice:<noteId>` from the durable local note and preserves that identity through late upload rejection.
+    6. The direct-skill compatibility response now returns the replicated admission receipts required by frontend reconciliation.
+    7. Full frontend result: `534/534`.
+    8. Focused direct-skill receipt result: `1/1`.
+    9. Backend and frontend typechecks passed.
 12. **J.12 — Delete legacy authorities:** `pending`.
 13. **J.13 — Run failure and convergence verification:** `pending`.
 14. **J.14 — Execute the epoch-4 production cutover:** `pending`.
@@ -159,8 +168,7 @@
 
 ## D. Current Verified Gaps
 
-1. Frontend launch behavior does not yet implement request-ID optimism, canonical reconciliation, and rejection rollback.
-2. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, temporary-pipeline lifecycle, and log-derived settlement remain until `J.12`.
+1. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, temporary-pipeline lifecycle, and log-derived settlement remain until `J.12`.
 
 ---
 

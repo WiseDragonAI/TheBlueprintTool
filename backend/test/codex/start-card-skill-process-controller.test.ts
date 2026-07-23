@@ -175,15 +175,18 @@ test('card skill process route creates a linked output card and launches codex',
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/process`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'test-skill', codexModel: 'gpt-5.4', codexEffort: 'xhigh' })
+      body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'test-skill', requestId: 'skill-request-a', codexModel: 'gpt-5.4', codexEffort: 'xhigh' })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { ok: boolean; run: { id: string; executionId: string; pipelineRunId: string; outputCardId: string; outputFile: string; stdoutFile: string; codexModel: string; codexEffort: string } };
+    const body = await response.json() as { ok: boolean; run: { id: string; executionId: string; pipelineRunId: string; outputCardId: string; outputFile: string; stdoutFile: string; codexModel: string; codexEffort: string }; receipts: Array<{ requestId: string; executionId: string; revision: number }> };
     assert.equal(body.ok, true);
     assert.ok(body.run.outputCardId);
     assert.ok(body.run.outputFile.endsWith(`${body.run.outputCardId}.md`));
     assert.equal(body.run.codexModel, 'gpt-5.4');
     assert.equal(body.run.codexEffort, 'xhigh');
+    assert.equal(body.receipts[0]?.requestId, 'skill-request-a:1');
+    assert.equal(body.receipts[0]?.executionId, body.run.executionId);
+    assert.equal(body.receipts[0]?.revision, 2);
 
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
       cards: Array<{

@@ -25,6 +25,7 @@ import { openPipelineEditor } from './render-pipeline-editor-modal.js';
 import { openPipelinesModal } from './render-pipelines-modal.js';
 import { openSkillLibraryEditor } from './render-skill-library-editor-modal.js';
 import { requestFederatedLibrarySynchronization } from './request-federated-library-synchronization.js';
+import { createExecutionRequestId } from '../helper/create-execution-request-id.js';
 
 export type ProcessModalMode = 'pipelines' | 'skills';
 
@@ -641,6 +642,7 @@ export async function runSelectedPipeline(): Promise<boolean> {
     ledgerId,
     sourceCardId: cardId,
     pipelineId: pipeline.id,
+    requestId: createExecutionRequestId('pipeline'),
   });
   if (generation !== processLoadGeneration || cardId !== processModalState.cardId) return false;
   processModalState.processing = false;

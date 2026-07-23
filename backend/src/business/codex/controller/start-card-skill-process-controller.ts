@@ -86,5 +86,12 @@ export async function startCardSkillProcessController(
         status: firstSkill?.status,
         startedAt: firstSkill?.startedAt,
       };
-  return { ok: true, statusCode: 202, run: compatibilityRun, pipelineRun, queuePosition: result.queuePosition ?? null };
+  return {
+    ok: true,
+    statusCode: 202,
+    run: compatibilityRun,
+    pipelineRun,
+    receipts: result.receipts,
+    queuePosition: result.queuePosition ?? null,
+  };
 }
