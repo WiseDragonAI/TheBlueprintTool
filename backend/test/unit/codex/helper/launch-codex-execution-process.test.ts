@@ -22,7 +22,7 @@ test('spawn metadata failure kills the new process group before returning the er
   const stderrFile = join(root, 'run.log');
   let childPid = 0;
   try {
-    assert.throws(() => launchCodexExecutionProcess({
+    await assert.rejects(launchCodexExecutionProcess({
       decisionOsRoot: root,
       runtime: {},
       workspaceRoot: root,
@@ -64,7 +64,7 @@ test('asynchronous settlement failures are reported without becoming unhandled r
   let resolveFailure!: (value: { operation: string; error: Error }) => void;
   const failure = new Promise<{ operation: string; error: Error }>((resolve) => { resolveFailure = resolve; });
   try {
-    launchCodexExecutionProcess({
+    await launchCodexExecutionProcess({
       decisionOsRoot: root,
       runtime: { onCodexBackgroundError: resolveFailure },
       workspaceRoot: root,
@@ -101,7 +101,7 @@ test('execution deadline stops a non-terminating Codex process and reports the s
   const failure = new Promise<{ operation: string; error: Error }>((resolve) => { resolveFailure = resolve; });
   const settlement = new Promise<void>((resolve) => { resolveSettlement = resolve; });
   try {
-    launchCodexExecutionProcess({
+    await launchCodexExecutionProcess({
       decisionOsRoot: root,
       runtime: { codexExecutionTimeoutMs: 25, onCodexBackgroundError: resolveFailure },
       workspaceRoot: root,

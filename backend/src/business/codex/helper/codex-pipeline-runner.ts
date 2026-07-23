@@ -505,7 +505,7 @@ export async function spawnPipelineSkillProcess(input: {
   const startedAt = input.skill.startedAt ?? new Date().toISOString();
   const executionCoordinator = codexExecutionCoordinator(input.runtime);
   let runtimeRun: AnyRecord = {};
-  launchCodexExecutionProcess({
+  await launchCodexExecutionProcess({
     decisionOsRoot: input.decisionOsRoot,
     runtime: input.runtime,
     workspaceRoot,

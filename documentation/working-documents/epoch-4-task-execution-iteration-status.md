@@ -4,7 +4,7 @@
 2. **Implementation branch:** `feature/epoch4-task-execution`.
 3. **Base commit:** `0c72b4ed95c12bcfb0a27ddcbf56f4ecfdba5df7`.
 4. **Production branch:** `main`.
-5. **Current phase:** `J.6 — Replace direct execution authority`.
+5. **Current phase:** `J.7 — Replace pipeline execution authority`.
 6. **Overall state:** `in-progress`.
 7. **Production state:** epoch `3` remains active. Epoch `4` is not admitted for production use.
 
@@ -95,7 +95,18 @@
    9. The server no longer includes relay-root equality in the project task-state write predicate.
    10. Focused router and server result: `20/20`.
    11. Backend typecheck passed.
-6. **J.6 — Replace direct execution authority:** `pending`.
+6. **J.6 — Replace direct execution authority:** `verified`.
+   1. Direct thread start and continuation now admit one replicated execution entity through `TaskExecutionRouter` and return an immediate durable queued receipt.
+   2. The scheduler selects local direct work from the replicated `queued` index, persists `starting`, awaits spawn registration and `running`, then persists the terminal phase.
+   3. Direct execution creates neither `.decision-os/codex-process-queue.json` nor `.decision-os/codex-executions.json`.
+   4. The node-local process registry owns child handles, process identity, and artifact paths without replicating process state.
+   5. The configured node identity remains authoritative for local execution while relay transport is disconnected or incompletely configured.
+   6. Admission responses retain deterministic artifact paths and continuation metadata while reporting `startedAt = null` until the scheduler actually spawns the process.
+   7. Detailed direct-run status prefers the latest replicated execution lifecycle over stale log activity.
+   8. Dispatch rejection settles only the claimed execution as `failed`, records an execution-scoped incident, leaves the scheduler usable, and does not create a child.
+   9. Focused direct and compatibility result: `42/42`.
+   10. Router and federation regression result: `17/17`.
+   11. Backend typecheck passed.
 7. **J.7 — Replace pipeline execution authority:** `pending`.
 8. **J.8 — Move exceptional launch paths:** `pending`.
 9. **J.9 — Replace control paths:** `pending`.
@@ -109,11 +120,12 @@
 
 ## D. Current Verified Gaps
 
-1. Direct execution launch surfaces still bypass `TaskExecutionRouter` and write `.decision-os/codex-executions.json` before the scheduler-visible legacy queue.
-2. The scheduler reads `.decision-os/codex-process-queue.json` and mutable pipeline manifests instead of the replicated execution entities.
-3. Pipeline and direct spawn callbacks can publish `spawned()` without awaiting durable lifecycle settlement.
-4. The installed legacy coordinator still writes `.decision-os/codex-executions.json` and projects card execution intent until gates `J.6` through `J.8` move its callers.
-5. Runtime pause policy can block unrelated admissions after one execution failure.
+1. Saved pipelines still schedule from mutable pipeline manifests and persist lifecycle through the legacy coordinator.
+2. Direct skill, voice handoff, and project-sync launch paths have not moved to the replicated execution scheduler.
+3. Cancellation, session deletion, compact status, remaining detailed status branches, live logs, SSE, and Control Room still contain legacy execution authority.
+4. Startup still runs direct queue recovery, pipeline resume, and card ownership reconciliation instead of one replicated execution recovery pass.
+5. Frontend launch behavior does not yet implement request-ID optimism, canonical reconciliation, and rejection rollback.
+6. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, mutable pipeline lifecycle, and log-derived settlement remain until `J.12`.
 
 ---
 
@@ -157,6 +169,14 @@
     1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=<absolute-worktree-backend-tsconfig> node --test --import <tsx-loader> backend/test/unit/codex/task-execution-router.test.ts backend/test/unit/server/helper/create-http-server.test.ts`.
     2. Evidence covers master resolution, local relay-independent admission, authenticated remote boundary, exact retry receipts, offline peer rejection without requester state, explicit assignment conflict, contained failed validation, direct-run serialization, complete pipeline topology admission, non-task locality, server installation, and health during relay outage.
     3. Backend typecheck passed.
+17. **Replicated direct execution authority:** passed `42/42`.
+    1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=<absolute-worktree-backend-tsconfig> node --test --test-reporter=dot --import <tsx-loader> backend/test/unit/codex/helper/launch-codex-execution-process.test.ts backend/test/codex/epoch4-direct-execution-scheduler.test.ts backend/test/codex/start-thread-codex-process-admission.test.ts backend/test/codex/task-codex-session-replication.test.ts backend/test/codex/start-codex-pipeline-run-controller.test.ts backend/test/codex/start-card-skill-process-controller.test.ts backend/test/codex/codex-process-queue.test.ts backend/test/unit/server/helper/create-http-server.test.ts`.
+    2. Evidence covers direct start, continuation, immediate queued receipts, deterministic artifact paths, exact session reuse, awaited spawn registration, terminal replicated settlement, absence of both legacy direct-execution files, scheduler reuse after dispatch failure, and legacy fallback compatibility.
+18. **Direct authority routing and offline identity regressions:** passed `17/17`.
+    1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=<absolute-worktree-backend-tsconfig> node --test --test-reporter=dot --import <tsx-loader> backend/test/unit/codex/task-execution-router.test.ts backend/test/server/federation-node-connector.integration.test.ts`.
+    2. Evidence includes configured local identity without relay transport, full federation connector behavior, local and remote routing, idempotency, and rejection containment.
+19. **J.6 backend typecheck:** passed.
+    1. Command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`.
 
 ---
 

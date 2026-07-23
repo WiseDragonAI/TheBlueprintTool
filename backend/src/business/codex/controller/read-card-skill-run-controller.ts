@@ -18,6 +18,7 @@ import { runtimeCodexRunOwnsLiveProcess } from '../helper/runtime-codex-run-owns
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
 import { legacyCodexExecutionStatus } from '../helper/codex-execution-coordinator.js';
 import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
+import { taskExecutionState } from '../helper/task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
@@ -90,6 +91,14 @@ function latestRunEventStatus(events: NormalizedRunEvent[]): RunStatus | null {
     if (/^(?:thread|turn|run)\.failed$/i.test(event.type) || (event.kind === 'run_status' && event.status === 'failed')) status = 'failed';
   }
   return status;
+}
+
+function replicatedExecutionStatus(phase: string): RunStatus {
+  if (phase === 'preparing' || phase === 'queued') return 'pending';
+  if (phase === 'starting' || phase === 'running' || phase === 'cancelling') return 'running';
+  if (phase === 'succeeded') return 'complete';
+  if (phase === 'cancelled') return 'cancelled';
+  return 'failed';
 }
 
 function inferredStatus(input: { runtime: AnyRecord; runId: string; events: NormalizedRunEvent[]; stdoutFile: string; stderrFile: string; stderrLog: string }): RunStatus {
@@ -320,7 +329,16 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const canonicalExecution = (cardExecutionId ? codexExecutionCoordinator(runtime)?.dto(cardExecutionId) : null)
     ?? codexExecutionCoordinator(runtime)?.dtoForSession(runId, cardId)
     ?? null;
-  const status = canonicalExecution ? legacyCodexExecutionStatus(canonicalExecution.phase) : inMemoryStatus
+  const replicatedExecution = taskExecutionState(runtime)?.executions.bySessionId(runId)
+    .filter((record) => record.metadata.ledgerId === ledgerId && (
+      record.metadata.sourceCardId === cardId || record.metadata.ownerCardId === cardId
+    ))
+    .sort((left, right) => (
+      right.metadata.requestedAt.localeCompare(left.metadata.requestedAt)
+      || right.metadata.executionId.localeCompare(left.metadata.executionId)
+    ))[0] ?? null;
+  const status = replicatedExecution ? replicatedExecutionStatus(replicatedExecution.lifecycle.phase)
+    : canonicalExecution ? legacyCodexExecutionStatus(canonicalExecution.phase) : inMemoryStatus
     ?? (queuedProcess?.status === 'pending' ? 'pending' : null)
     ?? (persistedSkillOwnsExecution ? persistedSkill?.status : null)
     ?? inferredTerminal
@@ -355,7 +373,9 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     stdoutFile,
     stderrFile,
   });
-  const active = canonicalExecution ? canonicalExecution.live : runtimeOwnsExecution && runtimeCodexRunOwnsLiveProcess(fencedRuntime, runId, decisionOsRoot);
+  const active = replicatedExecution
+    ? ['starting', 'running', 'cancelling'].includes(replicatedExecution.lifecycle.phase)
+    : canonicalExecution ? canonicalExecution.live : runtimeOwnsExecution && runtimeCodexRunOwnsLiveProcess(fencedRuntime, runId, decisionOsRoot);
   const currentElapsedMs = elapsedMs({ runtime: fencedRuntime, runId, status, stdoutFile, stderrFile });
   const projectedExecutions = executionHistory({
     executions,
@@ -383,9 +403,9 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     pipelineStatus: persistedPipelineRun?.status ?? null,
     status,
     active,
-    executionId: canonicalExecution?.executionId ?? (cardExecutionId || runtimeExecutionId || persistedSkill?.executionId || String(currentExecution?.executionId ?? '')),
-    phase: canonicalExecution?.phase ?? '',
-    execution: canonicalExecution,
+    executionId: replicatedExecution?.metadata.executionId ?? canonicalExecution?.executionId ?? (cardExecutionId || runtimeExecutionId || persistedSkill?.executionId || String(currentExecution?.executionId ?? '')),
+    phase: replicatedExecution?.lifecycle.phase ?? canonicalExecution?.phase ?? '',
+    execution: replicatedExecution ?? canonicalExecution,
     currentExecution,
     executions: projectedExecutions,
     interruptedAt: interruptedProcess?.interruptedAt ?? null,
@@ -396,7 +416,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
           ? unifiedCodexQueuePosition({ decisionOsRoot, id: persistedPipelineRun.id, createdAt: persistedPipelineRun.createdAt, runtime })
           : null
       : null,
-    startedAt: canonicalExecution?.startedAt ?? new Date(runSegmentStartedAtMs({ runtime: fencedRuntime, runId, stderrFile })).toISOString(),
+    startedAt: replicatedExecution?.metadata.requestedAt ?? canonicalExecution?.startedAt ?? new Date(runSegmentStartedAtMs({ runtime: fencedRuntime, runId, stderrFile })).toISOString(),
     elapsedMs: currentElapsedMs,
     lineCount: parsedLines.at(-1)?.line ?? 0,
     nextSince: parsedLines.at(-1)?.line ?? 0,

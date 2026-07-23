@@ -17,7 +17,7 @@ import { threadMessagesAfterLastCodexEvent } from '../helper/thread-messages-aft
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
 import { randomUUID } from 'node:crypto';
-import { enqueueCodexContinuation, findActiveLogicalQueueItem, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
+import { codexProcessIdentity, enqueueCodexContinuation, findActiveLogicalQueueItem, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { clearCardCodexExecution } from '../helper/clear-card-codex-execution.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
@@ -29,6 +29,14 @@ import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-pr
 import { projectCardExecutionIntent } from '../helper/project-card-execution-intent.js';
 import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
+import { TaskExecutionAdmissionError, createTaskExecutionLaunchRequest } from '../helper/task-execution-router.js';
+import {
+  registerTaskExecutionProcess,
+  removeTaskExecutionProcess,
+  taskExecutionNodeId,
+  taskExecutionRouter,
+  taskExecutionState,
+} from '../helper/task-execution-runtime.js';
 import {
   attachCodexRuntimeChild as attachRuntimeRunChild,
   codexRuntimeRuns as runtimeRuns,
@@ -118,10 +126,12 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const cardId = String(payload.cardId ?? '').trim();
   const runId = String(payload.runId ?? '').trim();
   const traceId = String(payload.traceId ?? '');
-  const queueDispatch = payload.queueDispatch === true;
+  const epoch4Dispatch = payload.epoch4Dispatch === true;
+  const queueDispatch = payload.queueDispatch === true || epoch4Dispatch;
   const queueItemId = optionalText(payload.queueItemId);
   const disallowSkills = payload.disallowSkills === true;
   let executionId = optionalText(payload.executionId);
+  const router = taskExecutionRouter(runtime);
   const fail = (statusCode: number, error: string, extra: AnyRecord = {}): AnyRecord => {
     logCodexContinueDebug('continue-controller-fail', { traceId, ledgerId, cardId, runId, statusCode, error, ...extra });
     return { ok: false, statusCode, error, runId, ...extra };
@@ -135,11 +145,11 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     }));
   }
   const existingRuntime = runtimeRuns(runtime)[runId];
-  const existingQueue = findActiveLogicalQueueItem(decisionOsRoot, { ledgerId, cardId, runId });
+  const existingQueue = router ? null : findActiveLogicalQueueItem(decisionOsRoot, { ledgerId, cardId, runId });
   if (!queueDispatch && existingRuntime && ['complete', 'failed', 'cancelled'].includes(String(existingRuntime.status ?? '')) && !existingRuntime.settledAt) {
     return fail(409, 'Run settlement is still in progress.', { executionId: existingRuntime.executionId });
   }
-  if (!queueDispatch && (existingRuntime?.status === 'pending' || existingRuntime?.status === 'running' || existingQueue)) {
+  if (!router && !queueDispatch && (existingRuntime?.status === 'pending' || existingRuntime?.status === 'running' || existingQueue)) {
     const admitted = existingRuntime ?? {
       id: runId,
       executionId: existingQueue?.payload.executionId,
@@ -209,7 +219,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   const ownership = cardCodexExecutionOwnership(card);
   if (ownership.state === 'contradictory') return fail(409, 'Card has contradictory Codex execution ownership.', ownership);
-  if (queueDispatch && (!card || String(card.codexActiveRunId ?? '') !== runId || String(card.codexActiveExecutionId ?? '') !== executionId)) {
+  if (queueDispatch && !epoch4Dispatch && (!card || String(card.codexActiveRunId ?? '') !== runId || String(card.codexActiveExecutionId ?? '') !== executionId)) {
     return fail(409, 'Queued execution no longer owns the card lease.', { executionId });
   }
   const statusMetadata = status.metadata && typeof status.metadata === 'object' && !Array.isArray(status.metadata) ? status.metadata as AnyRecord : {};
@@ -219,7 +229,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const command = newSession
     ? resolveCodexCommand({ workspaceRoot, runtime, codexModel, codexEffort })
     : resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel, codexEffort });
-  const executionCoordinator = codexExecutionCoordinator(runtime);
+  const executionCoordinator = epoch4Dispatch ? null : codexExecutionCoordinator(runtime);
   let canonicalRecord = executionCoordinator?.store.find(executionId) ?? null;
   if (card && queueDispatch) {
     if (executionCoordinator) {
@@ -240,6 +250,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       }
     }
     card.codexActiveRunId = runId;
+    card.codexActiveExecutionId = executionId;
     card.codexRunModel = command.model;
     card.codexRunEffort = command.effort;
     if (ledgerId === 'tasks') {
@@ -276,6 +287,69 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       }),
     } : undefined,
   });
+  if (!queueDispatch && router) {
+    const launchRequest = createTaskExecutionLaunchRequest({
+      requestId: optionalText(payload.requestId),
+      executionId,
+      projectId: String(runtime.projectId ?? ''),
+      ledgerId,
+      sessionId: runId,
+      sourceCardId: cardId,
+      ownerCardId: cardId,
+      kind: 'continuation',
+      model: command.model,
+      effort: command.effort,
+    });
+    try {
+      const receipt = await router.route(launchRequest);
+      const admitted = {
+        id: runId,
+        executionId: receipt.executionId,
+        ledgerId,
+        outputCardId: cardId,
+        sourceCardTitle: String(card?.title ?? cardId),
+        outputFile,
+        stdoutFile,
+        stderrFile,
+        codexModel: command.model,
+        codexEffort: command.effort,
+        newSession,
+        resumeSessionId: newSession ? '' : sessionId,
+        continuedMessageCount: messages.length,
+        pid: 0,
+        status: 'pending',
+        createdAt: receipt.requestedAt,
+        startedAt: null,
+        continuedAt: null,
+      };
+      updateRuntimeRun(runtime, runId, admitted);
+      notifyRuntimeCallback(runtime.onCodexRunAccepted, {
+        ledgerId,
+        cardId,
+        outputCardId: cardId,
+        threadId: `thread-${cardId}`,
+        runId,
+        executionId: receipt.executionId,
+        status: 'pending',
+        executorNodeId: receipt.executorNodeId,
+      });
+      return {
+        ok: true,
+        statusCode: 202,
+        receipt,
+        run: publicRun(admitted),
+        queued: true,
+        queuePosition: receipt.executorNodeId === taskExecutionNodeId(runtime)
+          ? unifiedCodexQueuePosition({ decisionOsRoot, id: receipt.executionId, createdAt: receipt.requestedAt, runtime })
+          : null,
+      };
+    } catch (error) {
+      if (error instanceof TaskExecutionAdmissionError) {
+        return fail(error.statusCode, error.code, { context: error.context, executionId });
+      }
+      throw error;
+    }
+  }
   if (!queueDispatch) {
     const createdAt = new Date().toISOString();
     const itemId = `codex-continuation-${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -359,7 +433,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     startedAt: '',
     continuedAt: '',
   };
-  launchCodexExecutionProcess({
+  await launchCodexExecutionProcess({
     decisionOsRoot,
     runtime,
     workspaceRoot,
@@ -376,10 +450,33 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     segment: newSession ? 'restart' : 'continue',
     startLine: eventStartLine,
     metadata: { sourceCardTitle: String(card?.title ?? cardId), codexModel: command.model, codexEffort: command.effort },
-    onSpawn: (child, continuedAt) => {
-      const persistedProcess = queueItemId
+    onSpawn: async (child, continuedAt) => {
+      const processStartTime = codexProcessIdentity(child.pid ?? 0);
+      const persistedProcess = !epoch4Dispatch && queueItemId
         ? recordCodexProcessQueueItemProcess({ decisionOsRoot, id: queueItemId, processId: child.pid ?? 0, stdoutFile, stderrFile })
         : null;
+      if (epoch4Dispatch) {
+        const state = taskExecutionState(runtime);
+        if (!state) throw new Error('task_execution_state_unavailable');
+        registerTaskExecutionProcess(runtime, {
+          executionId,
+          sessionId: runId,
+          child,
+          processId: child.pid ?? 0,
+          processStartTime,
+          startedAt: continuedAt,
+          stdoutFile,
+          stderrFile,
+        });
+        try {
+          const current = state.executions.find(executionId);
+          if (current?.lifecycle.phase === 'starting') await state.executions.transition(executionId, { phase: 'running' });
+          else if (current?.lifecycle.phase !== 'running') throw new Error(`task_execution_spawn_phase_invalid:${current?.lifecycle.phase ?? 'missing'}`);
+        } catch (error) {
+          removeTaskExecutionProcess(runtime, executionId);
+          throw error;
+        }
+      }
       Object.assign(run, { pid: child.pid ?? 0, startedAt: continuedAt, continuedAt });
       updateRuntimeRun(runtime, runId, run);
       attachRuntimeRunChild(runtime, runId, child);
@@ -401,6 +498,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     onStdoutChunk: (chunk) => logCodexContinueDebug('child-stdout-chunk', { traceId, runId, bytes: chunk.length, preview: chunk.toString('utf8').slice(0, 500) }),
     onStderrChunk: (chunk) => logCodexContinueDebug('child-stderr-chunk', { traceId, runId, bytes: chunk.length, preview: chunk.toString('utf8').slice(0, 500) }),
     onSettled: async (settlement) => {
+      if (epoch4Dispatch) removeTaskExecutionProcess(runtime, executionId);
       if (settlement.kind === 'error') {
         logCodexContinueDebug('child-error', { traceId, ledgerId, cardId, runId, message: settlement.error.message, finishedAt: settlement.finishedAt });
         const ownsExecution = updateRuntimeExecution(runtime, runId, executionId, { status: 'failed', error: settlement.error.message, finishedAt: settlement.finishedAt });
@@ -408,6 +506,15 @@ export async function continueCardSkillRunController(input: { action_payload?: A
         appendRunStatus(outputFile, 'failed', `${newSession ? 'new session' : 'resume'} failed: ${settlement.error.message}`);
         appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status: 'failed' }), 'utf8');
         if (executionCoordinator) await executionCoordinator.settle(executionId, { phase: 'failed', error: { code: 'codex_continuation_start_failed', message: settlement.error.message }, result: { status: 'failed', summary: settlement.error.message } });
+        if (epoch4Dispatch) {
+          const current = taskExecutionState(runtime)?.executions.find(executionId);
+          if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
+            await taskExecutionState(runtime)!.executions.transition(executionId, {
+              phase: 'failed',
+              error: { code: 'codex_continuation_start_failed', message: settlement.error.message },
+            });
+          }
+        }
         try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' }); }
         catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
         if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
@@ -431,6 +538,16 @@ export async function continueCardSkillRunController(input: { action_payload?: A
         result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
         error: status === 'failed' ? { code: 'codex_continuation_failed', message: detail } : null,
       });
+      if (epoch4Dispatch) {
+        const current = taskExecutionState(runtime)?.executions.find(executionId);
+        if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
+          await taskExecutionState(runtime)!.executions.transition(executionId, {
+            phase: status === 'complete' ? 'succeeded' : status,
+            result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
+            error: status === 'failed' ? { code: 'codex_continuation_failed', message: detail } : null,
+          });
+        }
+      }
       try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' }); }
       catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);

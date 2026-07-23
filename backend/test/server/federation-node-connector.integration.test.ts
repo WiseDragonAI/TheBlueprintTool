@@ -50,6 +50,31 @@ async function waitFor<T>(read: () => Promise<T | null>): Promise<T> {
   throw new Error('Timed out waiting for federation state.');
 }
 
+test('retains configured node identity while relay transport is not configured', () => {
+  const connector = createFederationNodeConnector({
+    settings: { federationNodeId: 'workstation', federationNodeLabel: 'Workstation' },
+    localProjects: () => [],
+    localServerUrl: () => 'http://127.0.0.1:1',
+  });
+  try {
+    assert.equal(connector.status().configured, false);
+    assert.deepEqual(connector.localOwner(), {
+      ownerNodeId: 'workstation',
+      ownerNodeLabel: 'Workstation',
+      online: true,
+    });
+    connector.reconfigure({ federationNodeId: 'phone', federationNodeLabel: 'Mobile' });
+    assert.equal(connector.status().configured, false);
+    assert.deepEqual(connector.localOwner(), {
+      ownerNodeId: 'phone',
+      ownerNodeLabel: 'Mobile',
+      online: true,
+    });
+  } finally {
+    connector.stop();
+  }
+});
+
 test('stops retrying when another server owns the configured node identity', async () => {
   const relayHttp = createServer();
   const relay = new WebSocketServer({ noServer: true });

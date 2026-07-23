@@ -100,6 +100,16 @@ function configuredSettings(value: unknown): FederationSettings | null {
   return { relayUrl, federationId, nodeId, nodeCredential, nodeLabel: nodeLabel || nodeId };
 }
 
+function configuredLocalOwner(value: unknown): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
+  const settings = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const nodeId = String(settings.federationNodeId ?? '').trim();
+  const nodeLabel = String(settings.federationNodeLabel ?? nodeId).trim();
+  if (!nodeId || !/^[a-zA-Z0-9_-]+$/.test(nodeId)) {
+    return { ownerNodeId: 'local', ownerNodeLabel: 'This server', online: true };
+  }
+  return { ownerNodeId: nodeId, ownerNodeLabel: nodeLabel || nodeId, online: true };
+}
+
 function webSocketUrl(settings: FederationSettings): string {
   const url = new URL(settings.relayUrl);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -205,6 +215,7 @@ export function createFederationNodeConnector(input: {
   const flowControlTimeoutMs = Math.max(1, input.flowControlTimeoutMs ?? defaultFlowControlTimeoutMs);
   const ownerRequestTimeoutMs = Math.max(1, input.ownerRequestTimeoutMs ?? defaultOwnerRequestTimeoutMs);
   let settings = configuredSettings(input.settings);
+  let localOwner = configuredLocalOwner(input.settings);
   const requesterStreams = new Map<string, RequesterStream>();
   const ownerStreams = new Map<string, OwnerStream>();
   const remoteNodes = new Map<string, { nodeLabel: string; online: boolean; projects: ProjectManifest[] }>();
@@ -743,6 +754,7 @@ export function createFederationNodeConnector(input: {
     reconfigure(value: unknown): void {
       this.stop();
       settings = configuredSettings(value);
+      localOwner = configuredLocalOwner(value);
       stopped = false;
       reconnectAttempt = 0;
       lastError = '';
@@ -782,7 +794,7 @@ export function createFederationNodeConnector(input: {
       }
     },
     localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
-      return { ownerNodeId: settings?.nodeId || 'local', ownerNodeLabel: settings?.nodeLabel || 'This server', online: true };
+      return localOwner;
     },
     nodes(): Array<{ nodeId: string; nodeLabel: string; online: boolean; projectCount: number }> {
       return [...remoteNodes].map(([nodeId, node]) => ({ nodeId, nodeLabel: node.nodeLabel, online: node.online, projectCount: node.projects.length }));

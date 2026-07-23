@@ -1,13 +1,12 @@
 /**
- * WHAT: Selects the oldest pending Codex job across pipeline and thread queues.
- * WHY: One project-wide process limit and FIFO order must govern every launch surface.
+ * WHAT: Selects the oldest runnable epoch-4 execution or legacy pipeline skill across one project.
+ * WHY: Direct work must be claimed from replicated execution entities while the pipeline authority remains isolated until J.7.
  */
 import { readCodexPipelineStore } from './codex-pipeline-store.js';
-import { markCodexProcessQueueItemRunning, readCodexProcessQueue, releaseCodexProcessQueueItemClaim, removeCodexProcessQueueItem } from './codex-process-queue.js';
 import { maxConcurrentCodexProcesses, runNextPipelineSkill } from './codex-pipeline-runner.js';
 import { startThreadCodexProcessController } from '../controller/start-thread-codex-process-controller.js';
 import { continueCardSkillRunController } from '../controller/continue-card-skill-run-controller.js';
-import { clearCardCodexExecutionForLedger } from './clear-card-codex-execution.js';
+import { taskExecutionNodeId, taskExecutionState } from './task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -20,6 +19,22 @@ function runnablePipelineRuns(decisionOsRoot: string) {
   ));
 }
 
+function runnableDirectExecutions(runtime: AnyRecord) {
+  const state = taskExecutionState(runtime);
+  if (!state) return [];
+  return state.executions.byPhase('queued')
+    .filter((record) => (
+      record.lifecycle.executorNodeId === taskExecutionNodeId(runtime)
+      && (record.metadata.kind === 'thread' || record.metadata.kind === 'continuation')
+      && (!record.metadata.predecessorExecutionId
+        || state.executions.find(record.metadata.predecessorExecutionId)?.lifecycle.phase === 'succeeded')
+    ))
+    .sort((left, right) => (
+      left.metadata.requestedAt.localeCompare(right.metadata.requestedAt)
+      || left.metadata.executionId.localeCompare(right.metadata.executionId)
+    ));
+}
+
 export function runningCodexProcessCount(runtime: AnyRecord): number {
   const sharedCount = runtime.globalCodexRunningProcessCount;
   if (typeof sharedCount === 'function') return Math.max(0, Number(sharedCount()) || 0);
@@ -27,29 +42,63 @@ export function runningCodexProcessCount(runtime: AnyRecord): number {
   return Object.values(runs).filter((run) => run.status === 'running').length;
 }
 
-export function nextPendingCodexProcessCreatedAt(decisionOsRoot: string): string | null {
+export function nextPendingCodexProcessCreatedAt(decisionOsRoot: string, runtime?: AnyRecord): string | null {
   const pipeline = runnablePipelineRuns(decisionOsRoot)[0];
-  const process = readCodexProcessQueue(decisionOsRoot).find((item) => item.status === 'pending');
-  if (!pipeline) return process?.createdAt ?? null;
-  if (!process) return pipeline.createdAt;
-  return process.createdAt <= pipeline.createdAt ? process.createdAt : pipeline.createdAt;
+  const execution = runtime ? runnableDirectExecutions(runtime)[0] : null;
+  if (!pipeline) return execution?.metadata.requestedAt ?? null;
+  if (!execution) return pipeline.createdAt;
+  return execution.metadata.requestedAt <= pipeline.createdAt ? execution.metadata.requestedAt : pipeline.createdAt;
 }
 
-export function pendingCodexProcessEntries(decisionOsRoot: string): Array<{ id: string; createdAt: string; order: number }> {
+export function pendingCodexProcessEntries(decisionOsRoot: string, runtime?: AnyRecord): Array<{ id: string; createdAt: string; order: number }> {
   return [
     ...runnablePipelineRuns(decisionOsRoot).map((run, order) => ({ id: run.id, createdAt: run.createdAt, order })),
-    ...readCodexProcessQueue(decisionOsRoot).filter((item) => item.status === 'pending').map((item, order) => ({ id: item.id, createdAt: item.createdAt, order: 1_000_000 + order })),
+    ...(runtime ? runnableDirectExecutions(runtime).map((record, order) => ({
+      id: record.metadata.executionId,
+      createdAt: record.metadata.requestedAt,
+      order: 1_000_000 + order,
+    })) : []),
   ];
 }
 
 export function unifiedCodexQueuePosition(input: { decisionOsRoot: string; id: string; createdAt: string; runtime?: AnyRecord }): number {
   const sharedPosition = input.runtime?.globalCodexQueuePosition;
   if (typeof sharedPosition === 'function') return Math.max(1, Number(sharedPosition(input.id)) || 1);
-  const pending = [
-    ...pendingCodexProcessEntries(input.decisionOsRoot),
-  ].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.order - right.order);
+  const pending = pendingCodexProcessEntries(input.decisionOsRoot, input.runtime)
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.order - right.order);
   const index = pending.findIndex((entry) => entry.id === input.id);
   return index < 0 ? 1 : index + 1;
+}
+
+async function failClaim(input: {
+  state: NonNullable<ReturnType<typeof taskExecutionState>>;
+  executionId: string;
+  code: string;
+  message: string;
+}): Promise<void> {
+  const current = input.state.executions.find(input.executionId);
+  if (current?.lifecycle.phase !== 'starting') return;
+  await input.state.executions.transition(input.executionId, {
+    phase: 'failed',
+    error: { code: input.code, message: input.message },
+  });
+}
+
+function reportDispatchFailure(runtime: AnyRecord, record: ReturnType<NonNullable<ReturnType<typeof taskExecutionState>>['executions']['find']>, error: unknown): void {
+  if (!record || typeof runtime.onCodexBackgroundError !== 'function') return;
+  try {
+    runtime.onCodexBackgroundError({
+      operation: 'task-execution-dispatch-failed',
+      error: error instanceof Error ? error : new Error(String(error)),
+      context: {
+        executionId: record.metadata.executionId,
+        taskId: record.metadata.taskId,
+        sessionId: record.metadata.sessionId,
+      },
+    });
+  } catch {
+    // Diagnostics must not replace execution-scoped failure settlement.
+  }
 }
 
 async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime: AnyRecord; launchLimit?: number }): Promise<AnyRecord> {
@@ -58,47 +107,59 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
   const launchLimit = Math.max(1, input.launchLimit ?? Number.POSITIVE_INFINITY);
   while (runningCodexProcessCount(input.runtime) < capacity && launched.length < launchLimit) {
     const pipeline = runnablePipelineRuns(input.decisionOsRoot)[0];
-    const thread = readCodexProcessQueue(input.decisionOsRoot).find((item) => item.status === 'pending');
-    if (!pipeline && !thread) break;
-    const launchThread = Boolean(thread && (!pipeline || thread.createdAt <= pipeline.createdAt));
-    if (launchThread && thread) {
-      const claimed = markCodexProcessQueueItemRunning(input.decisionOsRoot, thread.id);
-      if (!claimed) break;
-      const result = claimed.kind === 'continuation'
-        ? await continueCardSkillRunController({ action_payload: { ...claimed.payload, queueItemId: claimed.id, queueDispatch: true }, runtime_state: input.runtime })
-        : await startThreadCodexProcessController({ action_payload: { ...claimed.payload, reservedRunId: claimed.id, queueDispatch: true }, runtime_state: input.runtime });
+    const direct = runnableDirectExecutions(input.runtime)[0];
+    if (!pipeline && !direct) break;
+    const launchDirect = Boolean(direct && (!pipeline || direct.metadata.requestedAt <= pipeline.createdAt));
+    if (launchDirect && direct) {
+      const state = taskExecutionState(input.runtime);
+      if (!state) break;
+      const claimed = await state.executions.transition(direct.metadata.executionId, { phase: 'starting' });
+      const launchPayload = {
+        ledgerId: claimed.metadata.ledgerId,
+        cardId: claimed.metadata.sourceCardId,
+        threadId: `thread-${claimed.metadata.sourceCardId}`,
+        runId: claimed.metadata.sessionId,
+        reservedRunId: claimed.metadata.sessionId,
+        executionId: claimed.metadata.executionId,
+        codexModel: claimed.metadata.model,
+        codexEffort: claimed.metadata.effort,
+        epoch4Dispatch: true,
+      };
+      let result: AnyRecord;
+      let dispatchFailureReported = false;
+      try {
+        result = claimed.metadata.kind === 'continuation'
+          ? await continueCardSkillRunController({ action_payload: launchPayload, runtime_state: input.runtime })
+          : await startThreadCodexProcessController({ action_payload: launchPayload, runtime_state: input.runtime });
+      } catch (error) {
+        result = {
+          ok: false,
+          code: 'task_execution_dispatch_failed',
+          error: error instanceof Error ? error.message : String(error),
+        };
+        reportDispatchFailure(input.runtime, claimed, error);
+        dispatchFailureReported = true;
+      }
       launched.push(result);
       if (result.ok === false) {
-        if (result.code === 'codex_execution_projection_pending' && result.retryable === true) {
-          releaseCodexProcessQueueItemClaim(input.decisionOsRoot, thread.id);
-          break;
+        if (!dispatchFailureReported) {
+          reportDispatchFailure(input.runtime, claimed, result.error ?? result.code ?? 'Dispatch failed.');
         }
-        removeCodexProcessQueueItem(input.decisionOsRoot, thread.id);
-        const runId = String(claimed.payload.runId ?? claimed.id);
-        const executionId = String(claimed.payload.executionId ?? '');
-        const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object'
-          ? input.runtime.codexSkillRuns as Record<string, AnyRecord>
-          : {};
-        input.runtime.codexSkillRuns = runs;
-        runs[runId] = { ...(runs[runId] ?? {}), id: runId, executionId, status: 'failed', error: String(result.error ?? 'Dispatch failed.'), finishedAt: new Date().toISOString() };
-        await clearCardCodexExecutionForLedger({
-          decisionOsRoot: input.decisionOsRoot,
-          ledgerId: String(claimed.payload.ledgerId ?? ''),
-          cardId: String(claimed.payload.cardId ?? ''),
-          runId,
-          executionId,
-          runtime: input.runtime,
+        await failClaim({
+          state,
+          executionId: claimed.metadata.executionId,
+          code: String(result.code ?? 'task_execution_dispatch_failed'),
+          message: String(result.error ?? 'Dispatch failed.'),
         });
         if (typeof input.runtime.onCodexRunSettled === 'function') input.runtime.onCodexRunSettled({
-          ledgerId: claimed.payload.ledgerId,
-          cardId: claimed.payload.cardId,
-          outputCardId: claimed.payload.cardId,
-          threadId: `thread-${String(claimed.payload.cardId ?? '')}`,
-          runId,
-          executionId,
+          ledgerId: claimed.metadata.ledgerId,
+          cardId: claimed.metadata.sourceCardId,
+          outputCardId: claimed.metadata.ownerCardId,
+          threadId: `thread-${claimed.metadata.sourceCardId}`,
+          runId: claimed.metadata.sessionId,
+          executionId: claimed.metadata.executionId,
           status: 'failed',
         });
-        continue;
       }
       continue;
     }

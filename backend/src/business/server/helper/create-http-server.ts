@@ -123,7 +123,8 @@ const federatedLibraryRecoveryDelayMs = 30_000;
 function isExecutionScopedCodexFailure(operation: string): boolean {
   return operation === 'codex-execution-timeout'
     || operation === 'adopted-codex-execution-timeout'
-    || operation === 'adopted-pipeline-execution-timeout';
+    || operation === 'adopted-pipeline-execution-timeout'
+    || operation === 'task-execution-dispatch-failed';
 }
 
 class FederatedLibraryRequestError extends Error {
@@ -491,6 +492,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       },
       onCommitted: (record) => {
         controlRoomProjectionStore?.invalidate(project.id, [{ entityType: 'execution', entityId: record.metadata.executionId }]);
+        if (!pausedBackgroundComponents.has('codex-process-scheduler')) {
+          void scheduleGlobalCodexProcesses().catch((error: unknown) => {
+            recordBackgroundFailure('codex-process-scheduler', 'schedule-after-task-execution-admission', error, {
+              projectId: project.id,
+              executionId: record.metadata.executionId,
+            });
+          });
+        }
       },
       onFailure: (error, context) => {
         recordStoppedOperation({
@@ -598,7 +607,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   });
   const globalCodexRunningProcessCount = (): number => scheduledCodexRunningProcessCount() + projectSyncCodexSlots.reservedCount();
   const globalCodexQueuePosition = (id: string): number => {
-    const pending = [...projectContexts.keys()].flatMap((root, rootOrder) => pendingCodexProcessEntries(root)
+    const pending = [...projectContexts.entries()].flatMap(([root, context], rootOrder) => pendingCodexProcessEntries(root, context.runtime)
       .map((entry) => ({ ...entry, order: rootOrder * 2_000_000 + entry.order })))
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.order - right.order);
     const index = pending.findIndex((entry) => entry.id === id);
@@ -618,7 +627,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         capacity = globalCodexProcessCapacity();
         while (globalCodexRunningProcessCount() < capacity) {
           const candidate = [...projectContexts.entries()]
-            .map(([root, context]) => ({ root, context, createdAt: nextPendingCodexProcessCreatedAt(root) }))
+            .map(([root, context]) => ({ root, context, createdAt: nextPendingCodexProcessCreatedAt(root, context.runtime) }))
             .filter((entry): entry is { root: string; context: ProjectContext; createdAt: string } => entry.context.runtime.codexRuntimePaused !== true && Boolean(entry.createdAt))
             .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
           if (!candidate) break;
@@ -773,8 +782,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         ?? (runtime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId
         ?? 'local').trim() || 'local';
       const taskProjection = (): ProjectTaskState => taskStateForProject(project);
+      Object.defineProperty(projectRuntime, 'taskExecutionNodeId', {
+        value: nodeId,
+        configurable: true,
+        enumerable: false,
+      });
       Object.defineProperty(projectRuntime, 'taskExecutionRouter', {
         value: taskExecutionRouterForProject(project),
+        configurable: true,
+        enumerable: false,
+      });
+      Object.defineProperty(projectRuntime, 'taskExecutionState', {
+        value: taskProjection(),
         configurable: true,
         enumerable: false,
       });

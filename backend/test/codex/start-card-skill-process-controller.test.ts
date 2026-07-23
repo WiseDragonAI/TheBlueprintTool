@@ -563,7 +563,7 @@ test('thread codex process route anchors the run widget on the source card and s
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a' })
     });
-    assert.equal(replacementResponse.status, 202);
+    assert.equal(replacementResponse.status, 202, await replacementResponse.clone().text());
     const replacement = await replacementResponse.json() as { ok: boolean; run: { id: string; executionId: string } };
     assert.equal(replacement.ok, true);
     assert.equal(replacement.run.id, body.run.id);
@@ -950,6 +950,7 @@ test('card skill run continue route resumes the captured session after its card 
   chmodSync(fakeCodex, 0o755);
 
   writeFileSync(join(workspace, '.decision-os', 'project.json'), JSON.stringify({ id: 'card-skill-continue-project' }));
+  writeFileSync(join(workspace, '.decision-os', '.settings.json'), JSON.stringify({ federationNodeId: 'workstation' }));
   await migrateTaskCurrentState({
     decisionOsRoot: join(workspace, '.decision-os'),
     projectId: 'card-skill-continue-project',
@@ -959,7 +960,7 @@ test('card skill run continue route resumes the captured session after its card 
 
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = { decisionOsSettings: { federationNodeId: 'workstation' } };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -995,13 +996,14 @@ test('card skill run continue route resumes the captured session after its card 
       body: JSON.stringify({ ledgerId: 'tasks', cardId: outputCardId, codexModel: 'gpt-5.4', codexEffort: 'medium' })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { ok: boolean; run: { id: string; executionId: string; continuedMessageCount: number; resumeSessionId: string; startedAt: string; continuedAt: string; turnStartedAt?: string; finishedAt?: string; settledAt?: string; exitCode?: number } };
+    const body = await response.json() as { ok: boolean; run: { id: string; executionId: string; continuedMessageCount: number; resumeSessionId: string; createdAt: string; startedAt: string | null; continuedAt: string | null; turnStartedAt?: string; finishedAt?: string; settledAt?: string; exitCode?: number } };
     assert.equal(body.ok, true);
     assert.equal(body.run.id, runId);
     assert.equal(body.run.continuedMessageCount, 2);
     assert.equal(body.run.resumeSessionId, sessionId);
-    assert.match(body.run.startedAt, /^\d{4}-\d{2}-\d{2}T/);
-    assert.equal(body.run.startedAt, body.run.continuedAt);
+    assert.match(body.run.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(body.run.startedAt, null);
+    assert.equal(body.run.continuedAt, null);
     assert.notEqual(body.run.executionId, 'execution-previous');
     assert.equal(body.run.turnStartedAt, undefined);
     assert.equal(body.run.finishedAt, undefined);
