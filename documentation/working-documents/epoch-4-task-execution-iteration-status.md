@@ -4,7 +4,7 @@
 2. **Implementation branch:** `feature/epoch4-task-execution`.
 3. **Base commit:** `0c72b4ed95c12bcfb0a27ddcbf56f4ecfdba5df7`.
 4. **Production branch:** `main`.
-5. **Current phase:** `J.4 — Install the replicated execution repository`.
+5. **Current phase:** `J.5 — Install assignment-aware admission`.
 6. **Overall state:** `in-progress`.
 7. **Production state:** epoch `3` remains active. Epoch `4` is not admitted for production use.
 
@@ -72,7 +72,17 @@
    8. Focused backend result: `24` distinct assignment and supporting tests passed.
    9. Focused frontend result: `47` tests passed.
    10. Backend and frontend typechecks passed.
-4. **J.4 — Install the replicated execution repository:** `pending`.
+4. **J.4 — Install the replicated execution repository:** `verified`.
+   1. Project task state now owns one epoch-4 execution repository backed by execution entities and the existing journal, shard, bucket, root, and federation publication path.
+   2. Admission is idempotent by `taskId` plus `requestId`; concurrent execution IDs for one request remain explicit blocked diagnostics.
+   3. Awaited lifecycle transitions enforce the canonical phase graph, immutable executor, immutable provider session, monotonic timestamps, and revision increments.
+   4. Terminal artifact manifests are independently revisioned and contain exact content heads.
+   5. Rebuildable indexes cover task, session, pipeline run, phase, executor node, and request identity.
+   6. Entity, lifecycle, and request conflicts are excluded from scheduling indexes and remain visible in Control Room diagnostics.
+   7. Control Room derives active task placement from execution entities, invalidates by indexed task ID, and retains legacy card-intent reading only for the open legacy-removal gate.
+   8. Offline migration now emits the required all-null artifact lane for executions without captured files; the repository indexes every migrated execution.
+   9. Focused backend result: `76/76`.
+   10. Backend typecheck passed.
 5. **J.5 — Install assignment-aware admission:** `pending`.
 6. **J.6 — Replace direct execution authority:** `pending`.
 7. **J.7 — Replace pipeline execution authority:** `pending`.
@@ -92,7 +102,7 @@
 2. Direct execution admission writes `.decision-os/codex-executions.json` before the scheduler-visible legacy queue.
 3. The scheduler reads `.decision-os/codex-process-queue.json` and mutable pipeline manifests instead of the replicated execution entities.
 4. Pipeline and direct spawn callbacks can publish `spawned()` without awaiting durable lifecycle settlement.
-5. Control Room still derives active placement from legacy card execution fields; a migrated epoch-4 fixture therefore cannot expose runtime-only active state until gates `J.4` and `J.8`.
+5. The installed legacy coordinator still writes `.decision-os/codex-executions.json` and projects card execution intent until gates `J.6` through `J.8` move its callers.
 6. Runtime pause policy can block unrelated admissions after one execution failure.
 
 ---
@@ -129,6 +139,10 @@
     2. Master-task HTTP creation, required assignment, inherited-subtask rejection, reassignment, project-sync creation, runtime-incident creation, and federated Control Room result: `20/20`.
     3. Held Control Room assignment projection result: `1/1`.
     4. Backend typecheck passed after all assignment changes.
+15. **Replicated execution repository:** passed `76/76`.
+    1. Command from `backend/`: `node ../bin/decision-os-verify.mjs -- node --test --import tsx test/unit/task-state/task-current-state-core-v4.test.ts test/unit/task-state/task-current-state-join.test.ts test/unit/task-state/task-current-state-store.test.ts test/unit/federation/federation-task-state-replicator.test.ts test/unit/task-state/task-execution-repository.test.ts test/unit/server/helper/control-room-projection-store.test.ts test/unit/task-state/project-task-state.test.ts test/unit/task-state/task-current-state-migration.test.ts`.
+    2. Evidence covers live federation, offline anti-entropy, deterministic joins, repository idempotency, all derived indexes, awaited transitions, conflicts, migration loading, Control Room projection, and bounded execution invalidation.
+    3. Backend typecheck passed.
 
 ---
 

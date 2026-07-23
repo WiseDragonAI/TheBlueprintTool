@@ -10,6 +10,7 @@ import { taskCurrentStateVersion, type TaskEntityChange, type TaskStateDelta } f
 import { createTaskContentObjectStore } from './task-content-object-store.js';
 import { taskContentReferences } from './task-content-resources.js';
 import { taskCommandForMutation, taskCommandForProjection, type TaskProjectionCommand } from './task-mutation-command.js';
+import { createTaskExecutionRepository } from './task-execution-repository.js';
 
 type AnyRecord = Record<string, unknown>;
 type TaskProjectionEntityChange = { entityType: TaskEntityChange['entityType']; entityId: string };
@@ -74,6 +75,13 @@ export function createProjectTaskState(input: {
     await publish(result.delta);
     return result.delta;
   };
+  const executions = createTaskExecutionRepository({
+    store,
+    writerId: input.writerId,
+    projectId: input.projectId,
+    persist: (changes, emittedAt) => persistChanges(changes, { emittedAt }),
+    assertWritable,
+  });
 
   const entityHash = (change: TaskEntityChange): string => {
     // WHAT: Read the state hash for exactly the lanes owned by one command change.
@@ -292,6 +300,7 @@ export function createProjectTaskState(input: {
 
   return {
     store,
+    executions,
     executeMutation,
     executeMutationNow,
     transitionCardLifecycle,

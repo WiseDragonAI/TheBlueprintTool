@@ -28,6 +28,41 @@ test('configured writer remains read-only until project bootstrap converges', as
   assert.equal((await state.transitionCardLifecycle('card-a', 'done')).changed, true);
 });
 
+test('replicated execution repository publishes through the project task-state write boundary', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-execution-repository-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  writeFileSync(ledgerPath, JSON.stringify({
+    cards: [{ id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], assignment: { nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 } }],
+    annotations: [], relationships: [],
+  }));
+  const published: TaskStateDelta[] = [];
+  let writable = false;
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+    canWrite: () => writable,
+    publish: (delta) => { published.push(delta); },
+  });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const metadata = {
+    executionId: 'execution-a', requestId: 'request-a', sessionId: 'session-a', projectId: 'project-a', ledgerId: 'tasks',
+    taskId: 'master', sourceCardId: 'master', ownerCardId: 'master', kind: 'thread' as const, requestedAt: '2026-07-23T01:01:00.000Z',
+    model: null, effort: null, pipelineRunId: null, pipelineStepId: null, pipelineSkillRunId: null,
+    predecessorExecutionId: null, restartOfExecutionId: null,
+  };
+
+  await assert.rejects(state.executions.admit({ metadata, executorNodeId: 'workstation' }), /task_state_bootstrap_incomplete/);
+  writable = true;
+  await state.executions.admit({ metadata, executorNodeId: 'workstation' });
+
+  assert.equal(state.executions.find('execution-a')?.lifecycle.phase, 'preparing');
+  assert.equal(published.length, 1);
+  assert.deepEqual(published[0].entities.map((entity) => [entity.entityType, entity.entityId]), [['execution', 'execution-a']]);
+});
+
 test('task intake publishes no state until its first durable content contribution activates its shards', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-current-'));
   context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
@@ -283,7 +318,7 @@ test('lifecycle command changes one atomic card lane without note tombstones', a
   assert.match(String(lifecycle.changedAt), /^\d{4}-\d{2}-\d{2}T/);
 });
 
-test('lifecycle conflicts block completion and execution until a scoped lifecycle resolution', async (context) => {
+test('lifecycle conflicts block completion until a scoped lifecycle resolution', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-conflict-'));
   const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-project-conflict-remote-'));
   const ledgerPath = resolve(root, 'tasks.json');
@@ -312,26 +347,9 @@ test('lifecycle conflicts block completion and execution until a scoped lifecycl
   const after = structuredClone(before);
   assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation: { action: 'complete-master-task', masterTaskId: 'master' } }).ok, true);
   await assert.rejects(state.executeMutation({ action: 'complete-master-task', masterTaskId: 'master' }, before, after), /task_lifecycle_conflict:master/);
-  await assert.rejects(state.transitionExecutionIntent('master', { id: 'intent-a', state: 'waiting' }), /task_lifecycle_conflict:master/);
 
   await state.transitionCardLifecycle('master', 'todo');
   assert.equal(state.projection().conflicts.length, 0);
-  const execution = await state.transitionExecutionIntent('master', { id: 'intent-a', state: 'waiting' });
-  assert.deepEqual(execution.entities.map((entity) => [entity.entityType, entity.entityId]), [['card', 'master']]);
-});
-
-test('canonical execution intent is revision fenced and replaces a legacy intent during migration', async (context) => {
-  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-execution-'));
-  const ledgerPath = resolve(root, 'tasks.json');
-  const ledger = { cards: [{ id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], executionIntent: { id: 'run-a', state: 'queued', changedAt: '2026-07-23T01:00:00.000Z', startedAt: null, settledAt: null, error: null } }], annotations: [], relationships: [] };
-  writeFileSync(ledgerPath, JSON.stringify(ledger));
-  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
-  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
-  const base = { executionId: 'execution-a', phase: 'queued' as const, requestedAt: '2026-07-23T01:00:00.000Z', phaseSince: '2026-07-23T01:00:00.000Z', executorNodeId: null, changedAt: '2026-07-23T01:00:00.000Z', settledAt: null, error: null, revision: 2 };
-  await state.projectExecutionIntent('master', base);
-  await state.projectExecutionIntent('master', { ...base, revision: 1 });
-  assert.equal((state.projection().ledger.cards as Record<string, unknown>[])[0].executionIntent && ((state.projection().ledger.cards as Record<string, unknown>[])[0].executionIntent as Record<string, unknown>).revision, 2);
-  await assert.rejects(state.projectExecutionIntent('master', { ...base, executionId: 'execution-b', revision: 3 }), /task_execution_intent_conflict/);
 });
 
 test('master completion emits one lifecycle lane per positioned graph member', () => {

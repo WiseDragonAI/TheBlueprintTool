@@ -73,6 +73,7 @@ import { readTaskContentOnDemand } from '../../federation/helper/read-task-conte
 import { createProjectTaskState, type ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
+import { createTaskExecutionRepository } from '../../task-state/helper/task-execution-repository.js';
 import type { TaskProjectionCommand } from '../../task-state/helper/task-mutation-command.js';
 import { createRuntimeIncidentLedger, RuntimeScopePausedError, type RuntimeIncident } from './runtime-incident-ledger.js';
 import { createRuntimeIncidentReviewScheduler } from './create-runtime-incident-review-scheduler.js';
@@ -1271,6 +1272,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     taskProjectionForProject,
     runtimeForProject: (project) => projectContexts.get(project.decisionOsRoot)?.runtime,
     taskEntityForProject: (project, entityType, entityId) => tryTaskStateForProject(project)?.store.projectedEntity(entityType, entityId) ?? null,
+    taskExecutionsForProject: (project) => tryTaskStateForProject(project)?.executions.all() ?? [],
+    taskExecutionDiagnosticsForProject: (project) => tryTaskStateForProject(project)?.executions.diagnostics() ?? [],
+    taskExecutionForProject: (project, executionId) => {
+      try { return tryTaskStateForProject(project)?.executions.find(executionId) ?? null; }
+      catch { return null; }
+    },
     taskRootForProject: (project) => tryTaskStateForProject(project)?.store.rootHash() ?? `paused:${project.id}`,
   });
   // WHAT: Build the first projection during startup, then let project watchers maintain it.
@@ -1799,11 +1806,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           federationTaskStateReplicator?.reconcileProject(project.ownerNodeId, project.localProjectId);
           return [];
         }
+        const executionRepository = createTaskExecutionRepository({
+          store,
+          writerId: project.ownerNodeId,
+          projectId: project.localProjectId,
+        });
+        const executions = executionRepository.all();
         return [{
           projection: controlRoomProjectionFromTaskLedger({
             project: { ...project, id: project.localProjectId, originFingerprint: remoteProjectIdentity.get(`${project.ownerNodeId}\0${project.localProjectId}`) ?? project.originFingerprint },
             ledger: store.projection().ledger,
             conflicts: store.projection().conflicts,
+            executions,
+            executionDiagnostics: executionRepository.diagnostics(),
             executionObservationFor: (executionId) => {
               const observation = federatedExecutionObservations.get(`${project.localProjectId}\0${executionId}\0${project.ownerNodeId}`) ?? null;
               if (!observation || Date.parse(observation.expiresAt) <= Date.now()) return null;

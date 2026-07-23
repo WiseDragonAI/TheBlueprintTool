@@ -444,7 +444,7 @@ function captureArtifacts(decisionOsRoot: string, attempts: Attempt[]): {
       objects.set(hash, bytes);
       heads[kind] = { hash, bytes: bytes.byteLength, mediaType: kind === 'jsonl' || kind === 'telemetry' ? 'application/x-ndjson' : 'text/plain' };
     }
-    if (Object.keys(heads).length > 0) manifests.set(attempt.metadata.executionId, {
+    manifests.set(attempt.metadata.executionId, {
       jsonl: heads.jsonl ?? null,
       stderr: heads.stderr ?? null,
       telemetry: heads.telemetry ?? null,

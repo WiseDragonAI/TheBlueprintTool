@@ -21,23 +21,6 @@ function structural(value: unknown): unknown {
   return result;
 }
 
-function executionIntent(value: unknown): AnyRecord | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const intent = value as AnyRecord;
-  if (typeof intent.executionId === 'string' && intent.executionId) return {
-    executionId: intent.executionId,
-    phase: intent.phase ?? null,
-    requestedAt: intent.requestedAt ?? null,
-    phaseSince: intent.phaseSince ?? null,
-    executorNodeId: intent.executorNodeId ?? null,
-    changedAt: intent.changedAt ?? intent.phaseSince ?? null,
-    settledAt: intent.settledAt ?? null,
-    error: intent.error ?? null,
-    revision: intent.revision ?? null,
-  };
-  return { id: intent.id ?? null, state: intent.state ?? null, changedAt: intent.changedAt ?? intent.updatedAt ?? null, startedAt: intent.startedAt ?? null, settledAt: intent.settledAt ?? null, error: intent.error ?? null };
-}
-
 function lifecycle(before: AnyRecord | null, after: AnyRecord, transitionAt: string): AnyRecord {
   const previous = before?.lifecycle && typeof before.lifecycle === 'object' && !Array.isArray(before.lifecycle) ? before.lifecycle as AnyRecord : {};
   const next = after.lifecycle && typeof after.lifecycle === 'object' && !Array.isArray(after.lifecycle) ? after.lifecycle as AnyRecord : {};
@@ -80,8 +63,6 @@ export function encodeTaskDomainLanes(input: { entityType: TaskEntityType; recor
     lanes.set('lifecycle', lifecycle(input.before ?? null, input.record, input.transitionAt));
     const assigned = assignment(input.record.assignment);
     if (assigned) lanes.set('assignment', assigned);
-    const intent = executionIntent(input.record.executionIntent);
-    if (intent) lanes.set('executionIntent', intent);
   }
   if (input.entityType === 'relationship' && input.record.label === 'subtask' && !lanes.has('position')) {
     if (input.relationshipPosition === undefined) throw new Error('missing_subtask_position');

@@ -10,6 +10,7 @@ import { basename, resolve } from 'node:path';
 import test from 'node:test';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { migrateTaskCurrentState } from '../../../src/business/task-state/helper/task-current-state-migration.js';
+import { createTaskExecutionRepository } from '../../../src/business/task-state/helper/task-execution-repository.js';
 
 test('offline migration rejects a project identifier that can escape task-state storage', async () => {
   await assert.rejects(
@@ -259,6 +260,13 @@ test('epoch-3 migration assigns master tasks and collapses every legacy executio
   assert.equal((store.entity('execution', 'pipeline-execution-b')?.fields.lifecycle.candidates[0].value as Record<string, unknown>).phase, 'interrupted');
   assert.equal((store.entity('execution', 'pipeline-execution-b')?.fields.metadata.candidates[0].value as Record<string, unknown>).predecessorExecutionId, 'pipeline-execution-a');
   assert.equal((store.entity('execution', 'historic-session:execution:0')?.fields.lifecycle.candidates[0].value as Record<string, unknown>).phase, 'interrupted');
+  const executions = createTaskExecutionRepository({ store, writerId: 'workstation', projectId });
+  assert.equal(executions.all().length, 5, JSON.stringify(executions.diagnostics()));
+  assert.equal(executions.byTaskId('master-a').length, 5);
+  assert.equal(executions.byPipelineRunId('pipeline-run').length, 2);
+  assert.equal(executions.byPhase('interrupted').length, 4);
+  assert.equal(executions.byExecutorNodeId('workstation').length, 5);
+  assert.deepEqual(executions.diagnostics(), []);
   const artifact = (store.entity('execution', 'direct-execution')?.fields.artifacts.candidates[0].value as Record<string, any>).jsonl;
   assert.equal(readFileSync(resolve(result.root, 'objects', artifact.hash.slice(0, 2), artifact.hash), 'utf8'), '{"type":"turn.started"}\n');
   assert.equal(existsSync(resolve(root, 'codex-executions.json')), false);
