@@ -32,7 +32,7 @@ type RelayFrame = {
   code?: string;
   message?: string;
   projectId?: string;
-  stateVersion?: 3;
+  stateVersion?: typeof taskCurrentStateVersion;
   stateProtocol?: typeof taskStateProtocol;
   stateSchema?: typeof taskCurrentStateVersion;
   baselineEpoch?: typeof taskCurrentBaselineEpoch;

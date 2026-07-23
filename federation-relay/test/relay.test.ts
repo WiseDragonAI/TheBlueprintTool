@@ -1,5 +1,5 @@
 /**
- * WHAT: Exercises authenticated relay streaming, epoch-3 state durability, admission, and routing.
+ * WHAT: Exercises authenticated relay streaming, epoch-4 state durability, admission, and routing.
  * WHY: Relay acknowledgements and offline bootstrap require Worker-runtime behavioral evidence.
  */
 import { SELF } from 'cloudflare:test';
@@ -8,8 +8,10 @@ import {
   finalizeTaskCurrentEntity,
   hashTaskCurrentBucket,
   taskCurrentBucketForEntityKey,
+  taskCurrentBaselineEpoch,
   taskCurrentEntityKey,
   taskCurrentStateVersion,
+  taskStateProtocol,
 } from '../../shared/task-current-state-core';
 
 type FramePayload = {
@@ -63,9 +65,9 @@ function manifest(nodeLabel: string, projectIds = ['shared']) {
     version: 1,
     type: 'manifest',
     nodeLabel,
-    stateProtocol: 'decision-os-task-state/3',
-    stateSchema: 3,
-    baselineEpoch: 3,
+    stateProtocol: taskStateProtocol,
+    stateSchema: taskCurrentStateVersion,
+    baselineEpoch: taskCurrentBaselineEpoch,
     projects: projectIds.map((id) => ({ id, name: id, description: '', color: '#38d9e8', ledgers: [] })),
   };
 }
@@ -84,9 +86,9 @@ function stateBatch(projectId: string, entity: ReturnType<typeof currentEntity>,
   return {
     version: 1,
     type: 'state-entity-batch',
-    stateVersion: 3,
+    stateVersion: taskCurrentStateVersion,
     projectId,
-    payload: { stateVersion: 3, deliveryId, entries: [{ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity }] },
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId, entries: [{ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity }] },
   };
 }
 
@@ -171,13 +173,13 @@ describe('federation relay', () => {
     const entity = currentEntity('shared', 'card-live', 'todo');
     const stateEntity = nextFrame(nodeB, (frame) => frame.type === 'state-entity-batch');
     nodeA.send(JSON.stringify(stateBatch('shared', entity)));
-    await expect(stateEntity).resolves.toMatchObject({ type: 'state-entity-batch', stateVersion: 3, from: 'relay', projectId: 'shared', payload: { entries: [{ key: 'card\u0000card-live', stateHash: entity.stateHash, entity }] } });
+    await expect(stateEntity).resolves.toMatchObject({ type: 'state-entity-batch', stateVersion: taskCurrentStateVersion, from: 'relay', projectId: 'shared', payload: { entries: [{ key: 'card\u0000card-live', stateHash: entity.stateHash, entity }] } });
 
     const observedAt = new Date().toISOString();
     const observation = { executionId: 'execution-live', executorNodeId: 'node-a', phase: 'running', observedAt, expiresAt: new Date(Date.parse(observedAt) + 15_000).toISOString(), revision: 3 };
     const relayedObservation = nextFrame(nodeB, (frame) => frame.type === 'state-execution-observation');
-    nodeA.send(JSON.stringify({ version: 1, type: 'state-execution-observation', stateVersion: 3, projectId: 'shared', payload: { executionId: observation.executionId, observation } }));
-    await expect(relayedObservation).resolves.toMatchObject({ type: 'state-execution-observation', stateVersion: 3, from: 'node-a', projectId: 'shared', payload: { executionId: 'execution-live', observation } });
+    nodeA.send(JSON.stringify({ version: 1, type: 'state-execution-observation', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { executionId: observation.executionId, observation } }));
+    await expect(relayedObservation).resolves.toMatchObject({ type: 'state-execution-observation', stateVersion: taskCurrentStateVersion, from: 'node-a', projectId: 'shared', payload: { executionId: 'execution-live', observation } });
 
     const requestId = crypto.randomUUID();
     const ownerOpen = nextFrame(nodeB, (frame) => frame.type === 'request-open' && frame.requestId === requestId);
@@ -220,17 +222,17 @@ describe('federation relay', () => {
     const deliveryId = crypto.randomUUID();
     const acknowledged = nextFrame(nodeA, (frame) => frame.type === 'state-relay-ack');
     nodeA.send(JSON.stringify(stateBatch('shared', entity, deliveryId)));
-    await expect(acknowledged).resolves.toMatchObject({ from: 'relay', stateVersion: 3, payload: { deliveryId, accepted: [{ key: entityKey, stateHash: entity.stateHash }] } });
+    await expect(acknowledged).resolves.toMatchObject({ from: 'relay', stateVersion: taskCurrentStateVersion, payload: { deliveryId, accepted: [{ key: entityKey, stateHash: entity.stateHash }] } });
     nodeA.close(1000, 'writer_offline');
 
     const nodeB = await connect(federationId, 'node-b', credentialB);
     const storedSummary = nextFrame(nodeB, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared' && frame.payload?.buckets?.[0]?.count === 1);
     nodeB.send(JSON.stringify(manifest('Remote-only reader', [])));
-    nodeB.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: 3, projectId: 'shared', payload: { stateVersion: 3 } }));
+    nodeB.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion } }));
     await expect(storedSummary).resolves.toMatchObject({ from: 'relay', payload: { buckets: [{ bucket, count: 1, checksum }] } });
 
     const replay = nextFrame(nodeB, (frame) => frame.type === 'state-entity-batch' && frame.projectId === 'shared');
-    nodeB.send(JSON.stringify({ version: 1, type: 'state-missing-request', stateVersion: 3, projectId: 'shared', payload: { stateVersion: 3, buckets: [bucket] } }));
+    nodeB.send(JSON.stringify({ version: 1, type: 'state-missing-request', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion, buckets: [bucket] } }));
     await expect(replay).resolves.toMatchObject({ from: 'relay', payload: { entries: [{ key: entityKey, stateHash: entity.stateHash, entity }] } });
     nodeB.close(1000, 'test_complete');
   });
@@ -254,7 +256,7 @@ describe('federation relay', () => {
     const reader = await connect(federationId, 'reader', readerCredential);
     const summaryPromise = nextFrame(reader, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared' && frame.payload?.buckets?.reduce((count, bucket) => count + Number(bucket.count ?? 0), 0) === entities.length);
     reader.send(JSON.stringify(manifest('Reader', [])));
-    reader.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: 3, projectId: 'shared', payload: { stateVersion: 3 } }));
+    reader.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion } }));
     const summary = await summaryPromise;
     const received: string[] = [];
     const frameSizes: number[] = [];
@@ -266,7 +268,7 @@ describe('federation relay', () => {
       received.push(...(frame.payload?.entries ?? []).map((entry) => entry.key));
       if (received.length === entities.length) resolve();
     }));
-    reader.send(JSON.stringify({ version: 1, type: 'state-missing-request', stateVersion: 3, projectId: 'shared', payload: { stateVersion: 3, buckets: summary.payload?.buckets?.map((bucket) => bucket.bucket) } }));
+    reader.send(JSON.stringify({ version: 1, type: 'state-missing-request', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion, buckets: summary.payload?.buckets?.map((bucket) => bucket.bucket) } }));
     await complete;
 
     expect(frameSizes.length).toBeGreaterThan(1);
@@ -297,7 +299,7 @@ describe('federation relay', () => {
     await expect(oversizedResponse).resolves.toMatchObject({ type: 'response-error' });
 
     const emptySummary = nextFrame(writer, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared');
-    writer.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: 3, projectId: 'shared', payload: { stateVersion: 3 } }));
+    writer.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion } }));
     await expect(emptySummary).resolves.toMatchObject({ payload: { buckets: [] } });
     writer.close(1000, 'test_complete');
   });
@@ -307,8 +309,16 @@ describe('federation relay', () => {
     const credential = await createNode(federationId, 'legacy');
     const node = await connect(federationId, 'legacy', credential);
     const rejected = nextFrame(node, (frame) => frame.type === 'response-error');
-    node.send(JSON.stringify({ version: 1, type: 'manifest', nodeLabel: 'Legacy', projects: [] }));
-    await expect(rejected).resolves.toMatchObject({ type: 'response-error' });
+    node.send(JSON.stringify({
+      version: 1,
+      type: 'manifest',
+      nodeLabel: 'Legacy',
+      stateProtocol: 'decision-os-task-state/3',
+      stateSchema: 3,
+      baselineEpoch: 3,
+      projects: [],
+    }));
+    await expect(rejected).resolves.toMatchObject({ type: 'response-error', code: 'incompatible_state_protocol' });
     node.close(1000, 'test_complete');
   });
 
@@ -320,7 +330,7 @@ describe('federation relay', () => {
     subscriber.send(JSON.stringify(manifest('Subscriber', [])));
     bystander.send(JSON.stringify(manifest('Bystander', [])));
     const subscribed = nextFrame(subscriber, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared');
-    subscriber.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: 3, projectId: 'shared', payload: { stateVersion: 3 } }));
+    subscriber.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion } }));
     await subscribed;
     let bystanderReceived = false;
     bystander.addEventListener('message', (event) => {

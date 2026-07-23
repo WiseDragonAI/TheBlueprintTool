@@ -1,5 +1,5 @@
 /**
- * WHAT: Encodes relay-originated epoch-3 entity batches within count and byte transport ceilings.
+ * WHAT: Encodes relay-originated epoch-4 entity batches within count and byte transport ceilings.
  * WHY: Live forwarding and durable replay must use the same bounded frame contract as node publication.
  */
 import { taskCurrentEntityKey, taskCurrentStateVersion } from '../../shared/task-current-state-core';

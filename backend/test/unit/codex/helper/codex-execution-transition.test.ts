@@ -51,3 +51,15 @@ test('supports explicit interrupted recovery through the queue without reopening
   const succeeded = transitionCodexExecution({ record: running, expectedExecutionId: 'execution-a', phase: 'succeeded' });
   assert.throws(() => transitionCodexExecution({ record: succeeded, expectedExecutionId: 'execution-a', phase: 'queued' }), /transition_invalid/);
 });
+
+test('persists cancelling before terminal cancellation', () => {
+  const queued = transitionCodexExecution({ record: base(), expectedExecutionId: 'execution-a', phase: 'queued' });
+  const starting = transitionCodexExecution({ record: queued, expectedExecutionId: 'execution-a', phase: 'starting', executorNodeId: 'workstation' });
+  const running = transitionCodexExecution({ record: starting, expectedExecutionId: 'execution-a', phase: 'running', processId: 42, processStartTime: '100' });
+  const cancelling = transitionCodexExecution({ record: running, expectedExecutionId: 'execution-a', phase: 'cancelling', changedAt: '2026-07-23T01:00:04.000Z' });
+  const cancelled = transitionCodexExecution({ record: cancelling, expectedExecutionId: 'execution-a', phase: 'cancelled', changedAt: '2026-07-23T01:00:05.000Z' });
+  assert.equal(cancelling.startedAt, running.startedAt);
+  assert.equal(cancelling.finishedAt, null);
+  assert.equal(cancelled.result?.status, 'cancelled');
+  assert.equal(cancelled.finishedAt, '2026-07-23T01:00:05.000Z');
+});

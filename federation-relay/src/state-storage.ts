@@ -1,5 +1,5 @@
 /**
- * WHAT: Owns epoch-3 relay storage keys, wire-envelope admission, and bucket derivation.
+ * WHAT: Owns epoch-4 relay storage keys, wire-envelope admission, and bucket derivation.
  * WHY: The relay controller should coordinate durable transactions without duplicating state encoding rules.
  */
 import {
@@ -15,7 +15,7 @@ export type StateEntry = { key: string; stateHash: string; entity: RelayEntity }
 export type StoredStateEntry = { key: string; entityKey: string; bucket: string; entity: RelayEntity };
 
 export function stateEntityPrefix(projectId: string, bucket = ''): string {
-  return `state:v3:entity:${encodeURIComponent(projectId)}:${bucket ? `${encodeURIComponent(bucket)}:` : ''}`;
+  return `state:v4:entity:${encodeURIComponent(projectId)}:${bucket ? `${encodeURIComponent(bucket)}:` : ''}`;
 }
 
 export function stateEntityStorageKey(projectId: string, bucket: string, entityKey: string): string {
@@ -23,7 +23,7 @@ export function stateEntityStorageKey(projectId: string, bucket: string, entityK
 }
 
 export function stateBucketPrefix(projectId: string): string {
-  return `state:v3:bucket:${encodeURIComponent(projectId)}:`;
+  return `state:v4:bucket:${encodeURIComponent(projectId)}:`;
 }
 
 export function stateBucketKey(projectId: string, bucket: string): string {

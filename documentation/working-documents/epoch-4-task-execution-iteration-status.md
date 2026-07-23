@@ -4,7 +4,7 @@
 2. **Implementation branch:** `feature/epoch4-task-execution`.
 3. **Base commit:** `0c72b4ed95c12bcfb0a27ddcbf56f4ecfdba5df7`.
 4. **Production branch:** `main`.
-5. **Current phase:** `J.1 — Freeze epoch-4 contracts`.
+5. **Current phase:** `J.2 — Build the offline migrator`.
 6. **Overall state:** `in-progress`.
 7. **Production state:** epoch `3` remains active. Epoch `4` is not admitted for production use.
 
@@ -43,10 +43,15 @@
 
 ## C. Plan Gate Ledger
 
-1. **J.1 — Freeze epoch-4 contracts:** `in-progress`.
+1. **J.1 — Freeze epoch-4 contracts:** `verified`.
    1. Required evidence: shared assignment and execution schemas, phase transition rules, CRDT merge behavior, relay protocol admission, and focused tests.
-   2. Current evidence: repository inventory completed from base commit `0c72b4ed`.
-2. **J.2 — Build the offline migrator:** `pending`.
+   2. Implemented atomic assignment, execution metadata, execution lifecycle, execution artifact, and `cancelling` contracts.
+   3. Implemented explicit assignment and execution conflict classification.
+   4. Implemented relay epoch-4 admission, `state:v4` storage keys, and `FederationRelayV4` Durable Object namespace migration.
+   5. Focused backend result: `30` tests passed.
+   6. Relay result: `8` tests passed.
+   7. Backend and relay typechecks passed.
+2. **J.2 — Build the offline migrator:** `in-progress`.
 3. **J.3 — Persist task assignment:** `pending`.
 4. **J.4 — Install the replicated execution repository:** `pending`.
 5. **J.5 — Install assignment-aware admission:** `pending`.
@@ -64,31 +69,36 @@
 
 ## D. Current Verified Gaps
 
-1. The shared task-state constants remain protocol, schema, and baseline epoch `3`.
-2. `taskEntityTypes` contains no `execution` entity.
-3. Task creation passes the selected node as `replicaNodeId` and optimistic `ownerNodeId`; no assignment lane is persisted.
-4. The current task-state write predicate requires relay-root convergence.
-5. Direct execution admission writes `.decision-os/codex-executions.json` before the scheduler-visible legacy queue.
-6. The scheduler reads `.decision-os/codex-process-queue.json` and mutable pipeline manifests instead of the canonical execution store.
-7. Pipeline and direct spawn callbacks can publish `spawned()` without awaiting durable lifecycle settlement.
-8. Control Room task identity contains projection-source ownership.
-9. Runtime pause policy can block unrelated admissions after one execution failure.
+1. The offline migrator does not yet convert epoch-3 state to epoch `4`.
+2. Task creation passes the selected node as `replicaNodeId` and optimistic `ownerNodeId`; no assignment lane is persisted.
+3. The current task-state write predicate requires relay-root convergence.
+4. Direct execution admission writes `.decision-os/codex-executions.json` before the scheduler-visible legacy queue.
+5. The scheduler reads `.decision-os/codex-process-queue.json` and mutable pipeline manifests instead of the canonical execution store.
+6. Pipeline and direct spawn callbacks can publish `spawned()` without awaiting durable lifecycle settlement.
+7. Control Room task identity contains projection-source ownership.
+8. Runtime pause policy can block unrelated admissions after one execution failure.
 
 ---
 
 ## E. Verification Evidence
 
-1. **Documentation structure:** pending first implementation commit.
-2. **Focused backend tests:** not run.
+1. **Documentation structure:** verified in commit `e39c73df`.
+2. **Focused backend tests:** passed `30/30`.
+   1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=backend/tsconfig.json node --test --import ./backend/node_modules/tsx/dist/esm/index.mjs backend/test/unit/task-state/task-current-state-core-v4.test.ts backend/test/unit/task-state/task-current-state-join.test.ts backend/test/unit/task-state/task-current-state-store.test.ts backend/test/unit/codex/helper/codex-execution-transition.test.ts`.
 3. **Focused frontend tests:** not run.
-4. **Relay tests:** not run.
-5. **Backend typecheck:** not run.
+4. **Relay tests:** passed `8/8`.
+   1. Command from `federation-relay/`: `node ../bin/decision-os-verify.mjs -- node_modules/.bin/vitest run`.
+   2. Discarded command: invoking the relay Vitest binary from repository root selected every repository test and executed no relay test. The corrected working-directory command above passed.
+5. **Backend typecheck:** passed.
+   1. Command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`.
 6. **Frontend typecheck:** not run.
 7. **Full repository suite:** not run.
 8. **Offline migration fixture proof:** not run.
 9. **Two-node convergence proof:** not run.
 10. **Served browser proof:** not run.
 11. **Restart durability proof:** not run.
+12. **Relay typecheck:** passed.
+    1. Command from `federation-relay/`: `node ../bin/decision-os-verify.mjs -- node_modules/.bin/tsc -p tsconfig.json --noEmit`.
 
 ---
 

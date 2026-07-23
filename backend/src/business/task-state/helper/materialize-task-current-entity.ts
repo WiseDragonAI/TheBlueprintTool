@@ -152,7 +152,13 @@ export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, 
     if (path !== '$entity' && candidate) applyCandidate(materialized, path, candidate);
     if (candidates.length > 1) {
       entityConflicts.push({
-        kind: entity.entityType === 'card' && path === 'lifecycle' ? 'task-conflict' : 'state-conflict',
+        kind: entity.entityType === 'card' && path === 'lifecycle'
+          ? 'task-conflict'
+          : entity.entityType === 'card' && path === 'assignment'
+            ? 'assignment-conflict'
+            : entity.entityType === 'execution'
+              ? 'execution-conflict'
+              : 'state-conflict',
         emittedAt: '',
         entityType: entity.entityType,
         entityId: entity.entityId,
@@ -174,7 +180,9 @@ export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, 
     materialized.closedAt = lifecycle.closedAt;
   }
 
-  if (entity.entityType === 'thread-note') {
+  if (entity.entityType === 'execution') {
+    return;
+  } else if (entity.entityType === 'thread-note') {
     const separator = entity.entityId.lastIndexOf('/');
     // WHAT: Recover thread identity from the stable compound identity when a tombstone has no live field lanes.
     // WHY: A presence-only deletion must project under its original thread instead of an empty synthetic thread.

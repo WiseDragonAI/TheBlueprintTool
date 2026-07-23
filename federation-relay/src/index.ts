@@ -39,7 +39,7 @@ import {
 } from './state-storage';
 
 type Env = {
-  FEDERATIONS: DurableObjectNamespace<FederationRelay>;
+  FEDERATIONS: DurableObjectNamespace<FederationRelayV4>;
   ADMIN_SECRET: string;
 };
 
@@ -112,7 +112,7 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-export class FederationRelay extends DurableObject<Env> {
+export class FederationRelayV4 extends DurableObject<Env> {
   private readonly streams = new Map<string, Stream>();
   private readonly subscriptions = new Map<string, Set<string>>();
   private manifests = new Map<string, ProjectManifest[]>();
@@ -193,7 +193,7 @@ export class FederationRelay extends DurableObject<Env> {
     const entitiesDeleted = await this.deleteStatePrefix(stateEntityPrefix(projectId));
     const bucketsDeleted = await this.deleteStatePrefix(stateBucketPrefix(projectId));
     const resetAt = new Date().toISOString();
-    await this.ctx.storage.put(`state:v3:reset:${encodeURIComponent(projectId)}:${resetAt}`, { projectId, resetAt, entitiesDeleted, bucketsDeleted });
+    await this.ctx.storage.put(`state:v4:reset:${encodeURIComponent(projectId)}:${resetAt}`, { projectId, resetAt, entitiesDeleted, bucketsDeleted });
     return json({ ok: true, projectId, entitiesDeleted, bucketsDeleted, root: hashTaskCurrentRoot([]), resetAt });
   }
 

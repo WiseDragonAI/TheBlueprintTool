@@ -1,5 +1,5 @@
 /**
- * WHAT: Persists epoch-3 causal state through journals, independent shards, and local publication markers.
+ * WHAT: Persists epoch-4 causal state through journals, independent shards, and local publication markers.
  * WHY: Local success must follow journal durability while replicated hashes contain only joinable domain state.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
@@ -33,7 +33,7 @@ import {
   type TaskStateDelta,
 } from './task-current-state-types.js';
 
-type JournalDocument = { version: 3; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string };
+type JournalDocument = { version: typeof taskCurrentStateVersion; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string };
 type StoreOptions = {
   decisionOsRoot: string;
   projectId: string;

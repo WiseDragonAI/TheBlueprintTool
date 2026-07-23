@@ -1,5 +1,5 @@
 /**
- * WHAT: Exposes the complete platform-neutral epoch-3 task CRDT contract.
+ * WHAT: Exposes the complete platform-neutral epoch-4 task and execution CRDT contract.
  * WHY: Nodes, relay, migration, and tests need one stable import boundary.
  */
 export * from './task-current-state-core/model.js';

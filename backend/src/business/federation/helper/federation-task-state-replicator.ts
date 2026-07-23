@@ -1,5 +1,5 @@
 /**
- * WHAT: Delivers correlated, byte-bounded epoch-3 entity state and closes root repair loops.
+ * WHAT: Delivers correlated, byte-bounded epoch-4 entity state and closes root repair loops.
  * WHY: Dirty state clears only after exact relay acknowledgement and synchronization requires equal roots.
  */
 import { randomUUID } from 'node:crypto';

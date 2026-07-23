@@ -17,7 +17,8 @@ const transitions: Readonly<Record<CodexExecutionPhase, ReadonlySet<CodexExecuti
   preparing: new Set(['queued', 'succeeded', 'failed', 'cancelled']),
   queued: new Set(['starting', 'cancelled', 'interrupted']),
   starting: new Set(['running', 'failed', 'cancelled', 'interrupted']),
-  running: new Set(['succeeded', 'failed', 'cancelled', 'interrupted']),
+  running: new Set(['cancelling', 'succeeded', 'failed', 'cancelled', 'interrupted']),
+  cancelling: new Set(['failed', 'cancelled', 'interrupted']),
   succeeded: new Set(),
   failed: new Set(),
   cancelled: new Set(),
@@ -61,7 +62,7 @@ export function assertCodexExecutionRecord(record: CodexExecutionRecord): void {
   if (record.phase === 'cancelled' && record.result?.status !== 'cancelled') throw new Error('codex_execution_result_invalid');
   if (record.phase === 'interrupted' && record.result?.status !== 'interrupted') throw new Error('codex_execution_result_invalid');
   if (!isTerminalCodexExecutionPhase(record.phase) && (record.result !== null || record.error !== null || record.finishedAt !== null)) throw new Error('codex_execution_active_settlement_invalid');
-  if ((record.phase === 'starting' || record.phase === 'running') && (!record.startedAt || !record.executorNodeId)) throw new Error('codex_execution_executor_invalid');
+  if ((record.phase === 'starting' || record.phase === 'running' || record.phase === 'cancelling') && (!record.startedAt || !record.executorNodeId)) throw new Error('codex_execution_executor_invalid');
   if (record.kind === 'pipeline-skill' && (!record.pipelineRunId || !record.pipelineStepId || !record.pipelineSkillRunId)) throw new Error('codex_execution_pipeline_identity_invalid');
 }
 

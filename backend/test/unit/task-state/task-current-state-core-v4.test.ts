@@ -13,6 +13,7 @@ import {
   taskCurrentBucketForEntityKey,
   taskCurrentEntityByteLimit,
   taskCurrentStateVersion,
+  type TaskEntityType,
   type TaskCurrentEntity,
   type TaskCurrentRegister,
 } from '../../../../shared/task-current-state-core.js';
@@ -25,6 +26,10 @@ function register(replicaId: string, counter: number, value: unknown): TaskCurre
 
 function entity(replicaId: string, fields: TaskCurrentEntity['fields'], entityId = 'card-a'): TaskCurrentEntity {
   return finalizeTaskCurrentEntity({ version: taskCurrentStateVersion, projectId: 'project-a', entityType: 'card', entityId, fields });
+}
+
+function domainEntity(entityType: TaskEntityType, entityId: string, fields: TaskCurrentEntity['fields']): TaskCurrentEntity {
+  return finalizeTaskCurrentEntity({ version: taskCurrentStateVersion, projectId: 'project-a', entityType, entityId, fields });
 }
 
 function permutations<T>(values: T[]): T[][] {
@@ -87,7 +92,7 @@ test('generated concurrent registers satisfy the entity algebra', () => {
   }
 });
 
-test('epoch-3 admission rejects legacy, overlapping, invalid atomic, and oversized structural lanes', () => {
+test('epoch-4 admission rejects legacy, overlapping, invalid atomic, and oversized structural lanes', () => {
   assert.throws(() => entity('desktop', { status: register('desktop', 1, 'todo') }), /invalid_task_current_card_lane/);
   assert.throws(() => entity('desktop', { replicationState: register('desktop', 1, 'local-only') }), /invalid_task_current_card_lane/);
   assert.throws(() => entity('desktop', { persistenceState: register('desktop', 1, 'creating') }), /invalid_task_current_card_lane/);
@@ -97,15 +102,107 @@ test('epoch-3 admission rejects legacy, overlapping, invalid atomic, and oversiz
     'lifecycle/status': register('desktop', 1, 'todo'),
   }), /overlapping_task_current_lanes|invalid_task_current_card_lane/);
   assert.throws(() => entity('desktop', { 'executionIntent/state': register('desktop', 1, 'running') }), /invalid_task_current_card_lane/);
-  assert.throws(() => entity('desktop', { executionIntent: register('desktop', 1, { id: 'run-a', state: 'running', updatedAt: 'legacy' }) }), /invalid_task_current_execution_intent/);
-  assert.doesNotThrow(() => entity('desktop', { executionIntent: register('desktop', 1, {
-    executionId: 'execution-a', phase: 'running', requestedAt: '2026-07-23T01:00:00.000Z', phaseSince: '2026-07-23T01:00:01.000Z', executorNodeId: 'workstation', changedAt: '2026-07-23T01:00:01.000Z', settledAt: null, error: null, revision: 4,
+  assert.throws(() => entity('desktop', { executionIntent: register('desktop', 1, { id: 'run-a' }) }), /invalid_task_current_card_lane/);
+  assert.doesNotThrow(() => entity('desktop', { assignment: register('desktop', 1, {
+    nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1,
   }) }));
-  assert.throws(() => entity('desktop', { executionIntent: register('desktop', 1, {
-    executionId: 'execution-a', phase: 'running', requestedAt: '2026-07-23T01:00:00.000Z', phaseSince: '2026-07-23T01:00:01.000Z', executorNodeId: 'workstation', changedAt: '2026-07-23T01:00:01.000Z', settledAt: null, error: null, revision: 0,
-  }) }), /invalid_task_current_execution_intent/);
+  assert.throws(() => entity('desktop', { assignment: register('desktop', 1, {
+    nodeId: '../phone', changedAt: '2026-07-23T01:00:00.000Z', revision: 1,
+  }) }), /invalid_task_current_assignment/);
+  assert.throws(() => entity('desktop', { 'assignment/nodeId': register('desktop', 1, 'workstation') }), /invalid_task_current_card_lane/);
   assert.throws(() => finalizeTaskCurrentEntity({ version: taskCurrentStateVersion, projectId: 'project-a', entityType: 'thread-note', entityId: 'thread-a/note-a', fields: { message: register('desktop', 1, 'large body') } }), /invalid_task_current_thread_note_narrative_lane/);
   assert.throws(() => entity('desktop', { title: register('desktop', 1, 'x'.repeat(taskCurrentEntityByteLimit)) }), /task_current_entity_too_large/);
+});
+
+test('epoch-4 validates atomic execution metadata, lifecycle, and artifact lanes', () => {
+  const executionId = 'execution-a';
+  const valid = {
+    metadata: register('workstation', 1, {
+      executionId,
+      requestId: 'request-a',
+      sessionId: 'session-a',
+      projectId: 'project-a',
+      ledgerId: 'tasks',
+      taskId: 'card-a',
+      sourceCardId: 'card-a',
+      ownerCardId: 'card-a',
+      kind: 'thread',
+      requestedAt: '2026-07-23T01:00:00.000Z',
+      model: null,
+      effort: null,
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      predecessorExecutionId: null,
+      restartOfExecutionId: null,
+    }),
+    lifecycle: register('workstation', 1, {
+      phase: 'running',
+      phaseSince: '2026-07-23T01:00:01.000Z',
+      startedAt: '2026-07-23T01:00:01.000Z',
+      finishedAt: null,
+      executorNodeId: 'workstation',
+      providerSessionId: null,
+      result: null,
+      error: null,
+      revision: 3,
+    }),
+    artifacts: register('workstation', 1, {
+      jsonl: { hash: 'a'.repeat(64), bytes: 128, mediaType: 'application/x-ndjson' },
+      stderr: null,
+      telemetry: null,
+      result: null,
+      changedAt: '2026-07-23T01:00:01.000Z',
+      revision: 1,
+    }),
+  };
+  assert.doesNotThrow(() => domainEntity('execution', executionId, valid));
+  assert.throws(() => domainEntity('execution', executionId, {
+    ...valid,
+    metadata: register('workstation', 1, { ...(valid.metadata.candidates[0].value as Record<string, unknown>), executionId: 'execution-b' }),
+  }), /invalid_task_current_execution_metadata/);
+  assert.throws(() => domainEntity('execution', executionId, {
+    ...valid,
+    lifecycle: register('workstation', 1, { ...(valid.lifecycle.candidates[0].value as Record<string, unknown>), phase: 'failed', finishedAt: null, result: null, error: null }),
+  }), /invalid_task_current_execution_lifecycle/);
+  assert.throws(() => domainEntity('execution', executionId, {
+    ...valid,
+    artifacts: register('workstation', 1, { ...(valid.artifacts.candidates[0].value as Record<string, unknown>), jsonl: { hash: 'not-a-hash', bytes: 1, mediaType: 'application/x-ndjson' } }),
+  }), /invalid_task_current_execution_artifacts/);
+  assert.throws(() => domainEntity('execution', executionId, { unexpected: register('workstation', 1, true) }), /invalid_task_current_execution_lane/);
+});
+
+test('assignment and execution conflicts remain explicit after a convergent join', () => {
+  const left = entity('workstation', { assignment: register('workstation', 1, {
+    nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1,
+  }) });
+  const right = entity('phone', { assignment: register('phone', 1, {
+    nodeId: 'phone', changedAt: '2026-07-23T01:00:00.000Z', revision: 1,
+  }) });
+  const joined = joinTaskEntities(left, right);
+  const projection: TaskCurrentProjection = { version: taskCurrentStateVersion, projectId: 'project-a', ledger: { cards: [], annotations: [], relationships: [] }, conflicts: [], clock: {} };
+  materializeTaskCurrentEntity(projection, joined);
+  assert.equal(projection.conflicts.length, 1);
+  assert.equal(projection.conflicts[0].kind, 'assignment-conflict');
+  assert.equal(projection.conflicts[0].path, 'assignment');
+
+  const lifecycle = (replicaId: string, phase: 'queued' | 'running') => register(replicaId, 1, {
+    phase,
+    phaseSince: '2026-07-23T01:00:01.000Z',
+    startedAt: phase === 'running' ? '2026-07-23T01:00:01.000Z' : null,
+    finishedAt: null,
+    executorNodeId: 'workstation',
+    providerSessionId: null,
+    result: null,
+    error: null,
+    revision: 2,
+  });
+  const execution = joinTaskEntities(
+    domainEntity('execution', 'execution-a', { lifecycle: lifecycle('workstation', 'running') }),
+    domainEntity('execution', 'execution-a', { lifecycle: lifecycle('phone', 'queued') }),
+  );
+  materializeTaskCurrentEntity(projection, execution);
+  assert.equal(projection.conflicts.some((conflict) => conflict.kind === 'execution-conflict' && conflict.entityId === 'execution-a'), true);
 });
 
 test('wire hashes exclude local publication metadata by rejecting it as an unhashed extension', () => {
