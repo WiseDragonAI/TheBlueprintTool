@@ -27,7 +27,13 @@ test('node migrator converts every registered project and writes one offline rep
   writeFileSync(resolve(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [{ id: 'card-a', title: 'Card A', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } }], annotations: [], relationships: [] }));
   writeFileSync(resolve(decisionOsRoot, 'cards', 'tasks', 'card-a.md'), 'Local card body.\n');
 
-  const result = await migrateNodeTaskCurrentState({ catalogRoot, nodeId: 'workstation', backupRoot });
+  const result = await migrateNodeTaskCurrentState({
+    catalogRoot,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+    backupRoot,
+  });
 
   assert.equal(result.nodeId, 'workstation');
   assert.deepEqual(result.projects.map((project) => project.projectId), ['project-a']);
@@ -43,5 +49,10 @@ test('node migrator rejects a node identity that differs from federation setting
   context.after(() => rmSync(catalogRoot, { recursive: true, force: true }));
   mkdirSync(resolve(catalogRoot, '.decision-os'), { recursive: true });
   writeFileSync(resolve(catalogRoot, '.decision-os', '.settings.json'), JSON.stringify({ federationNodeId: 'phone' }));
-  await assert.rejects(migrateNodeTaskCurrentState({ catalogRoot, nodeId: 'workstation' }), /node_task_migration_node_identity_mismatch/);
+  await assert.rejects(migrateNodeTaskCurrentState({
+    catalogRoot,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+  }), /node_task_migration_node_identity_mismatch/);
 });

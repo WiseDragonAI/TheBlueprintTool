@@ -1,5 +1,5 @@
 /**
- * WHAT: Encodes domain records into canonical epoch-3 CRDT lane values.
+ * WHAT: Encodes domain records into canonical epoch-4 CRDT lane values.
  * WHY: Migration, runtime mutations, recovery, and tests must emit identical non-overlapping lane boundaries.
  */
 import type { TaskEntityType } from './task-current-state-types.js';

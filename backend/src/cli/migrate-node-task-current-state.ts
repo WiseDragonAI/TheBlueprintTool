@@ -12,8 +12,18 @@ function argument(name: string): string {
 
 const catalogRoot = argument('--catalog-root');
 const nodeId = argument('--node-id');
+const targetEpoch = Number(argument('--target-epoch'));
+const defaultAssignedNodeId = argument('--default-assigned-node');
 const backupRoot = argument('--backup-root');
-if (!catalogRoot || !nodeId) throw new Error('Usage: decision-os-migrate-node --catalog-root <path> --node-id <id> [--backup-root <path>]');
+if (!catalogRoot || !nodeId || !Number.isSafeInteger(targetEpoch) || !defaultAssignedNodeId) {
+  throw new Error('Usage: decision-os-migrate-node --catalog-root <path> --node-id <id> --target-epoch 4 --default-assigned-node <id> [--backup-root <path>]');
+}
 
-const result = await migrateNodeTaskCurrentState({ catalogRoot: resolve(catalogRoot), nodeId, ...(backupRoot ? { backupRoot: resolve(backupRoot) } : {}) });
+const result = await migrateNodeTaskCurrentState({
+  catalogRoot: resolve(catalogRoot),
+  nodeId,
+  targetEpoch,
+  defaultAssignedNodeId,
+  ...(backupRoot ? { backupRoot: resolve(backupRoot) } : {}),
+});
 process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);

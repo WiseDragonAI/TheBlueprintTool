@@ -1,5 +1,5 @@
 /**
- * WHAT: Normalizes one legacy task projection into the audited epoch-3 lifecycle and task-graph domain.
+ * WHAT: Normalizes one legacy task projection into the audited epoch-4 lifecycle, assignment, and task-graph domain.
  * WHY: Content-derived lifecycle and child-label membership may be interpreted exactly once during offline cutover.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -10,8 +10,39 @@ type BodyRewrite = { cardId: string; file: string; contentFile: string; before: 
 type LifecycleAudit = { cardId: string; createdAt: string; createdAtSource: string; status: string; statusSource: string; waitingAt: string | null; waitingAtSource: string; closedAt: string | null; closedAtSource: string };
 type RelationshipRepair = { relationshipId: string; from: string; to: string; previousPosition: number | null; position: number };
 type RecoveredNoteDeletion = { threadId: string; noteId: string };
+type AssignmentAudit = { cardId: string; inherited: boolean; assignedNodeId: string | null };
 
 const epoch = new Date(0).toISOString();
+const legacyExecutionCardFields = new Set([
+  'executionIntent',
+  'codexActiveRunId',
+  'codexActiveExecutionId',
+  'codexQueuedPipelineRunId',
+  'codexQueuedRunId',
+  'codexRunId',
+  'codexRunOutputFile',
+  'codexThreadRunId',
+  'codexThreadRunIds',
+  'codexThreadRunOutputFile',
+  'codexThreadRunOutputFiles',
+  'codexPipelineRunId',
+  'codexPipelineName',
+  'codexPipelineStepId',
+  'codexPipelineStepName',
+  'codexSkillName',
+  'codexRunModel',
+  'codexRunEffort',
+  'codexStatus',
+  'codexProcessing',
+  'codexQueued',
+  'codexQueuePosition',
+  'transcribingBeforeLaunch',
+]);
+
+export function isLegacyExecutionCardField(path: string): boolean {
+  const root = path.split('/')[0] ?? '';
+  return legacyExecutionCardFields.has(root);
+}
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -69,17 +100,25 @@ function legacyStatus(card: AnyRecord, markdown: string): { value: 'todo' | 'bac
   return { value: 'backlog', source: 'migration-default' };
 }
 
-export function prepareTaskCurrentStateMigration(input: { decisionOsRoot: string; ledger: AnyRecord; readContent?: (ref: string) => string | null; deferRelationshipValidation?: boolean }): {
+export function prepareTaskCurrentStateMigration(input: { decisionOsRoot: string; ledger: AnyRecord; defaultAssignedNodeId: string; readContent?: (ref: string) => string | null; deferRelationshipValidation?: boolean }): {
   ledger: AnyRecord;
   bodyRewrites: BodyRewrite[];
   lifecycleAudit: LifecycleAudit[];
+  assignmentAudit: AssignmentAudit[];
   relationshipRepairs: RelationshipRepair[];
   recoveredNoteDeletions: RecoveredNoteDeletion[];
 } {
+  if (!/^[a-zA-Z0-9_-]+$/.test(input.defaultAssignedNodeId)) throw new Error('invalid_task_migration_default_assigned_node_id');
   const ledger = structuredClone(input.ledger);
   const cards = records(ledger.cards);
+  const relationships = records(ledger.relationships);
+  const inheritedCardIds = new Set(relationships
+    .filter((relationship) => relationship.label === 'subtask')
+    .map((relationship) => String(relationship.to ?? ''))
+    .filter(Boolean));
   const bodyRewrites: BodyRewrite[] = [];
   const lifecycleAudit: LifecycleAudit[] = [];
+  const assignmentAudit: AssignmentAudit[] = [];
   for (const card of cards) {
     const content = contentFile(input.decisionOsRoot, card);
     const supplied = content ? input.readContent?.(content.ref) : null;
@@ -98,8 +137,14 @@ export function prepareTaskCurrentStateMigration(input: { decisionOsRoot: string
     card.lifecycle = { status: status.value, changedAt: closedAt || waitingAt || createdAt, waitingAt: waitingAt || null, closedAt: closedAt || null };
     card.status = status.value;
     if (Array.isArray(card.labels)) card.labels = card.labels.map(String).filter((label) => label !== 'subtask');
+    for (const field of legacyExecutionCardFields) delete card[field];
+    const cardId = String(card.id ?? '');
+    const inherited = inheritedCardIds.has(cardId);
+    if (inherited) delete card.assignment;
+    else card.assignment = { nodeId: input.defaultAssignedNodeId, changedAt: epoch, revision: 1 };
+    assignmentAudit.push({ cardId, inherited, assignedNodeId: inherited ? null : input.defaultAssignedNodeId });
     lifecycleAudit.push({
-      cardId: String(card.id ?? ''),
+      cardId,
       createdAt,
       createdAtSource: legacyCreatedAt ? 'card.createdAt' : 'migration-epoch',
       status: status.value,
@@ -116,7 +161,6 @@ export function prepareTaskCurrentStateMigration(input: { decisionOsRoot: string
   }
 
   const cardIds = new Set(cards.map((card) => String(card.id ?? '')).filter(Boolean));
-  const relationships = records(ledger.relationships);
   const invalid = relationships.filter((relationship) => relationship.label === 'subtask' && (!cardIds.has(String(relationship.from ?? '')) || !cardIds.has(String(relationship.to ?? ''))));
   if (!input.deferRelationshipValidation && invalid.length > 0) throw new Error(`invalid_subtask_relationships:${invalid.map((relationship) => String(relationship.id ?? '')).sort().join(',')}`);
   const relationshipRepairs: RelationshipRepair[] = [];
@@ -145,5 +189,5 @@ export function prepareTaskCurrentStateMigration(input: { decisionOsRoot: string
     deletedByThread[threadId] = retained;
   }
   ledger.deletedNoteIds = deletedByThread;
-  return { ledger, bodyRewrites, lifecycleAudit, relationshipRepairs, recoveredNoteDeletions };
+  return { ledger, bodyRewrites, lifecycleAudit, assignmentAudit, relationshipRepairs, recoveredNoteDeletions };
 }

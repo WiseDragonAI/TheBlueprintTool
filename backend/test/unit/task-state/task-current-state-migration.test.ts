@@ -83,6 +83,202 @@ test('offline migration installs current shards, immutable content, and a final 
   assert.match(report.canonicalProjectionChecksum, /^[a-f0-9]{64}$/);
 });
 
+test('epoch-3 migration assigns master tasks and collapses every legacy execution authority into epoch-4 entities', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-epoch4-execution-migration-'));
+  const rollbackRoot = `${root}-rollback`;
+  context.after(() => [root, rollbackRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'project-a';
+  const stateRoot = resolve(root, 'task-state', projectId);
+  const tasksFile = resolve(root, 'tasks.json');
+  const stdoutFile = resolve(root, 'runs', 'direct.jsonl');
+  const stderrFile = resolve(root, 'runs', 'direct.log');
+  mkdirSync(resolve(root, 'runs'), { recursive: true });
+  mkdirSync(stateRoot, { recursive: true });
+  writeFileSync(stdoutFile, '{"type":"turn.started"}\n');
+  writeFileSync(stderrFile, 'legacy stderr\n');
+  const ledger = {
+    cards: [
+      {
+        id: 'master-a',
+        title: 'Master',
+        labels: ['master-task'],
+        executionIntent: { id: 'intent-execution', state: 'running', changedAt: '2026-07-22T03:00:00.000Z', startedAt: '2026-07-22T03:00:00.000Z' },
+        codexActiveRunId: 'intent-session',
+        codexActiveExecutionId: 'intent-execution',
+        codexThreadRunId: 'intent-session',
+        codexThreadRunIds: ['historic-session', 'intent-session'],
+        codexThreadRunOutputFiles: { 'historic-session': stdoutFile },
+      },
+      { id: 'child-a', title: 'Child', labels: ['subtask'] },
+    ],
+    annotations: [],
+    relationships: [{ id: 'subtask-a', from: 'master-a', to: 'child-a', label: 'subtask', position: 0 }],
+  };
+  writeFileSync(tasksFile, JSON.stringify(ledger));
+  writeFileSync(resolve(stateRoot, 'format.json'), JSON.stringify({
+    stateProtocol: 'decision-os-task-state/3',
+    stateSchema: 3,
+    baselineEpoch: 3,
+    projectId,
+    baselineRoot: 'epoch-3-root',
+  }));
+  writeFileSync(resolve(stateRoot, 'projection.json'), JSON.stringify({ version: 3, projectId, ledger, conflicts: [] }));
+  writeFileSync(resolve(root, 'codex-executions.json'), JSON.stringify({
+    version: 1,
+    projectId,
+    updatedAt: '2026-07-22T02:00:00.000Z',
+    executions: [{
+      executionId: 'direct-execution',
+      sessionId: 'direct-session',
+      projectId,
+      ledgerId: 'tasks',
+      taskId: 'master-a',
+      ownerCardId: 'master-a',
+      kind: 'thread',
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      phase: 'running',
+      requestedAt: '2026-07-22T01:00:00.000Z',
+      phaseSince: '2026-07-22T01:01:00.000Z',
+      startedAt: '2026-07-22T01:01:00.000Z',
+      finishedAt: null,
+      executorNodeId: 'workstation',
+      processId: 42,
+      processStartTime: 'legacy-process',
+      stdoutFile,
+      stderrFile,
+      result: null,
+      error: null,
+      revision: 4,
+    }],
+  }));
+  writeFileSync(resolve(root, 'codex-process-queue.json'), JSON.stringify({
+    version: 1,
+    items: [{
+      id: 'direct-session',
+      kind: 'thread',
+      status: 'running',
+      createdAt: '2026-07-22T01:00:00.000Z',
+      startedAt: '2026-07-22T01:01:00.000Z',
+      interruptedAt: null,
+      interruptionReason: '',
+      processId: 42,
+      processStartTime: 'legacy-process',
+      stdoutFile,
+      stderrFile,
+      payload: { ledgerId: 'tasks', cardId: 'master-a', runId: 'direct-session', executionId: 'direct-execution' },
+    }],
+  }));
+  writeFileSync(resolve(root, 'codex-pipelines.json'), JSON.stringify({
+    version: 1,
+    pipelines: [],
+    steps: [],
+    skillLibrary: [],
+    activeWorkspaceRun: 'pipeline-run',
+    runs: [{
+      id: 'pipeline-run',
+      pipelineId: null,
+      pipelineName: 'Legacy pipeline',
+      temporary: true,
+      executionMode: 'local',
+      ledgerId: 'tasks',
+      sourceCardId: 'master-a',
+      sourceCardTitle: 'Master',
+      status: 'running',
+      createdAt: '2026-07-22T02:00:00.000Z',
+      updatedAt: '2026-07-22T02:10:00.000Z',
+      startedAt: '2026-07-22T02:00:00.000Z',
+      finishedAt: null,
+      resumedAt: null,
+      error: '',
+      steps: [{
+        id: 'pipeline-step',
+        stepId: 'step-a',
+        name: 'Step A',
+        purpose: '',
+        outputCardId: 'child-a',
+        status: 'running',
+        startedAt: '2026-07-22T02:00:00.000Z',
+        finishedAt: null,
+        error: '',
+        skills: [
+          {
+            id: 'skill-a',
+            pipelineSkillId: 'skill-a',
+            skillName: 'analysis',
+            runId: 'pipeline-skill-a',
+            executionId: 'pipeline-execution-a',
+            status: 'complete',
+            codexModel: 'gpt-5.6-sol',
+            codexEffort: 'medium',
+            stdoutFile: '',
+            stderrFile: '',
+            startedAt: '2026-07-22T02:00:00.000Z',
+            finishedAt: '2026-07-22T02:05:00.000Z',
+            error: '',
+          },
+          {
+            id: 'skill-b',
+            pipelineSkillId: 'skill-b',
+            skillName: 'implementation',
+            runId: 'pipeline-skill-b',
+            executionId: 'pipeline-execution-b',
+            status: 'pending',
+            codexModel: 'gpt-5.6-sol',
+            codexEffort: 'high',
+            stdoutFile: '',
+            stderrFile: '',
+            startedAt: null,
+            finishedAt: null,
+            error: '',
+          },
+        ],
+      }],
+    }],
+  }));
+
+  const result = await migrateTaskCurrentState({
+    decisionOsRoot: root,
+    projectId,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+    tasksLedgerFile: tasksFile,
+    backupRoot: rollbackRoot,
+  });
+
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId });
+  const cards = store.projection().ledger.cards as Array<Record<string, any>>;
+  assert.deepEqual(cards.find((card) => card.id === 'master-a')?.assignment, { nodeId: 'workstation', changedAt: '1970-01-01T00:00:00.000Z', revision: 1 });
+  assert.equal(cards.find((card) => card.id === 'child-a')?.assignment, undefined);
+  assert.equal(cards.find((card) => card.id === 'master-a')?.executionIntent, undefined);
+  assert.equal(cards.find((card) => card.id === 'master-a')?.codexActiveExecutionId, undefined);
+  assert.equal((store.entity('execution', 'direct-execution')?.fields.lifecycle.candidates[0].value as Record<string, unknown>).phase, 'interrupted');
+  assert.equal((store.entity('execution', 'pipeline-execution-a')?.fields.lifecycle.candidates[0].value as Record<string, unknown>).phase, 'succeeded');
+  assert.equal((store.entity('execution', 'pipeline-execution-b')?.fields.lifecycle.candidates[0].value as Record<string, unknown>).phase, 'interrupted');
+  assert.equal((store.entity('execution', 'pipeline-execution-b')?.fields.metadata.candidates[0].value as Record<string, unknown>).predecessorExecutionId, 'pipeline-execution-a');
+  assert.equal((store.entity('execution', 'historic-session:execution:0')?.fields.lifecycle.candidates[0].value as Record<string, unknown>).phase, 'interrupted');
+  const artifact = (store.entity('execution', 'direct-execution')?.fields.artifacts.candidates[0].value as Record<string, any>).jsonl;
+  assert.equal(readFileSync(resolve(result.root, 'objects', artifact.hash.slice(0, 2), artifact.hash), 'utf8'), '{"type":"turn.started"}\n');
+  assert.equal(existsSync(resolve(root, 'codex-executions.json')), false);
+  assert.equal(existsSync(resolve(root, 'codex-process-queue.json')), false);
+  assert.deepEqual(JSON.parse(readFileSync(resolve(root, 'codex-pipelines.json'), 'utf8')).runs, []);
+  assert.equal(existsSync(resolve(result.backup, 'decision-os', 'codex-executions.json')), true);
+  assert.equal(existsSync(resolve(result.backup, 'decision-os', 'codex-process-queue.json')), true);
+  const report = JSON.parse(readFileSync(result.report, 'utf8')) as Record<string, any>;
+  assert.deepEqual(
+    { stateProtocol: report.stateProtocol, stateSchema: report.stateSchema, baselineEpoch: report.baselineEpoch },
+    { stateProtocol: 'decision-os-task-state/4', stateSchema: 4, baselineEpoch: 4 },
+  );
+  assert.deepEqual(report.assignmentCoverage, { assignedTasks: 1, inheritedSubtasks: 1, missingAssignments: [] });
+  assert.equal(report.executionMigration.executionCount, 5);
+  assert.equal(report.executionMigration.interruptedCount, 4);
+  assert.equal(report.executionMigration.artifactCount, 2);
+  assert.equal(report.missingObjects, 0);
+  assert.equal(report.journalCount, 0);
+});
+
 test('migration preflight rejects broken subtask ownership before writing or backing up files', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-preflight-'));
   const rollbackRoot = `${root}-rollback`;
@@ -111,6 +307,32 @@ test('migration preflight rejects broken subtask ownership before writing or bac
   assert.equal(existsSync(rollbackRoot), false);
 });
 
+test('migration preserves corrupt execution evidence byte-identically and performs no partial cutover', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-corrupt-execution-'));
+  const rollbackRoot = `${root}-rollback`;
+  context.after(() => [root, rollbackRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'project-a';
+  const tasksFile = resolve(root, 'tasks.json');
+  const corruptExecutionFile = resolve(root, 'codex-executions.json');
+  const corruptBytes = '{"version":1,"executions":[';
+  writeFileSync(tasksFile, JSON.stringify({ cards: [{ id: 'master-a', title: 'Master' }], annotations: [], relationships: [] }));
+  writeFileSync(corruptExecutionFile, corruptBytes);
+
+  await assert.rejects(migrateTaskCurrentState({
+    decisionOsRoot: root,
+    projectId,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+    tasksLedgerFile: tasksFile,
+    backupRoot: rollbackRoot,
+  }), /Could not read the canonical Codex execution store/);
+
+  assert.equal(readFileSync(corruptExecutionFile, 'utf8'), corruptBytes);
+  assert.equal(existsSync(resolve(root, 'task-state', projectId, 'format.json')), false);
+  assert.equal(existsSync(rollbackRoot), false);
+});
+
 test('migration refuses to publish epoch 3 when a retained resource head has no collected object', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-missing-object-'));
   const rollbackRoot = `${root}-rollback`;
@@ -136,7 +358,7 @@ test('migration refuses to publish epoch 3 when a retained resource head has no 
   assert.equal(existsSync(rollbackRoot), true);
 });
 
-test('migration joins legacy current entities from every writable node before encoding epoch 3', async (context) => {
+test('migration joins epoch-3 current entities from every writable node before encoding epoch 4', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-union-'));
   const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-remote-'));
   const rollbackRoot = `${root}-rollback`;
@@ -145,7 +367,7 @@ test('migration joins legacy current entities from every writable node before en
   const activeRoot = resolve(root, 'task-state', projectId);
   const tasksFile = resolve(root, 'tasks.json');
   const entity = (replicaId: string, fields: Record<string, unknown>, entityType = 'card', entityId = 'card-a') => ({
-    version: 2,
+    version: 3,
     projectId,
     entityType,
     entityId,
@@ -168,14 +390,20 @@ test('migration joins legacy current entities from every writable node before en
   mkdirSync(resolve(activeRoot, 'objects', staleLocalHash.slice(0, 2)), { recursive: true });
   writeFileSync(resolve(activeRoot, 'objects', staleLocalHash.slice(0, 2), staleLocalHash), staleLocalBody);
   writeFileSync(resolve(root, 'cards', 'tasks', 'card-a.md'), localBody);
-  writeFileSync(resolve(activeRoot, 'format.json'), JSON.stringify({ version: 2, projectId, baselineRoot: 'legacy-a' }));
+  writeFileSync(resolve(activeRoot, 'format.json'), JSON.stringify({
+    stateProtocol: 'decision-os-task-state/3',
+    stateSchema: 3,
+    baselineEpoch: 3,
+    projectId,
+    baselineRoot: 'legacy-a',
+  }));
   writeFileSync(resolve(activeRoot, 'current', 'card', 'card-a.json'), JSON.stringify(entity('desktop', { title: 'Joined title', labels: ['master-task'], comment: { contentFile: localKey } })));
   writeFileSync(resolve(activeRoot, 'current', 'resource', 'stale-local.json'), JSON.stringify(entity('baseline-content', {
     head: { type: 'card-markdown', key: localKey, hash: staleLocalHash, bytes: staleLocalBody.byteLength, changedAt: '2026-07-20T00:00:00.000Z' },
   }, 'resource', localKey)));
   writeFileSync(resolve(remoteRoot, 'current', 'card', 'card-a.json'), JSON.stringify(entity('mobile', { status: 'done' })));
   writeFileSync(resolve(remoteRoot, 'current', 'card', 'deleted-card.json'), JSON.stringify({
-    version: 2, projectId, entityType: 'card', entityId: 'deleted-card',
+    version: 3, projectId, entityType: 'card', entityId: 'deleted-card',
     fields: { $entity: { clock: { mobile: 1 }, candidates: [{ dot: { replicaId: 'mobile', counter: 1 }, operation: 'tombstone' }] } }, replication: 'active', stateHash: 'legacy',
   }));
   const remoteObject = Buffer.from('remote-only immutable object');
@@ -193,7 +421,7 @@ test('migration joins legacy current entities from every writable node before en
     [`threadFiles/${threadId}`]: `.decision-os/threads/tasks/${threadId}.md`,
   }, 'ledger', `tasks:threadFiles/${threadId}`)));
   writeFileSync(resolve(remoteRoot, 'current', 'thread-note', `${encodeURIComponent(`${threadId}/${noteId}`)}.json`), JSON.stringify({
-    version: 2, projectId, entityType: 'thread-note', entityId: `${threadId}/${noteId}`,
+    version: 3, projectId, entityType: 'thread-note', entityId: `${threadId}/${noteId}`,
     fields: { $entity: { clock: { workstation: 17 }, candidates: [{ dot: { replicaId: 'workstation', counter: 17 }, operation: 'tombstone' }] } }, replication: 'active', stateHash: 'legacy',
   }));
   writeFileSync(tasksFile, JSON.stringify({
@@ -318,7 +546,12 @@ test('independent node migrations converge and retain routable content sources',
     const tasksFile = resolve(root, 'tasks.json');
     writeFileSync(tasksFile, JSON.stringify({
       cards: [
-        { id: 'shared', title: sharedTitle, comment: { contentFile: sharedRef } },
+        {
+          id: 'shared',
+          title: sharedTitle,
+          executionIntent: { id: 'shared-execution', state: 'queued', changedAt: '2026-07-22T00:00:00.000Z' },
+          comment: { contentFile: sharedRef },
+        },
         { id: uniqueId, title: uniqueId, comment: { contentFile: uniqueRef } },
       ],
       annotations: [], relationships: [],
@@ -337,6 +570,8 @@ test('independent node migrations converge and retain routable content sources',
   await Promise.all([workstation.flush(), phone.flush()]);
 
   assert.equal(workstation.rootHash(), phone.rootHash());
+  assert.equal((workstation.entity('execution', 'shared-execution')?.fields.lifecycle.candidates[0].value as Record<string, unknown>).phase, 'interrupted');
+  assert.equal(workstation.projection().conflicts.some((conflict) => conflict.entityType === 'execution' && conflict.entityId === 'shared-execution'), false);
   assert.deepEqual(new Set((workstation.projection().ledger.cards as Array<Record<string, unknown>>).map((card) => card.id)), new Set(['shared', 'workstation-only', 'phone-only']));
   const titleConflict = workstation.projection().conflicts.find((conflict) => conflict.entityType === 'card' && conflict.entityId === 'shared' && conflict.path === 'title');
   assert.deepEqual(new Set(titleConflict?.candidates.map((candidate) => candidate.value)), new Set(['Workstation title', 'Phone title']));

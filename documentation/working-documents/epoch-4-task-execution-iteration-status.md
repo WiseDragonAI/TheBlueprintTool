@@ -4,7 +4,7 @@
 2. **Implementation branch:** `feature/epoch4-task-execution`.
 3. **Base commit:** `0c72b4ed95c12bcfb0a27ddcbf56f4ecfdba5df7`.
 4. **Production branch:** `main`.
-5. **Current phase:** `J.2 — Build the offline migrator`.
+5. **Current phase:** `J.3 — Persist task assignment`.
 6. **Overall state:** `in-progress`.
 7. **Production state:** epoch `3` remains active. Epoch `4` is not admitted for production use.
 
@@ -51,7 +51,16 @@
    5. Focused backend result: `30` tests passed.
    6. Relay result: `8` tests passed.
    7. Backend and relay typechecks passed.
-2. **J.2 — Build the offline migrator:** `in-progress`.
+2. **J.2 — Build the offline migrator:** `verified`.
+   1. Accepts epoch-3 current shards and projection captures and publishes protocol, schema, and baseline epoch `4` only after durable conversion.
+   2. Requires CLI `--target-epoch 4` and one explicit `--default-assigned-node`; the production runbook uses `workstation` on both nodes.
+   3. Assigns every master task to `workstation`; subtasks retain inherited assignment.
+   4. Converts canonical execution records, direct queue entries, all pipeline skills, active card intents, and retained thread sessions into execution entities.
+   5. Converts every non-terminal legacy attempt to `interrupted`, retains terminal history, links pipeline predecessors, and captures available artifacts by exact hash.
+   6. Preserves pipeline definitions while removing mutable run manifests after backup; retires the canonical legacy execution file and direct queue after entity installation.
+   7. Reports protocol, schema, epoch, assignment coverage, execution-index validity, missing artifacts, missing objects, semantic inventory, zero journals, checksums, roots, and external rollback paths.
+   8. Focused migration result: `11` tests passed.
+   9. Backend typecheck passed.
 3. **J.3 — Persist task assignment:** `pending`.
 4. **J.4 — Install the replicated execution repository:** `pending`.
 5. **J.5 — Install assignment-aware admission:** `pending`.
@@ -69,12 +78,12 @@
 
 ## D. Current Verified Gaps
 
-1. The offline migrator does not yet convert epoch-3 state to epoch `4`.
-2. Task creation passes the selected node as `replicaNodeId` and optimistic `ownerNodeId`; no assignment lane is persisted.
-3. The current task-state write predicate requires relay-root convergence.
-4. Direct execution admission writes `.decision-os/codex-executions.json` before the scheduler-visible legacy queue.
-5. The scheduler reads `.decision-os/codex-process-queue.json` and mutable pipeline manifests instead of the canonical execution store.
-6. Pipeline and direct spawn callbacks can publish `spawned()` without awaiting durable lifecycle settlement.
+1. Task creation passes the selected node as `replicaNodeId` and optimistic `ownerNodeId`; no assignment lane is persisted.
+2. The current task-state write predicate requires relay-root convergence.
+3. Direct execution admission writes `.decision-os/codex-executions.json` before the scheduler-visible legacy queue.
+4. The scheduler reads `.decision-os/codex-process-queue.json` and mutable pipeline manifests instead of the replicated execution entities.
+5. Pipeline and direct spawn callbacks can publish `spawned()` without awaiting durable lifecycle settlement.
+6. Control Room still derives active placement from legacy card execution fields; a migrated epoch-4 fixture therefore cannot expose runtime-only active state until gates `J.4` and `J.8`.
 7. Control Room task identity contains projection-source ownership.
 8. Runtime pause policy can block unrelated admissions after one execution failure.
 
@@ -93,12 +102,18 @@
    1. Command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`.
 6. **Frontend typecheck:** not run.
 7. **Full repository suite:** not run.
-8. **Offline migration fixture proof:** not run.
-9. **Two-node convergence proof:** not run.
+8. **Offline migration fixture proof:** passed `11/11`.
+   1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=backend/tsconfig.json node --test --import ./backend/node_modules/tsx/dist/esm/index.mjs backend/test/unit/task-state/task-current-state-migration.test.ts backend/test/unit/task-state/migrate-node-task-current-state.test.ts`.
+   2. Evidence includes corrupt execution-state byte preservation, epoch-3 shard admission, deterministic assignment, all legacy execution sources, artifact objects, zero journals, complete backup, and legacy-authority retirement.
+9. **Two-node convergence proof:** migration fixture passed.
+   1. Independently migrated Workstation and Mobile fixtures join to one root, retain content ownership, deduplicate identical assignment and execution effects, and preserve real conflicts.
 10. **Served browser proof:** not run.
 11. **Restart durability proof:** not run.
 12. **Relay typecheck:** passed.
     1. Command from `federation-relay/`: `node ../bin/decision-os-verify.mjs -- node_modules/.bin/tsc -p tsconfig.json --noEmit`.
+13. **Dependent compatibility sample:** passed `26/33`; not a gate claim.
+    1. Six failures are isolated-worktree child-process loader failures because the temporary fixture resolves `TSX_TSCONFIG_PATH` below its own root.
+    2. One substantive failure is the expected open `J.4`/`J.8` gap: Control Room still reads card execution fields removed by epoch-4 migration.
 
 ---
 

@@ -1,6 +1,6 @@
 /**
  * WHAT: Converts every registered project on one node without federation access.
- * WHY: Workstation and phone must independently produce joinable epoch-3 state from their local files.
+ * WHY: Workstation and phone must independently produce joinable epoch-4 state from their local files.
  */
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { cp, mkdir, writeFile } from 'node:fs/promises';
@@ -11,6 +11,8 @@ import { migrateTaskCurrentState } from '../helper/task-current-state-migration.
 export type NodeTaskMigrationResult = {
   version: 1;
   nodeId: string;
+  targetEpoch: number;
+  defaultAssignedNodeId: string;
   catalogRoot: string;
   backupRoot: string;
   projects: Array<{ projectId: string; relativePath: string; root: string; baselineRoot: string; report: string; backup: string }>;
@@ -43,7 +45,13 @@ function registeredProjects(catalogRoot: string, registry: NonNullable<ReturnTyp
   }).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
-export async function migrateNodeTaskCurrentState(input: { catalogRoot: string; nodeId: string; backupRoot?: string }): Promise<NodeTaskMigrationResult> {
+export async function migrateNodeTaskCurrentState(input: {
+  catalogRoot: string;
+  nodeId: string;
+  targetEpoch: number;
+  defaultAssignedNodeId: string;
+  backupRoot?: string;
+}): Promise<NodeTaskMigrationResult> {
   if (!/^[a-zA-Z0-9_-]+$/.test(input.nodeId)) throw new Error('invalid_task_migration_node_id');
   const catalogRoot = realpathSync(resolve(input.catalogRoot));
   const masterDecisionOsRoot = resolve(catalogRoot, '.decision-os');
@@ -65,13 +73,23 @@ export async function migrateNodeTaskCurrentState(input: { catalogRoot: string; 
       decisionOsRoot: project.decisionOsRoot,
       projectId: project.projectId,
       nodeId: input.nodeId,
+      targetEpoch: input.targetEpoch,
+      defaultAssignedNodeId: input.defaultAssignedNodeId,
       tasksLedgerFile: project.tasksLedgerFile,
       backupRoot: resolve(backupRoot, 'project-rollbacks'),
     });
     migrated.push({ projectId: project.projectId, relativePath: project.relativePath, ...result });
   }
 
-  const result: NodeTaskMigrationResult = { version: 1, nodeId: input.nodeId, catalogRoot, backupRoot, projects: migrated };
+  const result: NodeTaskMigrationResult = {
+    version: 1,
+    nodeId: input.nodeId,
+    targetEpoch: input.targetEpoch,
+    defaultAssignedNodeId: input.defaultAssignedNodeId,
+    catalogRoot,
+    backupRoot,
+    projects: migrated,
+  };
   await writeFile(resolve(backupRoot, 'node-migration-report.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }
