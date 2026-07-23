@@ -3,9 +3,9 @@
  * WHY: The application command boundary must remain intact while persistence stays lane-scoped.
  */
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import test from 'node:test';
 import { applyLedgerMutation, type LedgerMutation } from '../../../src/business/ledger/helper/apply-ledger-mutation.js';
 import { createProjectTaskState } from '../../../src/business/task-state/helper/project-task-state.js';
@@ -61,6 +61,62 @@ test('replicated execution repository publishes through the project task-state w
   assert.equal(state.executions.find('execution-a')?.lifecycle.phase, 'preparing');
   assert.equal(published.length, 1);
   assert.deepEqual(published[0].entities.map((entity) => [entity.entityType, entity.entityId]), [['execution', 'execution-a']]);
+});
+
+test('execution artifacts use only the execution artifact lane as replicated reachability', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-execution-artifacts-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const jsonl = resolve(root, 'runs', 'codex-skills', 'tasks', 'session-a.jsonl');
+  const stderr = resolve(root, 'runs', 'codex-skills', 'tasks', 'session-a.log');
+  mkdirSync(dirname(jsonl), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  writeFileSync(jsonl, '{"type":"turn.completed"}\n');
+  writeFileSync(stderr, 'complete\n');
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+  });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+
+  await state.executions.admit({
+    executorNodeId: 'workstation',
+    metadata: {
+      executionId: 'execution-artifacts',
+      requestId: 'request-artifacts',
+      sessionId: 'session-a',
+      projectId: 'project-a',
+      ledgerId: 'tasks',
+      taskId: 'master-a',
+      sourceCardId: 'master-a',
+      ownerCardId: 'master-a',
+      kind: 'thread',
+      requestedAt: '2026-07-23T01:01:00.000Z',
+      model: null,
+      effort: null,
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      predecessorExecutionId: null,
+      restartOfExecutionId: null,
+    },
+  });
+  await state.executions.transition('execution-artifacts', { phase: 'succeeded' });
+  const finalized = await state.finalizeExecutionArtifacts('execution-artifacts', { jsonl, stderr });
+
+  assert.ok(finalized.artifacts.jsonl);
+  assert.ok(finalized.artifacts.stderr);
+  assert.equal(state.store.contentHeads().length, 0);
+  assert.equal(
+    existsSync(resolve(state.store.root, 'objects', finalized.artifacts.jsonl!.hash.slice(0, 2), finalized.artifacts.jsonl!.hash)),
+    true,
+  );
+  assert.equal(
+    existsSync(resolve(state.store.root, 'objects', finalized.artifacts.stderr!.hash.slice(0, 2), finalized.artifacts.stderr!.hash)),
+    true,
+  );
 });
 
 test('task intake publishes no state until its first durable content contribution activates its shards', async (context) => {

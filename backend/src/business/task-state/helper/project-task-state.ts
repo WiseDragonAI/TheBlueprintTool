@@ -3,14 +3,15 @@
  * WHY: Optimistic callers need immediate scoped state while persistence and replication avoid workspace rewrites.
  */
 import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
+import { captureTaskExecutionArtifact } from './capture-task-execution-artifact.js';
 import { createTaskCurrentStateStore } from './task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskEntityChange, type TaskStateDelta } from './task-current-state-types.js';
 import { createTaskContentObjectStore } from './task-content-object-store.js';
 import { taskContentReferences } from './task-content-resources.js';
 import { taskCommandForMutation, taskCommandForProjection, type TaskProjectionCommand } from './task-mutation-command.js';
 import { createTaskExecutionRepository } from './task-execution-repository.js';
-import type { TaskExecutionArtifactHead } from './task-current-state-types.js';
 
 type AnyRecord = Record<string, unknown>;
 type TaskProjectionEntityChange = { entityType: TaskEntityChange['entityType']; entityId: string };
@@ -163,33 +164,20 @@ export function createProjectTaskState(input: {
     assertWritable();
     const execution = executions.find(executionId);
     if (!execution) throw new Error(`task_execution_not_found:${executionId}`);
-    const captured = await Promise.all(Object.entries(files).map(async ([kind, file]) => ({
-      kind: kind as keyof typeof files,
-      head: file ? await contentObjects.capture(file) : null,
-    })));
-    const available = captured.filter((entry) => entry.head !== null);
-    if (available.length > 0) {
-      const changedHeads = available.map((entry) => entry.head!).filter((head) => !store.contentHeads(head.key).some((current) => (
-        current.type === head.type && current.hash === head.hash && current.bytes === head.bytes
-      )));
-      if (changedHeads.length > 0) {
-        await persistChanges(changedHeads.map((head) => ({
-          entityType: 'resource',
-          entityId: head.key,
-          changes: [{ path: 'head', operation: 'set', value: head }],
-        })), { activationTaskId: execution.metadata.taskId });
-        for (const head of changedHeads) await input.publishContent?.(head.key);
-      }
-    }
-    const artifact = (kind: keyof typeof files, mediaType: string): TaskExecutionArtifactHead | null => {
-      const head = available.find((entry) => entry.kind === kind)?.head;
-      return head ? { hash: head.hash, bytes: head.bytes, mediaType } : null;
-    };
+    const objectRoot = resolve(store.root, 'objects');
+    // WHAT: Give execution artifacts one replicated reachability owner.
+    // WHY: Publishing the same bytes as path-based resource heads prevents safe collection after the execution is tombstoned.
+    const [jsonl, stderr, telemetry, result] = await Promise.all([
+      files.jsonl ? captureTaskExecutionArtifact({ objectRoot, file: files.jsonl, mediaType: 'application/x-ndjson' }) : null,
+      files.stderr ? captureTaskExecutionArtifact({ objectRoot, file: files.stderr, mediaType: 'text/plain' }) : null,
+      files.telemetry ? captureTaskExecutionArtifact({ objectRoot, file: files.telemetry, mediaType: 'application/x-ndjson' }) : null,
+      files.result ? captureTaskExecutionArtifact({ objectRoot, file: files.result, mediaType: 'application/json' }) : null,
+    ]);
     return executions.finalizeArtifacts(executionId, {
-      jsonl: artifact('jsonl', 'application/x-ndjson'),
-      stderr: artifact('stderr', 'text/plain'),
-      telemetry: artifact('telemetry', 'application/x-ndjson'),
-      result: artifact('result', 'application/json'),
+      jsonl,
+      stderr,
+      telemetry,
+      result,
     });
   };
 

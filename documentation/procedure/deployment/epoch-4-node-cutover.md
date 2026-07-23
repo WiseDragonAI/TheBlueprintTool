@@ -186,3 +186,26 @@
 1. Do not close the cutover while any section `N` evidence is missing.
 2. Do not delete epoch-3 backups and namespace while the gate remains open.
 3. Do not mark the implementation goal complete before production evidence proves the complete plan.
+
+---
+
+## P. Post-Gate Execution Artifact Collection
+
+1. Run this section only after section `O` passes and the approved artifact-retention period has elapsed.
+2. Record one converged project root from the matching Workstation, Mobile, and relay evidence.
+3. Stop both registered node servers and verify both `50150` listeners are closed.
+4. Run the collector independently on each node:
+
+   ```bash
+   node <decision-os-repository>/bin/decision-os-collect-execution-artifacts.mjs \
+     --decision-os-root <project>/.decision-os \
+     --project-id <project-id> \
+     --node-id <node-id> \
+     --eligible-before <retention-cutoff-ISO-8601> \
+     --converged-root <recorded-project-root> \
+     --offline-confirmed
+   ```
+
+5. Require the report to name the exact node, project, cutoff, and converged root.
+6. Preserve every retained shared hash and every causal tombstone.
+7. Start Workstation, then Mobile, through their registered process controls and require unchanged project roots.

@@ -1,9 +1,9 @@
 ## A. Verification Result
 
 1. **Automated matrix state:** rows `1` through `36` have focused evidence on `feature/epoch4-task-execution`.
-2. **Served matrix state:** row `37` is not verified. The registered server at `http://127.0.0.1:50150/` is healthy but serves `main` at `369d4158`, while the verified refactor branch is based on `89d4d41b`.
+2. **Served matrix state:** row `37` is not verified. The registered server at `http://127.0.0.1:50150/` is healthy but serves `main` at `369d4158`; the refactor branch is not installed on that runtime.
 3. **Production state:** epoch `3` remains active. No server was stopped, restarted, replaced, or launched during this verification.
-4. **Artifact collection boundary:** execution and session tombstones replicate while artifacts remain retained. No artifact garbage collector exists under `backend/src`, so no deletion pass exists to exercise.
+4. **Artifact collection boundary:** execution and session tombstones replicate before an explicit offline collector admits deletion by retention cutoff plus recorded converged root. Execution artifacts now have one replicated reachability owner; shared hashes remain retained.
 
 ---
 
@@ -14,6 +14,7 @@
 3. **Mixed capacity:** node-message and project-sync children were outside the shared task-execution capacity count. The server now reserves those direct children through the global capacity boundary.
 4. **Server close:** a direct-child capacity wait could survive server shutdown. A server-owned abort signal now cancels pending shared-capacity waits.
 5. **Persistence containment:** a journal durable-write failure did not notify the project persistence-failure boundary. The store now reports that failure without replacing the original write error.
+6. **Artifact ownership:** execution settlement published duplicate path-based resource heads that made eligible objects permanently reachable. Execution artifacts now publish only their artifact lane, and the explicit collector preserves shared hashes plus byte-identical causal state.
 
 ---
 
@@ -34,6 +35,8 @@
 4. **Corrected failing scope:** `2/2` passed after replacing the fixed delay with a bounded marker wait.
 5. **Frontend suite:** `534/534` passed.
 6. **Focused J.13 scenarios:** all passed through the repository verification lease.
+7. **Artifact collection scope:** `17/17` passed for project-state artifact ownership, pre-cutoff retention, root mismatch rejection, shared-hash retention, eligible raw/object deletion, retry idempotency, and conflicted session fail-closed behavior.
+8. **Backend suite after artifact collection:** `381/381` passed.
 
 ---
 

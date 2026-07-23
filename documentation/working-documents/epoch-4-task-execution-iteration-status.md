@@ -180,6 +180,8 @@
     5. Backend suite reported `377/378`; its only failure was the new capacity test's fixed child-start delay. The corrected failing scope passed `2/2`.
     6. Frontend suite passed `534/534`.
     7. Served row `37` remains pending because the registered server is running `main` at `369d4158`, not this refactor branch.
+    8. The missing post-tombstone artifact collector is implemented as an explicit offline command gated by an operator cutoff and recorded converged root. Focused project-state and collector coverage passed `17/17`.
+    9. The complete backend suite after artifact collection passed `381/381`.
 14. **J.14 — Execute the epoch-4 production cutover:** `preflight`.
     1. The feature branch includes current `main` at merge commit `742d23c3` and is pushed to `origin/feature/epoch4-task-execution`.
     2. Before the Mobile disconnect, Workstation preflight verified the registered MultiTerm process, epoch-3 health, zero active incidents, seven valid registered projects, zero staged project changes, configured federation credentials, matching relay roots, and no live Decision OS-owned child.
@@ -193,10 +195,9 @@
 ## D. Current Verified Gaps
 
 1. Served Workstation and Mobile interaction verification remains for `J.13`.
-2. No artifact garbage collector exists under `backend/src`; tombstone replication and artifact retention ordering are verified, while an actual deletion pass does not exist.
-3. Production migration, relay namespace deployment, node restart, and three-party convergence proof remain for `J.14`.
-4. Mobile must reconnect, complete the read-only cutover preflight, and clear the three retained federated-library incidents before the production maintenance window is admitted.
-5. Operator authorization is required before either registered server process changes.
+2. Production migration, relay namespace deployment, node restart, and three-party convergence proof remain for `J.14`.
+3. Mobile must reconnect, complete the read-only cutover preflight, and clear the three retained federated-library incidents before the production maintenance window is admitted.
+4. Operator authorization is required before either registered server process changes.
 
 ---
 
