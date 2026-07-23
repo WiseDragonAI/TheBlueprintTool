@@ -228,6 +228,29 @@ test('server admits local assigned execution while its configured relay is unrea
   const server = runtime.server as Server;
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const eventAbort = new AbortController();
+  const eventResponse = await fetch(`${baseUrl}/api/control-room-events`, { signal: eventAbort.signal });
+  const eventReader = eventResponse.body!.getReader();
+  const decoder = new TextDecoder();
+  await eventReader.read();
+  const readExecutionRevision = async (revision: number): Promise<string> => {
+    let received = '';
+    while (!received.includes(`"revision":${revision}`)) {
+      const chunk = await eventReader.read();
+      if (chunk.done) break;
+      received += decoder.decode(chunk.value);
+    }
+    return received;
+  };
+  const readExecutionPhase = async (phase: string): Promise<string> => {
+    let received = '';
+    while (!received.includes(`"phase":"${phase}"`)) {
+      const chunk = await eventReader.read();
+      if (chunk.done) break;
+      received += decoder.decode(chunk.value);
+    }
+    return received;
+  };
 
   try {
     const unauthenticated = await fetch(`${baseUrl}/p/project-a/api/internal/task-executions/admit`, {
@@ -250,10 +273,29 @@ test('server admits local assigned execution while its configured relay is unrea
     }));
     assert.equal(admitted.phase, 'queued');
     assert.equal(admitted.executorNodeId, 'workstation');
+    const admittedEvents = await readExecutionRevision(2);
+    assert.match(admittedEvents, /event: codex-execution-change/);
+    assert.match(admittedEvents, /"phase":"preparing"/);
+    assert.match(admittedEvents, /"phase":"queued"/);
     const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; activeIncidentCount: number };
     assert.equal(health.status, 'ready');
     assert.equal(health.activeIncidentCount, 0);
+    const cancelled = await fetch(`${baseUrl}/p/project-a/api/codex/skills/runs/session-local/cancel`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'tasks', cardId: 'master', executionId: 'execution-local' }),
+    });
+    const cancelledBody = await cancelled.json() as { ok: boolean; phase: string; executorNodeId: string };
+    assert.equal(cancelled.status, 202);
+    assert.equal(cancelledBody.ok, true);
+    assert.equal(cancelledBody.phase, 'cancelled');
+    assert.equal(cancelledBody.executorNodeId, 'workstation');
+    const cancellationEvents = await readExecutionPhase('cancelled');
+    assert.match(cancellationEvents, /"phase":"cancelled"/);
+    assert.match(cancellationEvents, /"revision":3/);
   } finally {
+    eventAbort.abort();
+    await eventReader.cancel().catch(() => undefined);
     server.close();
     await once(server, 'close');
     process.chdir(originalCwd);

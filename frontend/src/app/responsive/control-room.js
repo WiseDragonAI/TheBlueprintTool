@@ -94,7 +94,7 @@ export function executionStopwatch(timestamp, now = Date.now()) {
 export function executionPresentation(task, now = Date.now()) {
   const phase = String(task?.executionStatus || task?.execution?.phase || '');
   const since = String(task?.execution?.phaseSince || task?.executionSince || '');
-  const label = ({ preparing: 'Preparing', queued: 'Queued', starting: 'Starting', running: 'Running', interrupted: 'Interrupted' })[phase] || 'Execution';
+  const label = ({ preparing: 'Preparing', queued: 'Queued', starting: 'Starting', running: 'Running', cancelling: 'Cancelling', interrupted: 'Interrupted' })[phase] || 'Execution';
   const elapsed = Number.isFinite(Date.parse(since)) ? executionStopwatch(since, now) : '';
   return { phase, since, label, elapsed, text: elapsed ? `${label} · ${elapsed}` : label };
 }

@@ -19,6 +19,17 @@ export type TaskExecutionProcess = {
   stderrFile: string;
 };
 
+export type TaskExecutionCancellationResult = {
+  ok: boolean;
+  statusCode: number;
+  executionId: string;
+  executorNodeId?: string;
+  phase?: string;
+  revision?: number;
+  cancellationRequested?: boolean;
+  error?: string;
+};
+
 function processRegistry(runtime: AnyRecord): Map<string, TaskExecutionProcess> {
   const current = runtime.taskExecutionProcesses;
   if (current instanceof Map) return current as Map<string, TaskExecutionProcess>;
@@ -67,4 +78,22 @@ export function removeTaskExecutionProcess(runtime: AnyRecord, executionId: stri
 
 export function taskExecutionProcesses(runtime: AnyRecord): TaskExecutionProcess[] {
   return [...processRegistry(runtime).values()];
+}
+
+export async function finalizeTaskExecutionArtifacts(input: {
+  runtime: AnyRecord;
+  executionId: string;
+  jsonl?: string;
+  stderr?: string;
+  telemetry?: string;
+  result?: string;
+}): Promise<void> {
+  const state = taskExecutionState(input.runtime);
+  if (!state) return;
+  await state.finalizeExecutionArtifacts(input.executionId, {
+    jsonl: input.jsonl,
+    stderr: input.stderr,
+    telemetry: input.telemetry,
+    result: input.result,
+  });
 }

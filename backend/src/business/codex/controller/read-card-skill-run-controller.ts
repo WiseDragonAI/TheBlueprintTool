@@ -18,7 +18,7 @@ import { runtimeCodexRunOwnsLiveProcess } from '../helper/runtime-codex-run-owns
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
 import { legacyCodexExecutionStatus } from '../helper/codex-execution-coordinator.js';
 import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
-import { taskExecutionState } from '../helper/task-execution-runtime.js';
+import { taskExecutionNodeId, taskExecutionProcess, taskExecutionState } from '../helper/task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
@@ -245,6 +245,126 @@ function uniqueToolCallCount(runId: string, events: NormalizedRunEvent[]): numbe
   return identities.size;
 }
 
+function readReplicatedExecutionRun(input: {
+  runtime: AnyRecord;
+  execution: NonNullable<ReturnType<NonNullable<ReturnType<typeof taskExecutionState>>['executions']['find']>>;
+  runId: string;
+  since: number;
+}): AnyRecord {
+  const { execution } = input;
+  const terminal = execution.lifecycle.phase === 'succeeded'
+    || execution.lifecycle.phase === 'failed'
+    || execution.lifecycle.phase === 'cancelled'
+    || execution.lifecycle.phase === 'interrupted';
+  if (execution.lifecycle.executorNodeId !== taskExecutionNodeId(input.runtime)
+    && !(terminal && typeof input.runtime.taskExecutionArtifactFile === 'function')) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: 'task_execution_wrong_executor',
+      executionId: execution.metadata.executionId,
+      executorNodeId: execution.lifecycle.executorNodeId,
+    };
+  }
+  const process = taskExecutionProcess(input.runtime, execution.metadata.executionId);
+  const artifactFile = typeof input.runtime.taskExecutionArtifactFile === 'function'
+    ? input.runtime.taskExecutionArtifactFile as (hash: string) => string
+    : () => '';
+  const stdoutFile = process?.stdoutFile
+    || (execution.artifacts.jsonl ? artifactFile(execution.artifacts.jsonl.hash) : '');
+  const stderrFile = process?.stderrFile
+    || (execution.artifacts.stderr ? artifactFile(execution.artifacts.stderr.hash) : '');
+  const stderrLog = stderrFile && existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
+  const parsedLines = stdoutFile && existsSync(stdoutFile) ? readCardSkillRunEventLines(stdoutFile) : [];
+  const events = parsedLines.map(normalizeCardSkillRunEvent);
+  const segmentStartLine = latestCodexRunSegmentStartLine({ log: stderrLog, runId: input.runId });
+  const segmentEvents = events.filter((event) => event.line > segmentStartLine);
+  const diagnostics = normalizedRunDiagnostics(latestCodexRunSegmentLog({ log: stderrLog, runId: input.runId }));
+  const active = execution.lifecycle.phase === 'starting'
+    || execution.lifecycle.phase === 'running'
+    || execution.lifecycle.phase === 'cancelling';
+  const status = replicatedExecutionStatus(execution.lifecycle.phase);
+  const startedAt = execution.lifecycle.startedAt ?? execution.metadata.requestedAt;
+  const finishedAt = execution.lifecycle.finishedAt;
+  const elapsed = Math.max(0, Date.parse(finishedAt ?? new Date().toISOString()) - Date.parse(startedAt));
+  // Execution state owns lifecycle. The immutable run manifest only enriches the
+  // compatibility response with display labels that are outside the epoch-4 schema.
+  const persistedPipelineRun = readCodexPipelineStore({
+    decisionOsRoot: String(input.runtime.decisionOsRoot ?? ''),
+  }).store.runs.find((run) => (
+    run.id === execution.metadata.pipelineRunId
+    || run.steps.some((step) => step.skills.some((skill) => skill.runId === input.runId))
+  ));
+  const persistedStep = persistedPipelineRun?.steps.find((step) => (
+    step.stepId === execution.metadata.pipelineStepId
+    || step.skills.some((skill) => skill.runId === input.runId)
+  ));
+  const persistedSkill = persistedStep?.skills.find((skill) => (
+    skill.executionId === execution.metadata.executionId
+    || skill.runId === execution.metadata.pipelineSkillRunId
+    || skill.runId === input.runId
+  ));
+  const metadata = {
+    ...runtimeRunMetadata(input.runtime, input.runId),
+    ...codexRunSegmentMetadata({ log: stderrLog, runId: input.runId }),
+    ...(persistedPipelineRun ? { sourceCardTitle: persistedPipelineRun.sourceCardTitle } : {}),
+    codexModel: execution.metadata.model ?? persistedSkill?.codexModel ?? '',
+    codexEffort: execution.metadata.effort ?? persistedSkill?.codexEffort ?? '',
+  };
+  return {
+    ok: true,
+    statusCode: 200,
+    ledgerId: execution.metadata.ledgerId,
+    cardId: execution.metadata.ownerCardId,
+    runId: input.runId,
+    runKind: execution.metadata.kind === 'pipeline-skill' ? 'card' : 'thread',
+    pipelineRunId: execution.metadata.pipelineRunId,
+    pipelineId: persistedPipelineRun?.pipelineId ?? null,
+    pipelineName: persistedPipelineRun?.pipelineName ?? '',
+    pipelineStepId: execution.metadata.pipelineStepId ?? '',
+    pipelineStepName: persistedStep?.name ?? '',
+    skillName: persistedSkill?.skillName ?? '',
+    pipelineStatus: persistedPipelineRun?.status ?? null,
+    status,
+    active,
+    executionId: execution.metadata.executionId,
+    phase: execution.lifecycle.phase,
+    phaseSince: execution.lifecycle.phaseSince,
+    lifecycleRevision: execution.lifecycle.revision,
+    executorNodeId: execution.lifecycle.executorNodeId,
+    execution,
+    currentExecution: null,
+    executions: [],
+    queuePosition: execution.lifecycle.phase === 'queued'
+      ? unifiedCodexQueuePosition({
+          decisionOsRoot: String(input.runtime.decisionOsRoot ?? ''),
+          id: execution.metadata.executionId,
+          createdAt: execution.metadata.requestedAt,
+          runtime: input.runtime,
+        })
+      : null,
+    startedAt,
+    finishedAt,
+    elapsedMs: elapsed,
+    lineCount: parsedLines.at(-1)?.line ?? 0,
+    nextSince: parsedLines.at(-1)?.line ?? 0,
+    toolCallCount: uniqueToolCallCount(input.runId, segmentEvents),
+    agentMessageCount: segmentEvents.filter((event) => event.kind === 'agent_message').length,
+    fileChangeCount: segmentEvents.filter((event) => event.title === 'File changes').length,
+    thinkingCount: segmentEvents.filter((event) => event.kind === 'thinking').length,
+    warningCount: segmentEvents.filter((event) => event.kind === 'warning').length + diagnostics.filter((event) => event.kind === 'warning').length,
+    errorCount: segmentEvents.filter((event) => event.kind === 'error').length + diagnostics.filter((event) => event.kind === 'error').length,
+    transportStatus: segmentEvents.some((event) => event.kind === 'transport') || diagnostics.some((event) => event.kind === 'transport') ? 'degraded' : 'ok',
+    persistedEventCount: 0,
+    metadata,
+    latestEvent: segmentEvents.at(-1) ?? null,
+    events: events.filter((event) => event.line > input.since),
+    diagnostics,
+    artifacts: execution.artifacts,
+    ...(execution.lifecycle.error ? { error: execution.lifecycle.error.message } : {}),
+  };
+}
+
 export async function readCardSkillRunController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
@@ -257,6 +377,17 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const traceId = String(payload.traceId ?? '');
   logCodexContinueDebug('read-controller-entry', { traceId, ledgerId, cardId, runId, since });
   if (!ledgerId || !cardId || !runId) return { ok: false, statusCode: 400, error: 'Missing ledgerId, cardId, or runId.' };
+  const replicatedExecution = taskExecutionState(runtime)?.executions.bySessionId(runId)
+    .filter((record) => record.metadata.ledgerId === ledgerId && (
+      record.metadata.sourceCardId === cardId || record.metadata.ownerCardId === cardId
+    ))
+    .sort((left, right) => (
+      right.metadata.requestedAt.localeCompare(left.metadata.requestedAt)
+      || right.metadata.executionId.localeCompare(left.metadata.executionId)
+    ))[0] ?? null;
+  if (replicatedExecution) {
+    return readReplicatedExecutionRun({ runtime, execution: replicatedExecution, runId, since });
+  }
 
   const state = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json') }, runtime_state: runtime });
   const tab = state.ledgers.find((entry) => entry.id === ledgerId);
@@ -329,16 +460,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const canonicalExecution = (cardExecutionId ? codexExecutionCoordinator(runtime)?.dto(cardExecutionId) : null)
     ?? codexExecutionCoordinator(runtime)?.dtoForSession(runId, cardId)
     ?? null;
-  const replicatedExecution = taskExecutionState(runtime)?.executions.bySessionId(runId)
-    .filter((record) => record.metadata.ledgerId === ledgerId && (
-      record.metadata.sourceCardId === cardId || record.metadata.ownerCardId === cardId
-    ))
-    .sort((left, right) => (
-      right.metadata.requestedAt.localeCompare(left.metadata.requestedAt)
-      || right.metadata.executionId.localeCompare(left.metadata.executionId)
-    ))[0] ?? null;
-  const status = replicatedExecution ? replicatedExecutionStatus(replicatedExecution.lifecycle.phase)
-    : canonicalExecution ? legacyCodexExecutionStatus(canonicalExecution.phase) : inMemoryStatus
+  const status = canonicalExecution ? legacyCodexExecutionStatus(canonicalExecution.phase) : inMemoryStatus
     ?? (queuedProcess?.status === 'pending' ? 'pending' : null)
     ?? (persistedSkillOwnsExecution ? persistedSkill?.status : null)
     ?? inferredTerminal
@@ -374,9 +496,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     stdoutFile,
     stderrFile,
   });
-  const active = replicatedExecution
-    ? ['starting', 'running', 'cancelling'].includes(replicatedExecution.lifecycle.phase)
-    : canonicalExecution ? canonicalExecution.live : runtimeOwnsExecution && runtimeCodexRunOwnsLiveProcess(fencedRuntime, runId, decisionOsRoot);
+  const active = canonicalExecution ? canonicalExecution.live : runtimeOwnsExecution && runtimeCodexRunOwnsLiveProcess(fencedRuntime, runId, decisionOsRoot);
   const currentElapsedMs = elapsedMs({ runtime: fencedRuntime, runId, status, stdoutFile, stderrFile });
   const projectedExecutions = executionHistory({
     executions,
@@ -404,9 +524,9 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     pipelineStatus: persistedPipelineRun?.status ?? null,
     status,
     active,
-    executionId: replicatedExecution?.metadata.executionId ?? canonicalExecution?.executionId ?? (cardExecutionId || runtimeExecutionId || persistedSkill?.executionId || String(currentExecution?.executionId ?? '')),
-    phase: replicatedExecution?.lifecycle.phase ?? canonicalExecution?.phase ?? '',
-    execution: replicatedExecution ?? canonicalExecution,
+    executionId: canonicalExecution?.executionId ?? (cardExecutionId || runtimeExecutionId || persistedSkill?.executionId || String(currentExecution?.executionId ?? '')),
+    phase: canonicalExecution?.phase ?? '',
+    execution: canonicalExecution,
     currentExecution,
     executions: projectedExecutions,
     interruptedAt: interruptedProcess?.interruptedAt ?? null,
@@ -417,7 +537,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
           ? unifiedCodexQueuePosition({ decisionOsRoot, id: persistedPipelineRun.id, createdAt: persistedPipelineRun.createdAt, runtime })
           : null
       : null,
-    startedAt: replicatedExecution?.metadata.requestedAt ?? canonicalExecution?.startedAt ?? new Date(runSegmentStartedAtMs({ runtime: fencedRuntime, runId, stderrFile })).toISOString(),
+    startedAt: canonicalExecution?.startedAt ?? new Date(runSegmentStartedAtMs({ runtime: fencedRuntime, runId, stderrFile })).toISOString(),
     elapsedMs: currentElapsedMs,
     lineCount: parsedLines.at(-1)?.line ?? 0,
     nextSince: parsedLines.at(-1)?.line ?? 0,

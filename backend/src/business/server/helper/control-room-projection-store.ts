@@ -169,7 +169,11 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     artifacts: execution.record.artifacts,
     live: false,
     observation: null,
-    validActions: terminalPhases.has(execution.record.lifecycle.phase) ? ['restart', 'open-log'] : ['cancel', 'open-log'],
+    validActions: terminalPhases.has(execution.record.lifecycle.phase)
+      ? ['restart', 'open-log']
+      : execution.record.lifecycle.phase === 'cancelling'
+        ? ['open-log']
+        : ['cancel', 'open-log'],
   } : null;
   const canonicalExecution = replicatedExecution ?? (executionId && input.runtime ? codexExecutionCoordinator(input.runtime)?.dto(executionId) ?? null : null);
   const projectedObservation = executionId ? input.executionObservationFor?.(executionId) ?? null : null;
@@ -185,7 +189,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     executionOwnerCardId: executionActive ? text(execution?.ownerCardId) : '', executionOwnerKind: executionActive ? text(execution?.ownerKind) : '',
     executionStatus: executionActive ? executionState : '', execution: canonicalExecution, executionObservation: observation,
     transcribingBeforeLaunch: executionState === 'preparing' && canonicalExecution?.kind === 'voice',
-    codexProcessing: executionState === 'starting' || executionState === 'running', codexQueued: executionState === 'queued', codexQueuePosition: null,
+    codexProcessing: executionState === 'starting' || executionState === 'running' || executionState === 'cancelling', codexQueued: executionState === 'queued', codexQueuePosition: null,
     executionNodeId: observation?.executorNodeId ?? execution?.record?.lifecycle.executorNodeId ?? '', executionNodeLabel: '',
     assignedNodeId: text(assignment.nodeId), assignedNodeLabel: '', assignedNodeOnline: null,
     waitingSince,

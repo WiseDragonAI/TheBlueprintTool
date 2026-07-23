@@ -460,6 +460,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     'let prompt = "";',
     'for await (const chunk of process.stdin) prompt += chunk;',
     'if (prompt.includes("initiator-reconciler")) {',
+    '  if (prompt.includes("federated-cancellation-proof")) await new Promise(() => setInterval(() => undefined, 1000));',
     '  const sha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();',
     '  console.log(JSON.stringify({ type: "thread.started", thread_id: "project-sync-thread" }));',
     '  console.log(JSON.stringify({ type: "item.completed", item: { id: "evidence", type: "agent_message", text: JSON.stringify({ status: "complete", headSha: sha, originSha: sha }) } }));',
@@ -652,6 +653,115 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     assert.equal(selectedNodePipeline.run.steps[0].skills[0].executor.nodeId, 'node-b');
     assert.ok(existsSync(join(betaRoot, '.decision-os', 'runs', 'codex-skills', 'tasks', `${pipelineSkillRunId}.jsonl`)));
     assert.equal(execFileSync('git', ['-C', betaRoot, 'status', '--porcelain=v1'], { encoding: 'utf8' }).trim(), '');
+    const cancellationPipelineRunId = 'federated-cancellation-proof';
+    const cancellationSkillRunId = 'federated-cancellation-proof-skill';
+    const cancellationExecutionId = 'federated-cancellation-proof-execution';
+    const cancellationRun: CodexPipelineRun = {
+      ...pipelineRun,
+      id: cancellationPipelineRunId,
+      createdAt: '2026-07-23T07:10:00.000Z',
+      updatedAt: '2026-07-23T07:10:00.000Z',
+      steps: pipelineRun.steps.map((step, index) => index > 0 ? step : {
+        ...step,
+        id: 'federated-cancellation-proof-step-run',
+        skills: step.skills.map((skill, skillIndex) => skillIndex > 0 ? skill : {
+          ...skill,
+          id: 'federated-cancellation-proof-skill-run',
+          runId: cancellationSkillRunId,
+          executionId: cancellationExecutionId,
+        }),
+      }),
+    };
+    const cancellationMetadata = {
+      ...executionMetadata,
+      executionId: cancellationExecutionId,
+      requestId: `pipeline:${cancellationPipelineRunId}:${cancellationExecutionId}`,
+      sessionId: cancellationSkillRunId,
+      requestedAt: cancellationRun.createdAt,
+      pipelineRunId: cancellationPipelineRunId,
+      pipelineSkillRunId: cancellationSkillRunId,
+    };
+    const cancellationStore = readCodexPipelineStore({ decisionOsRoot: alphaDecisionOsRoot }).store;
+    writeCodexPipelineStore({
+      decisionOsRoot: alphaDecisionOsRoot,
+      store: { ...cancellationStore, runs: [...cancellationStore.runs, cancellationRun] },
+    });
+    const heldRoleRequest = (runtimeA.federationNodeConnector as {
+      request(nodeId: string, path: string, options: {
+        method: string;
+        headers: Record<string, string>;
+        body: Buffer;
+        timeoutMs: number;
+      }): Promise<{ status: number; body: Buffer }>;
+    }).request('node-b', '/api/project-sync/role', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      timeoutMs: 10_000,
+      body: Buffer.from(JSON.stringify({
+        syncId: pipelineRunId,
+        initiatorNodeId: 'node-a',
+        projectId: betaProjectId,
+        role: 'initiator-reconciler',
+        originFingerprint: projectSyncSnapshot.originFingerprint,
+        snapshot: projectSyncSnapshot,
+        pipelineRunId: cancellationPipelineRunId,
+        pipelineSkillRunId: cancellationSkillRunId,
+        executionId: cancellationExecutionId,
+        executionMetadata: cancellationMetadata,
+        pipelineRun: cancellationRun,
+        masterTask: { projectId: alphaProjectId, ledgerId: 'tasks', cardId: 'alpha-card' },
+      })),
+    });
+    let lastCancellationStatus: Record<string, any> = {};
+    try {
+      await waitFor(async () => {
+        lastCancellationStatus = await fetch(
+          `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/pipelines/runs/${cancellationPipelineRunId}/status`,
+        ).then((response) => response.json()) as Record<string, any>;
+        return lastCancellationStatus.phase === 'running' && lastCancellationStatus.executorNodeId === 'node-b'
+          ? lastCancellationStatus
+          : null;
+      });
+    } catch {
+      throw new Error(`Remote cancellation execution did not reach running: ${JSON.stringify(lastCancellationStatus)}`);
+    }
+    const remoteLiveDetail = await fetch(
+      `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/skills/runs/${cancellationSkillRunId}?ledgerId=tasks&cardId=alpha-card`,
+    ).then((response) => response.json()) as Record<string, any>;
+    assert.equal(remoteLiveDetail.ok, true, JSON.stringify(remoteLiveDetail));
+    assert.equal(remoteLiveDetail.phase, 'running');
+    assert.equal(remoteLiveDetail.executorNodeId, 'node-b');
+    const remoteCancellation = await fetch(
+      `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/pipelines/runs/${cancellationPipelineRunId}/cancel`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ executionId: cancellationExecutionId }),
+      },
+    );
+    const remoteCancellationBody = await remoteCancellation.json() as Record<string, any>;
+    assert.equal(remoteCancellation.status, 202, JSON.stringify(remoteCancellationBody));
+    assert.equal(remoteCancellationBody.cancellationRequested, true);
+    assert.equal(remoteCancellationBody.executorNodeId, 'node-b');
+    const heldRoleResult = await heldRoleRequest;
+    assert.equal(heldRoleResult.status, 409);
+    try {
+      await waitFor(async () => {
+        lastCancellationStatus = await fetch(
+          `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/pipelines/runs/${cancellationPipelineRunId}/status`,
+        ).then((response) => response.json()) as Record<string, any>;
+        return lastCancellationStatus.phase === 'cancelled' ? lastCancellationStatus : null;
+      });
+    } catch {
+      throw new Error(`Remote cancellation execution did not settle cancelled: ${JSON.stringify(lastCancellationStatus)}`);
+    }
+    const remoteTerminalDetail = await fetch(
+      `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/skills/runs/${cancellationSkillRunId}?ledgerId=tasks&cardId=alpha-card`,
+    ).then((response) => response.json()) as Record<string, any>;
+    assert.equal(remoteTerminalDetail.ok, true, JSON.stringify(remoteTerminalDetail));
+    assert.equal(remoteTerminalDetail.phase, 'cancelled');
+    assert.equal(remoteTerminalDetail.executorNodeId, 'node-b');
+    assert.match(String(remoteTerminalDetail.artifacts?.stderr?.hash ?? ''), /^[a-f0-9]{64}$/);
     const unauthenticatedExecution = await fetch(`${baseB}/api/federation/node-message-executions`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId: betaProjectId, message: 'bypass' }),
     });

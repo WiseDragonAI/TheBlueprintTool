@@ -121,6 +121,14 @@ test('direct thread start and continuation reach terminal replicated state witho
   const scheduled = await scheduleCodexProcesses({ decisionOsRoot, runtime, launchLimit: 1 });
   assert.equal(scheduled.ok, true);
   await waitFor(() => state.executions.find('execution-a')?.lifecycle.phase === 'succeeded', 'terminal execution state');
+  // Lifecycle settlement precedes immutable artifact-head capture. Continuation is
+  // admitted only after that canonical barrier so it cannot mutate files mid-hash.
+  await waitFor(() => {
+    const execution = state.executions.find('execution-a');
+    return execution?.artifacts.revision > 1
+      && execution.artifacts.jsonl !== null
+      && execution.artifacts.stderr !== null;
+  }, 'terminal execution artifacts');
 
   assert.equal(state.executions.find('execution-a')?.lifecycle.result?.status, 'succeeded');
   assert.deepEqual(taskExecutionProcesses(runtime), []);

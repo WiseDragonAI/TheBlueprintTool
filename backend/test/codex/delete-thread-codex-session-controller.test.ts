@@ -14,6 +14,8 @@ import { createHttpServer } from '@backend/business/server/helper/create-http-se
 import { deleteThreadCodexSessionController } from '@backend/business/codex/controller/delete-thread-codex-session-controller.js';
 import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
 import { enqueueCodexThreadProcess, readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
+import { createTaskCurrentStateStore } from '@backend/business/task-state/helper/task-current-state-store.js';
+import { createTaskExecutionRepository } from '@backend/business/task-state/helper/task-execution-repository.js';
 
 function fixture(): { workspace: string; decisionOsRoot: string; ledgerPath: string; runId: string; cardId: string; artifacts: string[] } {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-delete-thread-session-'));
@@ -197,6 +199,72 @@ test('artifact read failure preserves session ownership and the ledger projectio
     assert.equal(ledger.cards[0].codexThreadRunOutputFile, `.decision-os/runs/codex-skills/specs/${context.runId}.md`);
     assert.equal(existsSync(context.artifacts[1]), true);
   } finally {
+    rmSync(context.workspace, { recursive: true, force: true });
+  }
+});
+
+test('canonical session deletion rejects active work then tombstones history before retaining artifacts', async () => {
+  const context = fixture();
+  const store = createTaskCurrentStateStore({
+    decisionOsRoot: context.decisionOsRoot,
+    projectId: 'project-a',
+    initializeLedger: { cards: [], annotations: [], relationships: [] },
+  });
+  const executions = createTaskExecutionRepository({ store, writerId: 'workstation', projectId: 'project-a' });
+  await executions.admit({
+    executorNodeId: 'workstation',
+    metadata: {
+      executionId: 'execution-canonical-delete',
+      requestId: 'request-canonical-delete',
+      sessionId: context.runId,
+      projectId: 'project-a',
+      ledgerId: 'specs',
+      taskId: context.cardId,
+      sourceCardId: context.cardId,
+      ownerCardId: context.cardId,
+      kind: 'thread',
+      requestedAt: '2026-07-23T11:00:00.000Z',
+      model: null,
+      effort: null,
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      predecessorExecutionId: null,
+      restartOfExecutionId: null,
+    },
+  });
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot: context.decisionOsRoot,
+    taskExecutionState: { executions },
+  };
+  try {
+    const active = await deleteThreadCodexSessionController({
+      action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId },
+      runtime_state: runtime,
+    });
+    assert.equal(active.ok, false);
+    assert.equal(active.statusCode, 409);
+    assert.equal(context.artifacts.every(existsSync), true);
+    assert.ok(executions.find('execution-canonical-delete'));
+
+    await executions.transition('execution-canonical-delete', {
+      phase: 'cancelled',
+      result: { status: 'cancelled', summary: 'Cancelled before launch.' },
+    });
+    const deleted = await deleteThreadCodexSessionController({
+      action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId },
+      runtime_state: runtime,
+    });
+
+    assert.equal(deleted.ok, true);
+    assert.equal(deleted.artifactsRetained, true);
+    assert.equal(deleted.executionCount, 1);
+    assert.equal(executions.find('execution-canonical-delete'), null);
+    assert.equal(context.artifacts.every(existsSync), true);
+    const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
+    assert.equal(ledger.cards[0].codexThreadRunId, undefined);
+  } finally {
+    await store.flush();
     rmSync(context.workspace, { recursive: true, force: true });
   }
 });

@@ -78,8 +78,14 @@ test('serves one compact multi-project Control Room projection and refreshes one
     assert.equal(notModified.status, 304);
     const compactText = await fetch(`${baseUrl}/api/codex/skills/runs/codex-skill-test/status?ledgerId=tasks&cardId=worker`).then((response) => response.text());
     const compact = JSON.parse(compactText) as Record<string, any>;
-    assert.equal(compact.status, 'running');
-    assert.equal(compact.startedAt, '2026-07-14T10:02:00.000Z');
+    assert.equal(compact.status, 'failed');
+    assert.equal(compact.phase, 'interrupted');
+    assert.equal(compact.active, false);
+    assert.equal(compact.executorNodeId, 'workstation');
+    assert.deepEqual(compact.validActions, ['restart', 'open-log']);
+    assert.equal(compact.queuePosition, null);
+    assert.equal(compact.execution.phase, 'interrupted');
+    assert.deepEqual(compact.execution.validActions, ['restart', 'open-log']);
     assert.equal(compact.events, undefined);
     assert.equal(compact.diagnostics, undefined);
     assert.ok(Buffer.byteLength(compactText) < 2_000);

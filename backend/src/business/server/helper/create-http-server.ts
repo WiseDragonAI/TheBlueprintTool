@@ -63,6 +63,7 @@ import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCo
 import { scheduleCodexRuntimeTimer, stopCodexRuntimeTimers } from '../../codex/helper/codex-runtime-run-store.js';
 import { installFederatedPipelineRun, installRemotePipelineRun, removeInstalledRemotePipelineRun } from '../../codex/helper/install-remote-pipeline-run.js';
 import { taskExecutionState } from '../../codex/helper/task-execution-runtime.js';
+import { cancelTaskExecutionLocally } from '../../codex/helper/cancel-task-execution.js';
 import { executeFederatedPipelineSkill } from '../../codex/helper/codex-pipeline-runner.js';
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { TaskExecutionMetadata } from '../../task-state/helper/task-current-state-types.js';
@@ -85,6 +86,7 @@ import { createProjectTaskState, type ProjectTaskState } from '../../task-state/
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import { createTaskExecutionRepository } from '../../task-state/helper/task-execution-repository.js';
+import { captureTaskExecutionArtifact } from '../../task-state/helper/capture-task-execution-artifact.js';
 import type { TaskProjectionCommand } from '../../task-state/helper/task-mutation-command.js';
 import { createRuntimeIncidentLedger, RuntimeScopePausedError, type RuntimeIncident } from './runtime-incident-ledger.js';
 import { createRuntimeIncidentReviewScheduler } from './create-runtime-incident-review-scheduler.js';
@@ -300,7 +302,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const projectTaskStates = new Map<string, ProjectTaskState>();
   const taskExecutionRouters = new Map<string, TaskExecutionRouter>();
   const federatedTaskStores = new Map<string, TaskCurrentStateStore>();
-  const federatedExecutionStates = new Map<string, Pick<ProjectTaskState, 'executions'>>();
+  type ExecutionState = Pick<ProjectTaskState, 'executions' | 'finalizeExecutionArtifacts'>;
+  const federatedExecutionStates = new Map<string, ExecutionState>();
   const federatedExecutionObservations = new Map<string, CodexExecutionObservation>();
   const pausedTaskProjects = new Map<string, RuntimeIncident>();
   const pausedFederatedTaskProjects = new Map<string, RuntimeIncident>();
@@ -412,6 +415,31 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     return new RuntimeScopePausedError(scope, incident.id);
   };
 
+  const publishExecutionChange = (input: {
+    projectId: string;
+    nodeId: string;
+    executionId: string;
+    record: ReturnType<ProjectTaskState['executions']['find']>;
+    remote?: boolean;
+  }): void => {
+    controlRoomProjectionStore?.invalidate(input.projectId, [{ entityType: 'execution', entityId: input.executionId }]);
+    const payload = {
+      remote: input.remote === true,
+      projectId: input.projectId,
+      nodeId: input.nodeId,
+      executionId: input.executionId,
+      phase: input.record?.lifecycle.phase ?? 'deleted',
+      phaseSince: input.record?.lifecycle.phaseSince ?? '',
+      revision: input.record?.lifecycle.revision ?? 0,
+      executorNodeId: input.record?.lifecycle.executorNodeId ?? '',
+    };
+    for (const client of globalContentEventClients) {
+      try { client.write(`event: codex-execution-change\ndata: ${JSON.stringify(payload)}\n\n`); } catch {
+        // A disconnected event client cannot fail the committed execution transition.
+      }
+    }
+  };
+
   const taskStateForProject = (project: DecisionOsProject): ProjectTaskState => {
     const paused = pausedTaskProjects.get(project.id);
     if (paused) throw new RuntimeScopePausedError(paused.scope, paused.id);
@@ -432,6 +460,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         decisionOsRoot: project.decisionOsRoot,
         tasksLedgerFile,
         publish: (delta) => federationTaskStateReplicator?.publishDelta(delta),
+        onExecutionChange: ({ executionId, record }) => publishExecutionChange({
+          projectId: project.id,
+          nodeId: federation?.localOwner().ownerNodeId ?? 'local',
+          executionId,
+          record,
+        }),
         onPersistenceError: (error) => { pauseTaskProject(project, error, 'materialize-local-task-state'); },
         initialize,
       });
@@ -648,28 +682,45 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const executionStateForProject = (
     projectId: string,
     ownerNodeId: string,
-  ): Pick<ProjectTaskState, 'executions'> | null => {
+  ): ExecutionState | null => {
     const localProject = projectCatalogStore.projects().find((project) => project.id === projectId && project.available);
     if (localProject) return tryTaskStateForProject(localProject);
     const current = federatedExecutionStates.get(projectId);
     if (current) return current;
     const store = federatedTaskStoreForProject(projectId, ownerNodeId);
     if (!store) return null;
-    const state = {
-      executions: createTaskExecutionRepository({
-        store,
-        writerId: federation?.localOwner().ownerNodeId ?? 'local',
+    const executions = createTaskExecutionRepository({
+      store,
+      writerId: federation?.localOwner().ownerNodeId ?? 'local',
+      projectId,
+      persist: async (changes, emittedAt) => {
+        const result = await store.mutate({
+          replicaId: federation?.localOwner().ownerNodeId ?? 'local',
+          changes,
+          emittedAt,
+        });
+        federationTaskStateReplicator?.publishDelta(result.delta);
+        return result.delta;
+      },
+      onCommitted: ({ executionId, record }) => publishExecutionChange({
         projectId,
-        persist: async (changes, emittedAt) => {
-          const result = await store.mutate({
-            replicaId: federation?.localOwner().ownerNodeId ?? 'local',
-            changes,
-            emittedAt,
-          });
-          federationTaskStateReplicator?.publishDelta(result.delta);
-          return result.delta;
-        },
+        nodeId: federation?.localOwner().ownerNodeId ?? 'local',
+        executionId,
+        record,
       }),
+    });
+    const state: ExecutionState = {
+      executions,
+      finalizeExecutionArtifacts: async (executionId, files) => {
+        const objectRoot = resolve(store.root, 'objects');
+        const [jsonl, stderr, telemetry, result] = await Promise.all([
+          files.jsonl ? captureTaskExecutionArtifact({ objectRoot, file: files.jsonl, mediaType: 'application/x-ndjson' }) : null,
+          files.stderr ? captureTaskExecutionArtifact({ objectRoot, file: files.stderr, mediaType: 'text/plain' }) : null,
+          files.telemetry ? captureTaskExecutionArtifact({ objectRoot, file: files.telemetry, mediaType: 'application/x-ndjson' }) : null,
+          files.result ? captureTaskExecutionArtifact({ objectRoot, file: files.result, mediaType: 'application/json' }) : null,
+        ]);
+        return executions.finalizeArtifacts(executionId, { jsonl, stderr, telemetry, result });
+      },
     };
     federatedExecutionStates.set(projectId, state);
     return state;
@@ -859,6 +910,36 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         configurable: true,
         enumerable: false,
       });
+      Object.defineProperty(projectRuntime, 'routeTaskExecutionCancellation', {
+        value: async (executionId: string, executorNodeId: string) => {
+          if (!federation || !federation.nodes().some((peer) => peer.nodeId === executorNodeId && peer.online)) {
+            return { ok: false, statusCode: 503, error: 'assigned_node_unreachable', executionId, executorNodeId };
+          }
+          const remote = await federation.request(
+            executorNodeId,
+            `/api/internal/task-executions/${encodeURIComponent(executionId)}/cancel`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: Buffer.from(JSON.stringify({ projectId })),
+            },
+          );
+          try {
+            const result = JSON.parse(remote.body.toString('utf8') || '{}') as AnyRecord;
+            return { ...result, statusCode: remote.status };
+          } catch {
+            return {
+              ok: false,
+              statusCode: 502,
+              error: 'task_execution_remote_response_invalid',
+              executionId,
+              executorNodeId,
+            };
+          }
+        },
+        configurable: true,
+        enumerable: false,
+      });
       const activeTaskState = pausedTaskProjects.has(projectId) ? null : tryTaskStateForProject(project);
       if (activeTaskState) {
         Object.defineProperty(projectRuntime, 'taskExecutionRouter', {
@@ -868,6 +949,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         });
         Object.defineProperty(projectRuntime, 'taskExecutionState', {
           value: activeTaskState,
+          configurable: true,
+          enumerable: false,
+        });
+        Object.defineProperty(projectRuntime, 'taskExecutionArtifactFile', {
+          value: (hash: string) => /^[a-f0-9]{64}$/i.test(hash)
+            ? resolve(activeTaskState.store.root, 'objects', hash.slice(0, 2), hash)
+            : '',
           configurable: true,
           enumerable: false,
         });
@@ -1388,6 +1476,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         federationContentStore.applyManifest(sourceReplicaId, { version: 1, projectId, generatedAt: new Date().toISOString(), complete: false, resources: heads.filter((head) => head.sourceReplicaId === sourceReplicaId).map(({ sourceReplicaId: _sourceReplicaId, ...head }) => head) });
       }
       controlRoomProjectionStore?.invalidate(projectId, delta.entities);
+      for (const executionId of new Set(delta.entities.filter((entity) => entity.entityType === 'execution').map((entity) => entity.entityId))) {
+        publishExecutionChange({
+          projectId,
+          nodeId: from,
+          executionId,
+          record: executionStateForProject(projectId, from)?.executions.find(executionId) ?? null,
+          remote: true,
+        });
+      }
       for (const client of globalContentEventClients) client.write(`event: ledger-content-change\ndata: ${JSON.stringify({ remote: true, projectId, nodeId: from })}\n\n`);
     },
   });
@@ -1652,6 +1749,115 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       : projects.length === 1 && isProjectSensitiveEndpoint(requestPath) && !isGlobalProjectEndpoint(requestPath)
         ? projects[0]
         : null;
+    const internalExecutionStatus = request.method === 'GET'
+      ? requestPath.match(/^\/api\/internal\/task-executions\/([^/]+)\/status$/)
+      : null;
+    if (internalExecutionStatus) {
+      response.setHeader('content-type', 'application/json');
+      const requesterNodeId = String(request.headers['x-decision-os-federation-node'] ?? '').trim();
+      const peer = federation.nodes().find((node) => node.nodeId === requesterNodeId && node.online);
+      if (!requesterNodeId || !peer) {
+        response.statusCode = 403;
+        response.end(JSON.stringify({ ok: false, error: 'federation_node_authentication_failed' }));
+        return;
+      }
+      const executionId = decodeRouteSegment(internalExecutionStatus[1]);
+      const projectId = requestUrl.searchParams.get('projectId') ?? '';
+      const state = projectId ? executionStateForProject(projectId, requesterNodeId) : null;
+      const execution = state?.executions.find(executionId) ?? null;
+      if (!state || !execution) {
+        response.statusCode = 404;
+        response.end(JSON.stringify({ ok: false, error: 'task_execution_not_found', executionId }));
+        return;
+      }
+      if (execution.lifecycle.executorNodeId !== federation.localOwner().ownerNodeId) {
+        response.statusCode = 409;
+        response.end(JSON.stringify({
+          ok: false,
+          error: 'task_execution_wrong_executor',
+          executionId,
+          executorNodeId: execution.lifecycle.executorNodeId,
+        }));
+        return;
+      }
+      const localProject = projects.find((project) => project.id === projectId && project.available);
+      const baseRuntime = federatedSchedulerContexts.get(executionId)?.runtime
+        ?? (localProject ? projectContext(localProject.decisionOsRoot, localProject.id).runtime : runtime);
+      const statusRuntime = Object.create(baseRuntime) as AnyRecord;
+      Object.defineProperty(statusRuntime, 'taskExecutionState', { value: state, configurable: true, enumerable: false });
+      Object.defineProperty(statusRuntime, 'taskExecutionNodeId', {
+        value: federation.localOwner().ownerNodeId,
+        configurable: true,
+        enumerable: false,
+      });
+      const store = taskStoreForProject(projectId, requesterNodeId);
+      Object.defineProperty(statusRuntime, 'taskExecutionArtifactFile', {
+        value: (hash: string) => store && /^[a-f0-9]{64}$/i.test(hash)
+          ? resolve(store.root, 'objects', hash.slice(0, 2), hash)
+          : '',
+        configurable: true,
+        enumerable: false,
+      });
+      const result = await readCardSkillRunController({
+        action_payload: {
+          runId: execution.metadata.sessionId,
+          ledgerId: execution.metadata.ledgerId,
+          cardId: execution.metadata.ownerCardId,
+          since: requestUrl.searchParams.get('since') ?? '0',
+        },
+        runtime_state: statusRuntime,
+      });
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    const internalCancellation = request.method === 'POST'
+      ? requestPath.match(/^\/api\/internal\/task-executions\/([^/]+)\/cancel$/)
+      : null;
+    if (internalCancellation) {
+      response.setHeader('content-type', 'application/json');
+      const requesterNodeId = String(request.headers['x-decision-os-federation-node'] ?? '').trim();
+      const peer = federation.nodes().find((node) => node.nodeId === requesterNodeId && node.online);
+      if (!requesterNodeId || !peer) {
+        response.statusCode = 403;
+        response.end(JSON.stringify({ ok: false, error: 'federation_node_authentication_failed' }));
+        return;
+      }
+      const executionId = decodeRouteSegment(internalCancellation[1]);
+      let body: AnyRecord = {};
+      try {
+        body = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord;
+      } catch {
+        response.statusCode = 400;
+        response.end(JSON.stringify({ ok: false, error: 'invalid_json', executionId }));
+        return;
+      }
+      const projectId = String(body.projectId ?? '').trim();
+      const state = projectId ? executionStateForProject(projectId, requesterNodeId) : null;
+      if (!state) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({ ok: false, error: 'task_execution_state_unavailable', executionId }));
+        return;
+      }
+      const localProject = projects.find((project) => project.id === projectId && project.available);
+      const baseRuntime = federatedSchedulerContexts.get(executionId)?.runtime
+        ?? (localProject ? projectContext(localProject.decisionOsRoot, localProject.id).runtime : runtime);
+      const cancellationRuntime = Object.create(baseRuntime) as AnyRecord;
+      Object.defineProperty(cancellationRuntime, 'taskExecutionState', {
+        value: state,
+        configurable: true,
+        enumerable: false,
+      });
+      Object.defineProperty(cancellationRuntime, 'taskExecutionNodeId', {
+        value: federation.localOwner().ownerNodeId,
+        configurable: true,
+        enumerable: false,
+      });
+      const result = await cancelTaskExecutionLocally({ runtime: cancellationRuntime, executionId });
+      response.statusCode = result.statusCode;
+      response.end(JSON.stringify(result));
+      return;
+    }
     // A hosted project is always authoritative locally. Stale replica selectors apply only to remote-only resources.
     if (projectScope && !activeProject && requestedReplicaNodeId && requestedReplicaNodeId !== localNodeId) {
       const ownerNodeId = requestedReplicaNodeId;
@@ -3214,15 +3420,58 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         cardId: requestUrl.searchParams.get('cardId') ?? '',
         since: requestUrl.searchParams.get('since') ?? '0'
       });
+      const ledgerId = requestUrl.searchParams.get('ledgerId') ?? '';
+      const cardId = requestUrl.searchParams.get('cardId') ?? '';
+      const since = requestUrl.searchParams.get('since') ?? '0';
+      const replicatedExecution = taskExecutionState(requestRuntime)?.executions.bySessionId(runId)
+        .filter((record) => record.metadata.ledgerId === ledgerId && (
+          record.metadata.sourceCardId === cardId || record.metadata.ownerCardId === cardId
+        ))
+        .sort((left, right) => (
+          right.metadata.requestedAt.localeCompare(left.metadata.requestedAt)
+          || right.metadata.executionId.localeCompare(left.metadata.executionId)
+        ))[0] ?? null;
+      let statusRuntime = requestRuntime;
+      if (replicatedExecution && replicatedExecution.lifecycle.executorNodeId !== federation.localOwner().ownerNodeId) {
+        const terminal = ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(replicatedExecution.lifecycle.phase);
+        if (!terminal) {
+          const remote = await federation.request(
+            replicatedExecution.lifecycle.executorNodeId,
+            `/api/internal/task-executions/${encodeURIComponent(replicatedExecution.metadata.executionId)}/status?projectId=${encodeURIComponent(replicatedExecution.metadata.projectId)}&since=${encodeURIComponent(since)}`,
+          );
+          response.setHeader('content-type', 'application/json');
+          response.statusCode = remote.status;
+          response.end(remote.body);
+          return;
+        }
+        const heads = [
+          replicatedExecution.artifacts.jsonl,
+          replicatedExecution.artifacts.stderr,
+          replicatedExecution.artifacts.telemetry,
+          replicatedExecution.artifacts.result,
+        ].filter((head) => head !== null);
+        await Promise.all(heads.map((head) => federation.requestToFile(
+          replicatedExecution.lifecycle.executorNodeId,
+          `/api/federation/content-object?projectId=${encodeURIComponent(replicatedExecution.metadata.projectId)}&hash=${encodeURIComponent(head.hash)}`,
+          federationContentStore.objectFile(head.hash),
+          head.hash,
+        )));
+        statusRuntime = Object.create(requestRuntime) as AnyRecord;
+        Object.defineProperty(statusRuntime, 'taskExecutionArtifactFile', {
+          value: (hash: string) => /^[a-f0-9]{64}$/i.test(hash) ? federationContentStore.objectFile(hash) : '',
+          configurable: true,
+          enumerable: false,
+        });
+      }
       const result = await readCardSkillRunController({
         action_payload: {
           runId,
-          ledgerId: requestUrl.searchParams.get('ledgerId') ?? '',
-          cardId: requestUrl.searchParams.get('cardId') ?? '',
-          since: requestUrl.searchParams.get('since') ?? '0',
+          ledgerId,
+          cardId,
+          since,
           traceId
         },
-        runtime_state: requestRuntime
+        runtime_state: statusRuntime
       });
       if (traceId) logCodexContinueDebug('status-route-response', {
         traceId,

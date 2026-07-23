@@ -15,6 +15,8 @@ import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical
 import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 import { readLedgerProjection } from '../../task-state/helper/read-ledger-projection.js';
 import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
+import { cancelTaskExecution } from '../helper/cancel-task-execution.js';
+import { taskExecutionState } from '../helper/task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -48,6 +50,28 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
   const runId = String(payload.runId ?? '').trim();
   const executionId = String(payload.executionId ?? '').trim();
   if (!ledgerId || !cardId || !runId || !executionId) return { ok: false, statusCode: 400, error: 'Missing ledgerId, cardId, runId, or executionId.' };
+
+  const replicatedExecution = taskExecutionState(runtime)?.executions.find(executionId) ?? null;
+  if (replicatedExecution) {
+    const metadata = replicatedExecution.metadata;
+    if (metadata.ledgerId !== ledgerId
+      || metadata.sessionId !== runId
+      || (metadata.sourceCardId !== cardId && metadata.ownerCardId !== cardId)) {
+      return { ok: false, statusCode: 409, error: 'Card execution is no longer active.', runId, executionId };
+    }
+    if (metadata.pipelineRunId) {
+      return cancelCodexPipelineRunController({
+        action_payload: { runId: metadata.pipelineRunId, executionId },
+        runtime_state: runtime,
+      });
+    }
+    const result = await cancelTaskExecution({ runtime, executionId });
+    return {
+      ...result,
+      status: result.phase === 'cancelled' ? 'cancelled' : result.phase === 'cancelling' ? 'running' : result.phase,
+      runId,
+    };
+  }
 
   const pipelineStore = readCodexPipelineStore({ decisionOsRoot }).store;
   const pipeline = pipelineStore.runs.find((candidate) => candidate.ledgerId === ledgerId

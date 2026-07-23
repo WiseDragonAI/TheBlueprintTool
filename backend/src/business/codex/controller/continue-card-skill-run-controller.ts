@@ -31,6 +31,7 @@ import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js'
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import { TaskExecutionAdmissionError, createTaskExecutionLaunchRequest } from '../helper/task-execution-router.js';
 import {
+  finalizeTaskExecutionArtifacts,
   registerTaskExecutionProcess,
   removeTaskExecutionProcess,
   taskExecutionNodeId,
@@ -514,6 +515,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
               error: { code: 'codex_continuation_start_failed', message: settlement.error.message },
             });
           }
+          await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
         }
         try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' }); }
         catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
@@ -547,6 +549,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
             error: status === 'failed' ? { code: 'codex_continuation_failed', message: detail } : null,
           });
         }
+        await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
       }
       try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' }); }
       catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }

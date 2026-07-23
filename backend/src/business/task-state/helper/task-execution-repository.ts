@@ -129,6 +129,7 @@ export function createTaskExecutionRepository(input: {
   now?: () => Date;
   persist?: (changes: TaskEntityChange[], emittedAt: string) => Promise<TaskStateDelta>;
   assertWritable?: () => void;
+  onCommitted?: (change: { executionId: string; record: ExecutionRecord | null }) => void;
 }) {
   const now = input.now ?? (() => new Date());
   let indexes = emptyIndexes();
@@ -215,6 +216,13 @@ export function createTaskExecutionRepository(input: {
     if (input.persist) await input.persist(changes, emittedAt);
     else await input.store.mutate({ replicaId: input.writerId, changes, emittedAt });
     indexes.root = '';
+    for (const executionId of new Set(changes.filter((change) => change.entityType === 'execution').map((change) => change.entityId))) {
+      try {
+        input.onCommitted?.({ executionId, record: find(executionId) });
+      } catch {
+        // Projection notifications must never turn a committed lifecycle transition into a failed command.
+      }
+    }
   };
 
   const find = (executionId: string): ExecutionRecord | null => {
@@ -224,9 +232,13 @@ export function createTaskExecutionRepository(input: {
     return indexes.records.get(executionId) ?? null;
   };
 
-  const recordsFor = (index: Map<string, Set<string>>, key: string): ExecutionRecord[] => {
+  const recordsFor = (
+    index: 'taskIds' | 'sessionIds' | 'pipelineRunIds' | 'phases' | 'executorNodeIds',
+    key: string,
+  ): ExecutionRecord[] => {
     rebuild();
-    return ordered([...(index.get(key) ?? [])].flatMap((executionId) => {
+    const selectedIndex = indexes[index] as Map<string, Set<string>>;
+    return ordered([...(selectedIndex.get(key) ?? [])].flatMap((executionId) => {
       const record = indexes.records.get(executionId);
       return record ? [record] : [];
     }));
@@ -351,10 +363,41 @@ export function createTaskExecutionRepository(input: {
     return structuredClone(find(executionId)!);
   };
 
+  const deleteSessionNow = async (sessionId: string, changedAt = now().toISOString()): Promise<ExecutionRecord[]> => {
+    input.assertWritable?.();
+    if (!sessionId.trim()) throw new Error('invalid_task_execution_session_id');
+    const selected = recordsFor('sessionIds', sessionId);
+    if (selected.some((record) => !terminalPhases.has(record.lifecycle.phase))) {
+      throw new Error(`task_execution_session_active:${sessionId}`);
+    }
+    if (!Number.isFinite(Date.parse(changedAt))) throw new Error('invalid_task_execution_timestamp');
+    const deletedAt = new Date(changedAt).toISOString();
+    const executionIds = selected.map((record) => record.metadata.executionId);
+    await persist([
+      ...executionIds.map((executionId): TaskEntityChange => ({
+        entityType: 'execution',
+        entityId: executionId,
+        changes: [{ path: '$entity', operation: 'tombstone' }],
+      })),
+      {
+        entityType: 'resource',
+        entityId: `codex-session:${sessionId}`,
+        changes: [
+          { path: 'kind', operation: 'set', value: 'codex-session-deletion' },
+          { path: 'sessionId', operation: 'set', value: sessionId },
+          { path: 'deletedAt', operation: 'set', value: deletedAt },
+          { path: 'executionIds', operation: 'set', value: executionIds },
+        ],
+      },
+    ], deletedAt);
+    return structuredClone(selected);
+  };
+
   return {
     admit: (admission: Parameters<typeof admitNow>[0]): Promise<ExecutionRecord> => serial(() => admitNow(admission)),
     transition: (executionId: string, transition: Parameters<typeof transitionNow>[1]): Promise<ExecutionRecord> => serial(() => transitionNow(executionId, transition)),
     finalizeArtifacts: (executionId: string, artifacts: Parameters<typeof finalizeArtifactsNow>[1]): Promise<ExecutionRecord> => serial(() => finalizeArtifactsNow(executionId, artifacts)),
+    deleteSession: (sessionId: string, changedAt?: string): Promise<ExecutionRecord[]> => serial(() => deleteSessionNow(sessionId, changedAt)),
     find: (executionId: string): ExecutionRecord | null => {
       const record = find(executionId);
       return record ? structuredClone(record) : null;
@@ -363,11 +406,11 @@ export function createTaskExecutionRepository(input: {
       rebuild();
       return structuredClone(ordered(indexes.records.values()));
     },
-    byTaskId: (taskId: string): ExecutionRecord[] => structuredClone(recordsFor(indexes.taskIds, taskId)),
-    bySessionId: (sessionId: string): ExecutionRecord[] => structuredClone(recordsFor(indexes.sessionIds, sessionId)),
-    byPipelineRunId: (pipelineRunId: string): ExecutionRecord[] => structuredClone(recordsFor(indexes.pipelineRunIds, pipelineRunId)),
-    byPhase: (phase: TaskExecutionPhase): ExecutionRecord[] => structuredClone(recordsFor(indexes.phases, phase)),
-    byExecutorNodeId: (nodeId: string): ExecutionRecord[] => structuredClone(recordsFor(indexes.executorNodeIds, nodeId)),
+    byTaskId: (taskId: string): ExecutionRecord[] => structuredClone(recordsFor('taskIds', taskId)),
+    bySessionId: (sessionId: string): ExecutionRecord[] => structuredClone(recordsFor('sessionIds', sessionId)),
+    byPipelineRunId: (pipelineRunId: string): ExecutionRecord[] => structuredClone(recordsFor('pipelineRunIds', pipelineRunId)),
+    byPhase: (phase: TaskExecutionPhase): ExecutionRecord[] => structuredClone(recordsFor('phases', phase)),
+    byExecutorNodeId: (nodeId: string): ExecutionRecord[] => structuredClone(recordsFor('executorNodeIds', nodeId)),
     findByRequest: (taskId: string, requestId: string): ExecutionRecord | null => {
       rebuild();
       const executionId = indexes.requests.get(requestKey(taskId, requestId));

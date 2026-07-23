@@ -104,6 +104,7 @@ let queueDragOrigin = null;
 let pendingControlRoomRefresh = false;
 let controlRoomEventSource = null;
 let controlRoomRefreshTimer = 0;
+const controlRoomExecutionRevisions = new Map();
 let controlRoomEtag = '';
 let controlRoomHydrating = false;
 let controlRoomHydrationGeneration = 0;
@@ -1865,7 +1866,19 @@ function subscribeControlRoomEvents() {
   };
   controlRoomEventSource.addEventListener('ledger-content-change', refresh);
   controlRoomEventSource.addEventListener('card-content-change', refresh);
-  controlRoomEventSource.addEventListener('codex-execution-change', refresh);
+  controlRoomEventSource.addEventListener('codex-execution-change', (event) => {
+    let payload = {};
+    try { payload = JSON.parse(event.data || '{}'); } catch {}
+    const identity = `${String(payload.projectId || '')}\0${String(payload.executionId || '')}`;
+    const revision = Number(payload.revision || 0);
+    if (identity !== '\0' && Number.isSafeInteger(revision) && revision > 0) {
+      const current = controlRoomExecutionRevisions.get(identity) || 0;
+      if (revision <= current) return;
+      controlRoomExecutionRevisions.set(identity, revision);
+    }
+    if (payload.phase === 'deleted') controlRoomExecutionRevisions.delete(identity);
+    refresh();
+  });
   controlRoomEventSource.addEventListener('project-sync-change', refresh);
   controlRoomEventSource.addEventListener('federation-replica-change', (event) => {
     refresh();

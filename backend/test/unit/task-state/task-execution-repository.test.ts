@@ -122,6 +122,33 @@ test('indexes pipeline identity and preserves legal awaited lifecycle plus termi
   assert.equal(finalized.artifacts.stderr?.hash, 'b'.repeat(64));
 });
 
+test('publishes execution tombstones and session deletion state atomically after terminal settlement', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-execution-session-delete-'));
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: { cards: [], annotations: [], relationships: [] } });
+  const repository = createTaskExecutionRepository({ store, writerId: 'workstation', projectId: 'project-a' });
+  context.after(async () => { await store.flush(); rmSync(root, { recursive: true, force: true }); });
+
+  await repository.admit({ metadata: metadata(), executorNodeId: 'workstation' });
+  await repository.transition('execution-a', { phase: 'queued' });
+  await assert.rejects(repository.deleteSession('session-a'), /task_execution_session_active/);
+  assert.ok(repository.find('execution-a'));
+  await repository.transition('execution-a', {
+    phase: 'cancelled',
+    result: { status: 'cancelled', summary: 'Cancelled before launch.' },
+  });
+
+  const deleted = await repository.deleteSession('session-a', '2026-07-23T01:01:00.000Z');
+
+  assert.deepEqual(deleted.map((record) => record.metadata.executionId), ['execution-a']);
+  assert.equal(repository.find('execution-a'), null);
+  const executionTombstone = store.entity('execution', 'execution-a');
+  assert.equal(executionTombstone?.fields.$entity.candidates[0].operation, 'tombstone');
+  const sessionDeletion = store.entity('resource', 'codex-session:session-a');
+  assert.equal(sessionDeletion?.fields.kind.candidates[0].value, 'codex-session-deletion');
+  assert.equal(sessionDeletion?.fields.deletedAt.candidates[0].value, '2026-07-23T01:01:00.000Z');
+  assert.deepEqual(sessionDeletion?.fields.executionIds.candidates[0].value, ['execution-a']);
+});
+
 test('rebuild exposes concurrent lifecycle candidates as an explicit execution conflict', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-execution-repository-conflict-'));
   const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-execution-repository-conflict-remote-'));

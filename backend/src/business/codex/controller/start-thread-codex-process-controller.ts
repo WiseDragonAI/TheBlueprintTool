@@ -34,6 +34,7 @@ import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js'
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import { TaskExecutionAdmissionError, createTaskExecutionLaunchRequest } from '../helper/task-execution-router.js';
 import {
+  finalizeTaskExecutionArtifacts,
   registerTaskExecutionProcess,
   removeTaskExecutionProcess,
   taskExecutionNodeId,
@@ -539,6 +540,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
                 error: { code: 'codex_process_start_failed', message: settlement.error.message },
               });
             }
+            await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
           }
           updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
           try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' }); }
@@ -582,6 +584,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
               error: status === 'failed' ? { code: 'codex_process_failed', message: detail } : null,
             });
           }
+          await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
         }
         updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
         try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' }); }

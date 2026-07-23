@@ -12,6 +12,9 @@ import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js'
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 import { legacyCodexExecutionStatus } from '../helper/codex-execution-coordinator.js';
 import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
+import { taskExecutionState } from '../helper/task-execution-runtime.js';
+import { reassessPipelineAfterSkill } from '../helper/codex-pipeline-runner.js';
+import type { ReplicatedTaskExecutionRecord } from '../../task-state/helper/task-execution-repository.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -38,6 +41,62 @@ function elapsedMs(startedAt: unknown, finishedAt: unknown): number | null {
   return Math.max(0, (Number.isFinite(finished) ? finished : Date.now()) - started);
 }
 
+function validActions(execution: ReplicatedTaskExecutionRecord): string[] {
+  if (execution.lifecycle.phase === 'preparing' || execution.lifecycle.phase === 'queued') return ['cancel'];
+  if (execution.lifecycle.phase === 'starting' || execution.lifecycle.phase === 'running') return ['cancel', 'open-log'];
+  if (execution.lifecycle.phase === 'cancelling') return ['open-log'];
+  return ['restart', 'open-log'];
+}
+
+function assignedNodeId(runtime: AnyRecord, execution: ReplicatedTaskExecutionRecord): string {
+  const cards = taskExecutionState(runtime)?.projection().ledger.cards;
+  const task = Array.isArray(cards)
+    ? cards.find((card) => String((card as AnyRecord).id ?? '') === execution.metadata.taskId) as AnyRecord | undefined
+    : undefined;
+  const assignment = task?.assignment && typeof task.assignment === 'object' && !Array.isArray(task.assignment)
+    ? task.assignment as AnyRecord
+    : {};
+  return String(assignment.nodeId ?? execution.lifecycle.executorNodeId);
+}
+
+function replicatedStatus(input: {
+  runtime: AnyRecord;
+  execution: ReplicatedTaskExecutionRecord;
+  decisionOsRoot: string;
+}): AnyRecord {
+  const { execution } = input;
+  const status = legacyCodexExecutionStatus(execution.lifecycle.phase);
+  return {
+    status,
+    phase: execution.lifecycle.phase,
+    active: ['preparing', 'queued', 'starting', 'running', 'cancelling'].includes(execution.lifecycle.phase),
+    startedAt: execution.lifecycle.startedAt ?? '',
+    finishedAt: execution.lifecycle.finishedAt ?? '',
+    phaseSince: execution.lifecycle.phaseSince,
+    elapsedMs: elapsedMs(execution.lifecycle.startedAt ?? execution.metadata.requestedAt, execution.lifecycle.finishedAt),
+    error: execution.lifecycle.error?.message ?? '',
+    lifecycleRevision: execution.lifecycle.revision,
+    assignedNodeId: assignedNodeId(input.runtime, execution),
+    executorNodeId: execution.lifecycle.executorNodeId,
+    validActions: validActions(execution),
+    queuePosition: execution.lifecycle.phase === 'queued'
+      ? unifiedCodexQueuePosition({
+        decisionOsRoot: input.decisionOsRoot,
+        id: execution.metadata.executionId,
+        createdAt: execution.metadata.requestedAt,
+        runtime: input.runtime,
+      })
+      : null,
+    pipelineRunId: execution.metadata.pipelineRunId,
+    execution: {
+      ...execution.metadata,
+      ...execution.lifecycle,
+      artifacts: execution.artifacts,
+      validActions: validActions(execution),
+    },
+  };
+}
+
 export function readCompactSkillRunStatusController(input: { runId: string; ledgerId: string; cardId: string; runtime: AnyRecord }): AnyRecord {
   const { runId, ledgerId, cardId, runtime } = input;
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
@@ -48,6 +107,21 @@ export function readCompactSkillRunStatusController(input: { runId: string; ledg
   const ledgerPath = resolve(decisionOsRoot, String(ledgerEntry.ledgerFile ?? '').replace(/^\.decision-os\//, ''));
   if (!existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.' };
   const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime });
+  const replicated = taskExecutionState(runtime)?.executions.bySessionId(runId)
+    .filter((execution) => execution.metadata.ledgerId === ledgerId
+      && (execution.metadata.sourceCardId === cardId || execution.metadata.ownerCardId === cardId))
+    .at(-1) ?? null;
+  if (replicated) {
+    return {
+      ok: true,
+      statusCode: 200,
+      runId,
+      kind: 'skill',
+      ledgerId,
+      cardId,
+      ...replicatedStatus({ runtime, execution: replicated, decisionOsRoot }),
+    };
+  }
   const ownership = resolveCardSkillRunOwnership({ ledger, decisionOsRoot, cardId, runId });
   if (!ownership.found) return { ok: false, statusCode: 404, error: 'Run not found on card.' };
   const canonical = codexExecutionCoordinator(runtime)?.dtoForSession(runId, cardId) ?? null;
@@ -103,11 +177,30 @@ export function readCompactSkillRunStatusController(input: { runId: string; ledg
 
 export function readCompactPipelineRunStatusController(input: { runId: string; runtime: AnyRecord }): AnyRecord {
   const decisionOsRoot = resolve(String(input.runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
-  const run = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === input.runId);
-  if (!run) return { ok: false, statusCode: 404, error: 'Pipeline run not found.' };
+  const stored = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === input.runId);
+  if (!stored) return { ok: false, statusCode: 404, error: 'Pipeline run not found.' };
+  const run = reassessPipelineAfterSkill({
+    decisionOsRoot,
+    runtime: input.runtime,
+    pipelineRunId: stored.id,
+  }) ?? stored;
   const activeStep = run.steps.find((step) => step.status === 'running' || step.status === 'pending') ?? null;
   const activeSkill = activeStep?.skills.find((skill) => skill.status === 'running' || skill.status === 'pending') ?? null;
   const latestSkill = activeSkill ?? run.steps.flatMap((step) => step.skills).at(-1) ?? null;
+  const replicated = latestSkill
+    ? taskExecutionState(input.runtime)?.executions.find(latestSkill.executionId) ?? null
+    : null;
+  if (replicated) {
+    return {
+      ok: true,
+      statusCode: 200,
+      runId: run.id,
+      kind: 'pipeline',
+      ledgerId: run.ledgerId,
+      cardId: replicated.metadata.ownerCardId,
+      ...replicatedStatus({ runtime: input.runtime, execution: replicated, decisionOsRoot }),
+    };
+  }
   const canonical = latestSkill ? codexExecutionCoordinator(input.runtime)?.dto(latestSkill.executionId) ?? null : null;
   if (canonical) {
     const status = legacyCodexExecutionStatus(canonical.phase);

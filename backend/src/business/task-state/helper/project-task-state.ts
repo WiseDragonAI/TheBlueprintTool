@@ -11,6 +11,7 @@ import { createTaskContentObjectStore } from './task-content-object-store.js';
 import { taskContentReferences } from './task-content-resources.js';
 import { taskCommandForMutation, taskCommandForProjection, type TaskProjectionCommand } from './task-mutation-command.js';
 import { createTaskExecutionRepository } from './task-execution-repository.js';
+import type { TaskExecutionArtifactHead } from './task-current-state-types.js';
 
 type AnyRecord = Record<string, unknown>;
 type TaskProjectionEntityChange = { entityType: TaskEntityChange['entityType']; entityId: string };
@@ -52,6 +53,7 @@ export function createProjectTaskState(input: {
   initialize?: boolean;
   canWrite?: () => boolean;
   onPersistenceError?: (error: Error) => void;
+  onExecutionChange?: (change: { executionId: string; record: ReturnType<ReturnType<typeof createTaskExecutionRepository>['find']> }) => void;
 }) {
   const store = createTaskCurrentStateStore({
     decisionOsRoot: input.decisionOsRoot,
@@ -81,6 +83,7 @@ export function createProjectTaskState(input: {
     projectId: input.projectId,
     persist: (changes, emittedAt) => persistChanges(changes, { emittedAt }),
     assertWritable,
+    onCommitted: input.onExecutionChange,
   });
 
   const entityHash = (change: TaskEntityChange): string => {
@@ -150,6 +153,45 @@ export function createProjectTaskState(input: {
       : { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     for (const head of changedHeads) await input.publishContent?.(head.key);
     return mergeDeltas(input.projectId, [contentDelta, await activateTask(taskId)]);
+  };
+
+  const finalizeExecutionArtifacts = async (executionId: string, files: {
+    jsonl?: string;
+    stderr?: string;
+    telemetry?: string;
+    result?: string;
+  }) => {
+    assertWritable();
+    const execution = executions.find(executionId);
+    if (!execution) throw new Error(`task_execution_not_found:${executionId}`);
+    const captured = await Promise.all(Object.entries(files).map(async ([kind, file]) => ({
+      kind: kind as keyof typeof files,
+      head: file ? await contentObjects.capture(file) : null,
+    })));
+    const available = captured.filter((entry) => entry.head !== null);
+    if (available.length > 0) {
+      const changedHeads = available.map((entry) => entry.head!).filter((head) => !store.contentHeads(head.key).some((current) => (
+        current.type === head.type && current.hash === head.hash && current.bytes === head.bytes
+      )));
+      if (changedHeads.length > 0) {
+        await persistChanges(changedHeads.map((head) => ({
+          entityType: 'resource',
+          entityId: head.key,
+          changes: [{ path: 'head', operation: 'set', value: head }],
+        })), { activationTaskId: execution.metadata.taskId });
+        for (const head of changedHeads) await input.publishContent?.(head.key);
+      }
+    }
+    const artifact = (kind: keyof typeof files, mediaType: string): TaskExecutionArtifactHead | null => {
+      const head = available.find((entry) => entry.kind === kind)?.head;
+      return head ? { hash: head.hash, bytes: head.bytes, mediaType } : null;
+    };
+    return executions.finalizeArtifacts(executionId, {
+      jsonl: artifact('jsonl', 'application/x-ndjson'),
+      stderr: artifact('stderr', 'text/plain'),
+      telemetry: artifact('telemetry', 'application/x-ndjson'),
+      result: artifact('result', 'application/json'),
+    });
   };
 
   const queueContentContribution = (taskId: string, resourceIds: string | string[]): Promise<TaskStateDelta> => {
@@ -308,6 +350,7 @@ export function createProjectTaskState(input: {
     executeProjectionCommandNow,
     activateTask: queueTaskActivation,
     recordContentContribution: queueContentContribution,
+    finalizeExecutionArtifacts,
     transitionExecutionIntent,
     projectExecutionIntent,
     flush: store.flush,

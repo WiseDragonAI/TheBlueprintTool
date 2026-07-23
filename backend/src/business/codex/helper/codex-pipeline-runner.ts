@@ -40,6 +40,7 @@ import {
 } from './codex-runtime-run-store.js';
 import { codexExecutionCoordinator } from './codex-execution-runtime.js';
 import {
+  finalizeTaskExecutionArtifacts,
   registerTaskExecutionProcess,
   removeTaskExecutionProcess,
   taskExecutionState,
@@ -718,7 +719,6 @@ export async function spawnPipelineSkillProcess(input: {
       notify(input.runtime.onCodexTurnStarted, { ledgerId: input.pipelineRun.ledgerId, cardId: input.pipelineRun.sourceCardId, outputCardId: input.step.outputCardId, threadId: `thread-${input.pipelineRun.sourceCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', startedAt: observedAt });
     },
     onSettled: async (settlement) => {
-      if (replicatedExecution) removeTaskExecutionProcess(input.runtime, input.skill.executionId);
       const cancelled = pipelineRuntimeRun(input.runtime, input.skill.runId)?.cancelRequestedAt || runtimeStatus(input.runtime, input.skill.runId) === 'cancelled';
       const status: TerminalStatus = cancelled
         ? 'cancelled'
@@ -749,6 +749,13 @@ export async function spawnPipelineSkillProcess(input: {
             executionId: input.skill.executionId,
           });
         }
+        await finalizeTaskExecutionArtifacts({
+          runtime: input.runtime,
+          executionId: input.skill.executionId,
+          jsonl: input.skill.stdoutFile,
+          stderr: input.skill.stderrFile,
+          telemetry: `${input.skill.stdoutFile}.telemetry.jsonl`,
+        });
       } else if (executionCoordinator) {
         await executionCoordinator.settle(input.skill.executionId, {
           phase: status === 'complete' ? 'succeeded' : status,
@@ -756,6 +763,9 @@ export async function spawnPipelineSkillProcess(input: {
           error: status === 'failed' ? { code: 'codex_pipeline_skill_failed', message: detail } : null,
         });
       }
+      // Keep the settled process paths readable until immutable artifact heads exist.
+      // Removing them earlier creates a terminal-status window with no live log source.
+      if (replicatedExecution) removeTaskExecutionProcess(input.runtime, input.skill.executionId);
       const reassessed = reassessPipelineAfterSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, settledStatus: status, error, exitCode, finishedAt: settlement.finishedAt });
       updateRuntimeRun(input.runtime, input.skill.runId, { settledAt: new Date().toISOString() });
       notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-settled', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, cardId: input.step.outputCardId, status, pipelineStatus: reassessed?.status ?? status });
@@ -832,6 +842,12 @@ export async function runPipelineExecution(input: {
           summary: `federated executor ${planned.nodeId}`,
         },
       });
+      await finalizeTaskExecutionArtifacts({
+        runtime: input.runtime,
+        executionId: input.executionId,
+        jsonl: located.skill.stdoutFile,
+        stderr: located.skill.stderrFile,
+      });
       return { ok: true, statusCode: 200, run: reassessPipelineAfterSkill({
         decisionOsRoot: input.decisionOsRoot,
         runtime: input.runtime,
@@ -841,11 +857,27 @@ export async function runPipelineExecution(input: {
       const message = error instanceof Error ? error.message : String(error);
       writeFileSync(located.skill.stderrFile, `${message}\n`, 'utf8');
       const latest = state.executions.find(input.executionId);
-      if (latest && (latest.lifecycle.phase === 'starting' || latest.lifecycle.phase === 'running')) {
+      if (latest?.lifecycle.phase === 'cancelling') {
+        // WHAT: Treat the child rejection after an accepted cancellation as cancellation.
+        // WHY: The process error text describes signal termination, while the durable
+        // pre-signal phase records the operator's intent and is the lifecycle authority.
+        await state.executions.transition(input.executionId, {
+          phase: 'cancelled',
+          result: { status: 'cancelled', summary: 'Cancelled by operator.' },
+        });
+      } else if (latest && (latest.lifecycle.phase === 'starting' || latest.lifecycle.phase === 'running')) {
         await state.executions.transition(input.executionId, {
           phase: 'failed',
           error: { code: 'federated_pipeline_skill_failed', message },
           result: { status: 'failed', summary: message },
+        });
+      }
+      if (state.executions.find(input.executionId)?.lifecycle.finishedAt) {
+        await finalizeTaskExecutionArtifacts({
+          runtime: input.runtime,
+          executionId: input.executionId,
+          jsonl: located.skill.stdoutFile,
+          stderr: located.skill.stderrFile,
         });
       }
       await cancelPipelineDependents({

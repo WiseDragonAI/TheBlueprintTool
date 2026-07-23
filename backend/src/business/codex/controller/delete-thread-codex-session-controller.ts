@@ -12,6 +12,7 @@ import { readLedgerProjection } from '@backend/business/task-state/helper/read-l
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
 import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
 import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
+import { taskExecutionState } from '../helper/task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type ArtifactSnapshot = { file: string; content: Buffer };
@@ -73,8 +74,27 @@ export async function deleteThreadCodexSessionController(input: { action_payload
   const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   if (!card) return { ok: false, statusCode: 404, error: 'Card not found.', cardId };
   const ownedRunIds = retainedThreadRunIds(card);
-  if (!ownedRunIds.includes(runId)) {
+  const replicatedState = taskExecutionState(runtime);
+  const replicatedExecutions = replicatedState?.executions.bySessionId(runId) ?? [];
+  const canonicalSession = replicatedExecutions.length > 0;
+  const canonicalOwnership = canonicalSession && replicatedExecutions.every((execution) => (
+    execution.metadata.ledgerId === ledgerId
+    && (execution.metadata.sourceCardId === cardId || execution.metadata.ownerCardId === cardId)
+  ));
+  if (!ownedRunIds.includes(runId) && !canonicalOwnership) {
     return { ok: false, statusCode: 404, error: 'Thread Codex session not found on card.', cardId, runId };
+  }
+  if (canonicalSession && !canonicalOwnership) {
+    return { ok: false, statusCode: 409, error: 'Thread Codex session belongs to another card.', cardId, runId };
+  }
+  if (replicatedExecutions.some((execution) => (
+    execution.lifecycle.phase === 'preparing'
+    || execution.lifecycle.phase === 'queued'
+    || execution.lifecycle.phase === 'starting'
+    || execution.lifecycle.phase === 'running'
+    || execution.lifecycle.phase === 'cancelling'
+  ))) {
+    return { ok: false, statusCode: 409, error: 'Codex execution session is still active.', runId };
   }
 
   const run = runtimeRuns(runtime)[runId];
@@ -85,11 +105,11 @@ export async function deleteThreadCodexSessionController(input: { action_payload
     && String(item.payload.runId ?? item.id) === runId
     && String(item.payload.executionId ?? '') === activeExecutionId
   )) : undefined;
-  if (activeExecutionId && (run?.status === 'pending' || run?.status === 'running' || queued)) {
+  if (!canonicalSession && activeExecutionId && (run?.status === 'pending' || run?.status === 'running' || queued)) {
     const cancelled = await cancelCardSkillRunController({ action_payload: { ledgerId, cardId, runId, executionId: activeExecutionId }, runtime_state: runtime });
     if (cancelled.ok === false) return cancelled;
   }
-  if (run && !String(run.settledAt ?? '').trim() && !await waitForSettlement(runtime, runId)) {
+  if (!canonicalSession && run && !String(run.settledAt ?? '').trim() && !await waitForSettlement(runtime, runId)) {
     return { ok: false, statusCode: 504, error: 'Codex run did not settle before session deletion.', runId };
   }
 
@@ -103,13 +123,16 @@ export async function deleteThreadCodexSessionController(input: { action_payload
   if (artifactFiles.some((file) => !isInside(runDirectory, file))) return { ok: false, statusCode: 400, error: 'Codex run artifact is outside its run directory.', runId };
   let snapshots: ArtifactSnapshot[];
   try {
-    snapshots = artifactFiles.filter(existsSync).map((file) => ({ file, content: readFileSync(file) }));
+    snapshots = canonicalSession
+      ? []
+      : artifactFiles.filter(existsSync).map((file) => ({ file, content: readFileSync(file) }));
   } catch (error) {
     return { ok: false, statusCode: 500, error: error instanceof Error ? error.message : 'Codex session artifacts could not be read.', runId };
   }
 
   try {
-    for (const snapshot of snapshots) rmSync(snapshot.file);
+    if (canonicalSession) await replicatedState!.executions.deleteSession(runId);
+    else for (const snapshot of snapshots) rmSync(snapshot.file);
     if (String(card.codexActiveRunId ?? '') === runId) {
       delete card.codexActiveRunId;
       delete card.codexActiveExecutionId;
@@ -144,11 +167,11 @@ export async function deleteThreadCodexSessionController(input: { action_payload
     }
     stripHydratedThreadNotes(ledger);
     await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'delete-codex-session', cardIds: [cardId] } });
-    await codexExecutionCoordinator(runtime)?.deleteSession(runId);
+    if (!canonicalSession) await codexExecutionCoordinator(runtime)?.deleteSession(runId);
   } catch (error) {
     try {
       await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger: JSON.parse(ledgerText) as AnyRecord, runtime, command: { kind: 'restore-codex-session', cardIds: [cardId] } });
-      restoreArtifacts(snapshots);
+      if (!canonicalSession) restoreArtifacts(snapshots);
     } catch {
       return { ok: false, statusCode: 500, error: 'Codex session deletion failed and rollback could not restore every artifact.', runId };
     }
@@ -158,5 +181,13 @@ export async function deleteThreadCodexSessionController(input: { action_payload
   delete runtimeRuns(runtime)[runId];
   const onLedgerChange = payload.onLedgerChange;
   if (typeof onLedgerChange === 'function') onLedgerChange({ ledgerId, cardId, runId, source: 'delete-thread-codex-session' });
-  return { ok: true, statusCode: 200, ledgerId, cardId, runId, status: 'deleted' };
+  return {
+    ok: true,
+    statusCode: 200,
+    ledgerId,
+    cardId,
+    runId,
+    status: 'deleted',
+    ...(canonicalSession ? { artifactsRetained: true, executionCount: replicatedExecutions.length } : {}),
+  };
 }

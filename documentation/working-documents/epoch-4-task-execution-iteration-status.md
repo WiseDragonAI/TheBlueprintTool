@@ -131,7 +131,16 @@
    9. Focused backend result: `32/32`.
    10. Focused frontend voice and thread result: `44/44`.
    11. Backend typecheck passed.
-9. **J.9 — Replace control paths:** `pending`.
+9. **J.9 — Replace control paths:** `verified`.
+   1. Card and pipeline cancellation resolve the replicated execution, persist `cancelling`, route to the immutable executor node, and bound local `SIGTERM` to `SIGKILL` escalation.
+   2. Session deletion rejects active executions, tombstones every terminal execution atomically, publishes the session resource deletion marker, and retains content-addressed artifacts for convergence-aware collection.
+   3. Compact status, detailed status, Control Room, and SSE consume replicated lifecycle phase, phase timestamp, executor, revision, valid actions, and artifact heads.
+   4. Active remote detailed status is authenticated-proxied to its executor. Terminal status retrieves missing content lazily by exact SHA-256 and reads the local verified object.
+   5. Terminal settlement retains live file paths through immutable artifact-head capture, then removes the node-local process entry.
+   6. SSE emits revisioned execution changes. Frontend reconciliation ignores stale lifecycle revisions and renders `cancelling` from its replicated phase timestamp.
+   7. Focused backend control-path result: `46/46`.
+   8. Focused frontend Control Room result: `3/3`.
+   9. Backend and frontend typechecks passed.
 10. **J.10 — Replace recovery:** `pending`.
 11. **J.11 — Complete optimistic frontend behavior:** `pending`.
 12. **J.12 — Delete legacy authorities:** `pending`.
@@ -142,10 +151,9 @@
 
 ## D. Current Verified Gaps
 
-1. Remote cancellation, session deletion, compact status, remaining detailed status branches, live logs, SSE, and Control Room still contain legacy execution authority.
-2. Startup still runs direct queue recovery, pipeline resume, and card ownership reconciliation instead of one replicated execution recovery pass.
-3. Frontend launch behavior does not yet implement request-ID optimism, canonical reconciliation, and rejection rollback.
-4. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, temporary-pipeline lifecycle, and log-derived settlement remain until `J.12`.
+1. Startup still runs direct queue recovery, pipeline resume, and card ownership reconciliation instead of one replicated execution recovery pass.
+2. Frontend launch behavior does not yet implement request-ID optimism, canonical reconciliation, and rejection rollback.
+3. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, temporary-pipeline lifecycle, and log-derived settlement remain until `J.12`.
 
 ---
 
@@ -220,6 +228,19 @@
 23. **Full backend suite:** failed `389/400`.
     1. Command: `node bin/decision-os-verify.mjs -- npm test --prefix backend`.
     2. The exact remaining failure classes are retained in section `D` and evidence item `7`; no full-suite completion claim is made.
+24. **J.9 focused backend control paths:** passed `46/46`.
+    1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=<absolute-worktree-backend-tsconfig> backend/node_modules/.bin/tsx --test --test-reporter=dot backend/test/codex/cancel-task-execution.test.ts backend/test/codex/delete-thread-codex-session-controller.test.ts backend/test/codex/read-compact-run-status-controller.test.ts backend/test/codex/read-task-execution-run-controller.test.ts backend/test/codex/epoch4-direct-execution-scheduler.test.ts backend/test/codex/start-card-skill-process-controller.test.ts backend/test/codex/federated-pipeline-execution.integration.test.ts backend/test/server/control-room-projection.integration.test.ts backend/test/server/federation-node-connector.integration.test.ts backend/test/unit/server/helper/create-http-server.test.ts backend/test/unit/task-state/task-execution-repository.test.ts`.
+    2. Evidence covers local and remote cancellation, exact-hash artifact retrieval, session tombstones, compact and detailed status, terminal artifact barriers, execution SSE, Control Room projection, and two-node executor routing.
+25. **J.9 focused frontend Control Room:** passed `3/3`.
+    1. Command: `node bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH=<absolute-worktree-frontend-tsconfig> frontend/node_modules/.bin/tsx --test frontend/test/runtime/control-room-voice-transcribing-before-launch.integration.test.ts frontend/test/runtime/control-room-initial-hydration.integration.test.ts`.
+    2. Evidence covers replicated lifecycle precedence, `cancelling` presentation, and phase-timestamp stopwatch behavior.
+26. **J.9 typechecks:** passed.
+    1. Backend command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`.
+    2. Frontend command: `node bin/decision-os-verify.mjs -- frontend/node_modules/.bin/tsc -p frontend/tsconfig.json --noEmit --typeRoots backend/node_modules/@types`.
+27. **Full backend suite after J.9:** passed `405/410`; five later-gate assertions remain.
+    1. Command: `node bin/decision-os-verify.mjs -- npm test --prefix backend`.
+    2. Three failures assert legacy startup queue scanning and claimed-thread resumption that `J.10` replaces with replicated execution recovery.
+    3. Two failures assert startup ownership reconciliation and card execution cleanup that `J.12` removes with the remaining legacy authorities.
 
 ---
 
