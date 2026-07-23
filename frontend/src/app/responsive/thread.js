@@ -160,7 +160,7 @@ export function closeMobileThread({ fromHistory = false, discardHistory = false 
   saveThreadDraft();
   saveThreadPanelScrollPositions();
   const runId = String(canvasState.threadRunIdByThreadId?.[canvasState.threadId] || (currentCard ? cardCodexThreadRunId(currentCard) : ''));
-  const activeRunId = String(canvasState.threadActiveRunIdByThreadId?.[canvasState.threadId] || currentCard?.codexActiveRunId || '');
+  const activeRunId = String(canvasState.threadActiveRunIdByThreadId?.[canvasState.threadId] || '');
   if (currentLedgerId && currentCard && canvasState.threadId && runId) {
     unbindThreadCodexRunLog({
       projectId: currentProjectId,

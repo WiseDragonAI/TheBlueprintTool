@@ -3,7 +3,7 @@
  * WHY: Widgets and thread logs need the same stable incremental JSONL and diagnostic contract.
  */
 import { projectReplicaRequestPath } from '../../project/helper/project-request-scope.js';
-import type { CodexExecutionDto, CodexExecutionPhase } from '../../../../../shared/schemas/codex-execution-types.js';
+import type { TaskExecutionDto, TaskExecutionPhase } from '../../../../../shared/schemas/task-execution-types.js';
 
 export type CardSkillRunStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
 export type CardSkillRunEventSource = 'jsonl' | 'stderr';
@@ -68,8 +68,8 @@ export type CardSkillRunSummary = {
   skillName: string;
   pipelineStatus: CardSkillRunStatus | '';
   status: CardSkillRunStatus;
-  phase: CodexExecutionPhase | '';
-  execution: CodexExecutionDto | null;
+  phase: TaskExecutionPhase | '';
+  execution: TaskExecutionDto | null;
   executionId: string;
   currentExecution: CardSkillRunExecution | null;
   executions: CardSkillRunExecution[];
@@ -211,7 +211,7 @@ export async function requestCardSkillRunStatus(input: { projectId?: string; rep
   const executions = Array.isArray(body.executions) ? body.executions.map((execution) => normalizedExecution(execution, runId)).filter((execution): execution is CardSkillRunExecution => Boolean(execution)) : [];
   const raw = body as Record<string, unknown>;
   const phase = ['preparing', 'queued', 'starting', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted'].includes(String(raw.phase ?? ''))
-    ? String(raw.phase) as CodexExecutionPhase
+    ? String(raw.phase) as TaskExecutionPhase
     : '';
   return {
     ok: response.ok && body.ok !== false,
@@ -228,7 +228,7 @@ export async function requestCardSkillRunStatus(input: { projectId?: string; rep
       : '',
     status: body.status ?? 'unknown',
     phase,
-    execution: raw.execution && typeof raw.execution === 'object' ? raw.execution as CodexExecutionDto : null,
+    execution: raw.execution && typeof raw.execution === 'object' ? raw.execution as TaskExecutionDto : null,
     executionId: String(body.executionId ?? ''),
     currentExecution: normalizedExecution(body.currentExecution, runId),
     executions,

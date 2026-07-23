@@ -8,7 +8,7 @@ type AnyRecord = Record<string, unknown>;
 const narrativeFields = new Set(['description', 'what', 'message', 'body', 'notes', 'deletedNoteIds', 'content', 'contentBytes', 'markdown']);
 const derivedLifecycleFields = new Set(['status', 'lifecycle', 'changedAt', 'waitingAt', 'closedAt', 'completedAt']);
 const nodeLocalCardFields = new Set(['replicationState', 'persistenceState']);
-const atomicCardFields = new Set(['assignment', 'executionIntent']);
+const atomicCardFields = new Set(['assignment']);
 
 function structural(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((child) => structural(child) ?? null);

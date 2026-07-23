@@ -15,7 +15,6 @@ import { loadUploadedVoiceAudio } from '@backend/business/transcription/effect/l
 import { persistTranscribedText } from '@backend/business/transcription/effect/persist-transcribed-text.js';
 import { resolveTranscriptionConfig } from '@backend/business/transcription/helper/resolve-transcription-config.js';
 import { continueCardSkillRunController } from '../../codex/controller/continue-card-skill-run-controller.js';
-import { readCardSkillRunController } from '../../codex/controller/read-card-skill-run-controller.js';
 import { startThreadCodexProcessController } from '../../codex/controller/start-thread-codex-process-controller.js';
 import { startCodexPipelineRunController } from '../../codex/controller/start-codex-pipeline-run-controller.js';
 import { telemetry } from '@backend/telemetry/harness.js';
@@ -159,7 +158,6 @@ function voiceStatusPayload(note: AnyRecord): AnyRecord {
     providerStartedAt: String(note.providerStartedAt ?? ''),
     providerSettledAt: String(note.providerSettledAt ?? ''),
     completedAt: String(note.completedAt ?? ''),
-    codexQueueExecutionId: String(note.codexQueueExecutionId ?? ''),
     codexQueueRequestId: String(note.codexQueueRequestId ?? ''),
     codexQueueLaunchMode: String(note.codexQueueLaunchMode ?? ''),
     codexQueueCardId: String(note.codexQueueCardId ?? ''),
@@ -196,32 +194,6 @@ function cardRunSelection(card: AnyRecord | undefined): { codexModel: string; co
   };
 }
 
-async function updateQueueStatus(input: {
-  runtime: AnyRecord;
-  ledgerId: string;
-  threadId: string;
-  noteId: string;
-  status: string;
-  runId?: string;
-  error?: string;
-  onCardContentChange?: unknown;
-}): Promise<boolean> {
-  const result = applyNotePatch({
-    runtime: input.runtime,
-    ledgerId: input.ledgerId,
-    threadId: input.threadId,
-    note: {
-      id: input.noteId,
-      codexQueueStatus: input.status,
-      codexQueueRunId: input.runId ?? '',
-      codexQueueError: input.error ?? ''
-    },
-    onCardContentChange: input.onCardContentChange,
-    reason: 'voice-codex-queue-status'
-  });
-  return result.ok;
-}
-
 export async function runQueuedThreadCodex(input: {
   runtime: AnyRecord;
   ledgerId: string;
@@ -230,24 +202,16 @@ export async function runQueuedThreadCodex(input: {
   noteId: string;
   executionId: string;
   sessionId: string;
-  onCardContentChange?: unknown;
   onLedgerChange?: unknown;
 }): Promise<AnyRecord> {
   const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
-  if (!context.ok) {
-    await updateQueueStatus({ ...input, status: 'failed', error: context.error ?? 'Ledger unavailable.' });
-    return { ok: false, error: context.error };
-  }
+  if (!context.ok) return { ok: false, error: context.error };
   const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
-  if (!card) {
-    await updateQueueStatus({ ...input, status: 'failed', error: 'Thread target card not found.' });
-    return { ok: false, error: 'Thread target card not found.' };
-  }
+  if (!card) return { ok: false, error: 'Thread target card not found.' };
   const runId = cardRunId(card);
   const selection = cardRunSelection(card);
   if (!runId) {
-    await updateQueueStatus({ ...input, status: 'starting' });
-    const result = await startThreadCodexProcessController({
+    return startThreadCodexProcessController({
       action_payload: {
         requestId: `voice:${input.noteId}`,
         ledgerId: input.ledgerId,
@@ -261,20 +225,8 @@ export async function runQueuedThreadCodex(input: {
       },
       runtime_state: input.runtime
     });
-    await updateQueueStatus({ ...input, status: result.ok === false ? 'failed' : 'started', runId: String((result.run as AnyRecord | undefined)?.id ?? ''), error: result.ok === false ? String(result.error ?? 'Codex launch failed.') : '' });
-    return result;
   }
-
-  const status = await readCardSkillRunController({
-    action_payload: { ledgerId: input.ledgerId, cardId: input.cardId, runId, since: 0 },
-    runtime_state: input.runtime
-  });
-  if (String(status.status ?? '') === 'running') {
-    await updateQueueStatus({ ...input, status: 'waiting', runId });
-    return { ok: true, queued: true, runId, status: 'waiting' };
-  }
-  await updateQueueStatus({ ...input, status: 'starting', runId });
-  const result = await continueCardSkillRunController({
+  return continueCardSkillRunController({
     action_payload: {
       requestId: `voice:${input.noteId}`,
       ledgerId: input.ledgerId,
@@ -286,8 +238,6 @@ export async function runQueuedThreadCodex(input: {
     },
     runtime_state: input.runtime
   });
-  await updateQueueStatus({ ...input, status: result.ok === false ? 'failed' : 'started', runId, error: result.ok === false ? String(result.error ?? 'Codex continue failed.') : '' });
-  return result;
 }
 
 async function runQueuedVoicePipeline(input: {
@@ -298,18 +248,10 @@ async function runQueuedVoicePipeline(input: {
   noteId: string;
   pipelineId: string;
   executionId: string;
-  sessionId: string;
-  onCardContentChange?: unknown;
   onLedgerChange?: unknown;
 }): Promise<AnyRecord> {
-  if (!input.pipelineId) {
-    await updateQueueStatus({ ...input, status: 'failed', error: 'No voice pipeline is configured in Settings.' });
-    return { ok: false, error: 'No voice pipeline is configured in Settings.' };
-  }
-  if (!await updateQueueStatus({ ...input, status: 'starting' })) {
-    return { ok: false, error: 'Voice execution status could not be persisted.' };
-  }
-  const result = await startCodexPipelineRunController({
+  if (!input.pipelineId) return { ok: false, error: 'No voice pipeline is configured in Settings.' };
+  return startCodexPipelineRunController({
     action_payload: {
       requestId: `voice:${input.noteId}`,
       executionId: input.executionId,
@@ -321,46 +263,6 @@ async function runQueuedVoicePipeline(input: {
     },
     runtime_state: input.runtime
   });
-  await updateQueueStatus({
-    ...input,
-    status: result.ok === false ? 'failed' : 'started',
-    runId: String((result.run as AnyRecord | undefined)?.id ?? ''),
-    error: result.ok === false ? String(result.error ?? 'Pipeline launch failed.') : ''
-  });
-  return result;
-}
-
-export async function continueQueuedVoiceCodexAfterRun(input: {
-  runtime: AnyRecord;
-  ledgerId: string;
-  cardId: string;
-  threadId?: string;
-  runId: string;
-  onCardContentChange?: unknown;
-  onLedgerChange?: unknown;
-}): Promise<AnyRecord> {
-  const threadId = optionalText(input.threadId) || `thread-${input.cardId}`;
-  const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
-  if (!context.ok) return { ok: false, error: context.error };
-  const waiting = (normalizeLedgerNotes(context.ledger)[threadId] ?? []).filter((note) => String(note.codexQueueStatus ?? '') === 'waiting');
-  if (waiting.length === 0) return { ok: true, queued: false };
-  const note = waiting[0];
-  const queuedExecutionId = String(note.codexQueueExecutionId ?? '');
-  const queuedRequestId = String(note.codexQueueRequestId ?? '') || `voice:${String(note.id ?? '')}`;
-  await updateQueueStatus({ ...input, threadId, noteId: String(note.id ?? ''), status: 'starting', runId: input.runId });
-  const result = await continueCardSkillRunController({
-    action_payload: { requestId: queuedRequestId, ledgerId: input.ledgerId, cardId: input.cardId, runId: input.runId, executionId: queuedExecutionId, disallowSkills: true, onLedgerChange: input.onLedgerChange },
-    runtime_state: input.runtime
-  });
-  await updateQueueStatus({
-    ...input,
-    threadId,
-    noteId: String(note.id ?? ''),
-    status: result.ok === false ? 'failed' : 'started',
-    runId: input.runId,
-    error: result.ok === false ? String(result.error ?? 'Codex continue failed.') : ''
-  });
-  return result;
 }
 
 async function finishVoiceUploadOrchestration(input: {
@@ -452,13 +354,10 @@ async function finishVoiceUploadOrchestration(input: {
         completedAt,
         revision: input.revisionBase + 3,
         error: '',
-        codexQueueStatus: input.launchMode !== 'send' ? input.cardId ? 'pending' : 'failed' : '',
-        codexQueueExecutionId: input.launchMode !== 'send' ? input.executionId : '',
         codexQueueRequestId: input.launchMode !== 'send' ? `voice:${input.noteId}` : '',
         codexQueueLaunchMode: input.launchMode !== 'send' ? input.launchMode : '',
         codexQueueCardId: input.launchMode !== 'send' ? input.cardId : '',
-        codexQueuePipelineId: input.launchMode === 'pipeline' ? input.pipelineId : '',
-        codexQueueError: input.launchMode !== 'send' && !input.cardId ? 'Thread target card not found.' : ''
+        codexQueuePipelineId: input.launchMode === 'pipeline' ? input.pipelineId : ''
       },
       onCardContentChange: input.onCardContentChange,
       reason: 'voice-transcribed'
@@ -485,9 +384,7 @@ async function finishVoiceUploadOrchestration(input: {
       providerSettledAt,
       completedAt,
       revision: config.ok === false ? input.revisionBase + 1 : input.revisionBase + 2,
-      error,
-      codexQueueStatus: input.launchMode !== 'send' ? 'failed' : '',
-      codexQueueError: input.launchMode !== 'send' ? error : ''
+      error
     },
     onCardContentChange: input.onCardContentChange,
     reason: 'voice-transcription-failed'
@@ -519,7 +416,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
   }
   const launchMode = voiceLaunchMode(payload);
   const queueCodex = launchMode !== 'send';
-  const executionId = queueCodex ? optionalText(payload.executionId) || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}` : '';
+  const executionId = queueCodex ? optionalText(payload.executionId) || `voice-execution-${id}` : '';
   let executionSessionId = '';
   const acceptedAt = new Date().toISOString();
   const reviewContext = (() => {
@@ -543,9 +440,6 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
       acceptedAt,
       revision: 1,
       error: '',
-      codexQueueStatus: queueCodex ? 'requested' : '',
-      codexQueueRequestedAt: queueCodex ? acceptedAt : '',
-      codexQueueExecutionId: queueCodex ? executionId : '',
       codexQueueRequestId: queueCodex ? `voice:${id}` : '',
       codexQueueLaunchMode: queueCodex ? launchMode : '',
       codexQueueCardId: queueCodex ? cardId : '',
@@ -596,9 +490,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
         status: 'transcription failed',
         completedAt: new Date().toISOString(),
         revision: 4,
-        error: error instanceof Error ? error.message : String(error),
-        codexQueueStatus: queueCodex ? 'failed' : '',
-        codexQueueError: queueCodex ? error instanceof Error ? error.message : String(error) : ''
+        error: error instanceof Error ? error.message : String(error)
       },
       onCardContentChange: payload.onCardContentChange,
       reason: 'voice-orchestration-failed'
@@ -634,9 +526,7 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
     : voiceLaunchMode(payload);
   const cardId = optionalText(current.codexQueueCardId) || cardIdForThread(threadId, payload.cardId);
   const queueCodex = launchMode !== 'send';
-  const executionId = queueCodex
-    ? optionalText(current.codexQueueExecutionId) || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`
-    : '';
+  const executionId = queueCodex ? optionalText(payload.executionId) || `voice-execution-${id}` : '';
   let executionSessionId = '';
   const patch = applyNotePatch({
     runtime,
@@ -652,9 +542,6 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
       acceptedAt,
       revision: revisionBase,
       error: '',
-      codexQueueStatus: queueCodex ? 'requested' : '',
-      codexQueueRequestedAt: queueCodex ? acceptedAt : '',
-      codexQueueExecutionId: executionId,
       codexQueueRequestId: queueCodex ? optionalText(current.codexQueueRequestId) || `voice:${id}` : '',
       codexQueueLaunchMode: queueCodex ? launchMode : '',
       codexQueueCardId: queueCodex ? cardId : '',

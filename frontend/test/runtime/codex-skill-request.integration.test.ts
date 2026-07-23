@@ -1146,12 +1146,12 @@ test('requestCardSkillRunContinue resumes the run with the selected model and ef
   }
 });
 
-test('cardCodexRunId falls back to the durable output card id', () => {
+test('cardCodexRunId resolves retained provider session history only', () => {
   assert.equal(cardCodexRunId({
     id: 'card-a',
     codexActiveRunId: 'codex-skill-9999-pipeline',
     codexThreadRunId: 'codex-skill-9999-thread'
-  }), 'codex-skill-9999-pipeline');
+  }), 'codex-skill-9999-thread');
   assert.equal(cardCodexRunId({
     id: 'card-a',
     codexThreadRunId: 'codex-skill-9999-thread'
@@ -1159,11 +1159,11 @@ test('cardCodexRunId falls back to the durable output card id', () => {
   assert.equal(cardCodexRunId({
     id: 'card-codex-skill-1000-abcd',
     comment: { what: '# Finished result without run metadata' }
-  }), 'codex-skill-1000-abcd');
+  }), '');
   assert.equal(cardCodexRunId({
     id: 'card-result',
     comment: { what: 'Codex run: codex-skill-2000-efgh' }
-  }), 'codex-skill-2000-efgh');
+  }), '');
   assert.equal(cardCodexThreadRunId({ codexThreadRunId: 'codex-skill-9999-thread' }), 'codex-skill-9999-thread');
   assert.equal(cardCodexThreadRunId({ codexRunId: 'codex-skill-9999-card' }), '');
 });

@@ -16,7 +16,7 @@ test('navigation projection preserves canonical master-task relationships and la
     cards: [
       {
         id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], x: 1, y: 2, w: 3, h: 4,
-        codexActiveRunId: 'codex-skill-running', codexActiveExecutionId: 'execution-running', codexThreadRunId: 'codex-skill-running',
+      codexThreadRunId: 'codex-skill-running',
         codexThreadRunIds: ['codex-skill-previous', 'codex-skill-running'],
         codexRunModel: 'gpt-5.6-sol', codexRunEffort: 'medium',
       },
@@ -32,8 +32,8 @@ test('navigation projection preserves canonical master-task relationships and la
     assert.deepEqual((projection?.cards as Array<Record<string, unknown>>).map((card) => card.labels), [['master-task'], ['subtask']]);
     assert.deepEqual((projection?.cards as Array<Record<string, unknown>>)[0], {
       id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], x: 1, y: 2, w: 3, h: 4,
-      codexActiveRunId: 'codex-skill-running', codexActiveExecutionId: 'execution-running', codexThreadRunId: 'codex-skill-running',
-      codexThreadRunIds: ['codex-skill-previous', 'codex-skill-running'], codexRunId: null,
+      codexThreadRunId: 'codex-skill-running',
+      codexThreadRunIds: ['codex-skill-previous', 'codex-skill-running'],
       codexThreadRunOutputFiles: null,
       codexRunModel: 'gpt-5.6-sol', codexRunEffort: 'medium',
     });

@@ -1,6 +1,6 @@
 /**
  * WHAT: Selects the oldest dependency-ready epoch-4 execution across one project.
- * WHY: Direct and saved-pipeline work must share one replicated queue; only temporary legacy runs remain isolated until J.8.
+ * WHY: Direct, continuation, and pipeline work must share one replicated queue and one lifecycle authority.
  */
 import { readCodexPipelineStore } from './codex-pipeline-store.js';
 import {
@@ -8,7 +8,6 @@ import {
   federatedPipelineExecutionReady,
   outputFileForPipelineCard,
   resolvePipelineLedgerContext,
-  runNextPipelineSkill,
   runPipelineExecution,
 } from './codex-pipeline-runner.js';
 import { startThreadCodexProcessController } from '../controller/start-thread-codex-process-controller.js';
@@ -16,17 +15,6 @@ import { continueCardSkillRunController } from '../controller/continue-card-skil
 import { taskExecutionNodeId, taskExecutionState } from './task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
-
-function runnableLegacyPipelineRuns(decisionOsRoot: string, runtime?: AnyRecord) {
-  const state = runtime ? taskExecutionState(runtime) : null;
-  return readCodexPipelineStore({ decisionOsRoot }).store.runs.filter((run) => (
-    run.executionMode !== 'federated'
-    && (state?.executions.byPipelineRunId(run.id).length ?? 0) === 0
-    && (run.status === 'pending' || run.status === 'running')
-    && run.steps.some((step) => step.skills.some((skill) => skill.status === 'pending'))
-    && !run.steps.some((step) => step.skills.some((skill) => skill.status === 'running'))
-  ));
-}
 
 function runnableExecutions(decisionOsRoot: string, runtime: AnyRecord) {
   const state = taskExecutionState(runtime);
@@ -70,34 +58,22 @@ function runnableExecutions(decisionOsRoot: string, runtime: AnyRecord) {
 export function runningCodexProcessCount(runtime: AnyRecord): number {
   const sharedCount = runtime.globalCodexRunningProcessCount;
   if (typeof sharedCount === 'function') return Math.max(0, Number(sharedCount()) || 0);
-  const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const registry = runtime.taskExecutionProcesses instanceof Map
     ? runtime.taskExecutionProcesses as Map<string, unknown>
     : new Map<string, unknown>();
-  const unregisteredLegacyRuns = Object.values(runs).filter((run) => (
-    run.status === 'running'
-    && !registry.has(String(run.executionId ?? ''))
-  )).length;
-  return registry.size + unregisteredLegacyRuns;
+  return registry.size;
 }
 
 export function nextPendingCodexProcessCreatedAt(decisionOsRoot: string, runtime?: AnyRecord): string | null {
-  const pipeline = runnableLegacyPipelineRuns(decisionOsRoot, runtime)[0];
-  const execution = runtime ? runnableExecutions(decisionOsRoot, runtime)[0] : null;
-  if (!pipeline) return execution?.metadata.requestedAt ?? null;
-  if (!execution) return pipeline.createdAt;
-  return execution.metadata.requestedAt <= pipeline.createdAt ? execution.metadata.requestedAt : pipeline.createdAt;
+  return runtime ? runnableExecutions(decisionOsRoot, runtime)[0]?.metadata.requestedAt ?? null : null;
 }
 
 export function pendingCodexProcessEntries(decisionOsRoot: string, runtime?: AnyRecord): Array<{ id: string; createdAt: string; order: number }> {
-  return [
-    ...runnableLegacyPipelineRuns(decisionOsRoot, runtime).map((run, order) => ({ id: run.id, createdAt: run.createdAt, order })),
-    ...(runtime ? runnableExecutions(decisionOsRoot, runtime).map((record, order) => ({
-      id: record.metadata.executionId,
-      createdAt: record.metadata.requestedAt,
-      order: 1_000_000 + order,
-    })) : []),
-  ];
+  return runtime ? runnableExecutions(decisionOsRoot, runtime).map((record, order) => ({
+    id: record.metadata.executionId,
+    createdAt: record.metadata.requestedAt,
+    order,
+  })) : [];
 }
 
 export function unifiedCodexQueuePosition(input: { decisionOsRoot: string; id: string; createdAt: string; runtime?: AnyRecord }): number {
@@ -145,11 +121,9 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
   const capacity = maxConcurrentCodexProcesses(input.runtime);
   const launchLimit = Math.max(1, input.launchLimit ?? Number.POSITIVE_INFINITY);
   while (runningCodexProcessCount(input.runtime) < capacity && launched.length < launchLimit) {
-    const pipeline = runnableLegacyPipelineRuns(input.decisionOsRoot, input.runtime)[0];
     const execution = runnableExecutions(input.decisionOsRoot, input.runtime)[0];
-    if (!pipeline && !execution) break;
-    const launchExecution = Boolean(execution && (!pipeline || execution.metadata.requestedAt <= pipeline.createdAt));
-    if (launchExecution && execution) {
+    if (!execution) break;
+    {
       const state = taskExecutionState(input.runtime);
       if (!state) break;
       const claimed = await state.executions.transition(execution.metadata.executionId, { phase: 'starting' });
@@ -207,11 +181,6 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
         });
       }
       continue;
-    }
-    if (pipeline) {
-      const result = await runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: pipeline.id });
-      launched.push(result);
-      if (result.ok === false || !result.skillRun) break;
     }
   }
   return { ok: launched.every((entry) => entry.ok !== false), launched, capacity };

@@ -4,7 +4,7 @@
 2. **Implementation branch:** `feature/epoch4-task-execution`.
 3. **Base commit:** `0c72b4ed95c12bcfb0a27ddcbf56f4ecfdba5df7`.
 4. **Production branch:** `main`.
-5. **Current phase:** `J.8 — Move exceptional launch paths`.
+5. **Current phase:** `J.13 — Run failure and convergence verification`.
 6. **Overall state:** `in-progress`.
 7. **Production state:** epoch `3` remains active. Epoch `4` is not admitted for production use.
 
@@ -121,7 +121,7 @@
    11. Backend typecheck passed.
 8. **J.8 — Move exceptional launch paths:** `verified`.
    1. Direct skills use the same temporary-pipeline admission, replicated execution topology, global capacity, node-local process registry, and terminal settlement as saved pipelines.
-   2. Voice upload persists one retry-stable request identity plus launch mode, card, pipeline, execution, and run topology before handoff. Retry reconstructs the launch from the durable note and creates no frontend execution authority.
+   2. Voice upload persists one retry-stable request identity plus launch mode, card, and pipeline target before handoff. Execution identity and lifecycle exist only in the replicated execution repository.
    3. Voice failure retains transcript and audio evidence, exposes the server-owned execution error, and remains retryable after reconciliation.
    4. Project synchronization pre-admits its complete three-role executor plan and runs every role through the shared scheduler. It has no role-specific capacity semaphore or manual lifecycle transition chain.
    5. A selected remote node installs and validates the immutable federated manifest before execution. Executor-local artifact paths do not alter logical topology identity.
@@ -160,7 +160,18 @@
     7. Full frontend result: `534/534`.
     8. Focused direct-skill receipt result: `1/1`.
     9. Backend and frontend typechecks passed.
-12. **J.12 — Delete legacy authorities:** `pending`.
+12. **J.12 — Delete legacy authorities:** `verified`.
+    1. Deleted the direct process queue, old canonical execution store, coordinator, mutable ownership reconciliation, pipeline resume, card leases, and task `executionIntent` runtime.
+    2. Runtime admission, scheduling, status, cancellation, recovery, Control Room, federation projection, and frontend reconciliation read replicated execution entities only.
+    3. Pipeline manifests remain byte-stable topology records. Compatibility lifecycle fields retain their initial values for the existing response shape and are never used for admission, scheduling, settlement, cancellation, status, or recovery.
+    4. Voice notes retain transcription state and retry-stable launch inputs only. They contain no execution phase, execution ID, run ID, execution timestamp, or execution error.
+    5. Legacy queue and canonical execution readers are isolated inside the offline epoch-4 migration boundary. Corrupt bytes remain untouched and produce an actionable migration error.
+    6. Provider session history, immutable artifact heads, JSONL, stderr, telemetry, pipeline topology, and endpoint response shapes remain available.
+    7. Federated execution now persists `running` before invoking the selected role transport; role-local process launch cannot become a competing lifecycle writer.
+    8. Production authority grep found no legacy execution reference outside the migration decoder and the epoch-4 lane rejection contract.
+    9. Full backend result: `371/371`.
+    10. Full frontend result: `533/533`.
+    11. Backend and frontend typechecks passed.
 13. **J.13 — Run failure and convergence verification:** `pending`.
 14. **J.14 — Execute the epoch-4 production cutover:** `pending`.
 
@@ -168,7 +179,8 @@
 
 ## D. Current Verified Gaps
 
-1. Legacy process queue, canonical execution file, card execution leases, task `executionIntent`, temporary-pipeline lifecycle, and log-derived settlement remain until `J.12`.
+1. Served Workstation and Mobile interaction verification remains for `J.13`.
+2. Production migration, relay namespace deployment, node restart, and three-party convergence proof remain for `J.14`.
 
 ---
 
@@ -266,6 +278,14 @@
     4. The remaining two deterministic failures assert card ownership and `executionIntent` cleanup removed by `J.12`.
 30. **J.10 backend typecheck:** passed.
     1. Command: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`.
+31. **J.12 legacy-authority removal:** passed.
+    1. Backend command: `node bin/decision-os-verify.mjs -- npm test --prefix backend`; result `371/371`.
+    2. Frontend command: `node bin/decision-os-verify.mjs -- npm test --prefix frontend`; result `533/533`.
+    3. Backend typecheck: `node bin/decision-os-verify.mjs -- backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit`; passed.
+    4. Frontend typecheck: `node bin/decision-os-verify.mjs -- frontend/node_modules/.bin/tsc -p frontend/tsconfig.json --noEmit --typeRoots backend/node_modules/@types`; passed.
+    5. Production authority grep found no `executionIntent`, card lease, direct queue API, old canonical coordinator, mutable pipeline scheduler, note-backed voice lifecycle, or legacy execution schema import outside migration-only readers and the epoch-4 lane rejection contract.
+    6. Migration corruption and byte-preservation result: `9/9`.
+    7. Federated role and project synchronization result: `9/9`.
 
 ---
 

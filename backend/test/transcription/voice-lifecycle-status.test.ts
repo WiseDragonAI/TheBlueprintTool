@@ -45,7 +45,7 @@ test('voice lifecycle persists ordered phases and exposes one targeted terminal 
     assert.deepEqual(Object.keys(status.note as Record<string, unknown>).sort(), [
       'acceptedAt', 'audioPersistedAt', 'completedAt', 'error', 'id', 'message', 'providerSettledAt',
       'providerStartedAt', 'revision', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'voiceFileRef',
-      'codexQueueCardId', 'codexQueueExecutionId', 'codexQueueLaunchMode', 'codexQueuePipelineId', 'codexQueueRequestId'
+      'codexQueueCardId', 'codexQueueLaunchMode', 'codexQueuePipelineId', 'codexQueueRequestId'
     ].sort());
     const note = status.note as Record<string, unknown>;
     assert.equal(note.status, 'transcribed');

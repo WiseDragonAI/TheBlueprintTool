@@ -15,10 +15,14 @@ import type {
   TaskExecutionMetadata,
   TaskExecutionPhase,
 } from '../../../../../shared/task-current-state-core.js';
-import { codexExecutionStoreFile, readCodexExecutionStore } from '../../codex/helper/codex-execution-store.js';
 import { codexPipelineStoreWriteBlocker, readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
-import { readCodexProcessQueue, type CodexProcessQueueItem } from '../../codex/helper/codex-process-queue.js';
 import { finalizeTaskCurrentEntity } from './task-current-state-join.js';
+import {
+  legacyCodexExecutionStoreFile,
+  readLegacyCodexExecutions,
+  readLegacyCodexProcessQueue,
+  type LegacyCodexProcessQueueItem,
+} from './read-legacy-execution-migration-input.js';
 import { taskCurrentStateVersion } from './task-current-state-types.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -229,7 +233,7 @@ function pipelineAttempt(input: {
   };
 }
 
-function queueAttempt(input: { item: CodexProcessQueueItem; projectId: string; ledger: AnyRecord; defaultAssignedNodeId: string }): Attempt {
+function queueAttempt(input: { item: LegacyCodexProcessQueueItem; projectId: string; ledger: AnyRecord; defaultAssignedNodeId: string }): Attempt {
   const item = input.item;
   const executionId = text(item.payload.executionId);
   if (!executionId) throw new Error(`task_migration_queue_execution_id_missing:${item.id}`);
@@ -486,10 +490,10 @@ export function prepareEpoch4ExecutionMigration(input: {
   defaultAssignedNodeId: string;
   ledger: AnyRecord;
 }): Epoch4ExecutionMigration {
-  const canonical = existsSync(codexExecutionStoreFile(input.decisionOsRoot))
-    ? readCodexExecutionStore({ decisionOsRoot: input.decisionOsRoot, projectId: input.projectId }).executions
+  const canonical = existsSync(legacyCodexExecutionStoreFile(input.decisionOsRoot))
+    ? readLegacyCodexExecutions({ decisionOsRoot: input.decisionOsRoot, projectId: input.projectId })
     : [];
-  const queue = readCodexProcessQueue(input.decisionOsRoot);
+  const queue = readLegacyCodexProcessQueue(input.decisionOsRoot);
   const pipeline = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
   const blocker = codexPipelineStoreWriteBlocker(pipeline);
   if (blocker) throw new Error(`task_migration_pipeline_store_invalid:${blocker.code}:${blocker.message}`);

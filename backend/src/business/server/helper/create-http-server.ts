@@ -10,7 +10,7 @@ import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
-import { continueQueuedVoiceCodexAfterRun, readVoiceTranscriptionStatusController, startVoiceRetryOrchestrationController, startVoiceUploadOrchestrationController } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
+import { readVoiceTranscriptionStatusController, startVoiceRetryOrchestrationController, startVoiceUploadOrchestrationController } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
 import { resolveDecisionOsRoot } from './resolve-decision-os-root.js';
 import { readDecisionOsSettings } from './read-decision-os-settings.js';
 import { normalizedConcurrentCodexProcesses, saveCodexProcessSettings } from './save-codex-process-settings.js';
@@ -46,12 +46,7 @@ import { startCodexPipelineRunController } from '../../codex/controller/start-co
 import { readCodexPipelineRunController } from '../../codex/controller/read-codex-pipeline-run-controller.js';
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
-import { stopAdoptedPipelineProcessMonitors } from '../../codex/helper/resume-codex-pipeline-runs.js';
-import { stopAdoptedCodexProcessMonitors } from '../../codex/helper/codex-process-queue.js';
 import { recoverTaskExecutions } from '../../codex/helper/recover-task-executions.js';
-import { CodexExecutionProjectionPendingError, createCodexExecutionCoordinator } from '../../codex/helper/codex-execution-coordinator.js';
-import { codexExecutionCoordinator, installCodexExecutionCoordinator } from '../../codex/helper/codex-execution-runtime.js';
-import { migrateLegacyCodexExecutions } from '../../codex/helper/migrate-legacy-codex-executions.js';
 import {
   TaskExecutionAdmissionError,
   createTaskExecutionRouter,
@@ -102,7 +97,7 @@ import {
   type FederatedSkillExportIndex,
 } from '../../federation/helper/federated-library-cache.js';
 import type { FederationInternalResponse } from '../../federation/helper/federation-node-connector.js';
-import type { CodexExecutionObservation } from '../../../../../shared/schemas/codex-execution-types.js';
+import type { TaskExecutionObservation } from '../../../../../shared/schemas/task-execution-types.js';
 import { federatedControlRoomProjection } from './federated-control-room-projection.js';
 import { federatedProjectCatalog } from './federated-project-catalog.js';
 import { ensureServerPipelines, migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
@@ -304,7 +299,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const federatedTaskStores = new Map<string, TaskCurrentStateStore>();
   type ExecutionState = Pick<ProjectTaskState, 'executions' | 'finalizeExecutionArtifacts'>;
   const federatedExecutionStates = new Map<string, ExecutionState>();
-  const federatedExecutionObservations = new Map<string, CodexExecutionObservation>();
+  const federatedExecutionObservations = new Map<string, TaskExecutionObservation>();
   const pausedTaskProjects = new Map<string, RuntimeIncident>();
   const pausedFederatedTaskProjects = new Map<string, RuntimeIncident>();
   const pausedBackgroundComponents = new Set<string>();
@@ -316,9 +311,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   let resumeProjectSyncRuntime: (() => void) | null = null;
 
   const disposeProjectContext = (context: ProjectContext): void => {
-    codexExecutionCoordinator(context.runtime)?.dispose();
-    stopAdoptedCodexProcessMonitors(context.runtime);
-    stopAdoptedPipelineProcessMonitors(context.runtime);
     stopCodexRuntimeTimers(context.runtime);
     context.watcher.close();
     context.clients.clear();
@@ -806,8 +798,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         });
         return;
       }
-      if (isTaskStateBootstrapGate(reported)
-        || (reported instanceof CodexExecutionProjectionPendingError && isTaskStateBootstrapGate(reported.cause))) {
+      if (isTaskStateBootstrapGate(reported)) {
         projectRuntime.taskStatePersistenceError = error.message;
         recordStoppedOperation({
           scope: `project-task-write:${projectId}`,
@@ -820,16 +811,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             ...context,
           },
         });
-        const executionId = reported instanceof CodexExecutionProjectionPendingError ? reported.record.executionId : String((event.context as AnyRecord | undefined)?.executionId ?? '');
-        if (executionId) scheduleCodexRuntimeTimer(projectRuntime, `canonical-projection:${executionId}`, 1_000, 'retry-canonical-codex-projection', () => {
-          void codexExecutionCoordinator(projectRuntime)?.reproject(executionId)
-            .then(() => { delete projectRuntime.taskStatePersistenceError; })
-            .catch((retryError: unknown) => (projectRuntime.onCodexBackgroundError as (retry: AnyRecord) => void)({
-              operation: 'retry-canonical-codex-projection',
-              error: retryError,
-              context: { projectId, executionId },
-            }));
-        }, { projectId, executionId });
         return;
       }
       projectRuntime.codexRuntimePaused = true;
@@ -960,64 +941,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           enumerable: false,
         });
       }
-      if (!pausedTaskProjects.has(projectId)) {
-        try {
-          migrateLegacyCodexExecutions({
-            decisionOsRoot: activeDecisionOsRoot,
-            projectId,
-            nodeId,
-            readLease: ({ ledgerId, cardId }) => {
-              if (ledgerId !== 'tasks') return null;
-              const ledger = taskProjection().projection().ledger;
-              const cards = Array.isArray(ledger.cards) ? ledger.cards as AnyRecord[] : [];
-              const card = cards.find((entry) => String(entry.id ?? '') === cardId);
-              const runId = String(card?.codexActiveRunId ?? '').trim();
-              const executionId = String(card?.codexActiveExecutionId ?? '').trim();
-              return runId && executionId ? { runId, executionId } : null;
-            },
-          });
-        } catch (error) {
-          (projectRuntime.onCodexBackgroundError as (event: AnyRecord) => void)({
-            operation: 'recover-durable-codex-process-queue',
-            error,
-            context: { projectId, decisionOsRoot: activeDecisionOsRoot, migration: 'canonical-execution-store' },
-          });
-        }
-      }
-      const executionCoordinator = createCodexExecutionCoordinator({
-        decisionOsRoot: activeDecisionOsRoot,
-        projectId,
-        nodeId,
-        project: async ({ record, intent }) => {
-          if (record.ledgerId !== 'tasks') return;
-          const delta = await taskProjection().projectExecutionIntent(record.taskId, intent);
-          controlRoomProjectionStore?.invalidate(projectId, delta.entities);
-        },
-        publish: ({ record, intent, observation, execution }) => {
-          federation?.publishExecutionObservation(projectId, { executionId: record.executionId, observation });
-          publishLedger({
-            reason: 'codex-execution-transition',
-            ledgerId: record.ledgerId,
-            cardId: record.taskId,
-            outputCardId: record.ownerCardId,
-            runId: record.sessionId,
-            executionId: record.executionId,
-            phase: record.phase,
-            revision: record.revision,
-            intent,
-            observation,
-            execution,
-          });
-        },
-        onBackgroundError: (error, context) => (projectRuntime.onCodexBackgroundError as (event: AnyRecord) => void)({
-          operation: context.operation,
-          error,
-          context: { projectId, executionId: context.executionId },
-        }),
-        assertAvailable: () => assertCodexRuntimeAvailable(projectRuntime),
-      });
-      installCodexExecutionCoordinator(projectRuntime, executionCoordinator);
-      startupProjectTasks.push(Promise.all(executionCoordinator.store.active().map((record) => executionCoordinator.reproject(record.executionId))).then(() => undefined));
     }
     projectRuntime.onPipelineLedgerChange = publishLedger;
     projectRuntime.scheduleCodexProcesses = scheduleGlobalCodexProcesses;
@@ -1056,10 +979,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           threadId: String(event.threadId ?? '')
         });
       }
-      if (!event.pipelineRunId || event.pipelineTerminal === true) void continueQueuedVoiceCodexAfterRun({
-        runtime: projectRuntime, ledgerId: String(event.ledgerId ?? ''), cardId: String(event.cardId ?? event.outputCardId ?? ''),
-        threadId: String(event.threadId ?? ''), runId: String(event.runId ?? ''), onCardContentChange: publishCard, onLedgerChange: publishLedger
-      }).catch((error: unknown) => recordBackgroundFailure('voice-codex-queue', 'continue-after-run-settled', error, { projectId, runId: String(event.runId ?? '') }));
     };
     watcher = watchProjectFiles({
       decisionOsRoot: activeDecisionOsRoot,
@@ -2814,6 +2733,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
                 snapshot,
                 codexRunId: skill.runId,
                 executionId: skill.executionId,
+                manageTaskExecutionLifecycle: false,
                 stdoutFile: skill.stdoutFile,
                 stderrFile: skill.stderrFile,
                 pipelineRunId: installed.id,
@@ -3767,19 +3687,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
         const beforeLedger = structuredClone(ledger);
         if (mutation.action === 'transition-card-lifecycle' && mutation.lifecycleStatus === 'backlog' && mutation.cardId) {
-          // WHAT: Preserve the existing active-run admission gate for the scoped lifecycle command.
-          // WHY: A queued or running task cannot be parked without reconciling its execution intent.
-          const card = Array.isArray(ledger.cards) ? ledger.cards.find((entry) => String(entry.id ?? '') === String(mutation.cardId)) : null;
-          const pipelineRunId = String(card?.codexQueuedPipelineRunId ?? '');
-          const skillRunId = String(card?.codexActiveRunId ?? card?.codexThreadRunId ?? card?.codexRunId ?? '');
-          const lifecycle = pipelineRunId
-            ? readCompactPipelineRunStatusController({ runId: pipelineRunId, runtime: requestRuntime })
-            : skillRunId
-              ? readCompactSkillRunStatusController({ runId: skillRunId, ledgerId: tabId, cardId: String(mutation.cardId), runtime: requestRuntime })
-              : null;
-          if (lifecycle && (lifecycle.status === 'pending' || lifecycle.status === 'processing' || lifecycle.status === 'running' || lifecycle.status === 'in_progress')) {
+          const taskId = String(mutation.cardId);
+          const activeExecution = taskExecutionState(requestRuntime)?.executions.byTaskId(taskId)
+            .find((execution) => ['preparing', 'queued', 'starting', 'running', 'cancelling'].includes(execution.lifecycle.phase));
+          if (activeExecution) {
             response.statusCode = 409;
-            response.end(JSON.stringify({ ok: false, error: 'A queued or running task cannot move to backlog.', status: lifecycle.status }));
+            response.end(JSON.stringify({ ok: false, error: 'A queued or running task cannot move to backlog.', phase: activeExecution.lifecycle.phase }));
             return;
           }
         }

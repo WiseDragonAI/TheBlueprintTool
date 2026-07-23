@@ -178,6 +178,7 @@ export function createProjectSyncController(input: {
           snapshot: phaseSnapshot,
           codexRunId: skill.runId,
           executionId: skill.executionId,
+          manageTaskExecutionLifecycle: false,
           stdoutFile: skill.stdoutFile,
           stderrFile: skill.stderrFile,
           pipelineRunId: run.pipelineRunId,

@@ -128,15 +128,12 @@ export function renderThreadNotes(): void {
     const agentOwned = role === 'agent' || role === 'assistant';
     const noteId = String(note.id ?? '');
     const normalizedStatus = status.toLowerCase();
-    const queueStatus = String(note.codexQueueStatus ?? '').toLowerCase();
-    const error = String(note.codexQueueError ?? note.error ?? '').trim();
-    const failed = normalizedStatus.endsWith('failed') || queueStatus === 'failed';
+    const error = String(note.error ?? '').trim();
+    const failed = normalizedStatus.endsWith('failed');
     const busy = /committing|uploading|queued|transcribing|finalizing|retrying/.test(normalizedStatus);
     const localVoiceUploadId = String(note.localVoiceUploadId ?? '');
-    const retryable = (Boolean(note.voiceFileRef) && (
-      normalizedStatus === 'transcription failed'
-      || queueStatus === 'failed'
-    )) || (Boolean(localVoiceUploadId) && normalizedStatus === 'upload failed');
+    const retryable = (Boolean(note.voiceFileRef) && normalizedStatus === 'transcription failed')
+      || (Boolean(localVoiceUploadId) && normalizedStatus === 'upload failed');
     const voiceOwned = Boolean(note.voiceFileRef);
     const phaseLabel = voiceOwned ? voicePhaseLabel(status) : status;
     const item = document.createElement('li');

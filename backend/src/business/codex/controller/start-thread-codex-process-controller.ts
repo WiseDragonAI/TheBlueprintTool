@@ -2,7 +2,7 @@
  * WHAT: Starts a headless Codex process scoped to one card thread.
  * WHY: The thread panel needs a direct Codex action that continues against the same thread messages.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
@@ -18,19 +18,12 @@ import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolve
 import { codexCapacityResumeDelayMs, isTransientCodexCapacityFailure, readCodexSessionId } from '../helper/transient-codex-capacity-failure.js';
 import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
 import { projectCardCodexRun } from '../helper/project-card-codex-run.js';
-import { codexProcessIdentity, enqueueCodexThreadProcess, readCodexProcessQueue, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
-import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
-import { clearCardCodexExecution } from '../helper/clear-card-codex-execution.js';
-import { runtimeCodexRunOwnsLiveProcess } from '../helper/runtime-codex-run-owns-live-process.js';
-import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
-import { cancelCodexPipelineRunController } from './cancel-codex-pipeline-run-controller.js';
+import { codexProcessIdentity } from '../helper/codex-process-identity.js';
+import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
-import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-process.js';
-import { projectCardExecutionIntent } from '../helper/project-card-execution-intent.js';
-import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import { TaskExecutionAdmissionError, createTaskExecutionLaunchRequest } from '../helper/task-execution-router.js';
 import {
@@ -79,31 +72,6 @@ function optionalText(value: unknown): string {
 
 function reportBackground(runtime: AnyRecord, operation: string, error: unknown, context: AnyRecord): void {
   if (typeof runtime.onCodexBackgroundError === 'function') runtime.onCodexBackgroundError({ operation, error, context });
-}
-
-async function supersedeNonLiveRun(input: { runtime: AnyRecord; decisionOsRoot: string; runId: string }): Promise<void> {
-  removeCodexProcessQueueItem(input.decisionOsRoot, input.runId);
-  const pipelineRun = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs.find((candidate) => (
-    candidate.id === input.runId
-    || candidate.steps.some((step) => step.skills.some((skill) => skill.runId === input.runId))
-  ));
-  if (pipelineRun && pipelineRun.status !== 'complete' && pipelineRun.status !== 'failed' && pipelineRun.status !== 'cancelled') {
-    const activeSkill = pipelineRun.steps.flatMap((step) => step.skills).find((skill) => skill.status === 'running')
-      ?? pipelineRun.steps.flatMap((step) => step.skills).find((skill) => skill.status === 'pending');
-    await cancelCodexPipelineRunController({
-      action_payload: { runId: pipelineRun.id, executionId: activeSkill?.executionId ?? '' },
-      runtime_state: input.runtime,
-    });
-  }
-  const run = runtimeRuns(input.runtime)[input.runId];
-  if (!run || run.status === 'complete' || run.status === 'failed' || run.status === 'cancelled') return;
-  const finishedAt = new Date().toISOString();
-  updateRuntimeRun(input.runtime, input.runId, {
-    status: 'cancelled',
-    error: 'Superseded by an operator-triggered run.',
-    finishedAt,
-    settledAt: finishedAt,
-  });
 }
 
 function appendRunStatus(filePath: string, status: ProcessStatus, detail: string): void {
@@ -164,9 +132,9 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const reservedRunId = optionalText(payload.reservedRunId);
   const reservedExecutionId = optionalText(payload.executionId);
   const epoch4Dispatch = payload.epoch4Dispatch === true;
-  const queueDispatch = payload.queueDispatch === true || epoch4Dispatch;
   const router = taskExecutionRouter(runtime);
-  if (!queueDispatch && payload.admissionLocked !== true) {
+  if (!epoch4Dispatch && !router) return { ok: false, statusCode: 503, code: 'task_execution_state_unavailable', retryable: true, error: 'Replicated task execution state is unavailable.' };
+  if (!epoch4Dispatch && payload.admissionLocked !== true) {
     return withCardCodexAdmission({ decisionOsRoot, ledgerId, cardId }, () => startThreadCodexProcessController({
       action_payload: { ...payload, admissionLocked: true },
       runtime_state: runtime,
@@ -186,26 +154,8 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime }) as AnyRecord & { cards?: AnyRecord[] };
   const source = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   if (!source) return { ok: false, statusCode: 404, error: 'Thread target card not found.', cardId, threadId };
-  const ownership = cardCodexExecutionOwnership(source);
-  if (ownership.state === 'contradictory') return { ok: false, statusCode: 409, error: 'Card has contradictory Codex execution ownership.', ...ownership };
-  const activeRunId = ownership.state === 'active' ? ownership.lease.runId : '';
-  const activeExecutionId = ownership.state === 'active' ? ownership.lease.executionId : '';
-  if (!router && !queueDispatch && activeRunId && activeExecutionId) {
-    const queued = readCodexProcessQueue(decisionOsRoot).find((item) => String(item.payload.runId ?? item.id) === activeRunId && String(item.payload.executionId ?? '') === activeExecutionId);
-    const live = runtimeRuns(runtime)[activeRunId];
-    if (queued || live && (live.status === 'pending' || live.status === 'running')) {
-      const run = live ?? { id: activeRunId, executionId: activeExecutionId, ledgerId, outputCardId: cardId, status: queued?.status === 'running' ? 'running' : 'pending', createdAt: queued?.createdAt ?? '' };
-      return {
-        ok: true,
-        statusCode: 202,
-        run: publicRun(run),
-        queued: String(run.status ?? '') === 'pending',
-        queuePosition: queued?.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: queued.id, createdAt: queued.createdAt, runtime }) : null,
-      };
-    }
-  }
   const retainedThreadRunId = String(source.codexThreadRunId ?? '').trim();
-  if (!queueDispatch && !activeRunId && retainedThreadRunId) {
+  if (!epoch4Dispatch && retainedThreadRunId) {
     const { continueCardSkillRunController } = await import('./continue-card-skill-run-controller.js');
     return continueCardSkillRunController({
       action_payload: { ...payload, ledgerId, cardId, runId: retainedThreadRunId, admissionLocked: true },
@@ -223,19 +173,6 @@ export async function startThreadCodexProcessController(input: { action_payload?
     cardId,
     threadId,
   };
-  const existingRunId = activeRunId;
-  if (!router && existingRunId && existingRunId !== reservedRunId) {
-    if (queueDispatch || runtimeCodexRunOwnsLiveProcess(runtime, existingRunId, decisionOsRoot)) return {
-      ok: false,
-      statusCode: 409,
-      error: 'Card already owns a live Codex process.',
-      cardId,
-      threadId,
-      runId: existingRunId,
-    };
-    await supersedeNonLiveRun({ runtime, decisionOsRoot, runId: existingRunId });
-  }
-
   const runId = reservedRunId || `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const executionId = reservedExecutionId || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const runDirectoryRef = `.decision-os/runs/codex-skills/${safeSegment(ledgerStem(ledgerPath))}`;
@@ -244,7 +181,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
   const runSummaryRef = `${runDirectoryRef}/${safeSegment(runId)}.md`;
   const runSummaryFile = resolve(decisionOsRoot, runSummaryRef.replace(/^\.decision-os\//, ''));
-  if (!queueDispatch && router) {
+  if (!epoch4Dispatch) {
     const selection = resolveCodexCommand({
       workspaceRoot,
       runtime,
@@ -265,7 +202,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
       effort: selection.effort,
     });
     try {
-      const receipt = await router.route(launchRequest);
+      const receipt = await router!.route(launchRequest);
       const run = {
         id: runId,
         executionId: receipt.executionId,
@@ -317,7 +254,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     }
   }
   mkdirSync(runDirectory, { recursive: true });
-  writeFileSync(runSummaryFile, [`# Thread Codex Run`, '', `Status: ${queueDispatch ? 'processing' : 'queued'}`, `Source card: ${String(source.title ?? cardId)}`, `Source thread: ${threadId}`, `Codex run: ${runId}`].join('\n'), 'utf8');
+  writeFileSync(runSummaryFile, [`# Thread Codex Run`, '', 'Status: processing', `Source card: ${String(source.title ?? cardId)}`, `Source thread: ${threadId}`, `Codex run: ${runId}`].join('\n'), 'utf8');
 
   const cardMarkdown = readFileSync(sourceCardFile, 'utf8');
   const prompt = buildThreadCodexPrompt({
@@ -362,33 +299,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     codexEffort: command.effort,
     ownership: 'thread',
   });
-  const executionCoordinator = epoch4Dispatch ? null : codexExecutionCoordinator(runtime);
-  let canonicalRecord = executionCoordinator?.store.find(executionId) ?? null;
-  if (executionCoordinator) {
-    try {
-      if (!canonicalRecord) canonicalRecord = await executionCoordinator.admit({
-        executionId,
-        sessionId: runId,
-        projectId: String(runtime.projectId ?? ''),
-        ledgerId,
-        taskId: cardId,
-        ownerCardId: cardId,
-        kind: 'thread',
-        requestedAt: createdAt,
-      });
-      if (canonicalRecord.phase === 'preparing') canonicalRecord = await executionCoordinator.enqueue(executionId);
-      if (queueDispatch && canonicalRecord.phase === 'queued') canonicalRecord = await executionCoordinator.claim(executionId);
-      if (ledgerId === 'tasks') source.executionIntent = executionCoordinator.intent(canonicalRecord);
-    } catch (error) {
-      return { ok: false, statusCode: 503, code: String((error as { code?: unknown })?.code ?? ''), retryable: true, error: error instanceof Error ? error.message : String(error), runId, executionId };
-    }
-  } else if (ledgerId === 'tasks') projectCardExecutionIntent({
-    card: source,
-    intentId: runId,
-    state: queueDispatch ? 'running' : 'queued',
-    changedAt: createdAt,
-  });
-  const startedAt = queueDispatch ? createdAt : null;
+  const startedAt = createdAt;
   const run = {
     id: runId,
     executionId,
@@ -405,45 +316,11 @@ export async function startThreadCodexProcessController(input: { action_payload?
     codexModel: command.model,
     codexEffort: command.effort,
     pid: 0,
-    status: queueDispatch ? 'running' : 'pending',
+    status: 'running',
     createdAt,
     startedAt,
   };
   updateRuntimeRun(runtime, runId, run);
-
-  if (!queueDispatch) {
-    try {
-      enqueueCodexThreadProcess({
-        decisionOsRoot,
-        id: runId,
-        createdAt,
-        payload: { ledgerId, threadId, cardId, runId, executionId, codexModel: command.model, codexEffort: command.effort },
-      });
-      stripHydratedThreadNotes(ledger);
-      await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'queue-codex-execution', cardIds: [cardId] } });
-    } catch (error) {
-      removeCodexProcessQueueItem(decisionOsRoot, runId);
-      delete runtimeRuns(runtime)[runId];
-      rmSync(runSummaryFile, { force: true });
-      if (executionCoordinator && canonicalRecord && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(canonicalRecord.phase)) {
-        await executionCoordinator.cancel(executionId, 'Direct Codex admission did not complete.').catch(() => undefined);
-      }
-      return { ok: false, statusCode: 500, error: error instanceof Error ? error.message : 'Codex admission failed.', runId };
-    }
-    notifyRuntimeCallback(runtime.onCodexRunAccepted, { ledgerId, cardId, threadId, runId, executionId, status: 'pending' });
-    const schedule = runtime.scheduleCodexProcesses;
-    if (typeof schedule === 'function') await schedule();
-    else await scheduleCodexProcesses({ decisionOsRoot, runtime });
-    const current = publicRun(runtimeRuns(runtime)[runId]);
-    return {
-      ok: true,
-      statusCode: 202,
-      run: current,
-      queued: current.status === 'pending',
-      queuePosition: current.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: runId, createdAt, runtime }) : null,
-      maxConcurrentCodexProcesses: Number(runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object' ? (runtime.decisionOsSettings as AnyRecord).maxConcurrentCodexProcesses ?? 1 : 1),
-    };
-  }
 
   stripHydratedThreadNotes(ledger);
   try {
@@ -482,69 +359,50 @@ export async function startThreadCodexProcessController(input: { action_payload?
       },
       onSpawn: async (child, attemptStartedAt) => {
         const processStartTime = codexProcessIdentity(child.pid ?? 0);
-        const persistedProcess = epoch4Dispatch
-          ? null
-          : recordCodexProcessQueueItemProcess({ decisionOsRoot, id: runId, processId: child.pid ?? 0, stdoutFile, stderrFile });
-        if (epoch4Dispatch) {
-          const state = taskExecutionState(runtime);
-          if (!state) throw new Error('task_execution_state_unavailable');
-          registerTaskExecutionProcess(runtime, {
-            executionId,
-            sessionId: runId,
-            child,
-            processId: child.pid ?? 0,
-            processStartTime,
-            startedAt: attemptStartedAt,
-            stdoutFile,
-            stderrFile,
-          });
-          try {
-            const current = state.executions.find(executionId);
-            if (current?.lifecycle.phase === 'starting') await state.executions.transition(executionId, { phase: 'running' });
-            else if (current?.lifecycle.phase !== 'running') throw new Error(`task_execution_spawn_phase_invalid:${current?.lifecycle.phase ?? 'missing'}`);
-          } catch (error) {
-            removeTaskExecutionProcess(runtime, executionId);
-            throw error;
-          }
+        const state = taskExecutionState(runtime);
+        if (!state) throw new Error('task_execution_state_unavailable');
+        registerTaskExecutionProcess(runtime, {
+          executionId,
+          sessionId: runId,
+          child,
+          processId: child.pid ?? 0,
+          processStartTime,
+          startedAt: attemptStartedAt,
+          stdoutFile,
+          stderrFile,
+        });
+        try {
+          const current = state.executions.find(executionId);
+          if (current?.lifecycle.phase === 'starting') await state.executions.transition(executionId, { phase: 'running' });
+          else if (current?.lifecycle.phase !== 'running') throw new Error(`task_execution_spawn_phase_invalid:${current?.lifecycle.phase ?? 'missing'}`);
+        } catch (error) {
+          removeTaskExecutionProcess(runtime, executionId);
+          throw error;
         }
         updateRuntimeRun(runtime, runId, { executionId, pid: child.pid ?? 0, status: 'running', startedAt: attemptStartedAt, transientRetryAt: null });
         attachRuntimeRunChild(runtime, runId, child);
-        if (executionCoordinator) void executionCoordinator.spawned(executionId, {
-          processId: child.pid ?? null,
-          processStartTime: persistedProcess?.processStartTime || null,
-          stdoutFile,
-          stderrFile,
-        }).catch((error: unknown) => reportBackground(runtime, 'project-canonical-codex-spawn', error, { runId, executionId }));
       },
       onTurnStarted: (_event, observedAt) => {
         if (updateRuntimeExecution(runtime, runId, executionId, { turnStartedAt: observedAt })) {
-          if (executionCoordinator) void executionCoordinator.heartbeat(executionId)
-            .catch((error: unknown) => reportBackground(runtime, 'publish-canonical-codex-heartbeat', error, { runId, executionId }));
           notifyRuntimeCallback(runtime.onCodexTurnStarted, { ledgerId, cardId, threadId, runId, executionId, status: 'running', startedAt: observedAt });
         }
       },
       onSettled: async (settlement) => {
-        if (epoch4Dispatch) removeTaskExecutionProcess(runtime, executionId);
+        removeTaskExecutionProcess(runtime, executionId);
         if (settlement.kind === 'error') {
           const ownsExecution = updateRuntimeExecution(runtime, runId, executionId, { status: 'failed', error: settlement.error.message, finishedAt: settlement.finishedAt });
           if (!ownsExecution) return;
           appendRunStatus(runSummaryFile, 'failed', settlement.error.message);
           appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status: 'failed' }), 'utf8');
-          if (!epoch4Dispatch) removeCodexProcessQueueItem(decisionOsRoot, runId);
-          if (executionCoordinator) await executionCoordinator.settle(executionId, { phase: 'failed', error: { code: 'codex_process_start_failed', message: settlement.error.message }, result: { status: 'failed', summary: settlement.error.message } });
-          if (epoch4Dispatch) {
-            const current = taskExecutionState(runtime)?.executions.find(executionId);
-            if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
-              await taskExecutionState(runtime)!.executions.transition(executionId, {
-                phase: 'failed',
-                error: { code: 'codex_process_start_failed', message: settlement.error.message },
-              });
-            }
-            await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
+          const current = taskExecutionState(runtime)?.executions.find(executionId);
+          if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
+            await taskExecutionState(runtime)!.executions.transition(executionId, {
+              phase: 'failed',
+              error: { code: 'codex_process_start_failed', message: settlement.error.message },
+            });
           }
+          await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
           updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
-          try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' }); }
-          catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
           scheduleCodexRuntime(runtime, 'schedule-after-thread-start-failure', { runId, executionId });
           notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status: 'failed' });
           return;
@@ -569,26 +427,16 @@ export async function startThreadCodexProcessController(input: { action_payload?
         appendRunStatus(runSummaryFile, status, detail);
         if (!updateRuntimeExecution(runtime, runId, executionId, { status, exitCode: settlement.exitCode, finishedAt: settlement.finishedAt })) return;
         appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
-        if (!epoch4Dispatch) removeCodexProcessQueueItem(decisionOsRoot, runId);
-        if (executionCoordinator) await executionCoordinator.settle(executionId, {
-          phase: status === 'complete' ? 'succeeded' : status,
-          result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
-          error: status === 'failed' ? { code: 'codex_process_failed', message: detail } : null,
-        });
-        if (epoch4Dispatch) {
-          const current = taskExecutionState(runtime)?.executions.find(executionId);
-          if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
-            await taskExecutionState(runtime)!.executions.transition(executionId, {
-              phase: status === 'complete' ? 'succeeded' : status,
-              result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
-              error: status === 'failed' ? { code: 'codex_process_failed', message: detail } : null,
-            });
-          }
-          await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
+        const current = taskExecutionState(runtime)?.executions.find(executionId);
+        if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
+          await taskExecutionState(runtime)!.executions.transition(executionId, {
+            phase: status === 'complete' ? 'succeeded' : status,
+            result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
+            error: status === 'failed' ? { code: 'codex_process_failed', message: detail } : null,
+          });
         }
+        await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
         updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
-        try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' }); }
-        catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
         scheduleCodexRuntime(runtime, 'schedule-after-thread-settlement', { runId, executionId, status });
         if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
         notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status, exitCode: settlement.exitCode });

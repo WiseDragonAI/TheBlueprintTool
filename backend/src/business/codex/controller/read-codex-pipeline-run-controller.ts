@@ -12,7 +12,6 @@ import {
   resolvePipelineLedgerContext,
 } from '../helper/codex-pipeline-runner.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
-import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 import { taskExecutionState } from '../helper/task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -32,10 +31,9 @@ export async function readCodexPipelineRunController(
   if (!runId) return { ok: false, statusCode: 400, error: 'Missing pipeline run id.' };
   const storedStore = readCodexPipelineStore({ decisionOsRoot }).store;
   const storedRun = storedStore.runs.find((entry) => entry.id === runId);
-  const run = storedRun && (storedRun.status === 'pending' || storedRun.status === 'running')
-    ? reassessPipelineAfterSkill({ decisionOsRoot, runtime, pipelineRunId: runId }) ?? storedRun
-    : storedRun;
-  if (!run) return { ok: false, statusCode: 404, error: 'Pipeline run not found.', runId };
+  if (!storedRun) return { ok: false, statusCode: 404, error: 'Pipeline run not found.', runId };
+  const run = reassessPipelineAfterSkill({ decisionOsRoot, runtime, pipelineRunId: runId });
+  if (!run) return { ok: false, statusCode: 404, error: 'Pipeline executions not found.', runId };
   const context = resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId: run.ledgerId });
   const cardsById = new Map((context?.ledger.cards ?? []).map((card) => [String(card.id ?? ''), card]));
   const steps = run.steps.map((step) => {
@@ -62,8 +60,7 @@ export async function readCodexPipelineRunController(
   const replicatedExecution = latestSkill
     ? taskExecutionState(runtime)?.executions.find(latestSkill.executionId) ?? null
     : null;
-  const execution = replicatedExecution
-    ? {
+  const execution = replicatedExecution ? {
       ...replicatedExecution.metadata,
       ...replicatedExecution.lifecycle,
       artifacts: replicatedExecution.artifacts,
@@ -72,8 +69,7 @@ export async function readCodexPipelineRunController(
         : replicatedExecution.lifecycle.phase === 'starting' || replicatedExecution.lifecycle.phase === 'running'
           ? ['cancel', 'open-log']
           : ['restart', 'open-log'],
-    }
-    : latestSkill ? codexExecutionCoordinator(runtime)?.dto(latestSkill.executionId) ?? null : null;
+    } : null;
   const pipeline = run.pipelineId
     ? readCodexPipelineStore({ decisionOsRoot }).store.pipelines.find((entry) => entry.id === run.pipelineId) ?? null
     : null;
@@ -86,7 +82,7 @@ export async function readCodexPipelineRunController(
     activeStep,
     activeSkill,
     execution,
-    canCancel: execution ? execution.validActions.includes('cancel') : run.status === 'pending' || run.status === 'running',
+    canCancel: execution ? execution.validActions.includes('cancel') : false,
     canRestart: terminal,
     canContinue: terminal,
     queuePosition: run.status === 'pending' && activeSkill

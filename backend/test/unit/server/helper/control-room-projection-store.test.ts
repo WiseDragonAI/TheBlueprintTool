@@ -31,7 +31,7 @@ function fixture(context: { after(callback: () => void): void }) {
   return { root, decisionOsRoot, project };
 }
 
-test('replicated execution intent alone places a master task in Exec', (context) => {
+test('legacy card execution intent cannot place a task in Exec', (context) => {
   const { project } = fixture(context);
   const ledger = {
     cards: [{
@@ -44,35 +44,8 @@ test('replicated execution intent alone places a master task in Exec', (context)
 
   const projection = controlRoomProjectionFromTaskLedger({ project, ledger }) as Record<string, any>;
 
-  assert.equal(projection.exec.length, 1);
-  assert.equal(projection.exec[0].executionStatus, 'running');
-  assert.equal(projection.exec[0].executionSince, '2026-07-14T10:03:00.000Z');
-  assert.equal(projection.exec[0].cardStatus, 'todo');
-});
-
-test('replicated subtask execution intent places its relationship-owned master in Exec', (context) => {
-  const { project } = fixture(context);
-  const ledger = {
-    cards: [
-      { id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z') },
-      {
-        id: 'child', title: 'Child', labels: ['subtask'], lifecycle: lifecycle('todo', '2026-07-14T10:01:00.000Z'),
-        executionIntent: { id: 'run-child', state: 'running', changedAt: '2026-07-14T10:02:00.000Z', startedAt: '2026-07-14T10:03:00.000Z', settledAt: null, error: null },
-      },
-    ],
-    annotations: [],
-    relationships: [{ id: 'rel-child', from: 'master', to: 'child', label: 'subtask', position: 0 }],
-  };
-
-  const projection = controlRoomProjectionFromTaskLedger({ project, ledger }) as Record<string, any>;
-
-  assert.equal(projection.queue.length, 0);
-  assert.equal(projection.exec.length, 1);
-  assert.equal(projection.exec[0].cardId, 'master');
-  assert.equal(projection.exec[0].executionStatus, 'running');
-  assert.equal(projection.exec[0].executionOwnerCardId, 'child');
-  assert.equal(projection.exec[0].executionOwnerKind, 'subtask');
-  assert.equal(projection.exec[0].executionSince, '2026-07-14T10:03:00.000Z');
+  assert.equal(projection.queue.length, 1);
+  assert.equal(projection.exec.length, 0);
 });
 
 test('epoch-4 execution entity places its task in Exec without card execution intent', (context) => {
@@ -132,13 +105,17 @@ test('epoch-4 execution conflicts invalidate the owning task without selecting a
   assert.deepEqual(projection.allTasks[0].diagnostics, ['task_execution_conflict:execution-a']);
 });
 
-test('node-local process, queue, voice, and body observations cannot override lifecycle', (context) => {
+test('legacy card, process, queue, voice, and body observations cannot override lifecycle', (context) => {
   const { decisionOsRoot, project } = fixture(context);
   mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
   writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), 'Completed at: 1999-01-01T00:00:00.000Z\n#task-complete\n');
   writeFileSync(join(decisionOsRoot, 'codex-process-queue.json'), JSON.stringify({ items: [{ id: 'run-a', status: 'pending' }] }));
   const ledger = {
-    cards: [{ id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('backlog', '2026-07-14T10:01:00.000Z'), comment: { contentFile: '.decision-os/cards/tasks/master.md' }, codexActiveRunId: 'run-a' }],
+    cards: [{
+      id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('backlog', '2026-07-14T10:01:00.000Z'),
+      comment: { contentFile: '.decision-os/cards/tasks/master.md' }, codexActiveRunId: 'run-a',
+      executionIntent: { id: 'run-a', state: 'running', changedAt: '2026-07-14T10:02:00.000Z' },
+    }],
     annotations: [], relationships: [],
   };
 

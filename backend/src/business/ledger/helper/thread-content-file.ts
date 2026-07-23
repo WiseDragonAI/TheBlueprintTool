@@ -58,7 +58,7 @@ function codeFenceMarker(line: string): { marker: '`' | '~'; length: number } | 
 
 function metadataFor(note: AnyRecord): AnyRecord {
   const metadata: AnyRecord = {};
-  for (const key of ['id', 'timestamp', 'voiceFileRef', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt', 'error', 'codexQueueStatus', 'codexQueueRequestedAt', 'codexQueueRequestId', 'codexQueueLaunchMode', 'codexQueueCardId', 'codexQueuePipelineId', 'codexQueueRunId', 'codexQueueExecutionId', 'codexQueueError', 'codexRunId', 'codexLine', 'codexKind', 'codexEventType', 'codexItemId', 'codexTool', 'codexExitCode']) {
+  for (const key of ['id', 'timestamp', 'voiceFileRef', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt', 'error', 'codexQueueRequestId', 'codexQueueLaunchMode', 'codexQueueCardId', 'codexQueuePipelineId', 'codexRunId', 'codexLine', 'codexKind', 'codexEventType', 'codexItemId', 'codexTool', 'codexExitCode']) {
     if (typeof note[key] === 'string' && note[key]) metadata[key] = note[key];
   }
   if (Number.isFinite(Number(note.revision)) && Number(note.revision) > 0) metadata.revision = Number(note.revision);

@@ -3,7 +3,6 @@
  * WHY: Optimistic callers need immediate scoped state while persistence and replication avoid workspace rewrites.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import type { CodexExecutionIntent } from '../../../../../shared/schemas/codex-execution-types.js';
 import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { createTaskCurrentStateStore } from './task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskEntityChange, type TaskStateDelta } from './task-current-state-types.js';
@@ -216,7 +215,6 @@ export function createProjectTaskState(input: {
         .map((relationship) => String(relationship.to ?? '')) : [];
       assertLifecycleConflictFree([masterTaskId, ...subtaskIds]);
     }
-    if (mutation.action === 'create-execution-intent' && mutation.cardId) assertLifecycleConflictFree([String(mutation.cardId)]);
     if (mutation.action === 'reassign-task' && mutation.cardId) {
       const taskId = String(mutation.cardId);
       const nodeId = String(mutation.assignedNodeId ?? '');
@@ -294,52 +292,6 @@ export function createProjectTaskState(input: {
     return operation;
   };
 
-  const transitionExecutionIntent = (taskId: string, patch: { id?: string; state: 'waiting' | 'queued' | 'running' | 'terminal' | 'failed'; launchMode?: 'run' | 'pipeline'; error?: string }): Promise<TaskStateDelta> => {
-    assertWritable();
-    const operation = commandQueue.then(async () => {
-      assertLifecycleConflictFree([taskId]);
-      const card = store.projectedEntity('card', taskId);
-      if (!card) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-      const current = card.executionIntent && typeof card.executionIntent === 'object' ? card.executionIntent as AnyRecord : {};
-      if (patch.id && current.id && String(current.id) !== patch.id && ['waiting', 'queued', 'running'].includes(String(current.state ?? ''))) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-      const changedAt = new Date().toISOString();
-      const state = patch.state;
-      return persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'executionIntent', operation: 'set', value: {
-        id: patch.id ?? current.id ?? null,
-        state,
-        changedAt,
-        startedAt: state === 'running' ? current.startedAt ?? changedAt : current.startedAt ?? null,
-        settledAt: state === 'terminal' || state === 'failed' ? changedAt : null,
-        error: patch.error ?? null,
-      } }] }]);
-    });
-    commandQueue = operation.then(() => undefined, () => undefined);
-    return operation;
-  };
-
-  const projectExecutionIntent = (taskId: string, intent: CodexExecutionIntent): Promise<TaskStateDelta> => {
-    assertWritable();
-    const operation = commandQueue.then(async () => {
-      assertLifecycleConflictFree([taskId]);
-      const card = store.projectedEntity('card', taskId);
-      if (!card) throw new Error(`task_card_not_found:${taskId}`);
-      const current = card.executionIntent && typeof card.executionIntent === 'object' && !Array.isArray(card.executionIntent)
-        ? card.executionIntent as AnyRecord
-        : null;
-      if (current && typeof current.executionId === 'string') {
-        if (current.executionId !== intent.executionId && ['preparing', 'queued', 'starting', 'running'].includes(String(current.phase ?? ''))) {
-          throw new Error(`task_execution_intent_conflict:${taskId}:${current.executionId}`);
-        }
-        if (current.executionId === intent.executionId && Number(current.revision ?? 0) >= intent.revision) {
-          return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-        }
-      }
-      return persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'executionIntent', operation: 'set', value: structuredClone(intent) }] }], { emittedAt: intent.changedAt });
-    });
-    commandQueue = operation.then(() => undefined, () => undefined);
-    return operation;
-  };
-
   return {
     store,
     executions,
@@ -351,8 +303,6 @@ export function createProjectTaskState(input: {
     activateTask: queueTaskActivation,
     recordContentContribution: queueContentContribution,
     finalizeExecutionArtifacts,
-    transitionExecutionIntent,
-    projectExecutionIntent,
     flush: store.flush,
     projection: store.projection,
   };

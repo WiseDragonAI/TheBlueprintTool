@@ -398,7 +398,7 @@ test('execution timeout settles as an execution-scoped diagnostic without pausin
   }
 });
 
-test('corrupt Codex process queue is preserved while the rest of the server remains available', async () => {
+test('retired Codex process queue is inert and byte-identical while the server remains available', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-corrupt-codex-queue-server-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
   const frontendRoot = join(projectRoot, 'frontend');
@@ -418,10 +418,10 @@ test('corrupt Codex process queue is preserved while the rest of the server rema
   try {
     assert.equal((await fetch(`${baseUrl}/`)).status, 200);
     const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; pausedBackgroundComponents: string[] };
-    assert.equal(health.status, 'degraded');
-    assert.ok(health.pausedBackgroundComponents.some((component) => component.startsWith('codex-runtime:')));
+    assert.equal(health.status, 'ready');
+    assert.deepEqual(health.pausedBackgroundComponents, []);
     const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; code: string; message: string }> };
-    assert.ok(incidents.incidents.some((incident) => incident.operation === 'recover-durable-codex-process-queue' && incident.message.includes('codex-process-queue.json')));
+    assert.equal(incidents.incidents.some((incident) => incident.operation === 'recover-durable-codex-process-queue'), false);
     assert.equal(readFileSync(queueFile, 'utf8'), corruptBytes);
   } finally {
     server.close();

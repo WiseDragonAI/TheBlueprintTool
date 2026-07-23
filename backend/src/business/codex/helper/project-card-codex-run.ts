@@ -1,6 +1,6 @@
 /**
- * WHAT: Projects the currently visible Codex run onto one ledger card.
- * WHY: Thread launches and Process Card pipelines must feed the same card-owned Codex Log contract.
+ * WHAT: Retains provider session history for a card thread.
+ * WHY: Conversation continuity needs stable session pointers, while replicated execution entities exclusively own lifecycle.
  */
 type AnyRecord = Record<string, unknown>;
 
@@ -31,12 +31,8 @@ export function projectCardCodexRun(input: {
 }): AnyRecord | null {
   const card = (input.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
   if (!card) return null;
-  card.codexActiveRunId = input.runId;
-  card.codexActiveExecutionId = input.executionId;
   card.codexRunModel = input.codexModel;
   card.codexRunEffort = input.codexEffort;
-  delete card.codexQueuedPipelineRunId;
-  delete card.codexQueuedRunId;
   if (input.ownership === 'thread') {
     card.codexThreadRunIds = [...new Set([...threadRunIds(card), input.runId])];
     delete card.codexRunId;
@@ -47,23 +43,6 @@ export function projectCardCodexRun(input: {
       ? card.codexThreadRunOutputFiles as Record<string, unknown>
       : {};
     card.codexThreadRunOutputFiles = { ...outputFiles, [input.runId]: input.outputFileRef };
-  } else {
-    // A direct or pipeline execution temporarily owns the active lease without
-    // destroying the durable thread session that the next thread launch resumes.
-    card.codexRunId = input.runId;
-    card.codexRunOutputFile = input.outputFileRef;
-  }
-  delete card.codexPipelineRunId;
-  delete card.codexPipelineName;
-  delete card.codexPipelineStepId;
-  delete card.codexPipelineStepName;
-  delete card.codexSkillName;
-  if (input.pipeline) {
-    card.codexPipelineRunId = input.pipeline.runId;
-    card.codexPipelineName = input.pipeline.name;
-    card.codexPipelineStepId = input.pipeline.stepId;
-    card.codexPipelineStepName = input.pipeline.stepName;
-    card.codexSkillName = input.pipeline.skillName;
   }
   return card;
 }

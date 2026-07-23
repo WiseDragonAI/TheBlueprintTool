@@ -1,6 +1,6 @@
 /**
- * WHAT: Runs durable Codex pipeline skills one at a time and persists every lifecycle transition.
- * WHY: Pipeline progress must survive process-local state loss without ever starting two ordered skills together.
+ * WHAT: Projects immutable pipeline topology through replicated execution lifecycle and launches the selected skill.
+ * WHY: Pipeline ordering must survive process-local state loss without letting manifest compatibility fields become runtime authority.
  */
 import { spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -13,32 +13,25 @@ import type {
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
-import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { codexRunExecutionFinishedMarker } from './codex-run-segment-marker.js';
-import { readCodexPipelineStore, writeCodexPipelineStore } from './codex-pipeline-store.js';
+import { readCodexPipelineStore } from './codex-pipeline-store.js';
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
 import { resolveCodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 import { resolveServerSkillContext } from './server-skill-context.js';
-import { projectCardCodexRun } from './project-card-codex-run.js';
-import { projectCardExecutionIntent } from './project-card-execution-intent.js';
-import { queueLedgerProjectionPersistence } from '@backend/business/task-state/helper/persist-ledger-projection.js';
-import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
-import { codexProcessIdentity } from './codex-process-queue.js';
+import { codexProcessIdentity } from './codex-process-identity.js';
 import { launchCodexExecutionProcess } from './launch-codex-execution-process.js';
 import { signalCodexProcessTree } from './reconcile-terminal-codex-process.js';
 import {
   attachCodexRuntimeChild as attachRuntimeChild,
   codexRuntimeRun,
-  codexRuntimeStatus,
   codexExecutionTimeoutMs,
   notifyCodexLifecycle as notify,
   publicCodexRuntimeRun,
   scheduleCodexRuntime,
   updateCodexRuntimeRun as updateRuntimeRun,
 } from './codex-runtime-run-store.js';
-import { codexExecutionCoordinator } from './codex-execution-runtime.js';
 import {
   finalizeTaskExecutionArtifacts,
   registerTaskExecutionProcess,
@@ -73,36 +66,6 @@ export function publicPipelineSkillRuntimeRun(run: AnyRecord): AnyRecord {
   return publicCodexRuntimeRun(run);
 }
 
-export function pipelineRuntimeRun(runtime: AnyRecord, runId: string): AnyRecord | undefined {
-  return codexRuntimeRun(runtime, runId);
-}
-
-function runtimeStatus(runtime: AnyRecord, runId: string): CodexPipelineStatus | null {
-  const value = codexRuntimeStatus(runtime, runId);
-  return value === 'pending' || value === 'running' || value === 'complete' || value === 'failed' || value === 'cancelled' ? value : null;
-}
-
-function recordPipelineSkillProcess(input: { decisionOsRoot: string; pipelineRunId: string; skillRunId: string; processId: number }): void {
-  const normalized = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
-  writeCodexPipelineStore({
-    decisionOsRoot: input.decisionOsRoot,
-    store: {
-      ...normalized.store,
-      runs: normalized.store.runs.map((run) => run.id !== input.pipelineRunId ? run : {
-        ...run,
-        steps: run.steps.map((step) => ({
-          ...step,
-          skills: step.skills.map((skill) => skill.runId !== input.skillRunId ? skill : {
-            ...skill,
-            processId: input.processId,
-            processStartTime: codexProcessIdentity(input.processId),
-          }),
-        })),
-      }),
-    },
-  });
-}
-
 export function maxConcurrentCodexProcesses(runtime: AnyRecord): number {
   const sharedCapacity = runtime.globalCodexProcessCapacity;
   if (typeof sharedCapacity === 'function') {
@@ -120,14 +83,6 @@ export function maxConcurrentCodexProcesses(runtime: AnyRecord): number {
   );
   if (!Number.isFinite(configured)) return 1;
   return Math.min(32, Math.max(1, Math.floor(configured)));
-}
-
-export function pipelineQueuePosition(input: {
-  runs: readonly CodexPipelineRun[];
-  pipelineRunId: string;
-}): number | null {
-  const index = input.runs.filter((run) => run.status === 'pending').findIndex((run) => run.id === input.pipelineRunId);
-  return index < 0 ? null : index + 1;
 }
 
 export type PipelineLedgerContext = {
@@ -174,54 +129,6 @@ export function resolvePipelineLedgerContext(input: {
   };
 }
 
-function persistLedger(context: PipelineLedgerContext, kind: string, cardIds: string[]): void {
-  queueLedgerProjectionPersistence({
-    ledgerId: context.ledgerId,
-    ledgerPath: context.ledgerPath,
-    ledger: context.ledger,
-    runtime: context.runtime,
-    command: { kind, cardIds },
-  });
-}
-
-function reconcilePipelineExecution(context: PipelineLedgerContext, run: CodexPipelineRun): void {
-  const skillExecutions = new Map(run.steps.flatMap((step) => step.skills.map((skill) => [skill.runId, skill] as const)));
-  let changed = false;
-  const changedCardIds: string[] = [];
-  for (const card of context.ledger.cards ?? []) {
-    const ownsPipeline = String(card.codexQueuedPipelineRunId ?? '') === run.id
-      || String(card.codexPipelineRunId ?? '') === run.id;
-    if (!ownsPipeline) continue;
-    const cardId = String(card.id ?? '');
-    let cardChanged = false;
-    if (String(card.executionRunId ?? '') === run.id && card.executionStatus !== undefined) {
-      delete card.executionStatus;
-      changed = true;
-      cardChanged = true;
-    }
-    if (String(card.executionRunId ?? '') === run.id) {
-      delete card.executionRunId;
-      changed = true;
-      cardChanged = true;
-    }
-    const activeSkill = skillExecutions.get(String(card.codexActiveRunId ?? ''));
-    if (activeSkill && activeSkill.status !== 'pending' && activeSkill.status !== 'running'
-      && String(card.codexActiveExecutionId ?? '') === activeSkill.executionId) {
-      delete card.codexActiveRunId;
-      delete card.codexActiveExecutionId;
-      changed = true;
-      cardChanged = true;
-    }
-    if (isTerminal(run.status) && card.executionIntent && typeof card.executionIntent === 'object' && ['waiting', 'queued', 'running'].includes(String((card.executionIntent as AnyRecord).state ?? ''))) {
-      projectCardExecutionIntent({ card, intentId: run.id, state: run.status === 'failed' ? 'failed' : 'terminal', error: run.error });
-      changed = true;
-      cardChanged = true;
-    }
-    if (cardChanged && cardId) changedCardIds.push(cardId);
-  }
-  if (changed) persistLedger(context, 'reconcile-codex-pipeline', changedCardIds);
-}
-
 function cardContent(input: { context: PipelineLedgerContext; decisionOsRoot: string; cardId: string }): string {
   const hydrated = hydrateLedgerCardContent(
     JSON.parse(JSON.stringify(input.context.ledger)),
@@ -238,65 +145,6 @@ export function outputFileForPipelineCard(context: PipelineLedgerContext, decisi
   return resolveCardContentFile(decisionOsRoot, comment.contentFile) ?? '';
 }
 
-async function projectPipelineSkillRun(input: {
-  decisionOsRoot: string;
-  context: PipelineLedgerContext;
-  step: CodexPipelineRunStep;
-  skill: CodexPipelineRunSkill;
-  pipelineRun: CodexPipelineRun;
-}): Promise<void> {
-  const outputFile = outputFileForPipelineCard(input.context, input.decisionOsRoot, input.step.outputCardId);
-  const outputFileRef = outputFile ? relative(dirname(input.decisionOsRoot), outputFile) : '';
-  const projection = {
-    ledger: input.context.ledger,
-    runId: input.skill.runId,
-    executionId: input.skill.executionId,
-    outputFileRef,
-    codexModel: input.skill.codexModel,
-    codexEffort: input.skill.codexEffort,
-    ownership: 'card' as const,
-    pipeline: {
-      runId: input.pipelineRun.id,
-      name: input.pipelineRun.pipelineName,
-      stepId: input.step.stepId,
-      stepName: input.step.name,
-      skillName: input.skill.skillName,
-    },
-  };
-  projectCardCodexRun({ ...projection, cardId: input.pipelineRun.sourceCardId });
-  projectCardCodexRun({ ...projection, cardId: input.step.outputCardId });
-  const source = (input.context.ledger.cards ?? []).find((card) => String(card.id ?? '') === input.pipelineRun.sourceCardId);
-  if (input.context.ledgerId === 'tasks' && source) {
-    const coordinator = codexExecutionCoordinator(input.context.runtime ?? {});
-    const execution = coordinator?.store.find(input.skill.executionId);
-    if (coordinator && execution) source.executionIntent = coordinator.intent(execution);
-    else projectCardExecutionIntent({
-      card: source,
-      intentId: input.pipelineRun.id,
-      state: 'running',
-      changedAt: input.skill.startedAt ?? new Date().toISOString(),
-    });
-  }
-  stripHydratedThreadNotes(input.context.ledger);
-  await persistLedgerProjection({
-    decisionOsRoot: input.decisionOsRoot,
-    ledgerId: input.context.ledgerId,
-    ledgerPath: input.context.ledgerPath,
-    ledger: input.context.ledger,
-    runtime: input.context.runtime,
-    command: { kind: 'project-codex-pipeline-skill', cardIds: [input.pipelineRun.sourceCardId, input.step.outputCardId] },
-  });
-}
-
-function terminalFromFiles(skill: CodexPipelineRunSkill): TerminalStatus | null {
-  const stdout = skill.stdoutFile && existsSync(skill.stdoutFile) ? readFileSync(skill.stdoutFile, 'utf8') : '';
-  const stderr = skill.stderrFile && existsSync(skill.stderrFile) ? readFileSync(skill.stderrFile, 'utf8') : '';
-  if (/cancelled|canceled|terminated by operator/i.test(stderr)) return 'cancelled';
-  if (/"type"\s*:\s*"(?:turn|thread|run)\.failed"|Codex run failed|exit code [1-9]/i.test(`${stdout}\n${stderr}`)) return 'failed';
-  if (/"type"\s*:\s*"turn\.completed"/i.test(stdout) || /Codex run completed/i.test(stderr)) return 'complete';
-  return null;
-}
-
 export function derivePipelineSkillStatus(input: {
   skill: CodexPipelineRunSkill;
   runtime?: AnyRecord;
@@ -304,24 +152,12 @@ export function derivePipelineSkillStatus(input: {
   const replicated = input.runtime
     ? taskExecutionState(input.runtime)?.executions.find(input.skill.executionId)
     : null;
-  if (replicated) {
-    if (replicated.lifecycle.phase === 'preparing' || replicated.lifecycle.phase === 'queued') return 'pending';
-    if (replicated.lifecycle.phase === 'starting' || replicated.lifecycle.phase === 'running' || replicated.lifecycle.phase === 'cancelling') return 'running';
-    if (replicated.lifecycle.phase === 'succeeded') return 'complete';
-    if (replicated.lifecycle.phase === 'cancelled') return 'cancelled';
-    return 'failed';
-  }
-  const canonical = input.runtime ? codexExecutionCoordinator(input.runtime)?.store.find(input.skill.executionId) : null;
-  if (canonical) {
-    if (canonical.phase === 'preparing' || canonical.phase === 'queued') return 'pending';
-    if (canonical.phase === 'starting' || canonical.phase === 'running') return 'running';
-    if (canonical.phase === 'succeeded') return 'complete';
-    if (canonical.phase === 'cancelled') return 'cancelled';
-    return 'failed';
-  }
-  const inMemory = input.runtime ? runtimeStatus(input.runtime, input.skill.runId) : null;
-  if (inMemory) return inMemory;
-  return terminalFromFiles(input.skill) ?? input.skill.status;
+  if (!replicated) throw new Error(`task_execution_not_found:${input.skill.executionId}`);
+  if (replicated.lifecycle.phase === 'preparing' || replicated.lifecycle.phase === 'queued') return 'pending';
+  if (replicated.lifecycle.phase === 'starting' || replicated.lifecycle.phase === 'running' || replicated.lifecycle.phase === 'cancelling') return 'running';
+  if (replicated.lifecycle.phase === 'succeeded') return 'complete';
+  if (replicated.lifecycle.phase === 'cancelled') return 'cancelled';
+  return 'failed';
 }
 
 function stepStatus(skills: readonly CodexPipelineRunSkill[]): CodexPipelineStatus {
@@ -344,7 +180,7 @@ function isTerminal(status: CodexPipelineStatus): status is TerminalStatus {
   return status === 'complete' || status === 'failed' || status === 'cancelled';
 }
 
-function replicatedPipelineRun(run: CodexPipelineRun, runtime: AnyRecord): CodexPipelineRun | null {
+export function replicatedPipelineRun(run: CodexPipelineRun, runtime: AnyRecord): CodexPipelineRun | null {
   const state = taskExecutionState(runtime);
   const executions = state?.executions.byPipelineRunId(run.id) ?? [];
   if (executions.length === 0) return null;
@@ -352,7 +188,7 @@ function replicatedPipelineRun(run: CodexPipelineRun, runtime: AnyRecord): Codex
   const steps = run.steps.map((step) => {
     const skills = step.skills.map((skill) => {
       const execution = byId.get(skill.executionId);
-      if (!execution) return skill;
+      if (!execution) throw new Error(`task_execution_not_found:${skill.executionId}`);
       const status = derivePipelineSkillStatus({ skill, runtime });
       return {
         ...skill,
@@ -409,74 +245,14 @@ export function reassessPipelineAfterSkill(input: {
   const prior = before.store.runs.find((run) => run.id === input.pipelineRunId);
   if (!prior) return null;
   const replicated = replicatedPipelineRun(prior, input.runtime);
-  if (replicated) {
-    const context = resolvePipelineLedgerContext({
-      decisionOsRoot: input.decisionOsRoot,
-      runtime: input.runtime,
-      ledgerId: replicated.ledgerId,
-    });
-    if (context) hydrateLedgerCardContent(context.ledger, input.decisionOsRoot);
-    return replicated;
-  }
-  const now = input.finishedAt ?? new Date().toISOString();
-  const steps = prior.steps.map((step) => {
-    const skills = step.skills.map((skill) => {
-      if (input.skillRunId && skill.runId === input.skillRunId && input.settledStatus) {
-        return {
-          ...skill,
-          status: input.settledStatus,
-          processId: 0,
-          processStartTime: '',
-          finishedAt: now,
-          error: input.error ?? (input.settledStatus === 'failed' ? `Codex exited with code ${input.exitCode ?? 'unknown'}.` : ''),
-        };
-      }
-      if (skill.status !== 'running') return skill;
-      const derived = derivePipelineSkillStatus({ skill, runtime: input.runtime });
-      return isTerminal(derived) ? { ...skill, status: derived, finishedAt: skill.finishedAt ?? now } : skill;
-    });
-    const status = stepStatus(skills);
-    const startedAt = step.startedAt ?? skills.find((skill) => skill.startedAt)?.startedAt ?? null;
-    const finishedAt = isTerminal(status) ? step.finishedAt ?? now : null;
-    const error = skills.find((skill) => skill.status === 'failed' || skill.status === 'cancelled')?.error ?? '';
-    return { ...step, skills, status, startedAt, finishedAt, error };
-  });
-  const status = runStatus(steps, prior.status);
-  const run: CodexPipelineRun = {
-    ...prior,
-    steps,
-    status,
-    updatedAt: now,
-    startedAt: prior.startedAt ?? steps.find((step) => step.startedAt)?.startedAt ?? null,
-    finishedAt: isTerminal(status) ? prior.finishedAt ?? now : null,
-    error: steps.find((step) => step.status === 'failed' || step.status === 'cancelled')?.error ?? '',
-  };
-  const nextRuns = before.store.runs.map((entry) => entry.id === run.id ? run : entry);
-  const activeWorkspaceRun = isTerminal(status) && before.store.activeWorkspaceRun === run.id
-    ? nextRuns.find((entry) => entry.status === 'running')?.id ?? null
-    : before.store.activeWorkspaceRun;
-  const written = writeCodexPipelineStore({
-    decisionOsRoot: input.decisionOsRoot,
-    store: {
-      ...before.store,
-      runs: nextRuns,
-      activeWorkspaceRun,
-    },
-  });
-  const persisted = written.store.runs.find((entry) => entry.id === run.id) ?? run;
-
-  // Reload generated card content as part of every reassessment so persisted state,
-  // not a stale in-memory card snapshot, remains the handoff source for the next skill.
+  if (!replicated) return null;
   const context = resolvePipelineLedgerContext({
     decisionOsRoot: input.decisionOsRoot,
     runtime: input.runtime,
-    ledgerId: persisted.ledgerId,
+    ledgerId: replicated.ledgerId,
   });
-  if (context) {
-    reconcilePipelineExecution(context, persisted);
-    hydrateLedgerCardContent(context.ledger, input.decisionOsRoot);
-  }
-  return persisted;
+  if (context) hydrateLedgerCardContent(context.ledger, input.decisionOsRoot);
+  return replicated;
 }
 
 function findNextSkill(run: CodexPipelineRun): { step: CodexPipelineRunStep; skill: CodexPipelineRunSkill } | null {
@@ -488,46 +264,6 @@ function findNextSkill(run: CodexPipelineRun): { step: CodexPipelineRunStep; ski
     }
   }
   return null;
-}
-
-export function markPipelineSkillStarted(input: {
-  decisionOsRoot: string;
-  pipelineRunId: string;
-  skillRunId: string;
-  startedAt: string;
-}): CodexPipelineRun | null {
-  const before = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
-  const prior = before.store.runs.find((run) => run.id === input.pipelineRunId);
-  if (!prior || isTerminal(prior.status) || prior.steps.some((step) => step.skills.some((skill) => skill.status === 'running'))) return null;
-  let found = false;
-  const steps = prior.steps.map((step) => {
-    const skills = step.skills.map((skill) => {
-      if (skill.runId !== input.skillRunId || skill.status !== 'pending') return skill;
-      found = true;
-      return { ...skill, status: 'running' as const, startedAt: input.startedAt, finishedAt: null, error: '' };
-    });
-    if (!found || !skills.some((skill) => skill.runId === input.skillRunId)) return step;
-    return { ...step, skills, status: 'running' as const, startedAt: step.startedAt ?? input.startedAt, finishedAt: null, error: '' };
-  });
-  if (!found) return null;
-  const run: CodexPipelineRun = {
-    ...prior,
-    steps,
-    status: 'running',
-    startedAt: prior.startedAt ?? input.startedAt,
-    finishedAt: null,
-    updatedAt: input.startedAt,
-    error: '',
-  };
-  const written = writeCodexPipelineStore({
-    decisionOsRoot: input.decisionOsRoot,
-    store: {
-      ...before.store,
-      runs: before.store.runs.map((entry) => entry.id === run.id ? run : entry),
-      activeWorkspaceRun: before.store.activeWorkspaceRun ?? run.id,
-    },
-  });
-  return written.store.runs.find((entry) => entry.id === run.id) ?? run;
 }
 
 function priorInput(input: {
@@ -604,9 +340,8 @@ export async function spawnPipelineSkillProcess(input: {
   if (!outputFile) throw new Error(`Output card ${input.step.outputCardId} has no Markdown file.`);
   const replicatedState = taskExecutionState(input.runtime);
   const replicatedExecution = replicatedState?.executions.find(input.skill.executionId) ?? null;
-  if (!replicatedExecution) {
-    await projectPipelineSkillRun({ decisionOsRoot: input.decisionOsRoot, context, step: input.step, skill: input.skill, pipelineRun: input.pipelineRun });
-  }
+  if (!replicatedState || !replicatedExecution) throw new Error(`task_execution_not_found:${input.skill.executionId}`);
+  if (replicatedExecution.lifecycle.phase !== 'starting') throw new Error(`task_execution_spawn_phase_invalid:${replicatedExecution.lifecycle.phase}`);
   const stageInput = priorInput({
     run: input.pipelineRun,
     step: input.step,
@@ -637,8 +372,7 @@ export async function spawnPipelineSkillProcess(input: {
   });
 
   mkdirSync(dirname(input.skill.stdoutFile), { recursive: true });
-  const startedAt = input.skill.startedAt ?? new Date().toISOString();
-  const executionCoordinator = codexExecutionCoordinator(input.runtime);
+  const startedAt = replicatedExecution.lifecycle.startedAt ?? new Date().toISOString();
   let runtimeRun: AnyRecord = {};
   await launchCodexExecutionProcess({
     decisionOsRoot: input.decisionOsRoot,
@@ -682,44 +416,31 @@ export async function spawnPipelineSkillProcess(input: {
         startedAt: launchedAt,
       });
       attachRuntimeChild(input.runtime, input.skill.runId, child);
-      if (replicatedState && replicatedExecution) {
-        const processId = child.pid ?? 0;
-        const processStartTime = codexProcessIdentity(processId);
-        registerTaskExecutionProcess(input.runtime, {
-          executionId: input.skill.executionId,
-          sessionId: input.skill.runId,
-          child,
-          processId,
-          processStartTime,
-          startedAt: launchedAt,
-          stdoutFile: input.skill.stdoutFile,
-          stderrFile: input.skill.stderrFile,
-        });
-        try {
-          await replicatedState.executions.transition(input.skill.executionId, { phase: 'running' });
-        } catch (error) {
-          removeTaskExecutionProcess(input.runtime, input.skill.executionId);
-          throw error;
-        }
-      } else {
-        recordPipelineSkillProcess({ decisionOsRoot: input.decisionOsRoot, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, processId: child.pid ?? 0 });
-        if (executionCoordinator) await executionCoordinator.spawned(input.skill.executionId, {
-          processId: child.pid ?? null,
-          processStartTime: codexProcessIdentity(child.pid ?? 0) || null,
-          stdoutFile: input.skill.stdoutFile,
-          stderrFile: input.skill.stderrFile,
-        });
+      const processId = child.pid ?? 0;
+      const processStartTime = codexProcessIdentity(processId);
+      registerTaskExecutionProcess(input.runtime, {
+        executionId: input.skill.executionId,
+        sessionId: input.skill.runId,
+        child,
+        processId,
+        processStartTime,
+        startedAt: launchedAt,
+        stdoutFile: input.skill.stdoutFile,
+        stderrFile: input.skill.stderrFile,
+      });
+      try {
+        await replicatedState.executions.transition(input.skill.executionId, { phase: 'running' });
+      } catch (error) {
+        removeTaskExecutionProcess(input.runtime, input.skill.executionId);
+        throw error;
       }
       notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-started', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', cardId: input.step.outputCardId });
     },
     onTurnStarted: (_event, observedAt) => {
-      if (!replicatedExecution && executionCoordinator) void executionCoordinator.heartbeat(input.skill.executionId).catch((error: unknown) => {
-        if (typeof input.runtime.onCodexBackgroundError === 'function') input.runtime.onCodexBackgroundError({ operation: 'publish-canonical-pipeline-heartbeat', error, context: { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId } });
-      });
       notify(input.runtime.onCodexTurnStarted, { ledgerId: input.pipelineRun.ledgerId, cardId: input.pipelineRun.sourceCardId, outputCardId: input.step.outputCardId, threadId: `thread-${input.pipelineRun.sourceCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', startedAt: observedAt });
     },
     onSettled: async (settlement) => {
-      const cancelled = pipelineRuntimeRun(input.runtime, input.skill.runId)?.cancelRequestedAt || runtimeStatus(input.runtime, input.skill.runId) === 'cancelled';
+      const cancelled = replicatedState.executions.find(input.skill.executionId)?.lifecycle.phase === 'cancelling';
       const status: TerminalStatus = cancelled
         ? 'cancelled'
         : settlement.kind === 'error'
@@ -733,39 +454,31 @@ export async function spawnPipelineSkillProcess(input: {
       if (status === 'cancelled') appendFileSync(input.skill.stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       if (status === 'failed') appendFileSync(input.skill.stderrFile, `Codex run failed: ${detail}\n`, 'utf8');
       appendFileSync(input.skill.stderrFile, codexRunExecutionFinishedMarker({ runId: input.skill.runId, executionId: input.skill.executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
-      if (replicatedState && replicatedExecution) {
-        const current = replicatedState.executions.find(input.skill.executionId);
-        if (current && (current.lifecycle.phase === 'starting' || current.lifecycle.phase === 'running' || current.lifecycle.phase === 'cancelling')) {
-          await replicatedState.executions.transition(input.skill.executionId, {
-            phase: status === 'complete' ? 'succeeded' : status,
-            result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
-            error: status === 'failed' ? { code: 'codex_pipeline_skill_failed', message: detail } : null,
-          });
-        }
-        if (status === 'failed' || status === 'cancelled') {
-          await cancelPipelineDependents({
-            runtime: input.runtime,
-            pipelineRunId: input.pipelineRun.id,
-            executionId: input.skill.executionId,
-          });
-        }
-        await finalizeTaskExecutionArtifacts({
-          runtime: input.runtime,
-          executionId: input.skill.executionId,
-          jsonl: input.skill.stdoutFile,
-          stderr: input.skill.stderrFile,
-          telemetry: `${input.skill.stdoutFile}.telemetry.jsonl`,
-        });
-      } else if (executionCoordinator) {
-        await executionCoordinator.settle(input.skill.executionId, {
+      const current = replicatedState.executions.find(input.skill.executionId);
+      if (current && (current.lifecycle.phase === 'starting' || current.lifecycle.phase === 'running' || current.lifecycle.phase === 'cancelling')) {
+        await replicatedState.executions.transition(input.skill.executionId, {
           phase: status === 'complete' ? 'succeeded' : status,
           result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
           error: status === 'failed' ? { code: 'codex_pipeline_skill_failed', message: detail } : null,
         });
       }
+      if (status === 'failed' || status === 'cancelled') {
+        await cancelPipelineDependents({
+          runtime: input.runtime,
+          pipelineRunId: input.pipelineRun.id,
+          executionId: input.skill.executionId,
+        });
+      }
+      await finalizeTaskExecutionArtifacts({
+        runtime: input.runtime,
+        executionId: input.skill.executionId,
+        jsonl: input.skill.stdoutFile,
+        stderr: input.skill.stderrFile,
+        telemetry: `${input.skill.stdoutFile}.telemetry.jsonl`,
+      });
       // Keep the settled process paths readable until immutable artifact heads exist.
       // Removing them earlier creates a terminal-status window with no live log source.
-      if (replicatedExecution) removeTaskExecutionProcess(input.runtime, input.skill.executionId);
+      removeTaskExecutionProcess(input.runtime, input.skill.executionId);
       const reassessed = reassessPipelineAfterSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, settledStatus: status, error, exitCode, finishedAt: settlement.finishedAt });
       updateRuntimeRun(input.runtime, input.skill.runId, { settledAt: new Date().toISOString() });
       notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-settled', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, cardId: input.step.outputCardId, status, pipelineStatus: reassessed?.status ?? status });
@@ -829,12 +542,12 @@ export async function runPipelineExecution(input: {
       return { ok: false, statusCode: 503, error: message, executionId: input.executionId };
     }
     try {
+      // WHAT: Record the executor boundary before invoking the selected remote role.
+      // WHY: The scheduler owns the replicated lifecycle; the transport callback returns
+      // role output and must not be required to mutate the initiator's execution phase.
+      await state.executions.transition(input.executionId, { phase: 'running' });
       const result = await registered.execute(located.skill);
       writeFileSync(located.skill.stdoutFile, `${JSON.stringify(result)}\n`, 'utf8');
-      // WHAT: Let the durable transition guard prove that the child reached `running`.
-      // WHY: CRDT projection reads can lag the repository's accepted local transition;
-      // a direct `running -> succeeded` write rejects a missing process boundary
-      // without inventing a second lifecycle read authority.
       await state.executions.transition(input.executionId, {
         phase: 'succeeded',
         result: {
@@ -931,117 +644,6 @@ export async function runPipelineExecution(input: {
   }
 }
 
-export async function runNextPipelineSkill(input: {
-  decisionOsRoot: string;
-  runtime: AnyRecord;
-  pipelineRunId: string;
-}): Promise<AnyRecord> {
-  const reassessed = reassessPipelineAfterSkill({
-    decisionOsRoot: input.decisionOsRoot,
-    runtime: input.runtime,
-    pipelineRunId: input.pipelineRunId,
-  });
-  if (!reassessed) return { ok: false, statusCode: 404, error: 'Pipeline run not found.', runId: input.pipelineRunId };
-  if (isTerminal(reassessed.status)) return { ok: true, statusCode: 200, run: reassessed };
-  const next = findNextSkill(reassessed);
-  if (!next) return { ok: true, statusCode: 200, run: reassessed };
-  const startedAt = new Date().toISOString();
-  const executionCoordinator = codexExecutionCoordinator(input.runtime);
-  if (executionCoordinator) {
-    try {
-      let execution = executionCoordinator.store.find(next.skill.executionId);
-      if (!execution) execution = await executionCoordinator.admit({
-        executionId: next.skill.executionId,
-        sessionId: next.skill.runId,
-        projectId: String(input.runtime.projectId ?? ''),
-        ledgerId: reassessed.ledgerId,
-        taskId: reassessed.sourceCardId,
-        ownerCardId: next.step.outputCardId,
-        kind: 'pipeline-skill',
-        pipelineRunId: reassessed.id,
-        pipelineStepId: next.step.id,
-        pipelineSkillRunId: next.skill.runId,
-        requestedAt: startedAt,
-      });
-      if (execution.phase === 'preparing') execution = await executionCoordinator.enqueue(next.skill.executionId);
-      if (execution.phase === 'queued') await executionCoordinator.claim(next.skill.executionId);
-    } catch (error) {
-      return { ok: false, statusCode: 503, code: String((error as { code?: unknown })?.code ?? ''), retryable: true, error: error instanceof Error ? error.message : String(error), run: reassessed };
-    }
-  }
-  let started: CodexPipelineRun | null = null;
-  let skill: CodexPipelineRunSkill | undefined;
-  try {
-    started = markPipelineSkillStarted({
-      decisionOsRoot: input.decisionOsRoot,
-      pipelineRunId: reassessed.id,
-      skillRunId: next.skill.runId,
-      startedAt,
-    });
-    if (!started) throw new Error('Pipeline skill claim was not persisted.');
-    const step = started.steps.find((entry) => entry.id === next.step.id);
-    skill = step?.skills.find((entry) => entry.runId === next.skill.runId);
-    if (!step || !skill) throw new Error('Started pipeline skill was not persisted.');
-    const runtimeRun = await spawnPipelineSkillProcess({
-      decisionOsRoot: input.decisionOsRoot,
-      runtime: input.runtime,
-      pipelineRun: started,
-      step,
-      skill,
-    });
-    return { ok: true, statusCode: 202, run: started, skillRun: runtimeRun };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const canonical = executionCoordinator?.store.find(next.skill.executionId);
-    if (canonical && (canonical.phase === 'starting' || canonical.phase === 'running')) await executionCoordinator?.settle(next.skill.executionId, {
-      phase: 'failed',
-      error: { code: 'codex_pipeline_skill_start_failed', message },
-      result: { status: 'failed', summary: message },
-    }).catch(() => undefined);
-    const failed = reassessPipelineAfterSkill({
-      decisionOsRoot: input.decisionOsRoot,
-      runtime: input.runtime,
-      pipelineRunId: started?.id ?? reassessed.id,
-      skillRunId: skill?.runId ?? next.skill.runId,
-      settledStatus: 'failed',
-      error: message,
-    });
-    return { ok: false, statusCode: 500, error: message, run: failed };
-  }
-}
-
-export async function scheduleCodexPipelineRuns(input: {
-  decisionOsRoot: string;
-  runtime: AnyRecord;
-}): Promise<{ launched: AnyRecord[]; queuedRunIds: string[]; capacity: number }> {
-  const capacity = maxConcurrentCodexProcesses(input.runtime);
-  const launched: AnyRecord[] = [];
-  while (true) {
-    const store = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store;
-    const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
-    const running = Object.values(runs).filter((run) => run.status === 'running').length;
-    if (running >= capacity) break;
-    const next = store.runs.find((run) => run.executionMode !== 'federated'
-      && (run.status === 'pending' || run.status === 'running')
-      && run.steps.some((step) => step.skills.some((skill) => skill.status === 'pending'))
-      && !run.steps.some((step) => step.skills.some((skill) => skill.status === 'running')));
-    if (!next) break;
-    const launch = await runNextPipelineSkill({
-      decisionOsRoot: input.decisionOsRoot,
-      runtime: input.runtime,
-      pipelineRunId: next.id,
-    });
-    launched.push(launch);
-    if (launch.ok === false || !launch.skillRun) break;
-  }
-  const finalStore = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store;
-  return {
-    launched,
-    queuedRunIds: finalStore.runs.filter((run) => run.status === 'pending').map((run) => run.id),
-    capacity,
-  };
-}
-
 export async function executeFederatedPipelineSkill(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
@@ -1062,7 +664,8 @@ export async function executeFederatedPipelineSkill(input: {
     : findNextSkill(current);
   if (!next) throw new Error('Federated pipeline has no pending skill.');
   const replicatedState = taskExecutionState(input.runtime);
-  if (replicatedState) {
+  if (!replicatedState) throw new Error('Replicated task execution state is unavailable.');
+  {
     const executorNodeId = String(input.executor.nodeId ?? '').trim();
     if (!/^[a-zA-Z0-9_-]+$/.test(executorNodeId)) throw new Error('Federated pipeline executor node is invalid.');
     const storedSkill = current.steps.flatMap((step) => step.skills).find((skill) => skill.executionId === next.skill.executionId);
@@ -1126,62 +729,6 @@ export async function executeFederatedPipelineSkill(input: {
     } finally {
       executors.delete(next.skill.executionId);
     }
-  }
-  const targetedStore = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
-  writeCodexPipelineStore({
-    decisionOsRoot: input.decisionOsRoot,
-    store: {
-      ...targetedStore.store,
-      runs: targetedStore.store.runs.map((run) => run.id !== current.id ? run : {
-        ...run,
-        steps: run.steps.map((step) => ({
-          ...step,
-          skills: step.skills.map((skill) => skill.runId === next.skill.runId ? { ...skill, executor: input.executor } : skill),
-        })),
-      }),
-    },
-  });
-  const startedAt = new Date().toISOString();
-  const started = markPipelineSkillStarted({
-    decisionOsRoot: input.decisionOsRoot,
-    pipelineRunId: current.id,
-    skillRunId: next.skill.runId,
-    startedAt,
-  });
-  if (!started) throw new Error('Federated pipeline skill could not be started.');
-  const step = started.steps.find((entry) => entry.id === next.step.id)!;
-  const skill = step.skills.find((entry) => entry.runId === next.skill.runId)!;
-  const context = resolvePipelineLedgerContext({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, ledgerId: started.ledgerId });
-  if (!context) throw new Error('Federated pipeline ledger could not be loaded.');
-  projectPipelineSkillRun({ decisionOsRoot: input.decisionOsRoot, context, step, skill, pipelineRun: started });
-  mkdirSync(dirname(skill.stdoutFile), { recursive: true });
-  const outputFile = outputFileForPipelineCard(context, input.decisionOsRoot, step.outputCardId);
-  try {
-    const result = await input.execute(skill);
-    writeFileSync(skill.stdoutFile, `${JSON.stringify(result)}\n`, 'utf8');
-    if (outputFile) appendRunStatus(outputFile, 'complete', `federated executor ${String(result.executorNodeId ?? 'local')}`);
-    const run = reassessPipelineAfterSkill({
-      decisionOsRoot: input.decisionOsRoot,
-      runtime: input.runtime,
-      pipelineRunId: started.id,
-      skillRunId: skill.runId,
-      settledStatus: 'complete',
-    });
-    if (!run) throw new Error('Federated pipeline completion could not be persisted.');
-    return { run, skill, result };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    writeFileSync(skill.stderrFile, `${message}\n`, 'utf8');
-    if (outputFile) appendRunStatus(outputFile, 'failed', message);
-    reassessPipelineAfterSkill({
-      decisionOsRoot: input.decisionOsRoot,
-      runtime: input.runtime,
-      pipelineRunId: started.id,
-      skillRunId: skill.runId,
-      settledStatus: 'failed',
-      error: message,
-    });
-    throw error;
   }
 }
 

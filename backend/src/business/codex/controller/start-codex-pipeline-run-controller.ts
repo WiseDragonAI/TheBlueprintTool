@@ -27,11 +27,9 @@ import {
   resolvePipelineLedgerContext,
   type PipelineLedgerContext,
 } from '../helper/codex-pipeline-runner.js';
-import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
+import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
-import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
-import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 import {
   createTaskExecutionLaunchRequest,
   TaskExecutionAdmissionError,
@@ -133,6 +131,9 @@ export async function startPipelineRun(input: {
   if (!source) return { ok: false, statusCode: 404, error: 'Source card not found.', cardId: input.sourceCardId };
   const replicatedState = taskExecutionState(input.runtime);
   const router = taskExecutionRouter(input.runtime);
+  if (!replicatedState || !router) {
+    return { ok: false, statusCode: 503, code: 'task_execution_state_unavailable', retryable: true, error: 'Replicated task execution state is unavailable.' };
+  }
   if (!input.restartOfRun && replicatedState) {
     const requestedSkillName = input.definition.steps[0]?.skills[0]?.skillName ?? '';
     const existing = normalized.store.runs.find((candidate) => (
@@ -173,25 +174,6 @@ export async function startPipelineRun(input: {
         maxConcurrentCodexProcesses: maxConcurrentCodexProcesses(input.runtime),
       };
     }
-  }
-  const ownership = cardCodexExecutionOwnership(source);
-  if (ownership.state === 'contradictory') return { ok: false, statusCode: 409, error: 'Source card has contradictory Codex execution ownership.', ...ownership };
-  const activeRunId = ownership.state === 'active' ? ownership.lease.runId : '';
-  const activeExecutionId = ownership.state === 'active' ? ownership.lease.executionId : '';
-  if (ownership.state === 'active') {
-    const existing = normalized.store.runs.find((candidate) => candidate.ledgerId === input.ledgerId
-      && candidate.sourceCardId === input.sourceCardId
-      && (candidate.status === 'pending' || candidate.status === 'running')
-      && candidate.steps.some((step) => step.skills.some((skill) => skill.runId === activeRunId && skill.executionId === activeExecutionId)));
-    if (existing) return {
-      ok: true,
-      statusCode: 202,
-      run: existing,
-      skillRun: null,
-      queuePosition: existing.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot: input.decisionOsRoot, id: existing.id, createdAt: existing.createdAt, runtime: input.runtime }) : null,
-      maxConcurrentCodexProcesses: 0,
-    };
-    return { ok: false, statusCode: 409, error: 'Source card already owns an active Codex execution.', runId: activeRunId, executionId: activeExecutionId };
   }
   // WHAT: Reject empty pipeline shapes at the runtime boundary.
   // WHY: A run with no executable stage cannot make progress or settle correctly.
@@ -251,7 +233,6 @@ export async function startPipelineRun(input: {
     context,
     source,
     run,
-    projectLegacyLifecycle: !router,
   });
   // WHAT: Stop when the ledger rejects a generated card or relationship.
   // WHY: The manifest must not start unless its complete visual chain exists.
@@ -466,76 +447,7 @@ export async function startPipelineRun(input: {
       maxConcurrentCodexProcesses: maxConcurrentCodexProcesses(input.runtime),
     };
   }
-  const executionCoordinator = codexExecutionCoordinator(input.runtime);
-  const firstStep = run.steps[0];
-  const firstSkill = firstStep?.skills[0];
-  if (executionCoordinator && firstStep && firstSkill) {
-    try {
-      let execution = executionCoordinator.store.find(firstSkill.executionId);
-      if (!execution) execution = await executionCoordinator.admit({
-        executionId: firstSkill.executionId,
-        sessionId: firstSkill.runId,
-        projectId: String(input.runtime.projectId ?? ''),
-        ledgerId: run.ledgerId,
-        taskId: run.sourceCardId,
-        ownerCardId: firstStep.outputCardId,
-        kind: 'pipeline-skill',
-        pipelineRunId: run.id,
-        pipelineStepId: firstStep.id,
-        pipelineSkillRunId: firstSkill.runId,
-        requestedAt: run.createdAt,
-      });
-      if (execution.phase === 'preparing') await executionCoordinator.enqueue(firstSkill.executionId);
-    } catch (error) {
-      const current = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
-      writeCodexPipelineStore({
-        decisionOsRoot: input.decisionOsRoot,
-        availableSkillNames,
-        store: { ...current.store, runs: current.store.runs.filter((entry) => entry.id !== run.id) },
-      });
-      const execution = executionCoordinator.store.find(firstSkill.executionId);
-      if (execution && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(execution.phase)) {
-        await executionCoordinator.cancel(firstSkill.executionId, 'Pipeline admission did not complete.').catch(() => undefined);
-      }
-      await rollbackPipelineCards({ decisionOsRoot: input.decisionOsRoot, context, ledgerBefore, sourceCardId: input.sourceCardId, outputCardIds: run.steps.map((step) => step.outputCardId) });
-      return { ok: false, statusCode: 503, code: String((error as { code?: unknown })?.code ?? ''), retryable: true, error: error instanceof Error ? error.message : String(error) };
-    }
-  }
-  // WHAT: Retain and invoke the request-scoped ledger callback when one is supplied.
-  // WHY: Pipeline runner transitions must publish through the same server event boundary as startup.
-  if (typeof input.onLedgerChange === 'function') input.runtime.onPipelineLedgerChange = input.onLedgerChange;
-  if (typeof input.onLedgerChange === 'function') {
-    (input.onLedgerChange as (event: AnyRecord) => void)({
-      reason: 'pipeline-enqueued',
-      ledgerId: input.ledgerId,
-      pipelineRunId: run.id,
-      runId: firstSkill?.runId ?? '',
-      executionId: firstSkill?.executionId ?? '',
-      status: 'pending',
-      cardId: input.sourceCardId,
-      cardIds: run.steps.map((step) => step.outputCardId),
-    });
-  }
-  const sharedSchedule = input.runtime.scheduleCodexProcesses;
-  if (run.executionMode === 'federated') {
-    return { ok: true, statusCode: 202, run, skillRun: null, queuePosition: null, maxConcurrentCodexProcesses: 0 };
-  }
-  const schedule = typeof sharedSchedule === 'function'
-    ? await sharedSchedule()
-    : await scheduleCodexProcesses({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime });
-  const launches = Array.isArray(schedule.launched) ? schedule.launched as AnyRecord[] : [];
-  const launch = launches.find((entry) => entry.run && typeof entry.run === 'object' && String((entry.run as AnyRecord).id ?? '') === run.id);
-  if (launch?.ok === false) return launch;
-  const persisted = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store;
-  const scheduledRun = persisted.runs.find((entry) => entry.id === run.id) ?? run;
-  return {
-    ok: true,
-    statusCode: 202,
-    run: scheduledRun,
-    skillRun: launch?.skillRun ?? null,
-    queuePosition: scheduledRun.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot: input.decisionOsRoot, id: run.id, createdAt: run.createdAt, runtime: input.runtime }) : null,
-    maxConcurrentCodexProcesses: schedule.capacity,
-  };
+  throw new Error('task_execution_pipeline_admission_unreachable');
 }
 
 export async function startTemporaryPipelineRun(input: {

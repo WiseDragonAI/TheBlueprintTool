@@ -9,7 +9,7 @@ import type {
   CodexPipelineRunStep,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { projectReplicaRequestPath } from '../../project/helper/project-request-scope.js';
-import type { CodexExecutionDto } from '../../../../../shared/schemas/codex-execution-types.js';
+import type { TaskExecutionDto } from '../../../../../shared/schemas/task-execution-types.js';
 
 export type CodexPipelineRunSkillDetail = CodexPipelineRunSkill & {
   stdoutAvailable: boolean;
@@ -41,7 +41,7 @@ export type CodexPipelineRunStatusResult = {
   pipeline?: CodexPipeline | null;
   activeStep?: CodexPipelineRunStepDetail | null;
   activeSkill?: CodexPipelineRunSkillDetail | null;
-  execution?: CodexExecutionDto | null;
+  execution?: TaskExecutionDto | null;
   canCancel: boolean;
   canRestart: boolean;
   canContinue: boolean;

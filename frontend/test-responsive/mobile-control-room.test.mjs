@@ -38,16 +38,24 @@ test('projects master-task lifecycle and positioned relationships without Markdo
   assert.deepEqual(parsed.subtasks.map((entry) => entry.cardId), ['card-r', 'card-b']);
 });
 
-test('replicated execution intent is the only local task execution authority', () => {
-  const projected = projectMasterTask(task({ card: { ...task().card, executionStatus: 'running', executionIntent: { id: 'intent-a', state: 'running', startedAt: '2026-07-10T10:30:00.000Z' } } }));
+test('replicated execution is the only local task execution authority', () => {
+  const projected = projectMasterTask(task({
+    executions: [{
+      metadata: { ownerCardId: 'card-a' },
+      lifecycle: { phase: 'running', phaseSince: '2026-07-10T10:30:00.000Z' },
+    }],
+  }));
   assert.equal(projected.status, 'task-execution');
   assert.equal(projected.executionStatus, 'running');
 });
 
-test('replicated subtask execution intent projects the master into Exec', () => {
-  const current = task();
-  current.cards[1] = { ...current.cards[1], executionIntent: { id: 'run-child', state: 'running', startedAt: '2026-07-10T10:30:00.000Z' } };
-  const projected = projectMasterTask(current);
+test('replicated subtask execution projects the master into Exec', () => {
+  const projected = projectMasterTask(task({
+    executions: [{
+      metadata: { ownerCardId: 'card-b' },
+      lifecycle: { phase: 'running', phaseSince: '2026-07-10T10:30:00.000Z' },
+    }],
+  }));
   assert.equal(projected.status, 'task-execution');
   assert.equal(projected.executionStatus, 'running');
   assert.equal(projected.executionOwnerCardId, 'card-b');
@@ -84,9 +92,14 @@ test('persists Control Room tab navigation and the nearest task anchor in browse
   assert.match(mobile, /document\.getElementById\(anchor\)\?\.scrollIntoView\(\{ block: 'start' \}\)/);
 });
 
-test('reads task execution timing from replicated execution intent', () => {
+test('reads task execution timing from the replicated execution projection', () => {
   const startedAt = '2026-07-10T10:35:07.000Z';
-  const parsed = projectMasterTask(task({ card: { ...task().card, executionIntent: { id: 'intent-a', state: 'running', startedAt } } }));
+  const parsed = projectMasterTask(task({
+    executions: [{
+      metadata: { ownerCardId: 'card-a' },
+      lifecycle: { phase: 'running', phaseSince: startedAt },
+    }],
+  }));
   assert.equal(parsed.executionStatus, 'running');
   assert.equal(executionStopwatch(startedAt, Date.parse('2026-07-10T10:37:12.000Z')), '02:05');
   assert.match(mobile, /fetch\('\/api\/control-room', \{ cache: 'no-store', signal: owner\?\.signal, headers:/);
@@ -102,13 +115,11 @@ test('renders replicated queued execution supplied by the server projection', ()
 
 test('Control Room resolves Process Card runs through the shared current-run pointer', () => {
   const processCardRunId = cardCodexRunId({
-    codexActiveRunId: 'codex-skill-pipeline',
+    execution: { sessionId: 'codex-skill-pipeline' },
     codexThreadRunId: 'codex-skill-thread',
-    codexRunId: 'codex-skill-card'
   });
   assert.equal(processCardRunId, 'codex-skill-pipeline');
   assert.equal(cardCodexRunId({ codexThreadRunId: 'codex-skill-thread' }), 'codex-skill-thread');
-  assert.equal(cardCodexRunId({ codexRunId: 'codex-skill-card' }), 'codex-skill-card');
   assert.match(mobile, /const nextControlRoom = await response\.json\(\)[\s\S]*state\.controlRoom = nextControlRoom/);
   assert.doesNotMatch(mobile, /const runId = cardCodexRunId\(card\)/);
 });

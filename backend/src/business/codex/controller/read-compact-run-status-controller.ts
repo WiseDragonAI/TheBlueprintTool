@@ -1,37 +1,22 @@
 /**
- * WHAT: Returns lifecycle-only skill and pipeline run projections without reading JSONL run histories.
- * WHY: Control Room classification needs current status, timestamps, and queue position, not events or diagnostics.
+ * WHAT: Returns lifecycle-only skill and pipeline projections from replicated executions.
+ * WHY: Compact status must not read queue files, card leases, mutable manifest phases, runtime aliases, or logs.
  */
-import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
-import { readLedgerProjection } from '../../task-state/helper/read-ledger-projection.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
-import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
+import { replicatedPipelineRun } from '../helper/codex-pipeline-runner.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
-import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
-import { legacyCodexExecutionStatus } from '../helper/codex-execution-coordinator.js';
-import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
 import { taskExecutionState } from '../helper/task-execution-runtime.js';
-import { reassessPipelineAfterSkill } from '../helper/codex-pipeline-runner.js';
 import type { ReplicatedTaskExecutionRecord } from '../../task-state/helper/task-execution-repository.js';
 
 type AnyRecord = Record<string, unknown>;
 
-function runtimeRun(runtime: AnyRecord, runId: string): AnyRecord {
-  const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object'
-    ? runtime.codexSkillRuns as Record<string, AnyRecord>
-    : {};
-  return runs[runId] ?? {};
-}
-
-function normalizedStatus(value: unknown): string {
-  const status = String(value ?? '').toLowerCase();
-  if (status === 'complete' || status === 'completed' || status === 'succeeded') return 'complete';
-  if (status === 'failure' || status === 'error') return 'failed';
-  if (status === 'canceled') return 'cancelled';
-  if (['pending', 'running', 'processing', 'in_progress', 'failed', 'cancelled', 'stale'].includes(status)) return status;
-  return 'unknown';
+function statusForPhase(phase: string): string {
+  if (phase === 'preparing' || phase === 'queued') return 'pending';
+  if (phase === 'starting' || phase === 'running' || phase === 'cancelling') return 'running';
+  if (phase === 'succeeded') return 'complete';
+  if (phase === 'cancelled') return 'cancelled';
+  return 'failed';
 }
 
 function elapsedMs(startedAt: unknown, finishedAt: unknown): number | null {
@@ -65,9 +50,8 @@ function replicatedStatus(input: {
   decisionOsRoot: string;
 }): AnyRecord {
   const { execution } = input;
-  const status = legacyCodexExecutionStatus(execution.lifecycle.phase);
   return {
-    status,
+    status: statusForPhase(execution.lifecycle.phase),
     phase: execution.lifecycle.phase,
     active: ['preparing', 'queued', 'starting', 'running', 'cancelling'].includes(execution.lifecycle.phase),
     startedAt: execution.lifecycle.startedAt ?? '',
@@ -81,11 +65,11 @@ function replicatedStatus(input: {
     validActions: validActions(execution),
     queuePosition: execution.lifecycle.phase === 'queued'
       ? unifiedCodexQueuePosition({
-        decisionOsRoot: input.decisionOsRoot,
-        id: execution.metadata.executionId,
-        createdAt: execution.metadata.requestedAt,
-        runtime: input.runtime,
-      })
+          decisionOsRoot: input.decisionOsRoot,
+          id: execution.metadata.executionId,
+          createdAt: execution.metadata.requestedAt,
+          runtime: input.runtime,
+        })
       : null,
     pipelineRunId: execution.metadata.pipelineRunId,
     execution: {
@@ -101,59 +85,12 @@ export function readCompactSkillRunStatusController(input: { runId: string; ledg
   const { runId, ledgerId, cardId, runtime } = input;
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
   if (!runId || !ledgerId || !cardId) return { ok: false, statusCode: 400, error: 'Missing ledgerId, cardId, or runId.' };
-  const state = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json') }, runtime_state: runtime });
-  const ledgerEntry = state.ledgers.find((entry) => entry.id === ledgerId);
-  if (!ledgerEntry) return { ok: false, statusCode: 404, error: 'Ledger not found.' };
-  const ledgerPath = resolve(decisionOsRoot, String(ledgerEntry.ledgerFile ?? '').replace(/^\.decision-os\//, ''));
-  if (!existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.' };
-  const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime });
-  const replicated = taskExecutionState(runtime)?.executions.bySessionId(runId)
-    .filter((execution) => execution.metadata.ledgerId === ledgerId
-      && (execution.metadata.sourceCardId === cardId || execution.metadata.ownerCardId === cardId))
-    .at(-1) ?? null;
-  if (replicated) {
-    return {
-      ok: true,
-      statusCode: 200,
-      runId,
-      kind: 'skill',
-      ledgerId,
-      cardId,
-      ...replicatedStatus({ runtime, execution: replicated, decisionOsRoot }),
-    };
-  }
-  const ownership = resolveCardSkillRunOwnership({ ledger, decisionOsRoot, cardId, runId });
-  if (!ownership.found) return { ok: false, statusCode: 404, error: 'Run not found on card.' };
-  const canonical = codexExecutionCoordinator(runtime)?.dtoForSession(runId, cardId) ?? null;
-  if (canonical) {
-    const status = legacyCodexExecutionStatus(canonical.phase);
-    return {
-      ok: true,
-      statusCode: 200,
-      runId,
-      kind: 'skill',
-      ledgerId,
-      cardId,
-      status,
-      phase: canonical.phase,
-      active: canonical.live,
-      startedAt: canonical.startedAt ?? '',
-      finishedAt: canonical.finishedAt ?? '',
-      elapsedMs: elapsedMs(canonical.startedAt ?? canonical.requestedAt, canonical.finishedAt),
-      error: canonical.error?.message ?? '',
-      lifecycleRevision: canonical.revision,
-      queuePosition: null,
-      pipelineRunId: canonical.pipelineRunId,
-      execution: canonical,
-    };
-  }
-  const live = runtimeRun(runtime, runId);
-  const pipelineRun = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.steps.some((step) => step.skills.some((skill) => skill.runId === runId)));
-  const persistedSkill = pipelineRun?.steps.flatMap((step) => step.skills).find((skill) => skill.runId === runId);
-  const queued = readCodexProcessQueue(decisionOsRoot).find((item) => item.id === runId || String(item.payload.runId ?? '') === runId);
-  const status = normalizedStatus(live.status ?? persistedSkill?.status ?? (queued ? 'pending' : 'unknown'));
-  const startedAt = String(live.startedAt ?? persistedSkill?.startedAt ?? '');
-  const finishedAt = String(live.finishedAt ?? persistedSkill?.finishedAt ?? '');
+  const execution = taskExecutionState(runtime)?.executions.bySessionId(runId)
+    .filter((candidate) => candidate.metadata.ledgerId === ledgerId
+      && (candidate.metadata.sourceCardId === cardId || candidate.metadata.ownerCardId === cardId))
+    .sort((left, right) => right.metadata.requestedAt.localeCompare(left.metadata.requestedAt)
+      || right.metadata.executionId.localeCompare(left.metadata.executionId))[0] ?? null;
+  if (!execution) return { ok: false, statusCode: 404, error: 'Execution not found.' };
   return {
     ok: true,
     statusCode: 200,
@@ -161,17 +98,7 @@ export function readCompactSkillRunStatusController(input: { runId: string; ledg
     kind: 'skill',
     ledgerId,
     cardId,
-    status,
-    active: status === 'running' || status === 'processing' || status === 'in_progress',
-    startedAt,
-    finishedAt,
-    elapsedMs: elapsedMs(startedAt, finishedAt),
-    error: status === 'failed' ? String(live.error ?? persistedSkill?.error ?? '') : '',
-    lifecycleRevision: Number(live.revision ?? (persistedSkill as unknown as AnyRecord | undefined)?.revision ?? 0),
-    queuePosition: status === 'pending' && queued
-      ? unifiedCodexQueuePosition({ decisionOsRoot, id: queued.id, createdAt: queued.createdAt, runtime })
-      : null,
-    pipelineRunId: pipelineRun?.id ?? null,
+    ...replicatedStatus({ runtime, execution, decisionOsRoot }),
   };
 }
 
@@ -179,69 +106,25 @@ export function readCompactPipelineRunStatusController(input: { runId: string; r
   const decisionOsRoot = resolve(String(input.runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
   const stored = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === input.runId);
   if (!stored) return { ok: false, statusCode: 404, error: 'Pipeline run not found.' };
-  const run = reassessPipelineAfterSkill({
-    decisionOsRoot,
-    runtime: input.runtime,
-    pipelineRunId: stored.id,
-  }) ?? stored;
-  const activeStep = run.steps.find((step) => step.status === 'running' || step.status === 'pending') ?? null;
-  const activeSkill = activeStep?.skills.find((skill) => skill.status === 'running' || skill.status === 'pending') ?? null;
-  const latestSkill = activeSkill ?? run.steps.flatMap((step) => step.skills).at(-1) ?? null;
-  const replicated = latestSkill
-    ? taskExecutionState(input.runtime)?.executions.find(latestSkill.executionId) ?? null
-    : null;
-  if (replicated) {
-    return {
-      ok: true,
-      statusCode: 200,
-      runId: run.id,
-      kind: 'pipeline',
-      ledgerId: run.ledgerId,
-      cardId: replicated.metadata.ownerCardId,
-      ...replicatedStatus({ runtime: input.runtime, execution: replicated, decisionOsRoot }),
-    };
-  }
-  const canonical = latestSkill ? codexExecutionCoordinator(input.runtime)?.dto(latestSkill.executionId) ?? null : null;
-  if (canonical) {
-    const status = legacyCodexExecutionStatus(canonical.phase);
-    return {
-      ok: true,
-      statusCode: 200,
-      runId: run.id,
-      kind: 'pipeline',
-      ledgerId: run.ledgerId,
-      cardId: canonical.ownerCardId,
-      status,
-      phase: canonical.phase,
-      active: canonical.live,
-      startedAt: canonical.startedAt ?? '',
-      finishedAt: canonical.finishedAt ?? '',
-      elapsedMs: elapsedMs(canonical.startedAt ?? canonical.requestedAt, canonical.finishedAt),
-      error: canonical.error?.message ?? '',
-      lifecycleRevision: canonical.revision,
-      queuePosition: null,
-      execution: canonical,
-    };
-  }
-  const status = normalizedStatus(run.status);
-  const startedAt = activeSkill?.startedAt ?? activeStep?.startedAt ?? run.resumedAt ?? run.startedAt ?? '';
-  const finishedAt = run.finishedAt ?? '';
+  const run = replicatedPipelineRun(stored, input.runtime);
+  const executions = taskExecutionState(input.runtime)?.executions.byPipelineRunId(stored.id) ?? [];
+  if (!run || executions.length === 0) return { ok: false, statusCode: 404, error: 'Pipeline executions not found.' };
+  const active = executions.find((execution) => ['preparing', 'queued', 'starting', 'running', 'cancelling'].includes(execution.lifecycle.phase));
+  const selected = active ?? executions.at(-1)!;
+  const detail = replicatedStatus({ runtime: input.runtime, execution: selected, decisionOsRoot });
   return {
     ok: true,
     statusCode: 200,
     runId: run.id,
     kind: 'pipeline',
     ledgerId: run.ledgerId,
-    cardId: activeStep?.outputCardId ?? run.sourceCardId,
-    status,
-    active: status === 'running' || status === 'processing' || status === 'in_progress',
-    startedAt,
-    finishedAt,
-    elapsedMs: elapsedMs(startedAt, finishedAt),
-    error: status === 'failed' ? String(run.error ?? '') : '',
-    lifecycleRevision: Number((run as unknown as AnyRecord).revision ?? 0),
-    queuePosition: status === 'pending'
-      ? unifiedCodexQueuePosition({ decisionOsRoot, id: run.id, createdAt: run.createdAt, runtime: input.runtime })
-      : null,
+    cardId: selected.metadata.ownerCardId,
+    ...detail,
+    status: run.status,
+    active: run.status === 'pending' || run.status === 'running',
+    startedAt: run.startedAt ?? '',
+    finishedAt: run.finishedAt ?? '',
+    elapsedMs: elapsedMs(run.startedAt ?? run.createdAt, run.finishedAt),
+    error: run.status === 'failed' ? run.error : '',
   };
 }

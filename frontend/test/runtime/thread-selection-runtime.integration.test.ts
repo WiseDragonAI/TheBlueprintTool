@@ -699,60 +699,6 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
   }
 });
 
-test('render-thread-notes keeps failed voice execution retryable from durable queue state', () => {
-  const previousDocument = globalThis.document;
-  const rendered: TestElement[] = [];
-  const list = {
-    className: '',
-    replaceChildren() {
-      rendered.length = 0;
-    },
-    append(item: TestElement) {
-      rendered.push(item);
-    }
-  };
-  (globalThis as unknown as { document: unknown }).document = {
-    querySelector(selector: string) {
-      if (selector === '.thread-note-list') return list;
-      return null;
-    },
-    createElement(tagName: string) {
-      return createTestElement('', tagName);
-    },
-    createTextNode(text: string) {
-      return createTestElement(text);
-    }
-  };
-  try {
-    state.threadId = 'thread-card-a';
-    state.activeLedger = {
-      notes: {
-        'thread-card-a': [{
-          id: 'note-execution-failed',
-          role: 'operator',
-          message: 'Transcribed voice command.',
-          voiceFileRef: '/tmp/voice.webm',
-          status: 'transcribed',
-          codexQueueStatus: 'failed',
-          codexQueueError: 'executor unavailable',
-        }]
-      }
-    };
-    renderThreadNotes();
-    assert.equal(rendered[0].className, 'thread-note voice-note is-retryable is-operator');
-    const retry = rendered[0].children.find((child) => child.className?.includes('thread-note-retry'));
-    assert.equal(retry?.dataset?.action, 'voice-retry');
-    assert.equal(retry?.dataset?.noteId, 'note-execution-failed');
-    assert.equal(retry?.dataset?.voiceFileRef, '/tmp/voice.webm');
-    const errorMessage = rendered[0].children.find((child) => child.className === 'thread-note-error');
-    assert.equal(errorMessage?.textContent, 'executor unavailable');
-    assert.equal(errorMessage?.attributes?.role, 'alert');
-  } finally {
-    (globalThis as unknown as { document: unknown }).document = previousDocument;
-    state.threadId = '';
-    state.activeLedger = null;
-  }
-});
 
 test('render-thread-notes exposes retry for a locally preserved pre-acceptance upload', () => {
   const previousDocument = globalThis.document;

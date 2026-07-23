@@ -32,8 +32,7 @@ function taskSemanticFingerprint(task: AnyRecord): string {
     'execution', 'executionObservations', 'executionNodeId', 'executionNodeLabel',
     'executionOwnerCardId', 'executionOwnerKind',
     'codexStatus', 'codexProcessing', 'codexQueued', 'codexQueuePosition', 'transcribingBeforeLaunch',
-    'codexRunId', 'codexPipelineRunId', 'codexActiveRunId', 'codexActiveExecutionId',
-    'codexThreadRunId', 'codexRunModel', 'codexRunEffort',
+    'codexRunId', 'codexPipelineRunId', 'codexThreadRunId', 'codexRunModel', 'codexRunEffort',
   ].includes(key)));
   return createHash('sha256').update(JSON.stringify(semantic)).digest('hex');
 }
@@ -150,12 +149,11 @@ export function federatedControlRoomProjection(input: {
     const projectKey = text(members[0]?.logicalProjectKey);
     const projectAuthority = projectAuthorities.get(projectKey);
     const authority = members.find((member) => member.ownerNodeId === projectAuthority?.ownerNodeId) ?? authorityMember(members);
-    const authorityIntent = authority.executionIntent && typeof authority.executionIntent === 'object' && !Array.isArray(authority.executionIntent)
-      ? authority.executionIntent as AnyRecord
+    const authorityExecution = authority.execution && typeof authority.execution === 'object' && !Array.isArray(authority.execution)
+      ? authority.execution as AnyRecord
       : {};
-    const legacyState = text(authorityIntent.state);
-    const intentPhase = text(authorityIntent.phase) || (legacyState === 'waiting' ? 'preparing' : legacyState);
-    const intentExecutionId = text(authorityIntent.executionId) || text(authorityIntent.id);
+    const intentPhase = text(authorityExecution.phase);
+    const intentExecutionId = text(authorityExecution.executionId);
     const structuralExecution = ['preparing', 'queued', 'starting', 'running'].includes(intentPhase);
     const observationMembers = members.filter((member) => {
       const candidate = member.executionObservation && typeof member.executionObservation === 'object'
@@ -164,7 +162,7 @@ export function federatedControlRoomProjection(input: {
       if (!candidate) return false;
       if (!intentExecutionId) return true;
       return text(candidate.executionId) === intentExecutionId
-        && Number(candidate.revision) === Number(authorityIntent.revision)
+        && Number(candidate.revision) === Number(authorityExecution.revision)
         && Date.parse(text(candidate.expiresAt)) > Date.now();
     });
     const orderedObservationMembers = [...observationMembers].sort((left, right) => {

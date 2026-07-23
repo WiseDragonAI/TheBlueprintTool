@@ -9,7 +9,6 @@ import { readRepositoryOriginIdentity } from '../../project-sync/helper/reposito
 import type { DecisionOsProject } from './project-catalog.js';
 import { compareControlRoomQueueTasks } from './control-room-queue-order.js';
 import type { ProjectSyncRun } from '../../project-sync/helper/project-sync-types.js';
-import { codexExecutionCoordinator } from '../../codex/helper/codex-execution-runtime.js';
 import type { ReplicatedTaskExecutionRecord, TaskExecutionRepository } from '../../task-state/helper/task-execution-repository.js';
 import {
   addRelationshipToIndex,
@@ -43,10 +42,7 @@ function text(value: unknown): string {
 }
 
 function executionPhase(intent: AnyRecord): string {
-  const phase = text(intent.phase);
-  if (phase) return phase;
-  const legacy = text(intent.state);
-  return legacy === 'waiting' ? 'preparing' : legacy;
+  return text(intent.phase);
 }
 
 function activeExecutionPhase(phase: string): boolean {
@@ -82,15 +78,6 @@ function zoneIdFor(card: AnyRecord, ledger: AnyRecord): string {
   return selected;
 }
 
-function activeExecutionCandidate(card: AnyRecord | undefined, ownerKind: 'master-task' | 'subtask'): ExecutionCandidate | null {
-  const intent = card?.executionIntent && typeof card.executionIntent === 'object' && !Array.isArray(card.executionIntent)
-    ? card.executionIntent as AnyRecord
-    : {};
-  const state = executionPhase(intent);
-  if (!activeExecutionPhase(state)) return null;
-  return { card: card!, intent, state, ownerCardId: text(card?.id), ownerKind };
-}
-
 function selectedExecutionCandidate(master: AnyRecord, subtasks: AnyRecord[], executions: ReplicatedTaskExecutionRecord[]): { selected: ExecutionCandidate | null; activeCount: number } {
   const cards = new Map([master, ...subtasks].map((card) => [text(card.id), card]));
   const replicated = executions.filter((record) => record.metadata.taskId === text(master.id) && activeExecutionPhase(record.lifecycle.phase)).map((record): ExecutionCandidate => ({
@@ -101,13 +88,7 @@ function selectedExecutionCandidate(master: AnyRecord, subtasks: AnyRecord[], ex
     ownerKind: record.metadata.ownerCardId === text(master.id) ? 'master-task' : 'subtask',
     record,
   }));
-  const candidates = [
-    ...replicated,
-    ...(replicated.length > 0 ? [] : [
-      activeExecutionCandidate(master, 'master-task'),
-      ...subtasks.map((card) => activeExecutionCandidate(card, 'subtask')),
-    ]),
-  ].filter((candidate): candidate is ExecutionCandidate => candidate !== null);
+  const candidates = replicated;
   const priority = (candidate: ExecutionCandidate): number => candidate.state === 'running' ? 0 : candidate.state === 'starting' ? 1 : candidate.state === 'queued' ? 2 : 3;
   return { selected: candidates.sort((left, right) => priority(left) - priority(right)
     || Number(left.ownerKind === 'subtask') - Number(right.ownerKind === 'subtask')
@@ -126,9 +107,9 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const linkedCards = relationships.map((relationship) => cards.get(text(relationship.to))).filter((card): card is AnyRecord => Boolean(card));
   const executionSelection = selectedExecutionCandidate(input.card, linkedCards, input.executions ?? []);
   const execution = executionSelection.selected;
-  const executionIntent = execution?.intent ?? {};
+  const executionLifecycle = execution?.intent ?? {};
   const lifecycleStatus = text(lifecycle.status);
-  const executionState = executionPhase(executionIntent);
+  const executionState = executionPhase(executionLifecycle);
   const executionActive = activeExecutionPhase(executionState);
   const waitingSince = text(lifecycle.waitingAt);
   const completedAt = text(lifecycle.closedAt);
@@ -160,9 +141,8 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     if (executionDiagnostic.taskId === text(input.card.id)) diagnostics.push(`${executionDiagnostic.code}:${executionDiagnostic.executionId}`);
   }
   const complete = subtasks.filter((subtask) => subtask.status === 'complete').length;
-  const executionSince = executionActive ? text(executionIntent.phaseSince) || text(executionIntent.startedAt) || text(executionIntent.changedAt) : '';
-  const executionCard = execution?.card as AnyRecord | undefined;
-  const executionId = text(executionIntent.executionId) || text(executionIntent.id);
+  const executionSince = executionActive ? text(executionLifecycle.phaseSince) || text(executionLifecycle.startedAt) || text(executionLifecycle.changedAt) : '';
+  const executionId = text(executionLifecycle.executionId) || text(executionLifecycle.id);
   const replicatedExecution = execution?.record ? {
     ...execution.record.metadata,
     ...execution.record.lifecycle,
@@ -175,7 +155,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
         ? ['open-log']
         : ['cancel', 'open-log'],
   } : null;
-  const canonicalExecution = replicatedExecution ?? (executionId && input.runtime ? codexExecutionCoordinator(input.runtime)?.dto(executionId) ?? null : null);
+  const canonicalExecution = replicatedExecution;
   const projectedObservation = executionId ? input.executionObservationFor?.(executionId) ?? null : null;
   const observation = canonicalExecution?.observation?.executionId === executionId ? canonicalExecution.observation : projectedObservation;
   return {
@@ -185,7 +165,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     projectId: input.project.id, projectName: input.project.name, projectColor: input.project.color,
     ledgerId: input.ledgerEntry.id, ledgerTitle: input.ledgerEntry.title, ledger: input.ledgerEntry.title,
     zoneId: zoneIdFor(input.card, input.ledger), status,
-    codexRunId: executionActive ? canonicalExecution?.sessionId ?? text(executionCard?.codexActiveRunId) : '', codexPipelineRunId: executionActive ? canonicalExecution?.pipelineRunId ?? text(executionCard?.codexPipelineRunId ?? executionCard?.codexQueuedPipelineRunId) : '', codexStatus: executionState,
+    codexRunId: executionActive ? canonicalExecution?.sessionId ?? '' : '', codexPipelineRunId: executionActive ? canonicalExecution?.pipelineRunId ?? '' : '', codexStatus: executionState,
     executionOwnerCardId: executionActive ? text(execution?.ownerCardId) : '', executionOwnerKind: executionActive ? text(execution?.ownerKind) : '',
     executionStatus: executionActive ? executionState : '', execution: canonicalExecution, executionObservation: observation,
     transcribingBeforeLaunch: executionState === 'preparing' && canonicalExecution?.kind === 'voice',
@@ -306,7 +286,7 @@ function sliceFingerprint(slice: Pick<ProjectSlice, 'projectId' | 'project' | 'd
     projectorVersion,
     dependencies: slice.dependencies.map(({ path, sha256 }) => ({ path, sha256 })),
     taskState: slice.taskRoot || slice.tasks,
-    executions: slice.tasks.map((task) => [task.cardId, task.executionIntent, task.execution, task.executionObservation]),
+    executions: slice.tasks.map((task) => [task.cardId, task.execution, task.executionObservation]),
   })).digest('hex');
 }
 

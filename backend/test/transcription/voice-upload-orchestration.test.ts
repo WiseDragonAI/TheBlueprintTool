@@ -395,7 +395,9 @@ test('voice upload continues the existing Codex session when the card has a run 
       facts: [],
       fields: [],
       codexThreadRunId: runId,
-      codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`
+      codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`,
+      codexRunModel: 'gpt-5.4',
+      codexRunEffort: 'medium'
     }],
     annotations: [],
     relationships: [],

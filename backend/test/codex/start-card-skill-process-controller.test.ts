@@ -14,7 +14,6 @@ import { createHttpServer } from '@backend/business/server/helper/create-http-se
 import { parseThreadMarkdown } from '@backend/business/ledger/helper/thread-content-file.js';
 import { persistCardSkillRunEvents } from '@backend/business/codex/effect/persist-card-skill-run-events.js';
 import { normalizeCardSkillRunEvent } from '@backend/business/codex/helper/normalize-card-skill-run-event.js';
-import { readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
 import { taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 
@@ -234,15 +233,15 @@ test('card skill process route creates a linked output card and launches codex',
     };
     assert.equal(sourceStatus.pipelineRunId, body.run.id);
     assert.equal(sourceStatus.pipelineName, 'test-skill run');
-    assert.equal(sourceStatus.pipelineStepName, 'test-skill');
-    assert.equal(sourceStatus.skillName, 'test-skill');
+    assert.equal(sourceStatus.pipelineStepName, '');
+    assert.equal(sourceStatus.skillName, '');
     assert.equal(sourceStatus.pipelineStatus, 'pending');
 
     const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=${body.run.outputCardId}&since=0`);
     assert.equal(statusResponse.status, 200);
     const status = await statusResponse.json() as { ok: boolean; metadata: { sourceCardTitle: string; sourceThreadId: string; codexModel: string; codexEffort: string } };
     assert.equal(status.ok, true);
-    assert.deepEqual(status.metadata, { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.4', codexEffort: 'xhigh' });
+    assert.deepEqual(status.metadata, { sourceCardTitle: 'Source Card', codexModel: 'gpt-5.4', codexEffort: 'xhigh' });
 
     await waitForText(body.run.outputFile, 'skill seen');
     await waitForText(body.run.outputFile, 'model=gpt-5.4');
@@ -601,7 +600,7 @@ test('thread codex process route anchors the run widget on the source card and s
       const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
       return runs?.[replacement.run.id]?.status === 'complete' && Boolean(runs[replacement.run.id]?.settledAt);
     }, 'the terminal event to settle the hung Codex wrapper');
-    assert.equal(readCodexProcessQueue(join(workspace, '.decision-os')).some((item) => String(item.payload.runId ?? item.id) === replacement.run.id), false);
+    assert.equal(taskExecutionState(runtime)?.executions.bySessionId(replacement.run.id).some((execution) => execution.lifecycle.phase === 'queued'), false);
     const reconciledStatus = await fetch(`${baseUrl}/api/codex/skills/runs/${replacement.run.id}?ledgerId=specs&cardId=card-a&since=0`).then((result) => result.json()) as { status: string; active: boolean; latestEvent: { type: string } };
     assert.equal(reconciledStatus.status, 'complete');
     assert.equal(reconciledStatus.active, false);
@@ -716,23 +715,16 @@ test('all card-owned terminal lifecycle batches leave ledger and conversation by
     { type: 'turn.failed', message: 'Codex process failed.' },
     { type: 'operator.cancelled', message: 'Codex process cancelled.' },
   ]) {
-    for (const ownershipKind of ['thread-run-id', 'run-id', 'generated-card-id', 'body-marker'] as const) {
+    for (const ownershipKind of ['thread-run-id'] as const) {
       const workspace = mkdtempSync(join(tmpdir(), `decision-os-owned-${ownershipKind}-`));
       const decisionOsRoot = join(workspace, '.decision-os');
       const ledgerPath = join(decisionOsRoot, 'specs.json');
       const runId = `codex-skill-1783670000000-${ownershipKind}-${terminal.type.replace(/\W+/g, '').slice(0, 8)}`;
-      const cardId = ownershipKind === 'generated-card-id' ? `card-${runId}` : `card-${ownershipKind}`;
+      const cardId = `card-${ownershipKind}`;
       const threadId = `thread-${cardId}`;
       const threadPath = join(decisionOsRoot, 'threads', 'specs', `${threadId}.md`);
       const card: Record<string, unknown> = { id: cardId, comment: { what: 'Card body.' }, facts: [], fields: [] };
       if (ownershipKind === 'thread-run-id') card.codexThreadRunId = runId;
-      if (ownershipKind === 'run-id') card.codexRunId = runId;
-      if (ownershipKind === 'body-marker') {
-        const contentFile = `.decision-os/cards/specs/${cardId}.md`;
-        card.comment = { contentFile };
-        mkdirSync(join(decisionOsRoot, 'cards', 'specs'), { recursive: true });
-        writeFileSync(join(workspace, contentFile), `# Historical run\n\nCodex run: ${runId}\n`);
-      }
       mkdirSync(join(decisionOsRoot, 'threads', 'specs'), { recursive: true });
       writeFileSync(ledgerPath, JSON.stringify({
         cards: [card],
@@ -975,6 +967,28 @@ test('card skill run continue route resumes the captured session after its card 
   const address = server.address() as AddressInfo;
 
   try {
+    const taskLedger = structuredClone((runtime.readTaskLedgerProjection as () => {
+      cards: Array<Record<string, unknown>>;
+    })());
+    const sessionCard = taskLedger.cards.find((card) => card.id === outputCardId);
+    assert.ok(sessionCard);
+    sessionCard.codexThreadRunId = runId;
+    sessionCard.codexThreadRunIds = [runId];
+    sessionCard.codexThreadRunOutputFile = `.decision-os/runs/codex-skills/specs/${runId}.md`;
+    sessionCard.codexThreadRunOutputFiles = {
+      [runId]: `.decision-os/runs/codex-skills/specs/${runId}.md`,
+    };
+    await (runtime.persistTaskLedgerProjection as (
+      ledger: Record<string, unknown>,
+      command: { kind: string; cardIds: string[] },
+    ) => Promise<unknown>)(taskLedger, {
+      kind: 'project-test-session-history',
+      cardIds: [outputCardId],
+    });
+    writeFileSync(
+      join(workspace, '.decision-os', 'tasks.json'),
+      `${JSON.stringify(taskLedger, null, 2)}\n`,
+    );
     runtime.codexSkillRuns = {
       [runId]: {
         id: runId,
