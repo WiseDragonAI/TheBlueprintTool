@@ -160,7 +160,8 @@ async function prepareNodePlans(input: {
   nodeId: string;
   targetEpoch: number;
   defaultAssignedNodeId: string;
-}, projects: ReturnType<typeof registeredProjects>) {
+}, projects: ReturnType<typeof registeredProjects>, masterDecisionOsRoot: string) {
+  const contentObjectRoot = resolve(masterDecisionOsRoot, 'cache', 'federation-content-current', 'objects');
   const plans = [];
   for (const project of projects) {
     plans.push(await prepareTaskCurrentStateMigrationPlan({
@@ -170,6 +171,7 @@ async function prepareNodePlans(input: {
       targetEpoch: input.targetEpoch,
       defaultAssignedNodeId: input.defaultAssignedNodeId,
       tasksLedgerFile: project.tasksLedgerFile,
+      contentObjectRoots: [contentObjectRoot],
     }));
   }
   return plans;
@@ -182,7 +184,7 @@ export async function planNodeTaskCurrentStateMigration(input: {
   defaultAssignedNodeId: string;
 }): Promise<NodeTaskMigrationPlanReport> {
   const context = await nodeContext(input);
-  const plans = await prepareNodePlans(input, context.projects);
+  const plans = await prepareNodePlans(input, context.projects, context.masterDecisionOsRoot);
   const projects = plans.map((plan, index) => ({
     projectId: plan.projectId,
     relativePath: context.projects[index].relativePath,
@@ -236,7 +238,7 @@ export async function migrateNodeTaskCurrentState(input: {
   try {
     // WHAT: Prepare the complete catalog before creating backup or shadow state.
     // WHY: A semantic defect in project seven must leave projects one through six byte-identical.
-    const plans = await prepareNodePlans(input, projects);
+    const plans = await prepareNodePlans(input, projects, masterDecisionOsRoot);
     await assertBackupCapacity(backupRoot, plans.flatMap((plan) => plan.sourceSnapshots).filter((entry) => entry.archive).reduce((sum, entry) => sum + entry.bytes, 0));
     const migrated = await runTaskCurrentStateMigrationTransaction({
       backupRoot,

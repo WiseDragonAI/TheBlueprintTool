@@ -444,6 +444,45 @@ test('migration refuses to publish epoch 3 when a retained resource head has no 
   assert.equal(existsSync(rollbackRoot), true);
 });
 
+test('migration selectively installs a retained remote object from a verified content cache', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-cached-object-'));
+  const contentObjectRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-content-cache-'));
+  const rollbackRoot = `${root}-rollback`;
+  context.after(() => [root, contentObjectRoot, rollbackRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'project-a';
+  const stateRoot = resolve(root, 'task-state', projectId);
+  const tasksFile = resolve(root, 'tasks.json');
+  const bytes = Buffer.from('remote immutable object');
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  const key = '.decision-os/files/remote.bin';
+  const cacheFile = resolve(contentObjectRoot, hash.slice(0, 2), hash);
+  mkdirSync(resolve(stateRoot, 'current', 'resource'), { recursive: true });
+  mkdirSync(resolve(cacheFile, '..'), { recursive: true });
+  writeFileSync(cacheFile, bytes);
+  writeFileSync(resolve(stateRoot, 'format.json'), JSON.stringify({ version: 3, projectId, baselineRoot: 'legacy' }));
+  writeFileSync(resolve(stateRoot, 'current', 'resource', 'remote.json'), JSON.stringify({
+    version: 3, projectId, entityType: 'resource', entityId: key, replication: 'active', stateHash: 'legacy',
+    fields: { head: { clock: { phone: 1 }, candidates: [{ dot: { replicaId: 'phone', counter: 1 }, operation: 'set', value: { type: 'managed-asset', key, hash, bytes: bytes.byteLength, changedAt: '2026-07-21T00:00:00.000Z' } }] } },
+  }));
+  writeFileSync(tasksFile, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+
+  const result = await migrateTaskCurrentState({
+    decisionOsRoot: root,
+    projectId,
+    nodeId: 'workstation',
+    tasksLedgerFile: tasksFile,
+    backupRoot: rollbackRoot,
+    contentObjectRoots: [contentObjectRoot],
+  });
+
+  assert.deepEqual(readFileSync(resolve(result.root, 'objects', hash.slice(0, 2), hash)), bytes);
+  const sourceManifest = JSON.parse(readFileSync(resolve(result.backup, 'source-manifest.json'), 'utf8')) as {
+    entries: Array<{ file: string; hash: string; archiveFile: string }>;
+  };
+  const cachedSource = sourceManifest.entries.find((entry) => entry.hash === hash && entry.file === cacheFile);
+  assert.equal(cachedSource?.archiveFile, '');
+});
+
 test('migration joins epoch-3 current entities from every writable node before encoding epoch 4', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-union-'));
   const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-remote-'));
