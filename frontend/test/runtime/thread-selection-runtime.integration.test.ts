@@ -648,7 +648,7 @@ test('render-thread-notes shows active thread conversation entries', () => {
   }
 });
 
-test('render-thread-notes keeps failed voice audio retryable', () => {
+test('render-thread-notes keeps failed transcription and execution launch retryable', () => {
   const previousDocument = globalThis.document;
   const rendered: TestElement[] = [];
   const list = {
@@ -676,10 +676,14 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
     state.threadId = 'thread-card-a';
     state.activeLedger = {
       notes: {
-        'thread-card-a': [{ id: 'note-1', role: 'operator', message: 'Voice uploaded; transcription failed.', voiceFileRef: '/tmp/voice.webm', status: 'transcription failed', error: 'transcription not configured' }]
+        'thread-card-a': [
+          { id: 'note-1', role: 'operator', message: 'Voice uploaded; transcription failed.', voiceFileRef: '/tmp/voice.webm', status: 'transcription failed', error: 'transcription not configured' },
+          { id: 'note-2', role: 'operator', message: 'Preserved transcript.', voiceFileRef: '/tmp/voice-2.webm', status: 'execution launch failed', error: 'assigned_node_unreachable' },
+        ]
       }
     };
     renderThreadNotes();
+    assert.equal(rendered.length, 2);
     assert.equal(rendered[0].className, 'thread-note voice-note is-retryable is-operator');
     const retry = rendered[0].children.find((child) => child.className?.includes('thread-note-retry'));
     assert.equal(retry?.dataset?.action, 'voice-retry');
@@ -692,12 +696,20 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
     assert.equal(deleteButton?.dataset?.action, 'confirm-delete-note');
     assert.equal(deleteButton?.dataset?.noteId, 'note-1');
     assert.equal(deleteButton?.textContent, 'X');
+    assert.equal(rendered[1].className, 'thread-note voice-note is-retryable is-operator');
+    const launchRetry = rendered[1].children.find((child) => child.className?.includes('thread-note-retry'));
+    assert.equal(launchRetry?.dataset?.action, 'voice-retry');
+    assert.equal(launchRetry?.dataset?.noteId, 'note-2');
+    assert.equal(launchRetry?.dataset?.voiceFileRef, '/tmp/voice-2.webm');
+    const launchError = rendered[1].children.find((child) => child.className === 'thread-note-error');
+    assert.equal(launchError?.textContent, 'assigned_node_unreachable');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';
     state.activeLedger = null;
   }
 });
+
 
 test('render-thread-notes exposes retry for a locally preserved pre-acceptance upload', () => {
   const previousDocument = globalThis.document;

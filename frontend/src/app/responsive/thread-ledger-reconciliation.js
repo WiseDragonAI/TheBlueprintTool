@@ -23,7 +23,6 @@ export function reconcileResponsiveThreadLedger(input) {
   }
   const optimisticRunId = String(input.optimisticRunId ?? '').trim();
   if (card && optimisticRunId) {
-    card.codexActiveRunId = optimisticRunId;
     card.codexThreadRunId = optimisticRunId;
   }
 

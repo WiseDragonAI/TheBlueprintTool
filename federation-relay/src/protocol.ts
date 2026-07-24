@@ -1,11 +1,13 @@
 /**
- * WHAT: Defines and validates the federation transport and epoch-3 state admission contract.
+ * WHAT: Defines and validates the federation transport and epoch-4 state admission contract.
  * WHY: Incompatible nodes must be rejected before they participate in replicated state.
  */
+import { taskCurrentBaselineEpoch, taskCurrentStateVersion, taskStateProtocol } from '../../shared/task-current-state-core';
+
 export const protocolVersion = 1;
-export const stateProtocol = 'decision-os-task-state/3' as const;
-export const stateSchema = 3 as const;
-export const stateBaselineEpoch = 3 as const;
+export const stateProtocol = taskStateProtocol;
+export const stateSchema = taskCurrentStateVersion;
+export const stateBaselineEpoch = taskCurrentBaselineEpoch;
 export const maximumStateFrameBytes = 512 * 1024;
 export const chunkBytes = 64 * 1024;
 export const creditWindowBytes = 1024 * 1024;
@@ -51,7 +53,7 @@ export type RelayFrame = {
   code?: string;
   message?: string;
   projectId?: string;
-  stateVersion?: 3;
+  stateVersion?: typeof taskCurrentStateVersion;
   stateProtocol?: typeof stateProtocol;
   stateSchema?: typeof stateSchema;
   baselineEpoch?: typeof stateBaselineEpoch;

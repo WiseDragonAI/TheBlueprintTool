@@ -36,6 +36,7 @@ import { bindDesktopVoiceActionPreview } from '/src/runtime/voice/effect/update-
 import { hydrateThreadViewportState, saveThreadPanelScrollPositions } from '/src/runtime/thread/effect/persist-thread-scroll.js';
 import { readPersistedState } from '/src/runtime/persistence/helper/read-persisted-state.js';
 import { deleteNoteController } from '/src/runtime/thread/controller/delete-note-controller.js';
+import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
 
 let currentCard = null;
 let currentProjectId = '';
@@ -159,7 +160,7 @@ export function closeMobileThread({ fromHistory = false, discardHistory = false 
   saveThreadDraft();
   saveThreadPanelScrollPositions();
   const runId = String(canvasState.threadRunIdByThreadId?.[canvasState.threadId] || (currentCard ? cardCodexThreadRunId(currentCard) : ''));
-  const activeRunId = String(canvasState.threadActiveRunIdByThreadId?.[canvasState.threadId] || currentCard?.codexActiveRunId || '');
+  const activeRunId = String(canvasState.threadActiveRunIdByThreadId?.[canvasState.threadId] || '');
   if (currentLedgerId && currentCard && canvasState.threadId && runId) {
     unbindThreadCodexRunLog({
       projectId: currentProjectId,
@@ -214,7 +215,8 @@ export async function handleResponsiveThreadShortcut(event) {
       const launchMode = voiceLaunchModeForModifiers(event);
       await executeVoiceAction({
         launchMode,
-        onDurableHandoff: () => void finishQueuedVoiceSubmission(true),
+        onDurableHandoff: (detail) => void finishQueuedVoiceSubmission(true, detail),
+        onRejected: rejectQueuedVoiceSubmission,
       });
     }
     else void startVoiceRecording();
@@ -243,9 +245,16 @@ export async function handleResponsiveThreadShortcut(event) {
   return false;
 }
 
-async function finishQueuedVoiceSubmission(submitted) {
+async function finishQueuedVoiceSubmission(submitted, detail) {
   if (!submitted) return;
-  await onQuickVoiceSubmitted();
+  await onQuickVoiceSubmitted(detail);
+}
+
+function rejectQueuedVoiceSubmission(detail) {
+  if (!detail?.requestId) return;
+  window.dispatchEvent(new CustomEvent('decision-os:codex-run-rejected', {
+    detail: { ...detail, error: 'Voice execution admission failed.' },
+  }));
 }
 
 async function startQuickVoiceComment() {
@@ -279,11 +288,14 @@ async function stopQuickVoiceComment(launchMode = 'send') {
   };
   await executeVoiceAction({
     launchMode: parseVoiceLaunchMode(launchMode),
-    onDurableHandoff: () => {
+    onDurableHandoff: (detail) => {
       resetCapture();
-      void finishQueuedVoiceSubmission(true);
+      void finishQueuedVoiceSubmission(true, detail);
     },
-    onRejected: resetCapture,
+    onRejected: (detail) => {
+      resetCapture();
+      rejectQueuedVoiceSubmission(detail);
+    },
   });
   if (launchMode === 'send') resetCapture();
 }
@@ -349,6 +361,16 @@ async function startCodex(button) {
   updateLaunchReadiness();
   if (button.disabled) return;
   button.disabled = true;
+  const requestId = createExecutionRequestId('thread');
+  const executionDetail = {
+    requestId,
+    projectId: currentProjectId,
+    ledgerId: currentLedgerId,
+    cardId: String(currentCard.id),
+    acceptedAt: new Date().toISOString(),
+    kind: 'thread',
+  };
+  window.dispatchEvent(new CustomEvent('decision-os:codex-run-preparing', { detail: executionDetail }));
   const existingRunId = String(button.dataset.codexRunId || cardCodexThreadRunId(currentCard)).trim();
   const result = existingRunId
     ? await requestCardSkillRunContinue({
@@ -357,6 +379,7 @@ async function startCodex(button) {
       ledgerId: currentLedgerId,
       cardId: String(currentCard.id),
       runId: existingRunId,
+      requestId,
       codexModel: button.dataset.codexModel,
       codexEffort: button.dataset.codexEffort
     })
@@ -364,13 +387,20 @@ async function startCodex(button) {
       ledgerId: currentLedgerId,
       threadId: canvasState.threadId,
       cardId: String(currentCard.id),
+      requestId,
       codexModel: button.dataset.codexModel,
       codexEffort: button.dataset.codexEffort
     });
   if (!result.ok) {
+    window.dispatchEvent(new CustomEvent('decision-os:codex-run-rejected', {
+      detail: { ...executionDetail, error: result.error || 'Codex execution admission failed.' },
+    }));
     button.disabled = false;
     return;
   }
+  window.dispatchEvent(new CustomEvent('decision-os:codex-run-enqueued', {
+    detail: { ...executionDetail, ...(result.receipt ?? {}), actionOwned: false },
+  }));
   const runId = String(result.run?.id ?? existingRunId);
   const executionId = String(result.run?.executionId ?? '');
   const startedAt = String(result.run?.startedAt || new Date().toISOString());

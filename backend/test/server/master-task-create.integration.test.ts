@@ -32,9 +32,23 @@ test('master-task creation persists the complete graph and returns absolute Mark
   const projectId = catalog.projects[0].id;
   const master = { id: 'card-master', title: 'Context metrics', cardType: 'note', domainId: 'tasks', status: 'todo', labels: ['master-task'], x: 60, y: 60, w: 360, h: 240, comment: { what: 'Ledger: Tasks\nWaiting since: now\n', contentFile: '.decision-os/cards/tasks/card-master.md' }, facts: [], fields: [] };
   const subtask = { id: 'card-subtask', title: 'Collect metrics', cardType: 'note', domainId: 'tasks', status: 'todo', labels: ['subtask'], x: 450, y: 60, w: 310, h: 180, comment: { what: '', contentFile: '.decision-os/cards/tasks/card-subtask.md' }, facts: [], fields: [] };
+  const rejectedResponse = await fetch(`${baseUrl}/p/${projectId}/decision-os/tasks`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      action: 'create-master-task',
+      annotation: { id: 'zone-rejected', x: 0, y: 0, width: 1200, height: 900, color: '#123456', label: 'Rejected', comments: [] },
+      card: { ...master, id: 'card-rejected', comment: { what: '', contentFile: '.decision-os/cards/tasks/card-rejected.md' } },
+      cards: [],
+      relationships: [],
+    }),
+  });
+  assert.equal(rejectedResponse.status, 400);
+  assert.deepEqual(await rejectedResponse.json(), { ok: false, error: 'assigned_node_id_required' });
+  assert.equal(existsSync(join(decisionOsRoot, 'cards', 'tasks', 'card-rejected.md')), false);
+
   const response = await fetch(`${baseUrl}/p/${projectId}/decision-os/tasks`, {
     method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
       action: 'create-master-task',
+      assignedNodeId: 'workstation',
       annotation: { id: 'zone-master', x: 0, y: 0, width: 1200, height: 900, color: '#123456', label: 'Context metrics', comments: [] },
       card: master,
       cards: [subtask],
@@ -47,6 +61,23 @@ test('master-task creation persists the complete graph and returns absolute Mark
   assert.ok(body.createdFiles.every((entry) => entry.path.startsWith(workspace)));
   assert.ok(body.createdFiles.every((entry) => existsSync(entry.path)));
   assert.match(readFileSync(body.createdFiles[0].path, 'utf8'), /Ledger: Tasks/);
+  const creationProjection = await fetch(`${baseUrl}/api/task-state/projection?projectId=${encodeURIComponent(projectId)}`).then((result) => result.json()) as { ledger: { cards: Array<{ id: string; assignment?: { nodeId: string; changedAt: string; revision: number } }> } };
+  assert.equal(creationProjection.ledger.cards.find((card) => card.id === 'card-master')?.assignment?.nodeId, 'workstation');
+  assert.equal(creationProjection.ledger.cards.find((card) => card.id === 'card-master')?.assignment?.revision, 1);
+  assert.equal(creationProjection.ledger.cards.find((card) => card.id === 'card-subtask')?.assignment, undefined);
+  const inheritedReassignment = await fetch(`${baseUrl}/p/${projectId}/decision-os/tasks`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      action: 'reassign-task', cardId: 'card-subtask', assignedNodeId: 'phone',
+    }),
+  });
+  assert.equal(inheritedReassignment.status, 409);
+  assert.deepEqual(await inheritedReassignment.json(), { ok: false, error: 'task_assignment_inherited' });
+  const reassignment = await fetch(`${baseUrl}/p/${projectId}/decision-os/tasks`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      action: 'reassign-task', cardId: 'card-master', assignedNodeId: 'phone',
+    }),
+  });
+  assert.equal(reassignment.status, 200);
   const lifecycleResponse = await fetch(`${baseUrl}/api/task-state/transition-card-lifecycle`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, cardId: 'card-master', lifecycleStatus: 'done' }),
   });
@@ -57,9 +88,15 @@ test('master-task creation persists the complete graph and returns absolute Mark
   });
   assert.equal(aggregateResponse.status, 410);
   assert.deepEqual(await aggregateResponse.json(), { ok: false, error: 'aggregate_task_state_commit_removed' });
-  const projection = await fetch(`${baseUrl}/api/task-state/projection?projectId=${encodeURIComponent(projectId)}`).then((result) => result.json()) as { ledger: { cards: Array<{ id: string; status: string }>; relationships: Array<{ id: string }>; annotations: Array<{ id: string }> } };
+  const projection = await fetch(`${baseUrl}/api/task-state/projection?projectId=${encodeURIComponent(projectId)}`).then((result) => result.json()) as { ledger: { cards: Array<{ id: string; status: string; assignment?: { nodeId: string; changedAt: string; revision: number } }>; relationships: Array<{ id: string }>; annotations: Array<{ id: string }> } };
   assert.deepEqual(projection.ledger.cards.map((card) => card.id).sort(), ['card-master', 'card-subtask']);
   assert.equal(projection.ledger.cards.find((card) => card.id === 'card-master')?.status, 'done');
+  assert.deepEqual(projection.ledger.cards.find((card) => card.id === 'card-master')?.assignment, {
+    nodeId: 'phone',
+    changedAt: projection.ledger.cards.find((card) => card.id === 'card-master')?.assignment?.changedAt,
+    revision: 2,
+  });
+  assert.equal(projection.ledger.cards.find((card) => card.id === 'card-subtask')?.assignment, undefined);
   assert.deepEqual(projection.ledger.relationships.map((relationship) => relationship.id), ['rel-subtask']);
   assert.deepEqual(projection.ledger.annotations.map((annotation) => annotation.id), ['zone-master']);
 });

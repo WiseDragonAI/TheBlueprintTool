@@ -8,9 +8,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startThreadCodexProcessController } from '@backend/business/codex/controller/start-thread-codex-process-controller.js';
-import { clearCardCodexExecution } from '@backend/business/codex/helper/clear-card-codex-execution.js';
+import { createTaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
 import { createProjectTaskState, type ProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
-import type { TaskProjectionCommand } from '@backend/business/task-state/helper/task-mutation-command.js';
 import type { TaskStateDelta } from '@backend/business/task-state/helper/task-current-state-types.js';
 
 test('queued and terminal task Codex session state converges on a second replica', async (context) => {
@@ -23,7 +22,14 @@ test('queued and terminal task Codex session state converges on a second replica
   const cardRef = `.decision-os/cards/tasks/${cardId}.md`;
   const threadRef = `.decision-os/threads/tasks/${threadId}.md`;
   const initialLedger = {
-    cards: [{ id: cardId, title: 'Replicated task run', status: 'todo', labels: ['master-task'], comment: { contentFile: cardRef } }],
+    cards: [{
+      id: cardId,
+      title: 'Replicated task run',
+      status: 'todo',
+      labels: ['master-task'],
+      assignment: { nodeId: 'workstation', changedAt: '2026-07-22T09:00:00.000Z', revision: 1 },
+      comment: { contentFile: cardRef },
+    }],
     annotations: [], relationships: [], notes: {}, threadFiles: { [threadId]: threadRef },
   };
   for (const root of [decisionOsRoot, remoteDecisionOsRoot]) {
@@ -53,10 +59,19 @@ test('queued and terminal task Codex session state converges on a second replica
   const runtime: Record<string, unknown> = {
     decisionOsRoot,
     projectId: 'project-a',
+    decisionOsSettings: { federationNodeId: 'workstation' },
     readTaskLedgerProjection: () => local!.projection().ledger,
-    persistTaskLedgerProjection: (ledger: Record<string, unknown>, command: TaskProjectionCommand) => local!.executeProjectionCommand(command, ledger),
+    taskExecutionState: local,
     scheduleCodexProcesses: async () => ({ launched: [] }),
   };
+  runtime.taskExecutionRouter = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => local!,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    localCapacity: () => 1,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+  });
 
   const started = await startThreadCodexProcessController({
     action_payload: { ledgerId: 'tasks', threadId, cardId },
@@ -65,34 +80,20 @@ test('queued and terminal task Codex session state converges on a second replica
   assert.equal(started.ok, true);
   const run = started.run as Record<string, unknown>;
   for (const delta of deltas.splice(0)) await remote.store.merge(delta);
-  const remoteQueued = (remote.projection().ledger.cards as Array<Record<string, unknown>>)[0];
-  assert.deepEqual(remoteQueued.executionIntent, {
-    id: run.id,
-    state: 'queued',
-    changedAt: remoteQueued.executionIntent && (remoteQueued.executionIntent as Record<string, unknown>).changedAt,
-    startedAt: null,
-    settledAt: null,
-    error: null,
-  });
-  assert.equal(remoteQueued.codexActiveRunId, run.id);
-  assert.equal(remoteQueued.codexActiveExecutionId, run.executionId);
+  const remoteQueued = remote.executions.find(String(run.executionId));
+  assert.equal(remoteQueued?.metadata.sessionId, run.id);
+  assert.equal(remoteQueued?.metadata.taskId, cardId);
+  assert.equal(remoteQueued?.lifecycle.phase, 'queued');
+  assert.equal(remoteQueued?.lifecycle.executorNodeId, 'workstation');
 
-  assert.equal(await clearCardCodexExecution({
-    decisionOsRoot,
-    ledgerId: 'tasks',
-    ledgerPath: join(decisionOsRoot, 'tasks.json'),
-    cardId,
-    runId: String(run.id),
-    executionId: String(run.executionId),
-    runtime,
-  }), true);
+  await local.executions.transition(String(run.executionId), { phase: 'starting' });
+  await local.executions.transition(String(run.executionId), { phase: 'running' });
+  await local.executions.transition(String(run.executionId), {
+    phase: 'succeeded',
+    result: { status: 'succeeded', summary: 'Completed.' },
+  });
   for (const delta of deltas.splice(0)) await remote.store.merge(delta);
-  const remoteTerminal = (remote.projection().ledger.cards as Array<Record<string, unknown>>)[0];
-  const terminalIntent = remoteTerminal.executionIntent as Record<string, unknown>;
-  assert.equal(remoteTerminal.codexActiveRunId, undefined);
-  assert.equal(remoteTerminal.codexActiveExecutionId, undefined);
-  assert.equal(terminalIntent.id, run.id);
-  assert.equal(terminalIntent.state, 'terminal');
-  assert.equal(typeof terminalIntent.changedAt, 'string');
-  assert.equal(terminalIntent.settledAt, terminalIntent.changedAt);
+  const remoteTerminal = remote.executions.find(String(run.executionId));
+  assert.equal(remoteTerminal?.lifecycle.phase, 'succeeded');
+  assert.equal(remoteTerminal?.lifecycle.result?.summary, 'Completed.');
 });

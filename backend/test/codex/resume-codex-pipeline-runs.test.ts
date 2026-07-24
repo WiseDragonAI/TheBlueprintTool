@@ -12,6 +12,9 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
+import { taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
+import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
+import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
 
 async function closeServer(server: Server): Promise<void> {
   if (!server.listening) return;
@@ -29,6 +32,16 @@ async function waitFor<T>(read: () => T | null, label: string): Promise<T> {
   assert.fail(`Timed out waiting for ${label}`);
 }
 
+async function waitForAsync<T>(read: () => Promise<T | null>, label: string): Promise<T> {
+  const started = Date.now();
+  while (Date.now() - started < 5000) {
+    const value = await read();
+    if (value !== null) return value;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.fail(`Timed out waiting for ${label}`);
+}
+
 function skill(workspace: string, name: string): void {
   const directory = join(workspace, '.skills', name);
   mkdirSync(directory, { recursive: true });
@@ -40,17 +53,22 @@ function baseWorkspace(prefix: string): { workspace: string; decisionOsRoot: str
   const decisionOsRoot = join(workspace, '.decision-os');
   const ledgerPath = join(decisionOsRoot, 'specs.json');
   mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'project', name: 'Project' }));
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
-    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }],
+    ledgers: [
+      { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
+      { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' },
+    ],
   }, null, 2));
   writeFileSync(ledgerPath, JSON.stringify({
     cards: [{ id: 'source', title: 'Source', x: 0, y: 0, w: 320, h: 180, comment: { what: 'source body' }, facts: [], fields: [] }],
     annotations: [], relationships: [], notes: {},
   }, null, 2));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [] }));
   return { workspace, decisionOsRoot, ledgerPath };
 }
 
-test('cancellation stops downstream work and restart clears generated card and thread content before relaunch', async () => {
+test('cancellation stops downstream work and restart preserves prior artifacts in linked immutable history', async () => {
   const previousCodexBin = process.env.CODEX_BIN;
   const { workspace, decisionOsRoot, ledgerPath } = baseWorkspace('decision-os-pipeline-cancel-');
   const fakeCodex = join(workspace, 'fake-codex.mjs');
@@ -115,12 +133,17 @@ test('cancellation stops downstream work and restart clears generated card and t
     const cancelRequested = await cancelResponse.json() as { status: string; cancellationRequested: boolean };
     assert.equal(cancelRequested.status, 'running');
     assert.equal(cancelRequested.cancellationRequested, true);
-    const cancelled = await waitFor(
-      () => readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === runId && run.status === 'cancelled') ?? null,
-      'pipeline cancellation settlement',
-    );
+    const cancelled = await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(runId)}`)
+        .then((response) => response.json()) as Record<string, any>;
+      return detail.run?.status === 'cancelled'
+        && detail.run.steps.every((step: Record<string, any>) => step.skills.every((skill: Record<string, any>) => skill.status === 'cancelled'))
+        ? detail.run
+        : null;
+    }, 'pipeline cancellation settlement');
     assert.equal(cancelled?.status, 'cancelled');
-    assert.equal(cancelled?.steps[0].skills[1].status, 'pending');
+    assert.equal(cancelled?.steps[0].skills[1].status, 'cancelled');
+    assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === runId)?.status, 'pending');
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, null);
     assert.deepEqual(readFileSync(invocations, 'utf8').trim().split('\n'), ['slow:1']);
 
@@ -136,16 +159,26 @@ test('cancellation stops downstream work and restart clears generated card and t
 
     const restartResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs/${runId}/restart`, { method: 'POST' });
     assert.equal(restartResponse.status, 202);
-    await waitFor(() => readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === runId)?.status === 'complete' ? true : null, 'restarted completion');
+    const replacement = await restartResponse.json() as Record<string, any>;
+    assert.notEqual(replacement.run.id, runId);
+    assert.equal(replacement.run.restartOfPipelineRunId, runId);
+    const replacementRun = await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(replacement.run.id)}`)
+        .then((response) => response.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? detail.run : null;
+    }, 'replacement completion');
     assert.deepEqual(readFileSync(invocations, 'utf8').trim().split('\n'), ['slow:1', 'slow:2', 'fast:3']);
-    assert.doesNotMatch(readFileSync(outputFile, 'utf8'), /old generated body/);
-    assert.doesNotMatch(readFileSync(threadFile, 'utf8'), /old thread note/);
+    assert.match(readFileSync(outputFile, 'utf8'), /old generated body/);
+    assert.match(readFileSync(threadFile, 'utf8'), /old thread note/);
+    const replacementOutput = join(decisionOsRoot, 'cards', 'specs', `${replacementRun.steps[0].outputCardId}.md`);
+    assert.doesNotMatch(readFileSync(replacementOutput, 'utf8'), /old generated body/);
+    assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.length, 2);
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, null);
 
     const detailResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs/${runId}`);
     assert.equal(detailResponse.status, 200);
     const detail = await detailResponse.json() as Record<string, any>;
-    assert.equal(detail.run.status, 'complete');
+    assert.equal(detail.run.status, 'cancelled');
     assert.equal(detail.run.steps[0].skills[0].logAvailable, true);
     assert.equal(detail.run.steps[0].skills[0].codexModel, cancelled?.steps[0].skills[0].codexModel);
   } finally {
@@ -155,7 +188,7 @@ test('cancellation stops downstream work and restart clears generated card and t
     rmSync(workspace, { recursive: true, force: true });
   }
 });
-test('server startup resumes after a persisted completed skill without duplicating its files', async () => {
+test('server startup schedules the queued replicated successor without mutating completed pipeline history', async () => {
   const previousCodexBin = process.env.CODEX_BIN;
   const { workspace, decisionOsRoot, ledgerPath } = baseWorkspace('decision-os-pipeline-resume-');
   const fakeCodex = join(workspace, 'fake-codex.mjs');
@@ -184,6 +217,8 @@ test('server startup resumes after a persisted completed skill without duplicati
   const firstStderr = join(runDirectory, 'first-run.log');
   const secondStdout = join(runDirectory, 'second-run.jsonl');
   const secondStderr = join(runDirectory, 'second-run.log');
+  const firstExecutionId = 'execution-first';
+  const secondExecutionId = 'execution-second';
   writeFileSync(firstStdout, '{"type":"thread.started"}\n{"type":"turn.completed"}\n');
   writeFileSync(firstStderr, '');
   const firstBytes = readFileSync(firstStdout, 'utf8');
@@ -209,12 +244,13 @@ test('server startup resumes after a persisted completed skill without duplicati
       ] }],
       runs: [{
         id: 'pipeline-resume', pipelineId: 'resume-definition', pipelineName: 'Resume', temporary: false,
+        executionMode: 'local',
         ledgerId: 'specs', sourceCardId: 'source', sourceCardTitle: 'Source', status: 'running',
         steps: [{
           id: 'pipeline-resume-step-1', stepId: 'step', name: 'Resume Step', purpose: '', outputCardId, status: 'running',
           skills: [
-            { id: 'run-first', pipelineSkillId: 'first-config', skillName: 'first', runId: 'first-run', status: 'complete', codexModel: 'gpt-5.4', codexEffort: 'high', stdoutFile: firstStdout, stderrFile: firstStderr, startedAt: now, finishedAt: now, error: '' },
-            { id: 'run-second', pipelineSkillId: 'second-config', skillName: 'second', runId: 'second-run', status: 'pending', codexModel: 'gpt-5.5', codexEffort: 'low', stdoutFile: secondStdout, stderrFile: secondStderr, startedAt: null, finishedAt: null, error: '' },
+            { id: 'run-first', pipelineSkillId: 'first-config', skillName: 'first', runId: 'first-run', executionId: firstExecutionId, status: 'complete', codexModel: 'gpt-5.4', codexEffort: 'high', stdoutFile: firstStdout, stderrFile: firstStderr, startedAt: now, finishedAt: now, error: '' },
+            { id: 'run-second', pipelineSkillId: 'second-config', skillName: 'second', runId: 'second-run', executionId: secondExecutionId, status: 'pending', codexModel: 'gpt-5.5', codexEffort: 'low', stdoutFile: secondStdout, stderrFile: secondStderr, startedAt: null, finishedAt: null, error: '' },
           ],
           startedAt: now, finishedAt: null, error: '',
         }],
@@ -223,6 +259,61 @@ test('server startup resumes after a persisted completed skill without duplicati
       skillLibrary: [], activeWorkspaceRun: 'pipeline-resume',
     },
   });
+  const taskState = createProjectTaskState({
+    projectId: 'project',
+    writerId: 'local',
+    decisionOsRoot,
+    tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
+    initialize: true,
+  });
+  const executionMetadata = (
+    executionId: string,
+    sessionId: string,
+    pipelineSkillRunId: string,
+    predecessorExecutionId: string | null,
+    model: string,
+    effort: string,
+  ): TaskExecutionMetadata => ({
+    executionId,
+    requestId: `pipeline:pipeline-resume:${executionId}`,
+    sessionId,
+    projectId: 'project',
+    ledgerId: 'specs',
+    taskId: '',
+    sourceCardId: 'source',
+    ownerCardId: outputCardId,
+    kind: 'pipeline-skill',
+    requestedAt: now,
+    model,
+    effort,
+    pipelineRunId: 'pipeline-resume',
+    pipelineStepId: 'pipeline-resume-step-1',
+    pipelineSkillRunId,
+    predecessorExecutionId,
+    restartOfExecutionId: null,
+  });
+  await taskState.executions.admit({
+    metadata: executionMetadata(firstExecutionId, 'first-run', 'first-run', null, 'gpt-5.4', 'high'),
+    executorNodeId: 'local',
+  });
+  await taskState.executions.transition(firstExecutionId, { phase: 'queued' });
+  await taskState.executions.transition(firstExecutionId, { phase: 'starting' });
+  await taskState.executions.transition(firstExecutionId, { phase: 'running' });
+  await taskState.executions.transition(firstExecutionId, {
+    phase: 'succeeded',
+    result: { status: 'succeeded', summary: 'First skill completed before restart.' },
+  });
+  await taskState.finalizeExecutionArtifacts(firstExecutionId, {
+    jsonl: firstStdout,
+    stderr: firstStderr,
+    result: join(cardDirectory, `${outputCardId}.md`),
+  });
+  const firstArtifactHeads = taskState.executions.find(firstExecutionId)?.artifacts;
+  await taskState.executions.admit({
+    metadata: executionMetadata(secondExecutionId, 'second-run', 'second-run', firstExecutionId, 'gpt-5.5', 'low'),
+    executorNodeId: 'local',
+  });
+  await taskState.executions.transition(secondExecutionId, { phase: 'queued' });
   process.env.CODEX_BIN = fakeCodex;
   const runtime: Record<string, unknown> = { decisionOsRoot };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
@@ -230,17 +321,27 @@ test('server startup resumes after a persisted completed skill without duplicati
   await once(server, 'listening');
   try {
     const completed = await waitFor(() => {
-      const run = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === 'pipeline-resume');
-      return run?.status === 'complete' ? run : null;
-    }, 'resumed pipeline completion');
-    assert.equal(completed.steps[0].skills[0].status, 'complete');
-    assert.equal(completed.steps[0].skills[1].status, 'complete');
+      const execution = taskExecutionState(runtime)?.executions.find(secondExecutionId);
+      return execution?.lifecycle.phase === 'succeeded'
+        && execution.artifacts.jsonl
+        && execution.artifacts.stderr
+        ? execution
+        : null;
+    }, 'recovered pipeline successor completion');
     assert.deepEqual(readFileSync(invocations, 'utf8').trim().split('\n'), ['second']);
     assert.equal(readFileSync(firstStdout, 'utf8'), firstBytes);
     assert.equal(statSync(firstStdout).mtimeMs, firstMtime);
     assert.equal(existsSync(secondStdout), true);
-    assert.ok(completed.resumedAt);
-    assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, null);
+    assert.equal(taskExecutionState(runtime)?.executions.find(firstExecutionId)?.lifecycle.phase, 'succeeded');
+    assert.deepEqual(taskExecutionState(runtime)?.executions.find(firstExecutionId)?.artifacts, firstArtifactHeads);
+    assert.notEqual(completed.artifacts.jsonl, null);
+    assert.notEqual(completed.artifacts.stderr, null);
+    const immutable = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === 'pipeline-resume');
+    assert.equal(immutable?.status, 'running');
+    assert.equal(immutable?.steps[0].skills[0].status, 'complete');
+    assert.equal(immutable?.steps[0].skills[1].status, 'pending');
+    assert.equal(immutable?.resumedAt, null);
+    assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, 'pipeline-resume');
   } finally {
     await closeServer(server);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;

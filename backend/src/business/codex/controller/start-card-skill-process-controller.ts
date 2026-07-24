@@ -4,6 +4,7 @@
  */
 import { resolve } from 'node:path';
 import { isAllowedCodexEffort, isAllowedCodexModel } from '../helper/resolve-codex-command.js';
+import { outputFileForPipelineCard, resolvePipelineLedgerContext } from '../helper/codex-pipeline-runner.js';
 import { startTemporaryPipelineRun } from './start-codex-pipeline-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -48,6 +49,9 @@ export async function startCardSkillProcessController(
     codexModel: explicitCodexModel,
     codexEffort: explicitCodexEffort,
     onLedgerChange: payload.onLedgerChange,
+    reservedRunId: optionalText(payload.reservedRunId),
+    reservedFirstExecutionId: optionalText(payload.executionId),
+    requestIdPrefix: optionalText(payload.requestId),
   });
   // WHAT: Preserve the shared pipeline start error for direct-run callers.
   // WHY: Compatibility fields are valid only after a skill run has been created.
@@ -55,10 +59,15 @@ export async function startCardSkillProcessController(
   const pipelineRun = result.run && typeof result.run === 'object' ? result.run as AnyRecord : {};
   const firstStep = Array.isArray(pipelineRun.steps) ? pipelineRun.steps[0] as AnyRecord | undefined : undefined;
   const firstSkill = Array.isArray(firstStep?.skills) ? firstStep.skills[0] as AnyRecord | undefined : undefined;
+  const context = resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId });
+  const outputFile = context && firstStep?.outputCardId
+    ? outputFileForPipelineCard(context, decisionOsRoot, String(firstStep.outputCardId))
+    : '';
   const compatibilityRun = result.skillRun && typeof result.skillRun === 'object'
     ? result.skillRun as AnyRecord
     : {
         id: firstSkill?.runId ?? pipelineRun.id,
+        executionId: firstSkill?.executionId,
         pipelineRunId: pipelineRun.id,
         pipelineId: null,
         pipelineName: pipelineRun.pipelineName,
@@ -69,6 +78,7 @@ export async function startCardSkillProcessController(
         sourceCardId: cardId,
         sourceCardTitle: pipelineRun.sourceCardTitle,
         outputCardId: firstStep?.outputCardId,
+        outputFile,
         stdoutFile: firstSkill?.stdoutFile,
         stderrFile: firstSkill?.stderrFile,
         codexModel: firstSkill?.codexModel,
@@ -76,5 +86,12 @@ export async function startCardSkillProcessController(
         status: firstSkill?.status,
         startedAt: firstSkill?.startedAt,
       };
-  return { ok: true, statusCode: 202, run: compatibilityRun, pipelineRun, queuePosition: result.queuePosition ?? null };
+  return {
+    ok: true,
+    statusCode: 202,
+    run: compatibilityRun,
+    pipelineRun,
+    receipts: result.receipts,
+    queuePosition: result.queuePosition ?? null,
+  };
 }

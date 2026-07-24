@@ -66,6 +66,7 @@ test('creates and refreshes one deterministic recurring runtime incident master 
     const firstSnapshot = {
       project,
       taskState,
+      assignedNodeId: 'workstation',
       updatedAt: '2026-07-22T11:53:44.879Z',
       incidents: [incident()],
       incidentLedgerFile: join(root, '.decision-os', 'runtime-incidents.json'),

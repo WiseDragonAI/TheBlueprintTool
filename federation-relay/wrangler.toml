@@ -5,11 +5,15 @@ compatibility_date = "2026-07-16"
 
 [[durable_objects.bindings]]
 name = "FEDERATIONS"
-class_name = "FederationRelay"
+class_name = "FederationRelayV4"
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["FederationRelay"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["FederationRelayV4"]
 
 [observability]
 enabled = true

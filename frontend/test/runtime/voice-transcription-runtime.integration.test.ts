@@ -383,6 +383,10 @@ test('request-transcription signals durable persistence before delayed upload se
     assert.equal(uploadCount, 2);
     assert.equal(requestedUrls[1], '/p/project-id/api/voice-upload');
     assert.equal(requestedReplicaNodeIds[1], 'mobile');
+    assert.deepEqual(requestedUrls, [
+      '/p/project-id/api/voice-upload',
+      '/p/project-id/api/voice-upload',
+    ]);
     assert.equal(note.voiceFileRef, '/tmp/retried.webm');
     assert.equal(note.status, 'queued');
     assert.equal(note.localVoiceUploadId, '');

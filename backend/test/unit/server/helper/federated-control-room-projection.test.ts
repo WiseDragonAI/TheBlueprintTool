@@ -27,10 +27,15 @@ test('merges Exec tasks from current structural projections', () => {
   assert.equal(result.active, undefined);
 });
 
-test('preserves one replicated structural execution intent without inventing a node conflict', () => {
+test('preserves one replicated execution without inventing a node conflict', () => {
+  const execution = {
+    executionId: 'execution-a', sessionId: 'run-a', phase: 'running', requestedAt: '2026-07-22T10:00:00.000Z',
+    phaseSince: '2026-07-22T10:01:00.000Z', startedAt: '2026-07-22T10:01:00.000Z', finishedAt: null,
+    executorNodeId: 'phone', revision: 3,
+  };
   const structuralTask = {
     cardId: 'master', projectId: 'project-1', ledgerId: 'tasks', title: 'Master', cardStatus: 'todo', status: 'task-execution',
-    executionIntent: { id: 'run-a', state: 'running', changedAt: '2026-07-22T10:00:00.000Z', startedAt: '2026-07-22T10:01:00.000Z', settledAt: null, error: null },
+    execution,
     executionStatus: 'running', executionSince: '2026-07-22T10:01:00.000Z', executionTime: Date.parse('2026-07-22T10:01:00.000Z'),
     executionOwnerCardId: 'child', executionOwnerKind: 'subtask', executionObservation: null,
   };
@@ -56,13 +61,13 @@ test('preserves one replicated structural execution intent without inventing a n
 test('matches one fresh canonical observation to its exact replicated execution', () => {
   const observedAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 15_000).toISOString();
-  const executionIntent = {
+  const execution = {
     executionId: 'execution-a', phase: 'running', requestedAt: observedAt, phaseSince: observedAt,
-    executorNodeId: 'phone', changedAt: observedAt, settledAt: null, error: null, revision: 3,
+    executorNodeId: 'phone', startedAt: observedAt, finishedAt: null, revision: 3,
   };
   const task = {
     cardId: 'master', projectId: 'project-1', ledgerId: 'tasks', title: 'Master', cardStatus: 'todo', status: 'task-execution',
-    executionIntent, executionStatus: 'running', executionSince: observedAt, executionTime: Date.parse(observedAt),
+    execution, executionStatus: 'running', executionSince: observedAt, executionTime: Date.parse(observedAt),
     executionOwnerCardId: 'master', executionOwnerKind: 'master-task',
   };
   const projection = (fingerprint: string, executionObservation: Record<string, unknown> | null) => ({
@@ -142,6 +147,36 @@ test('merges the federation Queue only by newest waiting time instead of owner n
     'local-node',
     'local-node',
   ]);
+});
+
+test('projects one durable assignment independently from the replica serving the task', () => {
+  const task = {
+    cardId: 'card-assigned', projectId: 'project-1', ledgerId: 'tasks', title: 'Assigned task',
+    cardStatus: 'todo', status: 'task-waiting', assignedNodeId: 'phone',
+    assignment: { nodeId: 'phone', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
+  };
+  const result = federatedControlRoomProjection({
+    localProjection: {
+      fingerprint: 'local', projects: [{ id: 'project-1', name: 'Project' }],
+      queue: [task], exec: [], backlog: [], done: [], allTasks: [task], diagnostics: [], ledgers: ['Tasks'],
+    },
+    localOwner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: false },
+    remoteProjections: [{
+      owner: { nodeId: 'phone', nodeLabel: 'Mobile', remote: true, online: false },
+      projection: {
+        fingerprint: 'phone', projects: [{ id: 'project-1', name: 'Project' }],
+        queue: [task], exec: [], backlog: [], done: [], allTasks: [task], diagnostics: [], ledgers: ['Tasks'],
+      },
+    }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  assert.equal(result.allTasks.length, 1);
+  assert.equal(result.allTasks[0].ownerNodeId, 'workstation');
+  assert.equal(result.allTasks[0].assignedNodeId, 'phone');
+  assert.equal(result.allTasks[0].assignedNodeLabel, 'Mobile');
+  assert.equal(result.allTasks[0].assignedNodeOnline, false);
+  assert.equal(result.allTasks[0].conflict, false);
 });
 
 test('changes the projection fingerprint when retained remote replicas change presence', () => {

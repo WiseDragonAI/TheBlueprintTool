@@ -33,7 +33,7 @@ function finishStreams(stdout: WriteStream, stderr: WriteStream, callback: () =>
   }
 }
 
-export function launchCodexExecutionProcess(input: {
+export async function launchCodexExecutionProcess(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
   workspaceRoot: string;
@@ -52,12 +52,12 @@ export function launchCodexExecutionProcess(input: {
   startLine: number;
   startedAt?: string;
   metadata?: CodexRunSegmentMetadata;
-  onSpawn: (child: ChildProcess, startedAt: string) => void;
+  onSpawn: (child: ChildProcess, startedAt: string) => void | Promise<void>;
   onTurnStarted?: (event: { line: number }, observedAt: string) => void;
   onStdoutChunk?: (chunk: Buffer) => void;
   onStderrChunk?: (chunk: Buffer) => void;
   onSettled: (settlement: CodexProcessSettlement) => unknown;
-}): { child: ChildProcess; startedAt: string } {
+}): Promise<{ child: ChildProcess; startedAt: string }> {
   const startedAt = String(input.startedAt ?? '').trim() || new Date().toISOString();
   const child = spawn(input.command.command, input.command.args, {
     cwd: input.workspaceRoot,
@@ -128,27 +128,6 @@ export function launchCodexExecutionProcess(input: {
       if (input.onTurnStarted) invokeCallback('publish-codex-turn-started', () => input.onTurnStarted?.({ line: event.line }, observedAt));
     },
   });
-  try {
-    appendFileSync(input.stderrFile, codexRunSegmentMarker({
-      runId: input.runId,
-      executionId: input.executionId,
-      startedAt,
-      segment: input.segment,
-      startLine: input.startLine,
-      metadata: input.metadata,
-    }), 'utf8');
-    input.onSpawn(child, startedAt);
-  } catch (error) {
-    clearTimeout(executionDeadline);
-    clearTimeout(forceStopDeadline);
-    terminalReconciler.dispose();
-    child.once('error', () => undefined);
-    signalCodexProcessTree({ child, signal: 'SIGKILL' });
-    child.stdin.destroy();
-    stdout.destroy();
-    stderr.destroy();
-    throw error;
-  }
   stdout.on('error', (error) => stopForFailure('write-codex-stdout-log', error));
   stderr.on('error', (error) => stopForFailure('write-codex-stderr-log', error));
   child.stdout.on('error', (error) => stopForFailure('read-codex-stdout', error));
@@ -165,12 +144,9 @@ export function launchCodexExecutionProcess(input: {
   child.stderr.on('data', (chunk: Buffer) => {
     if (input.onStderrChunk) invokeCallback('observe-codex-stderr', () => input.onStderrChunk?.(chunk));
   });
-  child.stdin.on('error', () => undefined);
-  child.stdout.pipe(stdout, { end: false });
-  child.stderr.pipe(stderr, { end: false });
-  child.stdin.end(input.prompt);
-
   let settled = false;
+  let spawnReady = false;
+  let pendingSettlement: CodexProcessSettlement | null = null;
   const settle = (settlement: CodexProcessSettlement): void => {
     // WHAT: Accept only the first process terminal signal.
     // WHY: Node can emit both `error` and `close` for one failed launch.
@@ -188,7 +164,37 @@ export function launchCodexExecutionProcess(input: {
       invokeCallback('settle-codex-process', () => input.onSettled(settlement));
     });
   };
-  child.once('error', (error) => settle({ kind: 'error', error, exitCode: null, terminalStatus, finishedAt: new Date().toISOString() }));
-  child.once('close', (exitCode) => settle({ kind: 'close', exitCode, terminalStatus, finishedAt: new Date().toISOString() }));
+  const requestSettlement = (settlement: CodexProcessSettlement): void => {
+    if (spawnReady) settle(settlement);
+    else pendingSettlement ??= settlement;
+  };
+  child.once('error', (error) => requestSettlement({ kind: 'error', error, exitCode: null, terminalStatus, finishedAt: new Date().toISOString() }));
+  child.once('close', (exitCode) => requestSettlement({ kind: 'close', exitCode, terminalStatus, finishedAt: new Date().toISOString() }));
+  child.stdin.on('error', () => undefined);
+  child.stdout.pipe(stdout, { end: false });
+  child.stderr.pipe(stderr, { end: false });
+  try {
+    appendFileSync(input.stderrFile, codexRunSegmentMarker({
+      runId: input.runId,
+      executionId: input.executionId,
+      startedAt,
+      segment: input.segment,
+      startLine: input.startLine,
+      metadata: input.metadata,
+    }), 'utf8');
+    await input.onSpawn(child, startedAt);
+  } catch (error) {
+    clearTimeout(executionDeadline);
+    clearTimeout(forceStopDeadline);
+    terminalReconciler.dispose();
+    signalCodexProcessTree({ child, signal: 'SIGKILL' });
+    child.stdin.destroy();
+    stdout.destroy();
+    stderr.destroy();
+    throw error;
+  }
+  spawnReady = true;
+  if (pendingSettlement) settle(pendingSettlement);
+  else child.stdin.end(input.prompt);
   return { child, startedAt };
 }

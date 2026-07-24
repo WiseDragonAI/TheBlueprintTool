@@ -1,13 +1,14 @@
 export const voiceTranscriptionDeadlineMs = 120_000;
 
-const terminalStatuses = new Set(['transcribed', 'transcription failed']);
+const terminalStatuses = new Set(['transcribed', 'transcription failed', 'execution launch failed']);
 const statusRank: Record<string, number> = {
   uploading: 0,
   queued: 1,
   transcribing: 2,
   finalizing: 3,
   transcribed: 4,
-  'transcription failed': 4
+  'transcription failed': 4,
+  'execution launch failed': 4
 };
 
 export const voiceLifecycleFields = [
@@ -40,6 +41,7 @@ export function voicePhaseLabel(status: unknown): string {
   if (normalized === 'finalizing') return 'Finalizing transcript';
   if (normalized === 'transcribed') return 'Transcribed';
   if (normalized === 'transcription failed') return 'Transcription failed';
+  if (normalized === 'execution launch failed') return 'Execution launch failed';
   return String(status ?? '');
 }
 

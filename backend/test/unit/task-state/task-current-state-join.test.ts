@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
+import { taskCurrentStateVersion } from '../../../../shared/task-current-state-core.js';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { finalizeTaskCurrentEntity, joinTaskEntities } from '../../../src/business/task-state/helper/task-current-state-join.js';
 
@@ -69,7 +70,7 @@ test('identical concurrent writes retain both causal origins for a later one-sid
 
 test('rejects different values that reuse one causal dot', () => {
   const entity = (value: string) => finalizeTaskCurrentEntity({
-    version: 3,
+    version: taskCurrentStateVersion,
     projectId: 'project-a',
     entityType: 'card',
     entityId: 'card-a',

@@ -10,7 +10,7 @@ import WebSocket from 'ws';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
 import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 import { taskCurrentBaselineEpoch, taskCurrentStateVersion, taskStateProtocol } from '../../task-state/helper/task-current-state-types.js';
-import type { CodexExecutionObservation } from '../../../../../shared/schemas/codex-execution-types.js';
+import type { TaskExecutionObservation } from '../../../../../shared/schemas/task-execution-types.js';
 
 type ProjectManifest = Pick<DecisionOsProject, 'id' | 'name' | 'description' | 'color' | 'ledgers' | 'originFingerprint'>;
 type RelayFrame = {
@@ -32,7 +32,7 @@ type RelayFrame = {
   code?: string;
   message?: string;
   projectId?: string;
-  stateVersion?: 3;
+  stateVersion?: typeof taskCurrentStateVersion;
   stateProtocol?: typeof taskStateProtocol;
   stateSchema?: typeof taskCurrentStateVersion;
   baselineEpoch?: typeof taskCurrentBaselineEpoch;
@@ -50,7 +50,7 @@ export type FederationExecutionObservationFrame = {
   type: 'state-execution-observation';
   from: string;
   projectId: string;
-  payload: { executionId: string; observation: CodexExecutionObservation | null };
+  payload: { executionId: string; observation: TaskExecutionObservation | null };
 };
 
 export type FederationSettings = {
@@ -98,6 +98,16 @@ function configuredSettings(value: unknown): FederationSettings | null {
     return null;
   }
   return { relayUrl, federationId, nodeId, nodeCredential, nodeLabel: nodeLabel || nodeId };
+}
+
+function configuredLocalOwner(value: unknown): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
+  const settings = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const nodeId = String(settings.federationNodeId ?? '').trim();
+  const nodeLabel = String(settings.federationNodeLabel ?? nodeId).trim();
+  if (!nodeId || !/^[a-zA-Z0-9_-]+$/.test(nodeId)) {
+    return { ownerNodeId: 'local', ownerNodeLabel: 'This server', online: true };
+  }
+  return { ownerNodeId: nodeId, ownerNodeLabel: nodeLabel || nodeId, online: true };
 }
 
 function webSocketUrl(settings: FederationSettings): string {
@@ -205,6 +215,7 @@ export function createFederationNodeConnector(input: {
   const flowControlTimeoutMs = Math.max(1, input.flowControlTimeoutMs ?? defaultFlowControlTimeoutMs);
   const ownerRequestTimeoutMs = Math.max(1, input.ownerRequestTimeoutMs ?? defaultOwnerRequestTimeoutMs);
   let settings = configuredSettings(input.settings);
+  let localOwner = configuredLocalOwner(input.settings);
   const requesterStreams = new Map<string, RequesterStream>();
   const ownerStreams = new Map<string, OwnerStream>();
   const remoteNodes = new Map<string, { nodeLabel: string; online: boolean; projects: ProjectManifest[] }>();
@@ -743,6 +754,7 @@ export function createFederationNodeConnector(input: {
     reconfigure(value: unknown): void {
       this.stop();
       settings = configuredSettings(value);
+      localOwner = configuredLocalOwner(value);
       stopped = false;
       reconnectAttempt = 0;
       lastError = '';
@@ -782,7 +794,7 @@ export function createFederationNodeConnector(input: {
       }
     },
     localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
-      return { ownerNodeId: settings?.nodeId || 'local', ownerNodeLabel: settings?.nodeLabel || 'This server', online: true };
+      return localOwner;
     },
     nodes(): Array<{ nodeId: string; nodeLabel: string; online: boolean; projectCount: number }> {
       return [...remoteNodes].map(([nodeId, node]) => ({ nodeId, nodeLabel: node.nodeLabel, online: node.online, projectCount: node.projects.length }));

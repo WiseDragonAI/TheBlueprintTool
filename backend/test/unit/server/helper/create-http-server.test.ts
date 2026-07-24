@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import type { Server } from 'node:http';
+import { request as httpRequest, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +14,8 @@ import { traces } from '@backend/telemetry/harness.js';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { createRuntimeIncidentLedger } from '@backend/business/server/helper/runtime-incident-ledger.js';
 import { scheduleCodexRuntimeTimer } from '@backend/business/codex/helper/codex-runtime-run-store.js';
+import { createTaskExecutionLaunchRequest, type TaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
+import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 
 test('create-http-server executes implemented behavior and records telemetry', async () => {
   traces.length = 0;
@@ -180,17 +182,37 @@ test('create-http-server resolves retained transient task bootstrap incidents at
   }
 });
 
-test('transient task bootstrap rejection returns 503 without degrading server health', async () => {
+test('server admits local assigned execution while its configured relay is unreachable', async () => {
   const originalCwd = process.cwd();
-  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-bootstrap-http-gate-'));
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-local-execution-relay-outage-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
   const frontendRoot = join(projectRoot, 'frontend');
   mkdirSync(decisionOsRoot, { recursive: true });
   mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'project-a', name: 'Project A' }));
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
     ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
   }));
-  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {} }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{
+      id: 'master',
+      title: 'Local task',
+      status: 'todo',
+      labels: ['master-task'],
+      assignment: { nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+  }));
+  const migratedState = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot,
+    tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
+    initialize: true,
+  });
+  await migratedState.flush();
   writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
   process.chdir(projectRoot);
   const runtime: Record<string, unknown> = {
@@ -206,30 +228,74 @@ test('transient task bootstrap rejection returns 503 without degrading server he
   const server = runtime.server as Server;
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const eventAbort = new AbortController();
+  const eventResponse = await fetch(`${baseUrl}/api/control-room-events`, { signal: eventAbort.signal });
+  const eventReader = eventResponse.body!.getReader();
+  const decoder = new TextDecoder();
+  await eventReader.read();
+  const readExecutionRevision = async (revision: number): Promise<string> => {
+    let received = '';
+    while (!received.includes(`"revision":${revision}`)) {
+      const chunk = await eventReader.read();
+      if (chunk.done) break;
+      received += decoder.decode(chunk.value);
+    }
+    return received;
+  };
+  const readExecutionPhase = async (phase: string): Promise<string> => {
+    let received = '';
+    while (!received.includes(`"phase":"${phase}"`)) {
+      const chunk = await eventReader.read();
+      if (chunk.done) break;
+      received += decoder.decode(chunk.value);
+    }
+    return received;
+  };
 
   try {
-    const form = new FormData();
-    form.append('audio', new Blob(['voice-bytes'], { type: 'audio/webm' }), 'voice.webm');
-    form.append('ledgerId', 'tasks');
-    form.append('threadId', 'thread-card-a');
-    form.append('cardId', 'card-a');
-    form.append('noteId', 'note-a');
-    form.append('queueCodex', 'false');
-    form.append('transcriptionText', 'Transient bootstrap test.');
-    form.append('awaitCompletion', 'true');
-    const rejection = await fetch(`${baseUrl}/api/voice-upload`, { method: 'POST', body: form });
-    assert.equal(rejection.status, 503);
-    const rejectionBody = await rejection.json() as { error: string; incidentId: string };
-    assert.equal(rejectionBody.error, 'task-state-bootstrap-incomplete');
-    assert.match(rejectionBody.incidentId, /^incident-/);
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    const unauthenticated = await fetch(`${baseUrl}/p/project-a/api/internal/task-executions/admit`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    assert.equal(unauthenticated.status, 403);
+    assert.equal((await unauthenticated.json() as { error: string }).error, 'federation_node_authentication_failed');
+    const router = runtime.taskExecutionRouter as TaskExecutionRouter;
+    assert.ok(router);
+    const admitted = await router.route(createTaskExecutionLaunchRequest({
+      requestId: 'request-local',
+      executionId: 'execution-local',
+      projectId: 'project-a',
+      ledgerId: 'tasks',
+      sessionId: 'session-local',
+      sourceCardId: 'master',
+      requestedAt: '2026-07-23T01:01:00.000Z',
+    }));
+    assert.equal(admitted.phase, 'queued');
+    assert.equal(admitted.executorNodeId, 'workstation');
+    const admittedEvents = await readExecutionRevision(2);
+    assert.match(admittedEvents, /event: codex-execution-change/);
+    assert.match(admittedEvents, /"phase":"preparing"/);
+    assert.match(admittedEvents, /"phase":"queued"/);
     const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; activeIncidentCount: number };
     assert.equal(health.status, 'ready');
     assert.equal(health.activeIncidentCount, 0);
-    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ code: string; scope: string; status: string }> };
-    assert.ok(incidents.incidents.some((incident) => incident.code === 'task_state_bootstrap_incomplete' && incident.status === 'resolved'));
-    assert.ok(incidents.incidents.some((incident) => incident.scope.startsWith('project-task-write:') && incident.status === 'resolved'));
+    const cancelled = await fetch(`${baseUrl}/p/project-a/api/codex/skills/runs/session-local/cancel`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'tasks', cardId: 'master', executionId: 'execution-local' }),
+    });
+    const cancelledBody = await cancelled.json() as { ok: boolean; phase: string; executorNodeId: string };
+    assert.equal(cancelled.status, 202);
+    assert.equal(cancelledBody.ok, true);
+    assert.equal(cancelledBody.phase, 'cancelled');
+    assert.equal(cancelledBody.executorNodeId, 'workstation');
+    const cancellationEvents = await readExecutionPhase('cancelled');
+    assert.match(cancellationEvents, /"phase":"cancelled"/);
+    assert.match(cancellationEvents, /"revision":3/);
   } finally {
+    eventAbort.abort();
+    await eventReader.cancel().catch(() => undefined);
     server.close();
     await once(server, 'close');
     process.chdir(originalCwd);
@@ -243,18 +309,137 @@ test('server close cancels project-owned Codex retry timers', async () => {
   const frontendRoot = join(projectRoot, 'frontend');
   mkdirSync(decisionOsRoot, { recursive: true });
   mkdirSync(frontendRoot, { recursive: true });
-  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'project-a', name: 'Project A' }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [
+      { id: 'master', title: 'Queued task', labels: ['master-task'] },
+      {
+        id: 'disconnect-master',
+        title: 'Disconnected request task',
+        labels: ['master-task'],
+        assignment: { nodeId: 'workstation', changedAt: '2026-07-23T12:45:00.000Z', revision: 1 },
+        comment: { contentFile: '.decision-os/cards/tasks/disconnect-master.md' },
+      },
+    ],
+    annotations: [],
+    relationships: [],
+    threadFiles: { 'thread-disconnect-master': '.decision-os/threads/tasks/thread-disconnect-master.md' },
+  }));
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(decisionOsRoot, 'threads', 'tasks'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'disconnect-master.md'), '# Disconnected request task\n');
+  writeFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-disconnect-master.md'), [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-disconnect","timestamp":"2026-07-23T12:46:00.000Z"} -->',
+    '',
+    'Run after this request is admitted.',
+    '',
+  ].join('\n'));
+  const durableState = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot,
+    tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
+    initialize: true,
+  });
+  await durableState.executions.admit({
+    executorNodeId: 'phone',
+    metadata: {
+      executionId: 'execution-retained-on-close',
+      requestId: 'request-retained-on-close',
+      sessionId: 'session-retained-on-close',
+      projectId: 'project-a',
+      ledgerId: 'tasks',
+      taskId: 'master',
+      sourceCardId: 'master',
+      ownerCardId: 'master',
+      kind: 'thread',
+      requestedAt: '2026-07-23T12:45:00.000Z',
+      model: null,
+      effort: null,
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      predecessorExecutionId: null,
+      restartOfExecutionId: null,
+    },
+  });
+  await durableState.executions.transition('execution-retained-on-close', { phase: 'queued' });
+  await durableState.flush();
   writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
-  const runtime: Record<string, unknown> = { decisionOsRoot };
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot,
+    decisionOsSettings: { federationNodeId: 'workstation' },
+  };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
-  const server = runtime.server as Server;
+  let server = runtime.server as Server;
   await once(server, 'listening');
+  const releaseCapacity = await (runtime.acquireProjectSyncCodexSlot as () => Promise<() => void>)();
+  let disconnectedStatus = 0;
+  let disconnectedBody = '';
+  const disconnectedRequest = httpRequest({
+    host: '127.0.0.1',
+    port: (server.address() as AddressInfo).port,
+    path: '/api/codex/threads/process',
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+  }, (incoming) => {
+    disconnectedStatus = incoming.statusCode ?? 0;
+    incoming.on('data', (chunk) => { disconnectedBody += chunk.toString('utf8'); });
+  });
+  disconnectedRequest.on('error', () => undefined);
+  disconnectedRequest.end(JSON.stringify({
+    ledgerId: 'tasks',
+    threadId: 'thread-disconnect-master',
+    cardId: 'disconnect-master',
+    requestId: 'request-disconnected',
+    executionId: 'execution-disconnected',
+    reservedRunId: 'session-disconnected',
+  }));
+  const abortDeadline = Date.now() + 2_000;
+  const abortPoll = setInterval(() => {
+    const admitted = (runtime.taskExecutionState as typeof durableState).executions.find('execution-disconnected');
+    if (!admitted && Date.now() < abortDeadline) return;
+    clearInterval(abortPoll);
+    disconnectedRequest.destroy(new Error('client_disconnected'));
+  }, 1);
+  abortPoll.unref?.();
+  const disconnectDeadline = Date.now() + 2_000;
+  while ((runtime.taskExecutionState as typeof durableState)
+    .executions.find('execution-disconnected')?.lifecycle.phase !== 'queued'
+    && Date.now() < disconnectDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const disconnectedPhase = (runtime.taskExecutionState as typeof durableState)
+    .executions.find('execution-disconnected')?.lifecycle.phase;
+  releaseCapacity();
+  if (disconnectedPhase !== 'queued') {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+    assert.equal(disconnectedPhase, 'queued', `status=${disconnectedStatus} body=${disconnectedBody}`);
+  }
+  const holdCapacityUntilClose = await (runtime.acquireProjectSyncCodexSlot as () => Promise<() => void>)();
+  const pendingCapacityWait = (runtime.acquireProjectSyncCodexSlot as () => Promise<() => void>)();
   let fired = false;
   scheduleCodexRuntimeTimer(runtime, 'test-close', 30, 'test-close', () => { fired = true; });
   server.close();
   await once(server, 'close');
+  await assert.rejects(pendingCapacityWait, /codex_slot_wait_cancelled/);
+  holdCapacityUntilClose();
   await new Promise((resolve) => setTimeout(resolve, 60));
   assert.equal(fired, false);
+  const restartedRuntime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: restartedRuntime });
+  server = restartedRuntime.server as Server;
+  await once(server, 'listening');
+  const recovered = (restartedRuntime.taskExecutionState as typeof durableState).executions.find('execution-retained-on-close');
+  assert.equal(recovered?.lifecycle.phase, 'queued');
+  server.close();
+  await once(server, 'close');
   rmSync(projectRoot, { recursive: true, force: true });
 });
 
@@ -325,6 +510,12 @@ test('execution timeout settles as an execution-scoped diagnostic without pausin
     const timeout = incidents.incidents.find((incident) => incident.operation === 'codex-execution-timeout');
     assert.equal(timeout?.status, 'resolved');
     assert.match(timeout?.scope ?? '', /^codex-execution:.*:execution-a$/);
+    const persisted = JSON.parse(readFileSync(join(decisionOsRoot, 'runtime-incidents.json'), 'utf8')) as {
+      incidents: Array<{ operation: string; scope: string }>;
+    };
+    assert.ok(persisted.incidents.some((incident) => incident.operation === 'codex-execution-timeout'
+      && /execution-a$/.test(incident.scope)));
+    assert.equal((await fetch(`${baseUrl}/api/federation/nodes`)).status, 200);
   } finally {
     server.close();
     await once(server, 'close');
@@ -332,7 +523,7 @@ test('execution timeout settles as an execution-scoped diagnostic without pausin
   }
 });
 
-test('corrupt Codex process queue is preserved while the rest of the server remains available', async () => {
+test('retired Codex process queue is inert and byte-identical while the server remains available', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-corrupt-codex-queue-server-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
   const frontendRoot = join(projectRoot, 'frontend');
@@ -352,10 +543,10 @@ test('corrupt Codex process queue is preserved while the rest of the server rema
   try {
     assert.equal((await fetch(`${baseUrl}/`)).status, 200);
     const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; pausedBackgroundComponents: string[] };
-    assert.equal(health.status, 'degraded');
-    assert.ok(health.pausedBackgroundComponents.some((component) => component.startsWith('codex-runtime:')));
+    assert.equal(health.status, 'ready');
+    assert.deepEqual(health.pausedBackgroundComponents, []);
     const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; code: string; message: string }> };
-    assert.ok(incidents.incidents.some((incident) => incident.operation === 'recover-durable-codex-process-queue' && incident.message.includes('codex-process-queue.json')));
+    assert.equal(incidents.incidents.some((incident) => incident.operation === 'recover-durable-codex-process-queue'), false);
     assert.equal(readFileSync(queueFile, 'utf8'), corruptBytes);
   } finally {
     server.close();

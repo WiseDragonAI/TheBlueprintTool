@@ -44,12 +44,17 @@ test('voice lifecycle persists ordered phases and exposes one targeted terminal 
     assert.equal(status.ok, true);
     assert.deepEqual(Object.keys(status.note as Record<string, unknown>).sort(), [
       'acceptedAt', 'audioPersistedAt', 'completedAt', 'error', 'id', 'message', 'providerSettledAt',
-      'providerStartedAt', 'revision', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'voiceFileRef', 'codexQueueExecutionId'
+      'providerStartedAt', 'revision', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'voiceFileRef',
+      'codexQueueCardId', 'codexQueueLaunchMode', 'codexQueuePipelineId', 'codexQueueRequestId'
     ].sort());
     const note = status.note as Record<string, unknown>;
     assert.equal(note.status, 'transcribed');
     assert.equal(note.message, 'Targeted transcript.');
     assert.equal(note.revision, 4);
+    assert.equal(note.codexQueueRequestId, '');
+    assert.equal(note.codexQueueLaunchMode, '');
+    assert.equal(note.codexQueueCardId, '');
+    assert.equal(note.codexQueuePipelineId, '');
     const timestamps = ['uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt'].map((key) => Date.parse(String(note[key])));
     assert.equal(timestamps.every(Number.isFinite), true);
     assert.deepEqual([...timestamps].sort((a, b) => a - b), timestamps);

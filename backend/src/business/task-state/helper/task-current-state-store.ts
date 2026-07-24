@@ -1,5 +1,5 @@
 /**
- * WHAT: Persists epoch-3 causal state through journals, independent shards, and local publication markers.
+ * WHAT: Persists epoch-4 causal state through journals, independent shards, and local publication markers.
  * WHY: Local success must follow journal durability while replicated hashes contain only joinable domain state.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
@@ -33,7 +33,7 @@ import {
   type TaskStateDelta,
 } from './task-current-state-types.js';
 
-type JournalDocument = { version: 3; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string };
+type JournalDocument = { version: typeof taskCurrentStateVersion; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string };
 type StoreOptions = {
   decisionOsRoot: string;
   projectId: string;
@@ -277,7 +277,15 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
 
   const journal = async (document: JournalDocument, id: string): Promise<string> => {
     const file = resolve(journalDirectory, `${encodeURIComponent(id)}.json`);
-    await persistence.atomicWrite(file, `${JSON.stringify(document)}\n`);
+    try {
+      await persistence.atomicWrite(file, `${JSON.stringify(document)}\n`);
+    } catch (error) {
+      // WHAT: Notify the owning project scope before returning the durable-write failure.
+      // WHY: The server must pause only that project while preserving the original persistence error.
+      try { options.onPersistenceError?.(error instanceof Error ? error : new Error(String(error))); }
+      catch { /* Persistence diagnostics cannot replace the original durable-write failure. */ }
+      throw error;
+    }
     return file;
   };
 

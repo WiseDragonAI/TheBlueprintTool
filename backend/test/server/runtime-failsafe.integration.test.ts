@@ -10,6 +10,7 @@ import { createHttpServer } from '@backend/business/server/helper/create-http-se
 import { createRuntimeIncidentLedger } from '@backend/business/server/helper/runtime-incident-ledger.js';
 import { runtimeIncidentReviewCardId, runtimeIncidentReviewProjectId } from '@backend/business/server/helper/synchronize-runtime-incident-review-task.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
+import { createTaskExecutionLaunchRequest, type TaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
 
 async function waitUntil(assertion: () => boolean | Promise<boolean>, timeoutMs = 2_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -85,8 +86,22 @@ test('periodically centralizes runtime incidents only in the Decision OS project
 
 test('keeps the catalog and diagnostics online when one project has colliding retained journals', async () => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-runtime-failsafe-'));
+  const healthyDecisionOsRoot = join(home, '.decision-os');
   const decisionOsRoot = join(home, 'project-a', '.decision-os');
   const projectId = 'project-a';
+  mkdirSync(healthyDecisionOsRoot, { recursive: true });
+  writeFileSync(join(healthyDecisionOsRoot, 'project.json'), JSON.stringify({ id: 'project-b' }));
+  writeFileSync(join(healthyDecisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(join(healthyDecisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{ id: 'healthy-master', title: 'Healthy master', labels: ['master-task'] }],
+    annotations: [], relationships: [], notes: {}, threadFiles: {},
+  }));
+  await migrateTaskCurrentState({
+    decisionOsRoot: healthyDecisionOsRoot,
+    projectId: 'project-b',
+    nodeId: 'local',
+    tasksLedgerFile: join(healthyDecisionOsRoot, 'tasks.json'),
+  });
   mkdirSync(decisionOsRoot, { recursive: true });
   writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: projectId }));
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
@@ -113,9 +128,13 @@ test('keeps the catalog and diagnostics online when one project has colliding re
   });
   writeFileSync(join(journalDirectory, 'a.json'), JSON.stringify(mutation('collision-a', '2026-07-22T00:00:01.000Z')));
   writeFileSync(join(journalDirectory, 'b.json'), JSON.stringify(mutation('collision-b', '2026-07-22T00:00:02.000Z')));
+  const journalABytes = readFileSync(join(journalDirectory, 'a.json'), 'utf8');
+  const journalBBytes = readFileSync(join(journalDirectory, 'b.json'), 'utf8');
 
   const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = {
+    decisionOsSettings: { federationNodeId: 'workstation' },
+  };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
   let server = runtime.server as Server;
   await once(server, 'listening');
@@ -141,6 +160,19 @@ test('keeps the catalog and diagnostics online when one project has colliding re
     assert.equal(collisionIncident.occurrences, 1);
     const secondHealth = await fetch(`${baseUrl}/api/health`);
     assert.equal(secondHealth.status, 200);
+    const unrelated = await (runtime.taskExecutionRouter as TaskExecutionRouter).route(createTaskExecutionLaunchRequest({
+      requestId: 'request-unrelated-project',
+      executionId: 'execution-unrelated-project',
+      projectId: 'project-b',
+      ledgerId: 'tasks',
+      sessionId: 'session-unrelated-project',
+      sourceCardId: 'healthy-master',
+      requestedAt: '2026-07-23T13:00:00.000Z',
+    }));
+    assert.equal(unrelated.executionId, 'execution-unrelated-project');
+    assert.equal(unrelated.phase, 'queued');
+    assert.equal(readFileSync(join(journalDirectory, 'a.json'), 'utf8'), journalABytes);
+    assert.equal(readFileSync(join(journalDirectory, 'b.json'), 'utf8'), journalBBytes);
 
     await new Promise<void>((resolve) => server.close(() => resolve()));
     const restartedRuntime: Record<string, unknown> = {};
@@ -152,8 +184,128 @@ test('keeps the catalog and diagnostics online when one project has colliding re
     assert.deepEqual(restartedHealth.pausedTaskProjectIds, [projectId]);
     const restartedIncidents = JSON.parse(readFileSync(join(home, '.decision-os', 'runtime-incidents.json'), 'utf8')) as Record<string, any>;
     assert.equal(restartedIncidents.incidents.find((incident: Record<string, unknown>) => incident.scope === `project-task-state:${projectId}`).occurrences, 1);
+    assert.equal(readFileSync(join(journalDirectory, 'a.json'), 'utf8'), journalABytes);
+    assert.equal(readFileSync(join(journalDirectory, 'b.json'), 'utf8'), journalBBytes);
   } finally {
     if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('task-state journal write failure preserves invalid bytes and pauses only its project', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'decision-os-runtime-write-failure-'));
+  const healthyRoot = join(home, '.decision-os');
+  const failingRoot = join(home, 'project-a', '.decision-os');
+  const initializeProject = async (decisionOsRoot: string, projectId: string, cardId: string) => {
+    mkdirSync(decisionOsRoot, { recursive: true });
+    writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: projectId }));
+    writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+      ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+    }));
+    writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+      cards: [{ id: cardId, title: cardId, labels: ['master-task'] }],
+      annotations: [],
+      relationships: [],
+      notes: {},
+      threadFiles: {},
+    }));
+    await migrateTaskCurrentState({
+      decisionOsRoot,
+      projectId,
+      nodeId: 'workstation',
+      tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
+    });
+  };
+  await initializeProject(healthyRoot, 'project-b', 'healthy-master');
+  await initializeProject(failingRoot, 'project-a', 'failing-master');
+  const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
+  const runtime: Record<string, unknown> = {
+    decisionOsSettings: { federationNodeId: 'workstation' },
+  };
+  createHttpServer({
+    action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const failingJournal = join(failingRoot, 'task-state', 'project-a', 'journal');
+  const invalidBytes = '{invalid-journal-boundary';
+  rmSync(failingJournal, { recursive: true, force: true });
+  writeFileSync(failingJournal, invalidBytes);
+
+  try {
+    const failedWrite = await fetch(`${baseUrl}/p/project-a/decision-os/tasks`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'failing-master', title: 'must-not-persist' } }),
+    });
+    assert.ok(failedWrite.status >= 500);
+    await waitUntil(async () => {
+      const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { pausedTaskProjectIds: string[] };
+      return health.pausedTaskProjectIds.includes('project-a');
+    });
+    assert.equal(readFileSync(failingJournal, 'utf8'), invalidBytes);
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
+      pausedTaskProjectIds: string[];
+    };
+    assert.deepEqual(health.pausedTaskProjectIds, ['project-a']);
+    assert.equal((await fetch(`${baseUrl}/api/diagnostics/incidents`)).status, 200);
+
+    const unrelated = await (runtime.taskExecutionRouter as TaskExecutionRouter).route(createTaskExecutionLaunchRequest({
+      requestId: 'request-after-write-failure',
+      executionId: 'execution-after-write-failure',
+      projectId: 'project-b',
+      ledgerId: 'tasks',
+      sessionId: 'session-after-write-failure',
+      sourceCardId: 'healthy-master',
+      requestedAt: '2026-07-23T13:15:00.000Z',
+    }));
+    assert.equal(unrelated.phase, 'queued');
+    assert.equal(unrelated.executionId, 'execution-after-write-failure');
+    assert.equal(readFileSync(failingJournal, 'utf8'), invalidBytes);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('keeps diagnostics online and pauses task admission for an interrupted epoch-4 transaction', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'decision-os-runtime-migration-admission-'));
+  const decisionOsRoot = join(home, '.decision-os');
+  const projectId = 'project-a';
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: projectId }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {}, threadFiles: {} }));
+  await migrateTaskCurrentState({ decisionOsRoot, projectId, nodeId: 'workstation', tasksLedgerFile: join(decisionOsRoot, 'tasks.json') });
+  mkdirSync(join(decisionOsRoot, 'runtime'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'runtime', 'epoch-4-migration-admission.json'), JSON.stringify({
+    version: 1,
+    runId: 'interrupted-run',
+    phase: 'committing',
+    backupRoot: join(home, 'rollback'),
+    updatedAt: '2026-07-24T00:00:00.000Z',
+  }));
+
+  const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
+  const runtime: Record<string, unknown> = { decisionOsSettings: { federationNodeId: 'workstation' } };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; pausedTaskProjectIds: string[] };
+    assert.equal(health.status, 'degraded');
+    assert.deepEqual(health.pausedTaskProjectIds, [projectId]);
+    assert.equal((await fetch(`${baseUrl}/api/diagnostics/incidents`)).status, 200);
+    assert.equal((await fetch(`${baseUrl}/`)).status, 200);
+    const incidents = JSON.parse(readFileSync(join(decisionOsRoot, 'runtime-incidents.json'), 'utf8')) as { incidents: Array<{ scope: string; code: string }> };
+    assert.equal(incidents.incidents.some((incident) => incident.scope === `project-task-state:${projectId}` && incident.code === 'task_migration_transaction_incomplete'), true);
+  } finally {
+    server.close();
+    await once(server, 'close');
     rmSync(home, { recursive: true, force: true });
   }
 });

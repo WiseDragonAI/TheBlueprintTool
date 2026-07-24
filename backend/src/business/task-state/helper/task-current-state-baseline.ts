@@ -1,5 +1,5 @@
 /**
- * WHAT: Encodes one offline ledger image into canonical epoch-3 entity lanes.
+ * WHAT: Encodes one offline ledger image into canonical epoch-4 entity lanes.
  * WHY: Baseline migration, recovery, and runtime mutations must not emit legacy status or overlapping lanes.
  */
 import type { TaskEntityChange, TaskFieldChange } from './task-current-state-types.js';

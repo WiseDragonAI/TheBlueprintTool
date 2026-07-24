@@ -21,6 +21,8 @@ import type { ProjectSyncStore } from '../helper/project-sync-store.js';
 import type { ProjectSyncRole, ProjectSyncRun } from '../helper/project-sync-types.js';
 import { readRepositorySyncStatus, type RepositorySyncStatus } from '../helper/repository-sync-status.js';
 import { verifyProjectSyncPhase } from '../helper/verify-project-sync-phase.js';
+import { codexExecutionTimeoutMs } from '../../codex/helper/codex-runtime-run-store.js';
+import { taskExecutionState } from '../../codex/helper/task-execution-runtime.js';
 
 type RoleResponse = { codexRunId: string; result: Record<string, unknown>; snapshot: RepositorySyncStatus };
 type SyncSourceProject = DecisionOsProject & { ownerNodeId?: string; localProjectId?: string; online?: boolean };
@@ -116,35 +118,57 @@ export function createProjectSyncController(input: {
   };
   const runRole = async (nodeId: string, projectId: string, run: ProjectSyncRun, role: ProjectSyncRole, phaseSnapshot: RepositorySyncStatus, requiredSha?: string): Promise<RoleResponse> => {
     const taskProject = localProject(run.taskProjectId);
+    const taskRuntime = input.runtimeForProject(taskProject);
+    if (nodeId !== input.localNodeId()) {
+      const pipelineRun = readCodexPipelineStore({ decisionOsRoot: taskProject.decisionOsRoot }).store.runs
+        .find((candidate) => candidate.id === run.pipelineRunId);
+      const skill = pipelineRun?.steps.flatMap((step) => step.skills)
+        .find((candidate) => candidate.executor?.nodeId === nodeId
+          && candidate.executor.projectId === projectId
+          && candidate.executor.role === role);
+      const execution = skill ? taskExecutionState(taskRuntime)?.executions.find(skill.executionId) : null;
+      if (!pipelineRun || !skill || !execution) throw new Error('Project synchronization execution topology is unavailable.');
+      const response = await input.federation.request(nodeId, '/api/project-sync/role', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        timeoutMs: codexExecutionTimeoutMs(taskRuntime),
+        body: Buffer.from(JSON.stringify({
+          syncId: run.syncId,
+          initiatorNodeId: run.initiatorNodeId,
+          projectId,
+          role,
+          requiredSha,
+          originFingerprint: run.originFingerprint,
+          snapshot: phaseSnapshot,
+          pipelineRunId: run.pipelineRunId,
+          pipelineSkillRunId: skill.runId,
+          executionId: skill.executionId,
+          executionMetadata: execution.metadata,
+          pipelineRun,
+          masterTask: { projectId: run.taskProjectId, ledgerId: run.ledgerId, cardId: run.masterCardId },
+        })),
+      });
+      const settled = parsed<RoleResponse>(response, `Remote ${role}`);
+      const deadline = Date.now() + 15_000;
+      while (taskExecutionState(taskRuntime)?.executions.find(skill.executionId)?.lifecycle.phase !== 'succeeded'
+        && Date.now() < deadline) {
+        await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      }
+      if (taskExecutionState(taskRuntime)?.executions.find(skill.executionId)?.lifecycle.phase !== 'succeeded') {
+        throw new Error(`Remote ${role} settled without converging its execution entity.`);
+      }
+      return settled;
+    }
     const executed = await executeFederatedPipelineSkill({
       decisionOsRoot: taskProject.decisionOsRoot,
-      runtime: input.runtimeForProject(taskProject),
+      runtime: taskRuntime,
       pipelineRunId: run.pipelineRunId,
       executor: { kind: 'federated', nodeId, projectId, role },
       execute: async (skill) => {
-        if (nodeId !== input.localNodeId()) {
-          const response = await input.federation.request(nodeId, '/api/project-sync/role', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: Buffer.from(JSON.stringify({
-              syncId: run.syncId,
-              initiatorNodeId: run.initiatorNodeId,
-              projectId,
-              role,
-              requiredSha,
-              originFingerprint: run.originFingerprint,
-              snapshot: phaseSnapshot,
-              pipelineRunId: run.pipelineRunId,
-              pipelineSkillRunId: skill.runId,
-              masterTask: { projectId: run.taskProjectId, ledgerId: run.ledgerId, cardId: run.masterCardId },
-            })),
-          });
-          return { ...parsed<RoleResponse>(response, `Remote ${role}`), executorNodeId: nodeId };
-        }
         const project = localProject(projectId);
         const codex = await executeProjectSyncPipelineSkill({
           projectRoot: project.root,
-          runtime: input.runtimeForProject(project),
+          runtime: taskRuntime,
           ledgerFile: resolve(project.decisionOsRoot, tasksLedgerForProject(project).ledgerFile.replace(/^\.decision-os\//, '')),
           syncId: run.syncId,
           nodeId,
@@ -153,6 +177,10 @@ export function createProjectSyncController(input: {
           requiredSha,
           snapshot: phaseSnapshot,
           codexRunId: skill.runId,
+          executionId: skill.executionId,
+          manageTaskExecutionLifecycle: false,
+          stdoutFile: skill.stdoutFile,
+          stderrFile: skill.stderrFile,
           pipelineRunId: run.pipelineRunId,
           masterTask: { projectId: run.taskProjectId, ledgerId: run.ledgerId, cardId: run.masterCardId },
         });
@@ -200,6 +228,7 @@ export function createProjectSyncController(input: {
     const task = await admitProjectSyncMasterTask({
       project: taskProject,
       runtime: input.runtimeForProject(taskProject),
+      assignedNodeId: input.localNodeId(),
       sourceProjectId: run.sourceProjectId,
       sourceProjectName: run.sourceProjectName,
       sourceProjectColor: run.sourceProjectColor,
@@ -217,6 +246,11 @@ export function createProjectSyncController(input: {
       ledgerId: task.ledgerId,
       sourceCardId: task.masterCardId,
       definition: { pipelineId: definition.pipeline.id, pipelineName: definition.pipeline.name, temporary: false, steps: definition.steps },
+      plannedExecutors: [
+        { kind: 'federated', nodeId: run.sourceNodeId, projectId: run.sourceProjectId, role: 'source-publisher' },
+        { kind: 'federated', nodeId: run.initiatorNodeId, projectId: taskProject.id, role: 'initiator-reconciler' },
+        { kind: 'federated', nodeId: run.sourceNodeId, projectId: run.sourceProjectId, role: 'source-finalizer' },
+      ],
     });
     if (pipeline.ok !== true || !pipeline.run || typeof pipeline.run !== 'object') throw new Error(String(pipeline.error ?? 'Synchronization pipeline admission failed.'));
     const pipelineRun = pipeline.run as { id?: unknown };

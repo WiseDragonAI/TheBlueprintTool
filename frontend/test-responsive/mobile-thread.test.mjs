@@ -117,7 +117,7 @@ test('desktop Shift+X returns to Control Room execution after durable local pers
   const shortcut = source.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(shortcut, /const launchMode = voiceLaunchModeForModifiers\(event\);/);
-  assert.match(shortcut, /await executeVoiceAction\(\{[\s\S]*launchMode,[\s\S]*onDurableHandoff: \(\) => void finishQueuedVoiceSubmission\(true\)/);
+  assert.match(shortcut, /await executeVoiceAction\(\{[\s\S]*launchMode,[\s\S]*onDurableHandoff: \(detail\) => void finishQueuedVoiceSubmission\(true, detail\)/);
   assert.doesNotMatch(shortcut, /stopVoiceRecording/);
   assert.match(applicationSource, /async function navigateAcceptedProcess\(detail\)[\s\S]*acceptedRunOwnsRoute\(detail, snapshot, threadGeneration\)[\s\S]*navigate\(controlRoomPath\('exec'\), true\)/);
 });

@@ -13,7 +13,8 @@ import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { deleteThreadCodexSessionController } from '@backend/business/codex/controller/delete-thread-codex-session-controller.js';
 import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
-import { enqueueCodexThreadProcess, readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
+import { createTaskCurrentStateStore } from '@backend/business/task-state/helper/task-current-state-store.js';
+import { createTaskExecutionRepository } from '@backend/business/task-state/helper/task-execution-repository.js';
 
 function fixture(): { workspace: string; decisionOsRoot: string; ledgerPath: string; runId: string; cardId: string; artifacts: string[] } {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-delete-thread-session-'));
@@ -75,84 +76,28 @@ test('DELETE session route removes a terminal owned run and rejects stale owners
       method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ledgerId: 'specs', cardId: context.cardId })
     });
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, statusCode: 200, ledgerId: 'specs', cardId: context.cardId, runId: context.runId, status: 'deleted' });
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      statusCode: 200,
+      ledgerId: 'specs',
+      cardId: context.cardId,
+      runId: context.runId,
+      status: 'deleted',
+      artifactsRetained: true,
+      executionCount: 0,
+    });
     const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
     assert.equal(ledger.cards[0].codexThreadRunId, undefined);
     assert.equal(ledger.cards[0].codexThreadRunOutputFile, undefined);
     assert.equal(ledger.cards[0].codexRunModel, 'gpt-5.5');
     assert.equal(ledger.cards[0].codexRunEffort, 'high');
-    assert.equal(context.artifacts.some(existsSync), false);
+    assert.equal(context.artifacts.every(existsSync), true);
     assert.equal(runtime.codexSkillRuns[context.runId], undefined);
     const staleStatus = await readCardSkillRunController({ action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId }, runtime_state: runtime });
     assert.equal(staleStatus.statusCode, 404);
   } finally {
     server.close();
     process.chdir(originalCwd);
-    rmSync(context.workspace, { recursive: true, force: true });
-  }
-});
-
-test('active session deletion waits for settlement before removing owned artifacts', async () => {
-  const context = fixture();
-  const executionId = 'execution-delete-active';
-  const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
-  ledger.cards[0].codexActiveRunId = context.runId;
-  ledger.cards[0].codexActiveExecutionId = executionId;
-  writeFileSync(context.ledgerPath, JSON.stringify(ledger, null, 2));
-  let settledBeforeReturn = false;
-  const run: Record<string, any> = { id: context.runId, executionId, ledgerId: 'specs', outputCardId: context.cardId, status: 'running' };
-  Object.defineProperty(run, 'child', {
-    enumerable: false,
-    value: {
-      killed: false,
-      kill(signal: string) {
-        assert.equal(signal, 'SIGTERM');
-        setTimeout(() => {
-          settledBeforeReturn = true;
-          run.settledAt = new Date().toISOString();
-        }, 20);
-        return true;
-      }
-    }
-  });
-  const runtime: Record<string, any> = { decisionOsRoot: context.decisionOsRoot, codexSkillRuns: { [context.runId]: run } };
-  try {
-    const result = await deleteThreadCodexSessionController({ action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId }, runtime_state: runtime });
-    assert.equal(result.ok, true);
-    assert.equal(settledBeforeReturn, true);
-    assert.equal(context.artifacts.some(existsSync), false);
-    assert.equal(runtime.codexSkillRuns[context.runId], undefined);
-  } finally {
-    rmSync(context.workspace, { recursive: true, force: true });
-  }
-});
-
-test('pending session deletion cancels the queue lease without waiting for a child settlement', async () => {
-  const context = fixture();
-  const executionId = 'execution-delete-pending';
-  const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
-  ledger.cards[0].codexActiveRunId = context.runId;
-  ledger.cards[0].codexActiveExecutionId = executionId;
-  writeFileSync(context.ledgerPath, JSON.stringify(ledger, null, 2));
-  enqueueCodexThreadProcess({
-    decisionOsRoot: context.decisionOsRoot,
-    id: context.runId,
-    createdAt: '2026-07-20T00:00:00.000Z',
-    payload: { ledgerId: 'specs', cardId: context.cardId, threadId: `thread-${context.cardId}`, runId: context.runId, executionId },
-  });
-  const runtime: Record<string, any> = {
-    decisionOsRoot: context.decisionOsRoot,
-    codexSkillRuns: { [context.runId]: { id: context.runId, executionId, ledgerId: 'specs', outputCardId: context.cardId, status: 'pending' } },
-  };
-  try {
-    const startedAt = Date.now();
-    const result = await deleteThreadCodexSessionController({ action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId }, runtime_state: runtime });
-    assert.equal(result.ok, true);
-    assert.ok(Date.now() - startedAt < 1_000);
-    assert.deepEqual(readCodexProcessQueue(context.decisionOsRoot), []);
-    assert.equal(context.artifacts.some(existsSync), false);
-    assert.equal(runtime.codexSkillRuns[context.runId], undefined);
-  } finally {
     rmSync(context.workspace, { recursive: true, force: true });
   }
 });
@@ -176,27 +121,93 @@ test('deleting the newest retained session promotes the previous run without del
     assert.deepEqual(persisted.cards[0].codexThreadRunIds, [previousRunId]);
     assert.equal(persisted.cards[0].codexThreadRunId, previousRunId);
     assert.equal(persisted.cards[0].codexThreadRunOutputFile, `.decision-os/runs/codex-skills/specs/${previousRunId}.md`);
-    assert.equal(context.artifacts.some(existsSync), false);
+    assert.equal(context.artifacts.every(existsSync), true);
     assert.equal(previousArtifacts.every(existsSync), true);
   } finally {
     rmSync(context.workspace, { recursive: true, force: true });
   }
 });
 
-test('artifact read failure preserves session ownership and the ledger projection', async () => {
+test('unreadable retained artifacts do not block canonical session metadata deletion', async () => {
   const context = fixture();
   rmSync(context.artifacts[0]);
   mkdirSync(context.artifacts[0]);
   const runtime: Record<string, any> = {};
   try {
     const result = await deleteThreadCodexSessionController({ action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId }, runtime_state: { ...runtime, decisionOsRoot: context.decisionOsRoot } });
-    assert.equal(result.ok, false);
-    assert.equal(result.statusCode, 500);
+    assert.equal(result.ok, true);
+    assert.equal(result.artifactsRetained, true);
     const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
-    assert.equal(ledger.cards[0].codexThreadRunId, context.runId);
-    assert.equal(ledger.cards[0].codexThreadRunOutputFile, `.decision-os/runs/codex-skills/specs/${context.runId}.md`);
+    assert.equal(ledger.cards[0].codexThreadRunId, undefined);
+    assert.equal(ledger.cards[0].codexThreadRunOutputFile, undefined);
     assert.equal(existsSync(context.artifacts[1]), true);
   } finally {
+    rmSync(context.workspace, { recursive: true, force: true });
+  }
+});
+
+test('canonical session deletion rejects active work then tombstones history before retaining artifacts', async () => {
+  const context = fixture();
+  const store = createTaskCurrentStateStore({
+    decisionOsRoot: context.decisionOsRoot,
+    projectId: 'project-a',
+    initializeLedger: { cards: [], annotations: [], relationships: [] },
+  });
+  const executions = createTaskExecutionRepository({ store, writerId: 'workstation', projectId: 'project-a' });
+  await executions.admit({
+    executorNodeId: 'workstation',
+    metadata: {
+      executionId: 'execution-canonical-delete',
+      requestId: 'request-canonical-delete',
+      sessionId: context.runId,
+      projectId: 'project-a',
+      ledgerId: 'specs',
+      taskId: context.cardId,
+      sourceCardId: context.cardId,
+      ownerCardId: context.cardId,
+      kind: 'thread',
+      requestedAt: '2026-07-23T11:00:00.000Z',
+      model: null,
+      effort: null,
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      predecessorExecutionId: null,
+      restartOfExecutionId: null,
+    },
+  });
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot: context.decisionOsRoot,
+    taskExecutionState: { executions },
+  };
+  try {
+    const active = await deleteThreadCodexSessionController({
+      action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId },
+      runtime_state: runtime,
+    });
+    assert.equal(active.ok, false);
+    assert.equal(active.statusCode, 409);
+    assert.equal(context.artifacts.every(existsSync), true);
+    assert.ok(executions.find('execution-canonical-delete'));
+
+    await executions.transition('execution-canonical-delete', {
+      phase: 'cancelled',
+      result: { status: 'cancelled', summary: 'Cancelled before launch.' },
+    });
+    const deleted = await deleteThreadCodexSessionController({
+      action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId },
+      runtime_state: runtime,
+    });
+
+    assert.equal(deleted.ok, true);
+    assert.equal(deleted.artifactsRetained, true);
+    assert.equal(deleted.executionCount, 1);
+    assert.equal(executions.find('execution-canonical-delete'), null);
+    assert.equal(context.artifacts.every(existsSync), true);
+    const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
+    assert.equal(ledger.cards[0].codexThreadRunId, undefined);
+  } finally {
+    await store.flush();
     rmSync(context.workspace, { recursive: true, force: true });
   }
 });

@@ -10,6 +10,7 @@ export const codexExecutionPhases = [
   'queued',
   'starting',
   'running',
+  'cancelling',
   'succeeded',
   'failed',
   'cancelled',
@@ -78,7 +79,7 @@ export type CodexExecutionIntent = {
 export type CodexExecutionObservation = {
   readonly executionId: string;
   readonly executorNodeId: string;
-  readonly phase: 'starting' | 'running';
+  readonly phase: 'starting' | 'running' | 'cancelling';
   readonly observedAt: string;
   readonly expiresAt: string;
   readonly revision: number;

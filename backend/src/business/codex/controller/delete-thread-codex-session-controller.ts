@@ -2,19 +2,16 @@
  * WHAT: Deletes the Codex run owned by one card thread after any live child has settled.
  * WHY: Clearing the run association must make the next thread launch a genuinely fresh session.
  */
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
-import { cancelCardSkillRunController } from './cancel-card-skill-run-controller.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
-import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
-import { codexExecutionCoordinator } from '../helper/codex-execution-runtime.js';
+import { taskExecutionState } from '../helper/task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
-type ArtifactSnapshot = { file: string; content: Buffer };
 
 function isInside(parent: string, child: string): boolean {
   const inner = relative(parent, child);
@@ -27,20 +24,6 @@ function runtimeRuns(runtime: AnyRecord): Record<string, AnyRecord> {
     : {};
   runtime.codexSkillRuns = runs;
   return runs;
-}
-
-async function waitForSettlement(runtime: AnyRecord, runId: string, timeoutMs = 10000): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const run = runtimeRuns(runtime)[runId];
-    if (!run || String(run.settledAt ?? '').trim()) return true;
-    await new Promise((resolveWait) => setTimeout(resolveWait, 10));
-  }
-  return false;
-}
-
-function restoreArtifacts(snapshots: ArtifactSnapshot[]): void {
-  for (const snapshot of snapshots) writeFileSync(snapshot.file, snapshot.content);
 }
 
 function retainedThreadRunIds(card: AnyRecord): string[] {
@@ -73,24 +56,26 @@ export async function deleteThreadCodexSessionController(input: { action_payload
   const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   if (!card) return { ok: false, statusCode: 404, error: 'Card not found.', cardId };
   const ownedRunIds = retainedThreadRunIds(card);
-  if (!ownedRunIds.includes(runId)) {
+  const replicatedState = taskExecutionState(runtime);
+  const replicatedExecutions = replicatedState?.executions.bySessionId(runId) ?? [];
+  const canonicalOwnership = replicatedExecutions.length > 0 && replicatedExecutions.every((execution) => (
+    execution.metadata.ledgerId === ledgerId
+    && (execution.metadata.sourceCardId === cardId || execution.metadata.ownerCardId === cardId)
+  ));
+  if (!ownedRunIds.includes(runId) && !canonicalOwnership) {
     return { ok: false, statusCode: 404, error: 'Thread Codex session not found on card.', cardId, runId };
   }
-
-  const run = runtimeRuns(runtime)[runId];
-  const activeExecutionId = String(card.codexActiveRunId ?? '') === runId ? String(card.codexActiveExecutionId ?? '').trim() : '';
-  const queued = activeExecutionId ? readCodexProcessQueue(decisionOsRoot).find((item) => (
-    String(item.payload.ledgerId ?? '') === ledgerId
-    && String(item.payload.cardId ?? '') === cardId
-    && String(item.payload.runId ?? item.id) === runId
-    && String(item.payload.executionId ?? '') === activeExecutionId
-  )) : undefined;
-  if (activeExecutionId && (run?.status === 'pending' || run?.status === 'running' || queued)) {
-    const cancelled = await cancelCardSkillRunController({ action_payload: { ledgerId, cardId, runId, executionId: activeExecutionId }, runtime_state: runtime });
-    if (cancelled.ok === false) return cancelled;
+  if (replicatedExecutions.length > 0 && !canonicalOwnership) {
+    return { ok: false, statusCode: 409, error: 'Thread Codex session belongs to another card.', cardId, runId };
   }
-  if (run && !String(run.settledAt ?? '').trim() && !await waitForSettlement(runtime, runId)) {
-    return { ok: false, statusCode: 504, error: 'Codex run did not settle before session deletion.', runId };
+  if (replicatedExecutions.some((execution) => (
+    execution.lifecycle.phase === 'preparing'
+    || execution.lifecycle.phase === 'queued'
+    || execution.lifecycle.phase === 'starting'
+    || execution.lifecycle.phase === 'running'
+    || execution.lifecycle.phase === 'cancelling'
+  ))) {
+    return { ok: false, statusCode: 409, error: 'Codex execution session is still active.', runId };
   }
 
   const outputFiles = card.codexThreadRunOutputFiles && typeof card.codexThreadRunOutputFiles === 'object' && !Array.isArray(card.codexThreadRunOutputFiles)
@@ -101,23 +86,8 @@ export async function deleteThreadCodexSessionController(input: { action_payload
   if (!isInside(decisionOsRoot, runDirectory)) return { ok: false, statusCode: 400, error: 'Codex run directory is outside the workspace.', runId };
   const artifactFiles = [runFiles.stdoutFile, runFiles.stderrFile, runFiles.outputFile, `${runFiles.stdoutFile}.telemetry.jsonl`];
   if (artifactFiles.some((file) => !isInside(runDirectory, file))) return { ok: false, statusCode: 400, error: 'Codex run artifact is outside its run directory.', runId };
-  let snapshots: ArtifactSnapshot[];
   try {
-    snapshots = artifactFiles.filter(existsSync).map((file) => ({ file, content: readFileSync(file) }));
-  } catch (error) {
-    return { ok: false, statusCode: 500, error: error instanceof Error ? error.message : 'Codex session artifacts could not be read.', runId };
-  }
-
-  try {
-    for (const snapshot of snapshots) rmSync(snapshot.file);
-    if (String(card.codexActiveRunId ?? '') === runId) {
-      delete card.codexActiveRunId;
-      delete card.codexActiveExecutionId;
-      if (String(card.executionRunId ?? '') === runId) {
-        delete card.executionRunId;
-        delete card.executionStatus;
-      }
-    }
+    if (replicatedExecutions.length > 0) await replicatedState!.executions.deleteSession(runId);
     const remainingRunIds = ownedRunIds.filter((ownedRunId) => ownedRunId !== runId);
     const remainingOutputFiles = Object.fromEntries(Object.entries(outputFiles).filter(([ownedRunId]) => ownedRunId !== runId));
     if (Object.keys(remainingOutputFiles).length > 0) card.codexThreadRunOutputFiles = remainingOutputFiles;
@@ -144,11 +114,9 @@ export async function deleteThreadCodexSessionController(input: { action_payload
     }
     stripHydratedThreadNotes(ledger);
     await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'delete-codex-session', cardIds: [cardId] } });
-    await codexExecutionCoordinator(runtime)?.deleteSession(runId);
   } catch (error) {
     try {
       await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger: JSON.parse(ledgerText) as AnyRecord, runtime, command: { kind: 'restore-codex-session', cardIds: [cardId] } });
-      restoreArtifacts(snapshots);
     } catch {
       return { ok: false, statusCode: 500, error: 'Codex session deletion failed and rollback could not restore every artifact.', runId };
     }
@@ -158,5 +126,14 @@ export async function deleteThreadCodexSessionController(input: { action_payload
   delete runtimeRuns(runtime)[runId];
   const onLedgerChange = payload.onLedgerChange;
   if (typeof onLedgerChange === 'function') onLedgerChange({ ledgerId, cardId, runId, source: 'delete-thread-codex-session' });
-  return { ok: true, statusCode: 200, ledgerId, cardId, runId, status: 'deleted' };
+  return {
+    ok: true,
+    statusCode: 200,
+    ledgerId,
+    cardId,
+    runId,
+    status: 'deleted',
+    artifactsRetained: true,
+    executionCount: replicatedExecutions.length,
+  };
 }

@@ -3,12 +3,11 @@
  * WHY: Narrative Markdown and node-local observations cannot classify tasks or override replicated lifecycle state.
  */
 export function cardCodexRunId(card) {
-  return String(card?.codexActiveRunId ?? '').trim()
-    || String(card?.codexThreadRunId ?? '').trim()
-    || String(card?.codexRunId ?? '').trim();
+  return String(card?.execution?.sessionId ?? '').trim()
+    || String(card?.codexThreadRunId ?? '').trim();
 }
 
-export function projectMasterTask({ card, cards = [], relationships = [], ledgerTitle = '' }) {
+export function projectMasterTask({ card, cards = [], relationships = [], executions = [], ledgerTitle = '' }) {
   const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
   const masterTask = labels.includes('master-task');
   const lifecycle = card?.lifecycle && typeof card.lifecycle === 'object' ? card.lifecycle : {};
@@ -16,12 +15,17 @@ export function projectMasterTask({ card, cards = [], relationships = [], ledger
     .filter((entry) => String(entry?.from) === String(card?.id) && entry?.label === 'subtask')
     .sort((left, right) => Number(left.position) - Number(right.position) || String(left.id).localeCompare(String(right.id)));
   const linkedCards = orderedRelationships.map((relationship) => cards.find((candidate) => String(candidate?.id) === String(relationship.to))).filter(Boolean);
-  const executionCandidates = [card, ...linkedCards].flatMap((candidate, index) => {
-    const intent = candidate?.executionIntent && typeof candidate.executionIntent === 'object' ? candidate.executionIntent : {};
-    const legacyState = String(intent.state ?? '');
-    const executionState = String(intent.phase ?? (legacyState === 'waiting' ? 'preparing' : legacyState));
-    return ['preparing', 'queued', 'starting', 'running'].includes(executionState)
-      ? [{ card: candidate, intent, executionState, ownerKind: index === 0 ? 'master-task' : 'subtask' }]
+  const candidateIds = new Map([card, ...linkedCards].map((candidate, index) => [
+    String(candidate?.id ?? ''),
+    { card: candidate, ownerKind: index === 0 ? 'master-task' : 'subtask' }
+  ]));
+  const executionCandidates = executions.flatMap((execution) => {
+    const metadata = execution?.metadata ?? execution ?? {};
+    const lifecycle = execution?.lifecycle ?? execution ?? {};
+    const owner = candidateIds.get(String(metadata.ownerCardId ?? metadata.sourceCardId ?? ''));
+    const executionState = String(lifecycle.phase ?? '');
+    return owner && ['preparing', 'queued', 'starting', 'running', 'cancelling'].includes(executionState)
+      ? [{ ...owner, execution, executionState }]
       : [];
   }).sort((left, right) => {
     const priority = (candidate) => candidate.executionState === 'running' ? 0 : candidate.executionState === 'starting' ? 1 : candidate.executionState === 'queued' ? 2 : 3;
@@ -30,7 +34,6 @@ export function projectMasterTask({ card, cards = [], relationships = [], ledger
       || String(left.card?.id ?? '').localeCompare(String(right.card?.id ?? ''));
   });
   const execution = executionCandidates[0];
-  const executionIntent = execution?.intent ?? {};
   const executionActive = Boolean(execution);
   const subtasks = orderedRelationships.map((relationship) => {
     const linked = cards.find((candidate) => String(candidate?.id) === String(relationship.to));
@@ -94,7 +97,7 @@ export function executionStopwatch(timestamp, now = Date.now()) {
 export function executionPresentation(task, now = Date.now()) {
   const phase = String(task?.executionStatus || task?.execution?.phase || '');
   const since = String(task?.execution?.phaseSince || task?.executionSince || '');
-  const label = ({ preparing: 'Preparing', queued: 'Queued', starting: 'Starting', running: 'Running', interrupted: 'Interrupted' })[phase] || 'Execution';
+  const label = ({ preparing: 'Preparing', queued: 'Queued', starting: 'Starting', running: 'Running', cancelling: 'Cancelling', interrupted: 'Interrupted' })[phase] || 'Execution';
   const elapsed = Number.isFinite(Date.parse(since)) ? executionStopwatch(since, now) : '';
   return { phase, since, label, elapsed, text: elapsed ? `${label} · ${elapsed}` : label };
 }

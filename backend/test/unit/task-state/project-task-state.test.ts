@@ -3,15 +3,17 @@
  * WHY: The application command boundary must remain intact while persistence stays lane-scoped.
  */
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import test from 'node:test';
 import { applyLedgerMutation, type LedgerMutation } from '../../../src/business/ledger/helper/apply-ledger-mutation.js';
 import { createProjectTaskState } from '../../../src/business/task-state/helper/project-task-state.js';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { taskCommandForMutation } from '../../../src/business/task-state/helper/task-mutation-command.js';
 import type { TaskStateDelta } from '../../../src/business/task-state/helper/task-current-state-types.js';
+
+type AnyRecord = Record<string, unknown>;
 
 test('configured writer remains read-only until project bootstrap converges', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-write-gate-'));
@@ -24,6 +26,97 @@ test('configured writer remains read-only until project bootstrap converges', as
   assert.throws(() => state.transitionCardLifecycle('card-a', 'done'), /task_state_bootstrap_incomplete/);
   writable = true;
   assert.equal((await state.transitionCardLifecycle('card-a', 'done')).changed, true);
+});
+
+test('replicated execution repository publishes through the project task-state write boundary', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-execution-repository-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  writeFileSync(ledgerPath, JSON.stringify({
+    cards: [{ id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], assignment: { nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 } }],
+    annotations: [], relationships: [],
+  }));
+  const published: TaskStateDelta[] = [];
+  let writable = false;
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+    canWrite: () => writable,
+    publish: (delta) => { published.push(delta); },
+  });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const metadata = {
+    executionId: 'execution-a', requestId: 'request-a', sessionId: 'session-a', projectId: 'project-a', ledgerId: 'tasks',
+    taskId: 'master', sourceCardId: 'master', ownerCardId: 'master', kind: 'thread' as const, requestedAt: '2026-07-23T01:01:00.000Z',
+    model: null, effort: null, pipelineRunId: null, pipelineStepId: null, pipelineSkillRunId: null,
+    predecessorExecutionId: null, restartOfExecutionId: null,
+  };
+
+  await assert.rejects(state.executions.admit({ metadata, executorNodeId: 'workstation' }), /task_state_bootstrap_incomplete/);
+  writable = true;
+  await state.executions.admit({ metadata, executorNodeId: 'workstation' });
+
+  assert.equal(state.executions.find('execution-a')?.lifecycle.phase, 'preparing');
+  assert.equal(published.length, 1);
+  assert.deepEqual(published[0].entities.map((entity) => [entity.entityType, entity.entityId]), [['execution', 'execution-a']]);
+});
+
+test('execution artifacts use only the execution artifact lane as replicated reachability', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-execution-artifacts-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const jsonl = resolve(root, 'runs', 'codex-skills', 'tasks', 'session-a.jsonl');
+  const stderr = resolve(root, 'runs', 'codex-skills', 'tasks', 'session-a.log');
+  mkdirSync(dirname(jsonl), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  writeFileSync(jsonl, '{"type":"turn.completed"}\n');
+  writeFileSync(stderr, 'complete\n');
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+  });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+
+  await state.executions.admit({
+    executorNodeId: 'workstation',
+    metadata: {
+      executionId: 'execution-artifacts',
+      requestId: 'request-artifacts',
+      sessionId: 'session-a',
+      projectId: 'project-a',
+      ledgerId: 'tasks',
+      taskId: 'master-a',
+      sourceCardId: 'master-a',
+      ownerCardId: 'master-a',
+      kind: 'thread',
+      requestedAt: '2026-07-23T01:01:00.000Z',
+      model: null,
+      effort: null,
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      predecessorExecutionId: null,
+      restartOfExecutionId: null,
+    },
+  });
+  await state.executions.transition('execution-artifacts', { phase: 'succeeded' });
+  const finalized = await state.finalizeExecutionArtifacts('execution-artifacts', { jsonl, stderr });
+
+  assert.ok(finalized.artifacts.jsonl);
+  assert.ok(finalized.artifacts.stderr);
+  assert.equal(state.store.contentHeads().length, 0);
+  assert.equal(
+    existsSync(resolve(state.store.root, 'objects', finalized.artifacts.jsonl!.hash.slice(0, 2), finalized.artifacts.jsonl!.hash)),
+    true,
+  );
+  assert.equal(
+    existsSync(resolve(state.store.root, 'objects', finalized.artifacts.stderr!.hash.slice(0, 2), finalized.artifacts.stderr!.hash)),
+    true,
+  );
 });
 
 test('task intake publishes no state until its first durable content contribution activates its shards', async (context) => {
@@ -43,7 +136,7 @@ test('task intake publishes no state until its first durable content contributio
     assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
     return state.executeMutation(mutation, before, after);
   };
-  await execute({ action: 'create-task-intake', annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' }, card: { id: 'card-a', title: 'Local task', status: 'todo', labels: ['master-task'], domainId: 'tasks', comment: { what: 'Task' } } });
+  await execute({ action: 'create-task-intake', assignedNodeId: 'workstation', annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' }, card: { id: 'card-a', title: 'Local task', status: 'todo', labels: ['master-task'], domainId: 'tasks', comment: { what: 'Task' } } });
   assert.equal(published.length, 0);
   await execute({ action: 'append-note', note: { id: 'note-a', threadId: 'thread-card-a', body: 'Activate it.', role: 'agent' } });
   assert.ok(published.flatMap((delta) => delta.entities).some((entity) => entity.entityType === 'card' && entity.entityId === 'card-a'));
@@ -54,6 +147,70 @@ test('task intake publishes no state until its first durable content contributio
   assert.match(readFileSync(resolve(root, 'threads', 'tasks', 'thread-card-a.md'), 'utf8'), /Activate it\./);
   assert.equal((state.projection().ledger.cards as Array<Record<string, unknown>>)[0].replicationState, undefined);
   assert.equal(state.store.entity('card', 'card-a')?.fields.replicationState, undefined);
+});
+
+test('assigned held task activates and reloads with one logical identity on both replicas', async (context) => {
+  const workstationRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-assigned-held-workstation-'));
+  const phoneRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-assigned-held-phone-'));
+  const workstationLedger = resolve(workstationRoot, 'tasks.json');
+  const phoneLedger = resolve(phoneRoot, 'tasks.json');
+  const emptyLedger = { modelName: 'tasks', cards: [], annotations: [], relationships: [], threadFiles: {} };
+  writeFileSync(workstationLedger, JSON.stringify(emptyLedger));
+  writeFileSync(phoneLedger, JSON.stringify(emptyLedger));
+  const published: TaskStateDelta[] = [];
+  const workstation = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: workstationRoot,
+    tasksLedgerFile: workstationLedger,
+    initialize: true,
+    publish: (delta) => { published.push(delta); },
+  });
+  const phone = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'phone',
+    decisionOsRoot: phoneRoot,
+    tasksLedgerFile: phoneLedger,
+    initialize: true,
+  });
+  context.after(async () => {
+    await Promise.all([workstation.flush(), phone.flush()]);
+    rmSync(workstationRoot, { recursive: true, force: true });
+    rmSync(phoneRoot, { recursive: true, force: true });
+  });
+  const execute = async (mutation: LedgerMutation) => {
+    const before = structuredClone(workstation.projection().ledger);
+    const after = structuredClone(before);
+    assert.equal(applyLedgerMutation({ decisionOsRoot: workstationRoot, ledgerPath: workstationLedger, ledger: after, mutation }).ok, true);
+    return workstation.executeMutation(mutation, before, after);
+  };
+
+  await execute({
+    action: 'create-task-intake',
+    assignedNodeId: 'phone',
+    annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' },
+    card: { id: 'card-a', title: 'Phone task', status: 'todo', labels: ['master-task'], domainId: 'tasks', comment: { what: 'Task' } },
+  });
+  assert.equal(published.length, 0);
+
+  await execute({ action: 'append-note', note: { id: 'note-a', threadId: 'thread-card-a', body: 'Publish it.', role: 'agent' } });
+  assert.ok(published.length > 0);
+  for (const delta of published) await phone.store.merge(delta);
+  await Promise.all([workstation.flush(), phone.flush()]);
+
+  for (const state of [workstation, phone]) {
+    const cards = state.projection().ledger.cards as Array<Record<string, any>>;
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0].id, 'card-a');
+    assert.equal(cards[0].assignment.nodeId, 'phone');
+  }
+
+  const reopenedWorkstation = createTaskCurrentStateStore({ decisionOsRoot: workstationRoot, projectId: 'project-a' });
+  const reopenedPhone = createTaskCurrentStateStore({ decisionOsRoot: phoneRoot, projectId: 'project-a' });
+  assert.equal((reopenedWorkstation.projection().ledger.cards as Array<Record<string, any>>).length, 1);
+  assert.equal((reopenedPhone.projection().ledger.cards as Array<Record<string, any>>).length, 1);
+  assert.equal((reopenedWorkstation.projection().ledger.cards as Array<Record<string, any>>)[0].assignment.nodeId, 'phone');
+  assert.equal((reopenedPhone.projection().ledger.cards as Array<Record<string, any>>)[0].assignment.nodeId, 'phone');
 });
 
 test('held deletion reports local projection changes without publishing federation state', async (context) => {
@@ -75,6 +232,7 @@ test('held deletion reports local projection changes without publishing federati
 
   await execute({
     action: 'create-task-intake',
+    assignedNodeId: 'workstation',
     annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' },
     card: { id: 'card-a', title: 'Local task', status: 'todo', labels: ['master-task'], domainId: 'tasks', comment: { what: 'Task' } },
   });
@@ -85,6 +243,142 @@ test('held deletion reports local projection changes without publishing federati
   assert.ok(deletion.localChanges.some((change) => change.entityType === 'card' && change.entityId === 'card-a'));
   assert.equal(published.length, 0);
   assert.equal((state.projection().ledger.cards as Array<Record<string, unknown>>).some((card) => card.id === 'card-a'), false);
+});
+
+test('master-task creation persists one master assignment and leaves subtasks inherited', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-assignment-create-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  writeFileSync(ledgerPath, JSON.stringify({ modelName: 'tasks', cards: [], annotations: [], relationships: [], threadFiles: {} }));
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'workstation', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const mutation: LedgerMutation = {
+    action: 'create-master-task',
+    assignedNodeId: 'phone',
+    annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' },
+    card: { id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], domainId: 'tasks' },
+    cards: [{ id: 'child', title: 'Child', status: 'todo', labels: ['subtask'], domainId: 'tasks' }],
+    relationships: [{ id: 'rel-child', from: 'master', to: 'child', label: 'subtask', position: 0 }],
+  };
+  const before = structuredClone(state.projection().ledger);
+  const after = structuredClone(before);
+
+  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
+  await state.executeMutation(mutation, before, after);
+
+  const cards = state.projection().ledger.cards as AnyRecord[];
+  const assignment = cards.find((card) => card.id === 'master')?.assignment as AnyRecord;
+  assert.equal(assignment.nodeId, 'phone');
+  assert.equal(assignment.revision, 1);
+  assert.match(String(assignment.changedAt), /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(cards.find((card) => card.id === 'child')?.assignment, undefined);
+  assert.equal(state.store.entity('card', 'master')?.fields.assignment?.candidates.length, 1);
+  assert.equal(state.store.entity('card', 'child')?.fields.assignment, undefined);
+});
+
+test('reassignment resolves concurrent assignment candidates and advances their maximum revision', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-assignment-resolve-'));
+  const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-project-assignment-resolve-remote-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const ledger = {
+    cards: [{ id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], assignment: { nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 } }],
+    annotations: [], relationships: [],
+  };
+  writeFileSync(ledgerPath, JSON.stringify(ledger));
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'workstation', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  const remote = createTaskCurrentStateStore({ decisionOsRoot: remoteRoot, projectId: 'project-a', initializeLedger: ledger });
+  context.after(async () => {
+    await Promise.all([state.flush(), remote.flush()]);
+    rmSync(root, { recursive: true, force: true });
+    rmSync(remoteRoot, { recursive: true, force: true });
+  });
+
+  const local = await state.store.mutate({
+    replicaId: 'workstation',
+    changes: [{ entityType: 'card', entityId: 'master', changes: [{ path: 'assignment', operation: 'set', value: { nodeId: 'workstation', changedAt: '2026-07-23T02:00:00.000Z', revision: 2 } }] }],
+  });
+  const concurrent = await remote.mutate({
+    replicaId: 'phone',
+    changes: [{ entityType: 'card', entityId: 'master', changes: [{ path: 'assignment', operation: 'set', value: { nodeId: 'phone', changedAt: '2026-07-23T02:00:01.000Z', revision: 3 } }] }],
+  });
+  assert.equal(local.delta.entities.length, 1);
+  await state.store.merge(concurrent.delta);
+  assert.equal(state.projection().conflicts.some((conflict) => conflict.kind === 'assignment-conflict'), true);
+
+  const before = structuredClone(state.projection().ledger);
+  const after = structuredClone(before);
+  const mutation: LedgerMutation = { action: 'reassign-task', cardId: 'master', assignedNodeId: 'phone' };
+  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
+  await state.executeMutation(mutation, before, after);
+
+  const assignment = (state.projection().ledger.cards as AnyRecord[])[0].assignment as AnyRecord;
+  assert.equal(assignment.nodeId, 'phone');
+  assert.equal(assignment.revision, 4);
+  assert.equal(state.projection().conflicts.some((conflict) => conflict.kind === 'assignment-conflict'), false);
+  assert.equal(state.store.entity('card', 'master')?.fields.assignment?.candidates.length, 1);
+});
+
+test('reassignment rejects inherited subtasks and tasks in every active execution phase', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-assignment-fences-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const ledger = {
+    cards: [
+      { id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], assignment: { nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 } },
+      { id: 'child', title: 'Child', status: 'todo', labels: ['subtask'] },
+    ],
+    annotations: [],
+    relationships: [{ id: 'rel-child', from: 'master', to: 'child', label: 'subtask', position: 0 }],
+  };
+  writeFileSync(ledgerPath, JSON.stringify(ledger));
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'workstation', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+
+  const inheritedLedger = structuredClone(state.projection().ledger);
+  const inherited = applyLedgerMutation({
+    decisionOsRoot: root,
+    ledgerPath,
+    ledger: inheritedLedger,
+    mutation: { action: 'reassign-task', cardId: 'child', assignedNodeId: 'phone' },
+  });
+  assert.equal(inherited.ok, false);
+  assert.equal(inherited.error?.statusCode, 409);
+  assert.equal(inherited.error?.body.error, 'task_assignment_inherited');
+
+  const executionId = 'execution-active';
+  await state.store.mutate({
+    replicaId: 'workstation',
+    changes: [{
+      entityType: 'execution',
+      entityId: executionId,
+      changes: [
+        { path: 'metadata', operation: 'set', value: {
+          executionId, requestId: 'request-active', sessionId: 'session-active', projectId: 'project-a', ledgerId: 'tasks',
+          taskId: 'master', sourceCardId: 'master', ownerCardId: 'master', kind: 'thread', requestedAt: '2026-07-23T03:00:00.000Z',
+          model: null, effort: null, pipelineRunId: null, pipelineStepId: null, pipelineSkillRunId: null,
+          predecessorExecutionId: null, restartOfExecutionId: null,
+        } },
+        { path: 'lifecycle', operation: 'set', value: {
+          phase: 'starting', phaseSince: '2026-07-23T03:00:01.000Z', startedAt: null, finishedAt: null,
+          executorNodeId: 'workstation', providerSessionId: null, result: null, error: null, revision: 3,
+        } },
+        { path: 'artifacts', operation: 'set', value: {
+          jsonl: null, stderr: null, telemetry: null, result: null, changedAt: '2026-07-23T03:00:00.000Z', revision: 1,
+        } },
+      ],
+    }],
+  });
+  for (const phase of ['starting', 'running', 'cancelling'] as const) {
+    if (phase !== 'starting') {
+      await state.executions.transition(executionId, { phase });
+    }
+    assert.equal(state.executions.find(executionId)?.lifecycle.phase, phase);
+    const before = structuredClone(state.projection().ledger);
+    const after = structuredClone(before);
+    const mutation: LedgerMutation = { action: 'reassign-task', cardId: 'master', assignedNodeId: 'phone' };
+    assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
+    await assert.rejects(state.executeMutation(mutation, before, after), /task_execution_active:master/);
+    const master = (state.projection().ledger.cards as AnyRecord[]).find((card) => card.id === 'master');
+    assert.equal((master?.assignment as AnyRecord).nodeId, 'workstation');
+  }
 });
 
 test('unchanged content bytes do not create a second resource mutation when file metadata changes', async (context) => {
@@ -154,7 +448,7 @@ test('lifecycle command changes one atomic card lane without note tombstones', a
   assert.match(String(lifecycle.changedAt), /^\d{4}-\d{2}-\d{2}T/);
 });
 
-test('lifecycle conflicts block completion and execution until a scoped lifecycle resolution', async (context) => {
+test('lifecycle conflicts block completion until a scoped lifecycle resolution', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-conflict-'));
   const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-project-conflict-remote-'));
   const ledgerPath = resolve(root, 'tasks.json');
@@ -183,26 +477,9 @@ test('lifecycle conflicts block completion and execution until a scoped lifecycl
   const after = structuredClone(before);
   assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation: { action: 'complete-master-task', masterTaskId: 'master' } }).ok, true);
   await assert.rejects(state.executeMutation({ action: 'complete-master-task', masterTaskId: 'master' }, before, after), /task_lifecycle_conflict:master/);
-  await assert.rejects(state.transitionExecutionIntent('master', { id: 'intent-a', state: 'waiting' }), /task_lifecycle_conflict:master/);
 
   await state.transitionCardLifecycle('master', 'todo');
   assert.equal(state.projection().conflicts.length, 0);
-  const execution = await state.transitionExecutionIntent('master', { id: 'intent-a', state: 'waiting' });
-  assert.deepEqual(execution.entities.map((entity) => [entity.entityType, entity.entityId]), [['card', 'master']]);
-});
-
-test('canonical execution intent is revision fenced and replaces a legacy intent during migration', async (context) => {
-  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-execution-'));
-  const ledgerPath = resolve(root, 'tasks.json');
-  const ledger = { cards: [{ id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], executionIntent: { id: 'run-a', state: 'queued', changedAt: '2026-07-23T01:00:00.000Z', startedAt: null, settledAt: null, error: null } }], annotations: [], relationships: [] };
-  writeFileSync(ledgerPath, JSON.stringify(ledger));
-  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
-  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
-  const base = { executionId: 'execution-a', phase: 'queued' as const, requestedAt: '2026-07-23T01:00:00.000Z', phaseSince: '2026-07-23T01:00:00.000Z', executorNodeId: null, changedAt: '2026-07-23T01:00:00.000Z', settledAt: null, error: null, revision: 2 };
-  await state.projectExecutionIntent('master', base);
-  await state.projectExecutionIntent('master', { ...base, revision: 1 });
-  assert.equal((state.projection().ledger.cards as Record<string, unknown>[])[0].executionIntent && ((state.projection().ledger.cards as Record<string, unknown>[])[0].executionIntent as Record<string, unknown>).revision, 2);
-  await assert.rejects(state.projectExecutionIntent('master', { ...base, executionId: 'execution-b', revision: 3 }), /task_execution_intent_conflict/);
 });
 
 test('master completion emits one lifecycle lane per positioned graph member', () => {

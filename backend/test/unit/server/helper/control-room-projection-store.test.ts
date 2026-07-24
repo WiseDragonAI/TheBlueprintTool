@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { controlRoomProjectionFromTaskLedger, createControlRoomProjectionStore } from '@backend/business/server/helper/control-room-projection-store.js';
 import type { DecisionOsProject } from '@backend/business/server/helper/project-catalog.js';
+import type { ReplicatedTaskExecutionRecord } from '@backend/business/task-state/helper/task-execution-repository.js';
 
 const lifecycle = (status: 'todo' | 'backlog' | 'done', changedAt: string) => ({
   status,
@@ -30,7 +31,7 @@ function fixture(context: { after(callback: () => void): void }) {
   return { root, decisionOsRoot, project };
 }
 
-test('replicated execution intent alone places a master task in Exec', (context) => {
+test('legacy card execution intent cannot place a task in Exec', (context) => {
   const { project } = fixture(context);
   const ledger = {
     cards: [{
@@ -43,44 +44,78 @@ test('replicated execution intent alone places a master task in Exec', (context)
 
   const projection = controlRoomProjectionFromTaskLedger({ project, ledger }) as Record<string, any>;
 
-  assert.equal(projection.exec.length, 1);
-  assert.equal(projection.exec[0].executionStatus, 'running');
-  assert.equal(projection.exec[0].executionSince, '2026-07-14T10:03:00.000Z');
-  assert.equal(projection.exec[0].cardStatus, 'todo');
+  assert.equal(projection.queue.length, 1);
+  assert.equal(projection.exec.length, 0);
 });
 
-test('replicated subtask execution intent places its relationship-owned master in Exec', (context) => {
+test('epoch-4 execution entity places its task in Exec without card execution intent', (context) => {
   const { project } = fixture(context);
   const ledger = {
-    cards: [
-      { id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z') },
-      {
-        id: 'child', title: 'Child', labels: ['subtask'], lifecycle: lifecycle('todo', '2026-07-14T10:01:00.000Z'),
-        executionIntent: { id: 'run-child', state: 'running', changedAt: '2026-07-14T10:02:00.000Z', startedAt: '2026-07-14T10:03:00.000Z', settledAt: null, error: null },
-      },
-    ],
-    annotations: [],
-    relationships: [{ id: 'rel-child', from: 'master', to: 'child', label: 'subtask', position: 0 }],
+    cards: [{
+      id: 'master', title: 'Master', labels: ['master-task'], createdAt: '2026-07-23T01:00:00.000Z',
+      lifecycle: lifecycle('todo', '2026-07-23T01:00:00.000Z'),
+      assignment: { nodeId: 'phone', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
+    }],
+    annotations: [], relationships: [],
   };
+  const executions: ReplicatedTaskExecutionRecord[] = [{
+    metadata: {
+      executionId: 'execution-a', requestId: 'request-a', sessionId: 'session-a', projectId: 'project-a', ledgerId: 'tasks',
+      taskId: 'master', sourceCardId: 'master', ownerCardId: 'master', kind: 'thread', requestedAt: '2026-07-23T01:01:00.000Z',
+      model: null, effort: null, pipelineRunId: null, pipelineStepId: null, pipelineSkillRunId: null,
+      predecessorExecutionId: null, restartOfExecutionId: null,
+    },
+    lifecycle: {
+      phase: 'running', phaseSince: '2026-07-23T01:02:00.000Z', startedAt: '2026-07-23T01:02:00.000Z', finishedAt: null,
+      executorNodeId: 'phone', providerSessionId: 'provider-a', result: null, error: null, revision: 4,
+    },
+    artifacts: { jsonl: null, stderr: null, telemetry: null, result: null, changedAt: '2026-07-23T01:01:00.000Z', revision: 1 },
+  }];
 
-  const projection = controlRoomProjectionFromTaskLedger({ project, ledger }) as Record<string, any>;
+  const projection = controlRoomProjectionFromTaskLedger({ project, ledger, executions }) as Record<string, any>;
 
   assert.equal(projection.queue.length, 0);
   assert.equal(projection.exec.length, 1);
-  assert.equal(projection.exec[0].cardId, 'master');
   assert.equal(projection.exec[0].executionStatus, 'running');
-  assert.equal(projection.exec[0].executionOwnerCardId, 'child');
-  assert.equal(projection.exec[0].executionOwnerKind, 'subtask');
-  assert.equal(projection.exec[0].executionSince, '2026-07-14T10:03:00.000Z');
+  assert.equal(projection.exec[0].executionSince, '2026-07-23T01:02:00.000Z');
+  assert.equal(projection.exec[0].executionNodeId, 'phone');
+  assert.equal(projection.exec[0].codexRunId, 'session-a');
+  assert.equal(projection.exec[0].execution.executionId, 'execution-a');
+  assert.equal(projection.exec[0].execution.revision, 4);
 });
 
-test('node-local process, queue, voice, and body observations cannot override lifecycle', (context) => {
+test('epoch-4 execution conflicts invalidate the owning task without selecting a candidate', (context) => {
+  const { project } = fixture(context);
+  const ledger = {
+    cards: [{
+      id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('todo', '2026-07-23T01:00:00.000Z'),
+      assignment: { nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
+    }],
+    annotations: [], relationships: [],
+  };
+  const projection = controlRoomProjectionFromTaskLedger({
+    project,
+    ledger,
+    executionDiagnostics: [{ executionId: 'execution-a', code: 'task_execution_conflict', lanes: ['lifecycle'], taskId: 'master' }],
+  }) as Record<string, any>;
+
+  assert.equal(projection.queue.length, 1);
+  assert.equal(projection.exec.length, 0);
+  assert.equal(projection.allTasks[0].valid, false);
+  assert.deepEqual(projection.allTasks[0].diagnostics, ['task_execution_conflict:execution-a']);
+});
+
+test('legacy card, process, queue, voice, and body observations cannot override lifecycle', (context) => {
   const { decisionOsRoot, project } = fixture(context);
   mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
   writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), 'Completed at: 1999-01-01T00:00:00.000Z\n#task-complete\n');
   writeFileSync(join(decisionOsRoot, 'codex-process-queue.json'), JSON.stringify({ items: [{ id: 'run-a', status: 'pending' }] }));
   const ledger = {
-    cards: [{ id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('backlog', '2026-07-14T10:01:00.000Z'), comment: { contentFile: '.decision-os/cards/tasks/master.md' }, codexActiveRunId: 'run-a' }],
+    cards: [{
+      id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('backlog', '2026-07-14T10:01:00.000Z'),
+      comment: { contentFile: '.decision-os/cards/tasks/master.md' }, codexActiveRunId: 'run-a',
+      executionIntent: { id: 'run-a', state: 'running', changedAt: '2026-07-14T10:02:00.000Z' },
+    }],
     annotations: [], relationships: [],
   };
 
@@ -153,7 +188,10 @@ test('same structural state produces byte-identical local and remote-only task p
 test('lifecycle conflicts remain visible and invalidate the affected task graph', (context) => {
   const { project } = fixture(context);
   const ledger = {
-    cards: [{ id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z') }],
+    cards: [{
+      id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z'),
+      assignment: { nodeId: 'workstation', changedAt: '2026-07-14T10:00:00.000Z', revision: 1 },
+    }],
     annotations: [], relationships: [],
   };
   const conflicts = [{ kind: 'task-conflict', entityType: 'card', entityId: 'master', path: 'lifecycle', candidates: [] }];
@@ -217,6 +255,53 @@ test('post-join invalidation materializes only the changed child and its relatio
   await new Promise((resolveWait) => setImmediate(resolveWait));
   assert.deepEqual(store.diagnostics(), beforeContentHead);
   assert.equal(store.get([project]).revision, revisionBeforeContentHead);
+});
+
+test('execution-entity invalidation rematerializes only its indexed task', async (context) => {
+  const { decisionOsRoot, project } = fixture(context);
+  const taskProjection = {
+    ledger: {
+      cards: ['master-a', 'master-b'].map((id) => ({
+        id, title: id, labels: ['master-task'], lifecycle: lifecycle('todo', '2026-07-23T01:00:00.000Z'),
+        assignment: { nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
+      })),
+      annotations: [], relationships: [],
+    },
+    conflicts: [],
+  };
+  const execution: ReplicatedTaskExecutionRecord = {
+    metadata: {
+      executionId: 'execution-a', requestId: 'request-a', sessionId: 'session-a', projectId: 'project-a', ledgerId: 'tasks',
+      taskId: 'master-a', sourceCardId: 'master-a', ownerCardId: 'master-a', kind: 'thread', requestedAt: '2026-07-23T01:01:00.000Z',
+      model: null, effort: null, pipelineRunId: null, pipelineStepId: null, pipelineSkillRunId: null,
+      predecessorExecutionId: null, restartOfExecutionId: null,
+    },
+    lifecycle: {
+      phase: 'queued', phaseSince: '2026-07-23T01:02:00.000Z', startedAt: null, finishedAt: null,
+      executorNodeId: 'workstation', providerSessionId: null, result: null, error: null, revision: 2,
+    },
+    artifacts: { jsonl: null, stderr: null, telemetry: null, result: null, changedAt: '2026-07-23T01:01:00.000Z', revision: 1 },
+  };
+  let executions: ReplicatedTaskExecutionRecord[] = [];
+  const store = createControlRoomProjectionStore({
+    cacheFile: join(decisionOsRoot, 'cache', 'control-room-execution.json'),
+    taskProjectionForProject: () => taskProjection,
+    taskExecutionsForProject: () => executions,
+    taskExecutionForProject: (_project, executionId) => executions.find((record) => record.metadata.executionId === executionId) ?? null,
+  });
+  const before = store.get([project]);
+  const workBefore = store.diagnostics();
+  executions = [execution];
+
+  store.invalidate(project.id, [{ entityType: 'execution', entityId: 'execution-a' }]);
+  await new Promise((resolveWait) => setImmediate(resolveWait));
+  const after = store.get([project]) as Record<string, any>;
+
+  assert.ok(after.revision > before.revision);
+  assert.equal(after.exec[0].cardId, 'master-a');
+  assert.equal(after.queue[0].cardId, 'master-b');
+  assert.equal(store.diagnostics().taskMaterializations - workBefore.taskMaterializations, 1);
+  assert.equal(store.diagnostics().largestIncrementalBatch, 1);
 });
 
 test('high fan-out relationship updates remain bounded to 64 task materializations per background batch', async (context) => {

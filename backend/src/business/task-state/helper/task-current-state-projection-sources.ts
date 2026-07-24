@@ -1,5 +1,5 @@
 /**
- * WHAT: Converts projection-only node captures into explicit epoch-3 migration contributions.
+ * WHAT: Converts projection-only node captures into explicit epoch-4 migration contributions.
  * WHY: A writable legacy node may expose a complete projection and content manifest without epoch-2 current shards.
  */
 import { createHash } from 'node:crypto';
@@ -142,7 +142,7 @@ export function mergeProjectionSourceLedger(target: AnyRecord, source: AnyRecord
   for (const [path, value] of Object.entries(source)) if (!owned.has(path) && target[path] === undefined) target[path] = structuredClone(value);
 }
 
-export function prepareProjectionSources(input: { stateRoots: string[]; projectId: string; decisionOsRoot: string }): PreparedProjectionSource[] {
+export function prepareProjectionSources(input: { stateRoots: string[]; projectId: string; decisionOsRoot: string; defaultAssignedNodeId: string }): PreparedProjectionSource[] {
   const sources = input.stateRoots.flatMap((stateRoot, sourceIndex): PreparedProjectionSource[] => {
     const projectionFile = resolve(stateRoot, 'projection.json');
     if (!existsSync(projectionFile) || hasCurrentEntities(stateRoot)) return [];
@@ -156,7 +156,13 @@ export function prepareProjectionSources(input: { stateRoots: string[]; projectI
     const originalContent = new Map(manifest.resources.map((resource) => [resource.key, resourceBytes(stateRoot, decisionOsRoot, resource)]));
     const hydrated = structuredClone(document.ledger);
     hydrateNotes(hydrated, originalContent);
-    const prepared = prepareTaskCurrentStateMigration({ decisionOsRoot: input.decisionOsRoot, ledger: hydrated, readContent: (ref) => originalContent.get(ref.replace(/^\//, ''))?.toString('utf8') ?? null, deferRelationshipValidation: true });
+    const prepared = prepareTaskCurrentStateMigration({
+      decisionOsRoot: input.decisionOsRoot,
+      ledger: hydrated,
+      defaultAssignedNodeId: input.defaultAssignedNodeId,
+      readContent: (ref) => originalContent.get(ref.replace(/^\//, ''))?.toString('utf8') ?? null,
+      deferRelationshipValidation: true,
+    });
     const rewrites = new Map(prepared.bodyRewrites.map((rewrite) => [rewrite.contentFile, Buffer.from(rewrite.after)]));
     const content = manifest.resources.map((resource) => ({ key: resource.key, bytes: rewrites.get(resource.key) ?? originalContent.get(resource.key)! }));
     const subtaskRelationships = new Set((Array.isArray(prepared.ledger.relationships) ? prepared.ledger.relationships as AnyRecord[] : []).filter((entry) => entry.label === 'subtask').map((entry) => String(entry.id ?? '')));

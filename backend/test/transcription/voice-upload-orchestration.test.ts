@@ -8,7 +8,16 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
-import { codexExecutionCoordinator } from '@backend/business/codex/helper/codex-execution-runtime.js';
+import { createTaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
+import { taskExecutionProcesses, taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
+import {
+  readVoiceTranscriptionStatusController,
+  startVoiceUploadOrchestrationController,
+} from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
+import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
+import type { TaskProjectionCommand } from '@backend/business/task-state/helper/task-mutation-command.js';
+
+const executionPhases = ['preparing', 'queued', 'starting', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled', 'interrupted'] as const;
 
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
@@ -19,11 +28,12 @@ async function waitForText(file: string, text: string): Promise<void> {
   assert.fail(`Timed out waiting for ${text} in ${file}`);
 }
 
-async function waitForPipelineComplete(decisionOsRoot: string, pipelineId: string): Promise<void> {
+async function waitForPipelineComplete(decisionOsRoot: string, runtime: Record<string, unknown>, pipelineId: string): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < 3000) {
     const run = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.pipelineId === pipelineId);
-    if (run?.status === 'complete') return;
+    const executions = run ? taskExecutionState(runtime)?.executions.byPipelineRunId(run.id) ?? [] : [];
+    if (executions.length > 0 && executions.every((execution) => execution.lifecycle.phase === 'succeeded')) return;
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
   assert.fail(`Timed out waiting for pipeline ${pipelineId} to complete`);
@@ -32,7 +42,7 @@ async function waitForPipelineComplete(decisionOsRoot: string, pipelineId: strin
 async function waitForExecutionPhase(runtime: Record<string, unknown>, executionId: string, phase: string): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < 3000) {
-    if (codexExecutionCoordinator(runtime)?.store.find(executionId)?.phase === phase) return;
+    if (taskExecutionState(runtime)?.executions.find(executionId)?.lifecycle.phase === phase) return;
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
   assert.fail(`Timed out waiting for execution ${executionId} phase ${phase}`);
@@ -53,6 +63,56 @@ function voiceUploadForm(input: { transcript?: string; queueCodex?: boolean; lau
   if (input.transcript !== undefined) form.append('transcriptionText', input.transcript);
   if (input.awaitCompletion !== false) form.append('awaitCompletion', 'true');
   return form;
+}
+
+function assignedTaskState(input: { workspace: string; nodeId: string; writerId: string }) {
+  const decisionOsRoot = join(input.workspace, '.decision-os');
+  const cardRef = '.decision-os/cards/tasks/card-a.md';
+  const threadRef = '.decision-os/threads/tasks/thread-card-a.md';
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(decisionOsRoot, 'threads', 'tasks'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{
+      id: 'card-a',
+      title: 'Voice task',
+      status: 'todo',
+      labels: ['master-task'],
+      assignment: { nodeId: input.nodeId, changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
+      comment: { contentFile: cardRef },
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+    threadFiles: { 'thread-card-a': threadRef },
+  }));
+  writeFileSync(join(input.workspace, cardRef), '# Voice task\n');
+  writeFileSync(join(input.workspace, threadRef), '');
+  return createProjectTaskState({
+    projectId: 'project-a',
+    writerId: input.writerId,
+    decisionOsRoot,
+    tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
+    initialize: true,
+  });
+}
+
+function taskRuntime(input: { workspace: string; nodeId: string; state: ReturnType<typeof assignedTaskState> }): Record<string, unknown> {
+  return {
+    decisionOsRoot: join(input.workspace, '.decision-os'),
+    projectId: 'project-a',
+    taskExecutionNodeId: input.nodeId,
+    decisionOsSettings: { federationNodeId: input.nodeId, maxConcurrentCodexProcesses: 1 },
+    taskExecutionState: input.state,
+    readTaskLedgerProjection: () => input.state.projection().ledger,
+    persistTaskLedgerProjection: (ledger: Record<string, unknown>, command: TaskProjectionCommand) => input.state.executeProjectionCommand(command, ledger),
+  };
+}
+
+function executionCount(state: ReturnType<typeof assignedTaskState>): number {
+  return executionPhases.reduce((count, phase) => count + state.executions.byPhase(phase).length, 0);
 }
 
 test('queued voice acceptance moves the card to transcribing-before-launch during transcription and clears it on failure', async () => {
@@ -97,7 +157,7 @@ test('queued voice acceptance moves the card to transcribing-before-launch durin
     let ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string; executionRunId?: string }> };
     assert.equal(ledger.cards[0].executionStatus, undefined);
     assert.equal(ledger.cards[0].executionRunId, undefined);
-    assert.equal(codexExecutionCoordinator(runtime)?.store.find(responseBody.body.executionId)?.phase, 'preparing');
+    assert.equal(taskExecutionState(runtime)?.executions.find(responseBody.body.executionId), null);
 
     ledger.cards = [];
     writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify(ledger, null, 2));
@@ -105,7 +165,7 @@ test('queued voice acceptance moves the card to transcribing-before-launch durin
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '"status":"transcription failed"');
     ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string }> };
     assert.equal(ledger.cards.length, 0);
-    assert.equal(codexExecutionCoordinator(runtime)?.store.find(responseBody.body.executionId)?.phase, 'failed');
+    assert.equal(taskExecutionState(runtime)?.executions.find(responseBody.body.executionId), null);
     assert.equal(runtime.voiceCodexExecutionObservations, undefined);
   } finally {
     settleTranscription?.(new Response(JSON.stringify({ error: { message: 'test cleanup' } }), { status: 503, headers: { 'content-type': 'application/json' } }));
@@ -294,7 +354,13 @@ test('voice upload transcribes on the backend and starts Codex when the card has
     await waitForExecutionPhase(runtime, body.body.executionId, 'succeeded');
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ id: string; codexThreadRunId?: string }> };
     assert.match(ledger.cards.find((card) => card.id === 'card-a')?.codexThreadRunId ?? '', /^codex-skill-/);
-    assert.equal(codexExecutionCoordinator(runtime)?.store.find(body.body.executionId)?.kind, 'voice');
+    assert.equal(taskExecutionState(runtime)?.executions.find(body.body.executionId)?.metadata.kind, 'thread');
+    assert.equal(
+      taskExecutionState(runtime)?.executions.bySessionId(
+        String(taskExecutionState(runtime)?.executions.find(body.body.executionId)?.metadata.sessionId ?? '')
+      ).length,
+      1,
+    );
     assert.equal(runtime.voiceCodexExecutionObservations, undefined);
   } finally {
     server.close();
@@ -303,6 +369,115 @@ test('voice upload transcribes on the backend and starts Codex when the card has
     else process.env.CODEX_BIN = previousCodexBin;
     rmSync(workspace, { recursive: true, force: true });
   }
+});
+
+test('voice upload preserves the transcript and dispatches exactly one execution to the remote owner', async (context) => {
+  const localWorkspace = mkdtempSync(join(tmpdir(), 'decision-os-voice-remote-local-'));
+  const remoteWorkspace = mkdtempSync(join(tmpdir(), 'decision-os-voice-remote-owner-'));
+  const localState = assignedTaskState({ workspace: localWorkspace, nodeId: 'phone', writerId: 'workstation' });
+  const remoteState = assignedTaskState({ workspace: remoteWorkspace, nodeId: 'phone', writerId: 'phone' });
+  const localRuntime = taskRuntime({ workspace: localWorkspace, nodeId: 'workstation', state: localState });
+  const remoteRuntime = taskRuntime({ workspace: remoteWorkspace, nodeId: 'phone', state: remoteState });
+  const remoteRouter = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => remoteState,
+    localNodeId: () => 'phone',
+    peer: () => null,
+    localCapacity: () => 1,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+  });
+  localRuntime.taskExecutionRouter = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => localState,
+    localNodeId: () => 'workstation',
+    peer: (nodeId) => nodeId === 'phone' ? { online: true } : null,
+    localCapacity: () => 1,
+    dispatchRemote: (nodeId, request) => {
+      assert.equal(nodeId, 'phone');
+      return remoteRouter.admitLocal(request);
+    },
+  });
+  context.after(async () => {
+    await Promise.all([localState.flush(), remoteState.flush()]);
+    rmSync(localWorkspace, { recursive: true, force: true });
+    rmSync(remoteWorkspace, { recursive: true, force: true });
+  });
+
+  const result = await startVoiceUploadOrchestrationController({
+    action_payload: {
+      audioBuffer: Buffer.from('voice-bytes'),
+      mimeType: 'audio/webm',
+      transcriptionText: 'Remote owner transcript.',
+      ledgerId: 'tasks',
+      threadId: 'thread-card-a',
+      cardId: 'card-a',
+      noteId: 'note-remote-owner',
+      queueCodex: true,
+      awaitCompletion: true,
+    },
+    runtime_state: localRuntime,
+  });
+
+  assert.equal(result.statusCode, 202);
+  const status = readVoiceTranscriptionStatusController({
+    action_payload: { ledgerId: 'tasks', threadId: 'thread-card-a', noteId: 'note-remote-owner' },
+    runtime_state: localRuntime,
+  }) as { note: { message: string; status: string } };
+  assert.equal(status.note.message, 'Remote owner transcript.');
+  assert.equal(status.note.status, 'transcribed');
+  assert.equal(executionCount(localState), 0);
+  const remoteExecutions = remoteState.executions.byPhase('queued');
+  assert.equal(executionCount(remoteState), 1);
+  assert.equal(remoteExecutions.length, 1);
+  assert.equal(remoteExecutions[0].metadata.executionId, result.executionId);
+  assert.equal(remoteExecutions[0].metadata.requestId, 'voice:note-remote-owner');
+  assert.equal(remoteExecutions[0].lifecycle.executorNodeId, 'phone');
+  assert.deepEqual(taskExecutionProcesses(localRuntime), []);
+  assert.deepEqual(taskExecutionProcesses(remoteRuntime), []);
+});
+
+test('voice upload preserves the transcript and exposes retry when the assigned owner is unavailable', async (context) => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-voice-owner-unavailable-'));
+  const state = assignedTaskState({ workspace, nodeId: 'phone', writerId: 'workstation' });
+  const runtime = taskRuntime({ workspace, nodeId: 'workstation', state });
+  runtime.taskExecutionRouter = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => state,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    localCapacity: () => 1,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+  });
+  context.after(async () => {
+    await state.flush();
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  const result = await startVoiceUploadOrchestrationController({
+    action_payload: {
+      audioBuffer: Buffer.from('voice-bytes'),
+      mimeType: 'audio/webm',
+      transcriptionText: 'Unavailable owner transcript.',
+      ledgerId: 'tasks',
+      threadId: 'thread-card-a',
+      cardId: 'card-a',
+      noteId: 'note-owner-unavailable',
+      queueCodex: true,
+      awaitCompletion: true,
+    },
+    runtime_state: runtime,
+  });
+
+  assert.equal(result.statusCode, 202);
+  const status = readVoiceTranscriptionStatusController({
+    action_payload: { ledgerId: 'tasks', threadId: 'thread-card-a', noteId: 'note-owner-unavailable' },
+    runtime_state: runtime,
+  }) as { note: { message: string; status: string; error: string } };
+  assert.equal(status.note.message, 'Unavailable owner transcript.');
+  assert.equal(status.note.status, 'execution launch failed');
+  assert.equal(status.note.error, 'assigned_node_unreachable');
+  assert.equal(executionCount(state), 0);
+  assert.deepEqual(taskExecutionProcesses(runtime), []);
 });
 
 test('voice Pipeline mode starts the pipeline configured in Settings', async () => {
@@ -358,8 +533,11 @@ test('voice Pipeline mode starts the pipeline configured in Settings', async () 
     assert.equal(body.body.ok, true);
     assert.equal(body.body.launchMode, 'pipeline');
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.some((run) => run.pipelineId === 'voice-pipeline'), true);
-    await waitForPipelineComplete(decisionOsRoot, 'voice-pipeline');
-    assert.equal(codexExecutionCoordinator(runtime)?.store.find(body.body.executionId)?.phase, 'succeeded');
+    await waitForPipelineComplete(decisionOsRoot, runtime, 'voice-pipeline');
+    const execution = taskExecutionState(runtime)?.executions.find(body.body.executionId);
+    assert.equal(execution?.metadata.requestId, 'voice:note-voice-pipeline:1');
+    assert.equal(execution?.metadata.pipelineRunId, 'voice-pipeline-note-voice-pipeline');
+    assert.equal(execution?.lifecycle.phase, 'succeeded');
     assert.equal(runtime.voiceCodexExecutionObservations, undefined);
   } finally {
     server.close();
@@ -391,7 +569,9 @@ test('voice upload continues the existing Codex session when the card has a run 
       facts: [],
       fields: [],
       codexThreadRunId: runId,
-      codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`
+      codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`,
+      codexRunModel: 'gpt-5.4',
+      codexRunEffort: 'medium'
     }],
     annotations: [],
     relationships: [],
@@ -450,7 +630,8 @@ test('voice upload continues the existing Codex session when the card has a run 
     assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexThreadRunId, runId);
     assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexRunModel, 'gpt-5.4');
     assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexRunEffort, 'medium');
-    assert.equal(codexExecutionCoordinator(runtime)?.store.find(body.body.executionId)?.sessionId, runId);
+    assert.equal(taskExecutionState(runtime)?.executions.find(body.body.executionId)?.metadata.sessionId, runId);
+    assert.equal(taskExecutionState(runtime)?.executions.find(body.body.executionId)?.metadata.kind, 'continuation');
     assert.equal(runtime.voiceCodexExecutionObservations, undefined);
   } finally {
     server.close();

@@ -1,5 +1,5 @@
 /**
- * WHAT: Exposes the shared epoch-3 entity algebra to the Cloudflare relay.
+ * WHAT: Exposes the shared epoch-4 entity algebra to the Cloudflare relay.
  * WHY: The relay must validate, hash, and join entities with the exact node implementation.
  */
 import {

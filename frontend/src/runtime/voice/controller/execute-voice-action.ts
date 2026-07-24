@@ -4,16 +4,17 @@
  */
 import { stopVoiceRecording } from './stop-voice-recording.js';
 import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
+import type { VoiceExecutionHandoff } from '../effect/request-transcription.js';
 
 type StopVoiceRecording = (input: {
   launchMode: VoiceLaunchMode;
-  onPersisted?: () => void;
+  onPersisted?: (detail: VoiceExecutionHandoff) => void;
 }) => Promise<boolean>;
 
 export type ExecuteVoiceActionInput = {
   launchMode: VoiceLaunchMode;
-  onDurableHandoff?: () => void;
-  onRejected?: () => void;
+  onDurableHandoff?: (detail: VoiceExecutionHandoff) => void;
+  onRejected?: (detail?: VoiceExecutionHandoff) => void;
   stop?: StopVoiceRecording;
 };
 
@@ -29,17 +30,20 @@ export async function executeVoiceAction(input: ExecuteVoiceActionInput): Promis
   }
 
   let handedOff = false;
-  const onPersisted = (): void => {
+  let handoffDetail: VoiceExecutionHandoff | undefined;
+  const onPersisted = (detail: VoiceExecutionHandoff): void => {
     if (handedOff) return;
     handedOff = true;
-    input.onDurableHandoff?.();
+    handoffDetail = detail;
+    input.onDurableHandoff?.(detail);
   };
   void stop({ launchMode: input.launchMode, onPersisted })
     .then((submitted) => {
-      if (!submitted && !handedOff) input.onRejected?.();
+      // A durable handoff gives immediate UI feedback; a later admission rejection still restores canonical state.
+      if (!submitted) input.onRejected?.(handoffDetail);
     })
     .catch(() => {
-      if (!handedOff) input.onRejected?.();
+      input.onRejected?.(handoffDetail);
     });
   return true;
 }

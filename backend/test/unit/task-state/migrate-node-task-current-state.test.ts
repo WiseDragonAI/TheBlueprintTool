@@ -4,10 +4,12 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { migrateNodeTaskCurrentState } from '../../../src/business/task-state/controller/migrate-node-task-current-state.js';
+import { migrateNodeTaskCurrentState, planNodeTaskCurrentStateMigration } from '../../../src/business/task-state/controller/migrate-node-task-current-state.js';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 
 test('node migrator converts every registered project and writes one offline report', async (context) => {
@@ -27,11 +29,23 @@ test('node migrator converts every registered project and writes one offline rep
   writeFileSync(resolve(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [{ id: 'card-a', title: 'Card A', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } }], annotations: [], relationships: [] }));
   writeFileSync(resolve(decisionOsRoot, 'cards', 'tasks', 'card-a.md'), 'Local card body.\n');
 
-  const result = await migrateNodeTaskCurrentState({ catalogRoot, nodeId: 'workstation', backupRoot });
+  const plan = await planNodeTaskCurrentStateMigration({ catalogRoot, nodeId: 'workstation', targetEpoch: 4, defaultAssignedNodeId: 'workstation' });
+  assert.equal(plan.projectCount, 1);
+  assert.equal(plan.projects[0].sourceFingerprint.length, 64);
+  assert.equal(existsSync(backupRoot), false);
+
+  const result = await migrateNodeTaskCurrentState({
+    catalogRoot,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+    backupRoot,
+  });
 
   assert.equal(result.nodeId, 'workstation');
   assert.deepEqual(result.projects.map((project) => project.projectId), ['project-a']);
-  assert.equal(existsSync(resolve(backupRoot, 'catalog-decision-os', '.settings.json')), true);
+  assert.equal(existsSync(resolve(backupRoot, 'catalog-decision-os', '.settings.json')), false);
+  assert.equal(existsSync(resolve(backupRoot, 'source-manifest.json')), true);
   assert.equal(JSON.parse(readFileSync(resolve(backupRoot, 'node-migration-report.json'), 'utf8')).projects.length, 1);
   const store = createTaskCurrentStateStore({ decisionOsRoot, projectId: 'project-a' });
   assert.equal((store.projection().ledger.cards as Array<{ id: string }>)[0].id, 'card-a');
@@ -43,5 +57,105 @@ test('node migrator rejects a node identity that differs from federation setting
   context.after(() => rmSync(catalogRoot, { recursive: true, force: true }));
   mkdirSync(resolve(catalogRoot, '.decision-os'), { recursive: true });
   writeFileSync(resolve(catalogRoot, '.decision-os', '.settings.json'), JSON.stringify({ federationNodeId: 'phone' }));
-  await assert.rejects(migrateNodeTaskCurrentState({ catalogRoot, nodeId: 'workstation' }), /node_task_migration_node_identity_mismatch/);
+  await assert.rejects(migrateNodeTaskCurrentState({
+    catalogRoot,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+  }), /node_task_migration_node_identity_mismatch/);
+});
+
+test('node preflight validates every project before creating backup or changing the first project', async (context) => {
+  const catalogRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-node-preflight-'));
+  const backupRoot = `${catalogRoot}-backup`;
+  context.after(() => [catalogRoot, backupRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const master = resolve(catalogRoot, '.decision-os');
+  mkdirSync(master, { recursive: true });
+  writeFileSync(resolve(master, '.settings.json'), JSON.stringify({ federationNodeId: 'workstation' }));
+  writeFileSync(resolve(master, 'projects.json'), JSON.stringify({ version: 2, projects: Object.fromEntries(['project-a', 'project-b'].map((id) => [id, {
+    id, relativePath: id, name: id, description: '', color: '#38d9e8', registeredAt: '2026-07-22T00:00:00.000Z', cardId: `project-card:${id}`,
+  }])) }));
+  for (const id of ['project-a', 'project-b']) {
+    const root = resolve(catalogRoot, id, '.decision-os');
+    mkdirSync(root, { recursive: true });
+    writeFileSync(resolve(root, 'project.json'), JSON.stringify({ id }));
+    writeFileSync(resolve(root, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+    writeFileSync(resolve(root, 'tasks.json'), JSON.stringify({
+      cards: [{ id: `${id}-card`, title: id }],
+      annotations: [],
+      relationships: id === 'project-b' ? [{ id: 'broken', from: `${id}-card`, to: 'missing', label: 'subtask' }] : [],
+    }));
+  }
+  const firstTasks = readFileSync(resolve(catalogRoot, 'project-a', '.decision-os', 'tasks.json'));
+
+  await assert.rejects(migrateNodeTaskCurrentState({
+    catalogRoot,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+    backupRoot,
+  }), /invalid_subtask_relationships:broken/);
+
+  assert.deepEqual(readFileSync(resolve(catalogRoot, 'project-a', '.decision-os', 'tasks.json')), firstTasks);
+  assert.equal(existsSync(resolve(catalogRoot, 'project-a', '.decision-os', 'task-state', 'project-a', 'format.json')), false);
+  assert.equal(existsSync(backupRoot), false);
+});
+
+test('node migration admits an identity-verified project registered through an external symlink', async (context) => {
+  const catalogRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-node-symlink-catalog-'));
+  const externalRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-node-symlink-project-'));
+  const backupRoot = `${catalogRoot}-backup`;
+  context.after(() => [catalogRoot, externalRoot, backupRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const master = resolve(catalogRoot, '.decision-os');
+  const decisionOsRoot = resolve(externalRoot, '.decision-os');
+  mkdirSync(master, { recursive: true });
+  mkdirSync(decisionOsRoot, { recursive: true });
+  symlinkSync(externalRoot, resolve(catalogRoot, 'external-project'));
+  writeFileSync(resolve(master, '.settings.json'), JSON.stringify({ federationNodeId: 'workstation' }));
+  writeFileSync(resolve(master, 'projects.json'), JSON.stringify({ version: 2, projects: {
+    'external-project': { id: 'external-project', relativePath: 'external-project', name: 'External', description: '', color: '#38d9e8', registeredAt: '2026-07-22T00:00:00.000Z', cardId: 'project-card:external-project' },
+  } }));
+  writeFileSync(resolve(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'external-project' }));
+  writeFileSync(resolve(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(resolve(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+
+  const result = await migrateNodeTaskCurrentState({
+    catalogRoot,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+    backupRoot,
+  });
+
+  assert.equal(result.projects[0].relativePath, 'external-project');
+  assert.equal(JSON.parse(readFileSync(resolve(decisionOsRoot, 'task-state', 'external-project', 'format.json'), 'utf8')).stateSchema, 4);
+});
+
+test('node migration refuses to start while a catalog-owned server process is live', async (context) => {
+  const catalogRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-node-online-'));
+  const backupRoot = `${catalogRoot}-backup`;
+  context.after(() => [catalogRoot, backupRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const master = resolve(catalogRoot, '.decision-os');
+  const decisionOsRoot = resolve(catalogRoot, 'project-a', '.decision-os');
+  mkdirSync(master, { recursive: true });
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(resolve(master, '.settings.json'), JSON.stringify({ federationNodeId: 'workstation' }));
+  writeFileSync(resolve(master, 'projects.json'), JSON.stringify({ version: 2, projects: {
+    'project-a': { id: 'project-a', relativePath: 'project-a', name: 'Project A', description: '', color: '#38d9e8', registeredAt: '2026-07-22T00:00:00.000Z', cardId: 'project-card:project-a' },
+  } }));
+  writeFileSync(resolve(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'project-a' }));
+  writeFileSync(resolve(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(resolve(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  const server = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'decision-os-server'], { cwd: catalogRoot, stdio: 'ignore' });
+  await once(server, 'spawn');
+  context.after(() => { server.kill('SIGTERM'); });
+
+  await assert.rejects(migrateNodeTaskCurrentState({
+    catalogRoot,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+    backupRoot,
+  }), /node_task_migration_server_online/);
+  assert.equal(existsSync(backupRoot), false);
 });

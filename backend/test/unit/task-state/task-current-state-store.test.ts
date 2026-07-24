@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
-import { finalizeTaskCurrentEntity, taskCurrentEntityByteLimit, type TaskCurrentEntity } from '../../../../shared/task-current-state-core.js';
+import { finalizeTaskCurrentEntity, taskCurrentEntityByteLimit, taskCurrentStateVersion, type TaskCurrentEntity } from '../../../../shared/task-current-state-core.js';
 
 const todoLifecycle = { status: 'todo', changedAt: '2026-07-21T00:00:00.000Z', waitingAt: '2026-07-21T00:00:00.000Z', closedAt: null };
 
@@ -82,7 +82,7 @@ test('local mutations keep migration-sized project clocks out of entity register
   const entities: TaskCurrentEntity[] = Array.from({ length: 800 }, (_, index) => {
     const replicaId = `migration:project-a:card:card-${String(index).padStart(4, '0')}:${'source'.repeat(12)}`;
     return finalizeTaskCurrentEntity({
-      version: 3,
+      version: taskCurrentStateVersion,
       projectId: 'project-a',
       entityType: 'card',
       entityId: `card-${String(index).padStart(4, '0')}`,
@@ -92,7 +92,7 @@ test('local mutations keep migration-sized project clocks out of entity register
       },
     });
   });
-  await store.merge({ version: 3, projectId: 'project-a', entities });
+  await store.merge({ version: taskCurrentStateVersion, projectId: 'project-a', entities });
   await store.flush();
   assert.ok(Buffer.byteLength(JSON.stringify(store.clock())) > taskCurrentEntityByteLimit);
 
@@ -106,9 +106,9 @@ test('local mutations keep migration-sized project clocks out of entity register
 
   const journalDirectory = resolve(root, 'task-state', 'project-a', 'journal');
   writeFileSync(resolve(journalDirectory, 'retained-global-context.json'), JSON.stringify({
-    version: 3,
+    version: taskCurrentStateVersion,
     mutation: {
-      version: 3,
+      version: taskCurrentStateVersion,
       batchId: 'retained-global-context',
       projectId: 'project-a',
       replicaId: 'workstation',

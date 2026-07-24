@@ -1,5 +1,5 @@
 /**
- * WHAT: Encodes domain records into canonical epoch-3 CRDT lane values.
+ * WHAT: Encodes domain records into canonical epoch-4 CRDT lane values.
  * WHY: Migration, runtime mutations, recovery, and tests must emit identical non-overlapping lane boundaries.
  */
 import type { TaskEntityType } from './task-current-state-types.js';
@@ -8,6 +8,7 @@ type AnyRecord = Record<string, unknown>;
 const narrativeFields = new Set(['description', 'what', 'message', 'body', 'notes', 'deletedNoteIds', 'content', 'contentBytes', 'markdown']);
 const derivedLifecycleFields = new Set(['status', 'lifecycle', 'changedAt', 'waitingAt', 'closedAt', 'completedAt']);
 const nodeLocalCardFields = new Set(['replicationState', 'persistenceState']);
+const atomicCardFields = new Set(['assignment']);
 
 function structural(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((child) => structural(child) ?? null);
@@ -18,23 +19,6 @@ function structural(value: unknown): unknown {
     result[key] = structural(child);
   }
   return result;
-}
-
-function executionIntent(value: unknown): AnyRecord | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const intent = value as AnyRecord;
-  if (typeof intent.executionId === 'string' && intent.executionId) return {
-    executionId: intent.executionId,
-    phase: intent.phase ?? null,
-    requestedAt: intent.requestedAt ?? null,
-    phaseSince: intent.phaseSince ?? null,
-    executorNodeId: intent.executorNodeId ?? null,
-    changedAt: intent.changedAt ?? intent.phaseSince ?? null,
-    settledAt: intent.settledAt ?? null,
-    error: intent.error ?? null,
-    revision: intent.revision ?? null,
-  };
-  return { id: intent.id ?? null, state: intent.state ?? null, changedAt: intent.changedAt ?? intent.updatedAt ?? null, startedAt: intent.startedAt ?? null, settledAt: intent.settledAt ?? null, error: intent.error ?? null };
 }
 
 function lifecycle(before: AnyRecord | null, after: AnyRecord, transitionAt: string): AnyRecord {
@@ -52,21 +36,33 @@ function lifecycle(before: AnyRecord | null, after: AnyRecord, transitionAt: str
   return { status, changedAt, waitingAt: null, closedAt: null };
 }
 
+function assignment(value: unknown): AnyRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = value as AnyRecord;
+  const nodeId = String(candidate.nodeId ?? '').trim();
+  const changedAt = String(candidate.changedAt ?? '').trim();
+  const revision = Number(candidate.revision);
+  if (!/^[a-zA-Z0-9_-]+$/.test(nodeId) || !Number.isFinite(Date.parse(changedAt)) || !Number.isSafeInteger(revision) || revision < 1) {
+    throw new Error('invalid_task_assignment');
+  }
+  return { nodeId, changedAt: new Date(changedAt).toISOString(), revision };
+}
+
 export function encodeTaskDomainLanes(input: { entityType: TaskEntityType; record: AnyRecord; before?: AnyRecord | null; transitionAt: string; relationshipPosition?: number }): Map<string, unknown> {
   const lanes = new Map<string, unknown>();
   for (const [path, raw] of Object.entries(input.record)) {
     if (path === 'id' || narrativeFields.has(path) || raw === undefined) continue;
     // WHAT: Exclude derived, atomic, and node-local card fields from generic structural lanes.
     // WHY: Atomic registers are encoded below while UI publication state must never enter causal hashes.
-    if (input.entityType === 'card' && (derivedLifecycleFields.has(path) || nodeLocalCardFields.has(path) || path === 'executionIntent')) continue;
+    if (input.entityType === 'card' && (derivedLifecycleFields.has(path) || nodeLocalCardFields.has(path) || atomicCardFields.has(path))) continue;
     const value = structural(raw);
     if (value !== undefined) lanes.set(path, value);
   }
   if (input.entityType === 'card') {
     if (!lanes.has('createdAt')) lanes.set('createdAt', input.transitionAt);
     lanes.set('lifecycle', lifecycle(input.before ?? null, input.record, input.transitionAt));
-    const intent = executionIntent(input.record.executionIntent);
-    if (intent) lanes.set('executionIntent', intent);
+    const assigned = assignment(input.record.assignment);
+    if (assigned) lanes.set('assignment', assigned);
   }
   if (input.entityType === 'relationship' && input.record.label === 'subtask' && !lanes.has('position')) {
     if (input.relationshipPosition === undefined) throw new Error('missing_subtask_position');

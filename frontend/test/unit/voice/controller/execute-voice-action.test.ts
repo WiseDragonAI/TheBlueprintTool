@@ -10,6 +10,14 @@ const runEntryPoints = [
   'canvas voice toggle',
   'canvas action dock',
 ];
+const handoff = {
+  requestId: 'voice:note-a',
+  projectId: 'project-a',
+  ledgerId: 'tasks',
+  cardId: 'card-a',
+  acceptedAt: '2026-07-23T10:00:00.000Z',
+  kind: 'voice' as const,
+};
 
 for (const entryPoint of runEntryPoints) {
   test(`${entryPoint} run hands off after local persistence without awaiting upload`, async () => {
@@ -21,7 +29,7 @@ for (const entryPoint of runEntryPoints) {
       launchMode: 'run',
       stop: async ({ onPersisted }) => {
         lifecycle.push('stop');
-        onPersisted?.();
+        onPersisted?.(handoff);
         lifecycle.push('upload');
         return upload;
       },
@@ -35,6 +43,22 @@ for (const entryPoint of runEntryPoints) {
     assert.deepEqual(lifecycle, ['stop', 'handoff', 'upload']);
   });
 }
+
+test('run rejection after durable handoff identifies the optimistic request to restore', async () => {
+  const rejected: string[] = [];
+
+  await executeVoiceAction({
+    launchMode: 'run',
+    stop: async ({ onPersisted }) => {
+      onPersisted?.(handoff);
+      return false;
+    },
+    onRejected: (detail) => rejected.push(detail?.requestId ?? ''),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(rejected, ['voice:note-a']);
+});
 
 test('run rejects the surface handoff when local persistence fails', async () => {
   const lifecycle: string[] = [];

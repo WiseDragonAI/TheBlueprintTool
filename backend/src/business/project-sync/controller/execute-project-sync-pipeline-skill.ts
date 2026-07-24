@@ -20,6 +20,11 @@ export function executeProjectSyncPipelineSkill(input: {
   requiredSha?: string;
   snapshot: RepositorySyncStatus;
   codexRunId: string;
+  executionId?: string;
+  stdoutFile?: string;
+  stderrFile?: string;
+  manageTaskExecutionLifecycle?: boolean;
+  onSpawned?: (value: { processId: number; startedAt: string }) => void;
   pipelineRunId: string;
   masterTask: { projectId: string; ledgerId: string; cardId: string };
 }): Promise<{ codexRunId: string; result: Record<string, unknown> }> {
@@ -29,6 +34,11 @@ export function executeProjectSyncPipelineSkill(input: {
     runtime: input.runtime,
     skillName: skillForRole[input.role],
     skillRunId: input.codexRunId,
+    executionId: input.executionId,
+    stdoutFile: input.stdoutFile,
+    stderrFile: input.stderrFile,
+    manageTaskExecutionLifecycle: input.manageTaskExecutionLifecycle,
+    onSpawned: input.onSpawned,
     ledgerFile: input.ledgerFile,
     context: {
       syncId: input.syncId,

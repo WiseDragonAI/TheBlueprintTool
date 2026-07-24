@@ -26,7 +26,7 @@ export function createTaskCurrentStatePersistence(root: string) {
     try { fsyncSync(directory); }
     finally { closeSync(directory); }
   };
-  const atomicWrite = async (file: string, bytes: string): Promise<void> => {
+  const atomicWrite = async (file: string, bytes: string | Uint8Array): Promise<void> => {
     await mkdir(dirname(file), { recursive: true });
     const temporary = `${file}.tmp-${process.pid}-${randomUUID()}`;
     const descriptor = await open(temporary, 'wx');

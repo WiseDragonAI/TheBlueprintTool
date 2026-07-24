@@ -1,6 +1,6 @@
 /**
- * WHAT: Admission coverage for authoritative operator-triggered thread runs.
- * WHY: Stale card and queue state must never suppress Run; only a live child process may reject it.
+ * WHAT: Admission coverage for authoritative operator-triggered thread executions.
+ * WHY: Replicated execution state owns idempotency, phase, and live process cancellation.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,33 +9,28 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startThreadCodexProcessController } from '@backend/business/codex/controller/start-thread-codex-process-controller.js';
 import { cancelCardSkillRunController } from '@backend/business/codex/controller/cancel-card-skill-run-controller.js';
-import { enqueueCodexThreadProcess, markCodexProcessQueueItemRunning, readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
-import { runtimeCodexRunOwnsLiveProcess } from '@backend/business/codex/helper/runtime-codex-run-owns-live-process.js';
+import { createTaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
+import { taskExecutionProcess, taskExecutionProcesses } from '@backend/business/codex/helper/task-execution-runtime.js';
+import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
+import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
+import type { TaskProjectionCommand } from '@backend/business/task-state/helper/task-mutation-command.js';
 
-type Fixture = {
-  workspace: string;
-  decisionOsRoot: string;
-  ledgerPath: string;
-  cardId: string;
-  threadId: string;
-  staleRunId: string;
-};
-
-function fixture(): Fixture {
+function fixture() {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-authoritative-run-'));
   const decisionOsRoot = join(workspace, '.decision-os');
   const cardId = 'card-a';
   const threadId = `thread-${cardId}`;
-  const staleRunId = 'codex-skill-1784100000000-stale';
+  const runId = 'codex-skill-1784100000000-canonical';
+  const executionId = 'execution-canonical';
   const ledgerPath = join(decisionOsRoot, 'specs.json');
   const cardRef = `.decision-os/cards/specs/${cardId}.md`;
   const threadRef = `.decision-os/threads/specs/${threadId}.md`;
   mkdirSync(join(decisionOsRoot, 'cards', 'specs'), { recursive: true });
   mkdirSync(join(decisionOsRoot, 'threads', 'specs'), { recursive: true });
-  writeFileSync(join(decisionOsRoot, 'state.json'), `${JSON.stringify({
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }],
-  }, null, 2)}\n`);
-  writeFileSync(ledgerPath, `${JSON.stringify({
+  }));
+  writeFileSync(ledgerPath, JSON.stringify({
     cards: [{
       id: cardId,
       title: 'Authoritative Run Card',
@@ -43,15 +38,12 @@ function fixture(): Fixture {
       comment: { contentFile: cardRef },
       facts: [],
       fields: [],
-      codexActiveRunId: staleRunId,
-      codexActiveExecutionId: 'execution-stale',
-      codexThreadRunId: staleRunId,
     }],
     annotations: [],
     relationships: [],
     notes: {},
     threadFiles: { [threadId]: threadRef },
-  }, null, 2)}\n`);
+  }));
   writeFileSync(join(workspace, cardRef), '# Authoritative Run Card\n');
   writeFileSync(join(workspace, threadRef), [
     '# OPERATOR',
@@ -60,7 +52,73 @@ function fixture(): Fixture {
     'Run this thread now.',
     '',
   ].join('\n'));
-  return { workspace, decisionOsRoot, ledgerPath, cardId, threadId, staleRunId };
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+  });
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot,
+    projectId: 'project-a',
+    taskExecutionNodeId: 'workstation',
+    taskExecutionState: state,
+    readTaskLedgerProjection: () => state.projection().ledger,
+    persistTaskLedgerProjection: (ledger: Record<string, unknown>, command: TaskProjectionCommand) => state.executeProjectionCommand(command, ledger),
+    scheduleCodexProcesses: async () => ({ ok: true, launched: [] }),
+  };
+  runtime.taskExecutionRouter = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => state,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    localCapacity: () => 1,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+  });
+  const request = {
+    requestId: 'request-canonical',
+    executionId,
+    reservedRunId: runId,
+    ledgerId: 'specs',
+    threadId,
+    cardId,
+  };
+  return { workspace, decisionOsRoot, ledgerPath, cardId, threadId, runId, executionId, state, runtime, request };
+}
+
+function executionMetadata(context: ReturnType<typeof fixture>): TaskExecutionMetadata {
+  return {
+    executionId: context.executionId,
+    requestId: 'request-canonical',
+    sessionId: context.runId,
+    projectId: 'project-a',
+    ledgerId: 'specs',
+    taskId: '',
+    sourceCardId: context.cardId,
+    ownerCardId: context.cardId,
+    kind: 'thread',
+    requestedAt: '2026-07-23T10:00:00.000Z',
+    model: null,
+    effort: null,
+    pipelineRunId: null,
+    pipelineStepId: null,
+    pipelineSkillRunId: null,
+    predecessorExecutionId: null,
+    restartOfExecutionId: null,
+  };
+}
+
+async function cleanup(context: ReturnType<typeof fixture>): Promise<void> {
+  for (const process of taskExecutionProcesses(context.runtime)) {
+    try {
+      process.child.kill('SIGKILL');
+    } catch {
+      // The execution already settled.
+    }
+  }
+  await context.state.flush();
+  rmSync(context.workspace, { recursive: true, force: true });
 }
 
 async function waitForCondition(predicate: () => boolean, label: string): Promise<void> {
@@ -72,75 +130,58 @@ async function waitForCondition(predicate: () => boolean, label: string): Promis
   assert.fail(`Timed out waiting for ${label}.`);
 }
 
-test('repeated operator Run returns the already admitted pending execution', async () => {
+test('repeated operator Run returns the already admitted queued execution', async () => {
   const context = fixture();
-  const runtime: Record<string, unknown> = {
-    decisionOsRoot: context.decisionOsRoot,
-    codexSkillRuns: {
-      [context.staleRunId]: { id: context.staleRunId, executionId: 'execution-stale', status: 'pending', pid: 0 },
-    },
-    scheduleCodexProcesses: async () => ({ ok: true, launched: [] }),
-  };
-  enqueueCodexThreadProcess({
-    decisionOsRoot: context.decisionOsRoot,
-    id: context.staleRunId,
-    createdAt: '2026-07-15T08:00:00.000Z',
-    payload: { ledgerId: 'specs', threadId: context.threadId, cardId: context.cardId, runId: context.staleRunId, executionId: 'execution-stale' },
-  });
-
   try {
-    const result = await startThreadCodexProcessController({
-      action_payload: { ledgerId: 'specs', threadId: context.threadId, cardId: context.cardId },
-      runtime_state: runtime,
+    const first = await startThreadCodexProcessController({
+      action_payload: context.request,
+      runtime_state: context.runtime,
+    });
+    const repeated = await startThreadCodexProcessController({
+      action_payload: context.request,
+      runtime_state: context.runtime,
     });
 
-    assert.equal(result.ok, true);
-    assert.equal(result.statusCode, 202);
-    const admittedRun = result.run as Record<string, unknown>;
-    assert.equal(admittedRun.id, context.staleRunId);
-    assert.equal(admittedRun.executionId, 'execution-stale');
-    assert.deepEqual(readCodexProcessQueue(context.decisionOsRoot).map((item) => item.id), [context.staleRunId]);
-    const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
-    assert.equal(ledger.cards[0].codexActiveRunId, context.staleRunId);
-    assert.equal(ledger.cards[0].codexActiveExecutionId, 'execution-stale');
-    assert.equal(ledger.cards[0].codexThreadRunId, context.staleRunId);
-    assert.equal(ledger.cards[0].executionStatus, undefined);
-    assert.equal(ledger.cards[0].executionRunId, undefined);
+    assert.equal(first.ok, true);
+    assert.equal(first.statusCode, 202);
+    assert.equal(repeated.ok, true);
+    assert.equal((repeated.run as Record<string, unknown>).id, context.runId);
+    assert.equal((repeated.run as Record<string, unknown>).executionId, context.executionId);
+    assert.equal(context.state.executions.find(context.executionId)?.lifecycle.phase, 'queued');
+    assert.equal(context.state.executions.bySessionId(context.runId).length, 1);
+    assert.equal(existsSync(join(context.decisionOsRoot, 'codex-process-queue.json')), false);
   } finally {
-    rmSync(context.workspace, { recursive: true, force: true });
+    await cleanup(context);
   }
 });
 
-test('repeated operator Run returns the already admitted live execution', async () => {
+test('repeated operator Run returns the already admitted running execution', async () => {
   const context = fixture();
-  const liveChild = { pid: 4242, exitCode: null, killed: false };
-  const runtime: Record<string, unknown> = {
-    decisionOsRoot: context.decisionOsRoot,
-    codexSkillRuns: {
-      [context.staleRunId]: { id: context.staleRunId, executionId: 'execution-stale', status: 'running', pid: liveChild.pid, child: liveChild },
-    },
-  };
-
   try {
-    const result = await startThreadCodexProcessController({
-      action_payload: { ledgerId: 'specs', threadId: context.threadId, cardId: context.cardId },
-      runtime_state: runtime,
+    await startThreadCodexProcessController({
+      action_payload: context.request,
+      runtime_state: context.runtime,
+    });
+    await context.state.executions.transition(context.executionId, { phase: 'starting' });
+    await context.state.executions.transition(context.executionId, { phase: 'running' });
+
+    const repeated = await startThreadCodexProcessController({
+      action_payload: context.request,
+      runtime_state: context.runtime,
     });
 
-    assert.equal(result.ok, true);
-    assert.equal(result.statusCode, 202);
-    assert.equal((result.run as Record<string, unknown>).id, context.staleRunId);
-    assert.equal((result.run as Record<string, unknown>).executionId, 'execution-stale');
-    assert.deepEqual(readCodexProcessQueue(context.decisionOsRoot), []);
-    const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
-    assert.equal(ledger.cards[0].codexActiveRunId, context.staleRunId);
-    assert.equal(ledger.cards[0].codexThreadRunId, context.staleRunId);
+    assert.equal(repeated.ok, true);
+    assert.equal(repeated.statusCode, 202);
+    assert.equal((repeated.run as Record<string, unknown>).id, context.runId);
+    assert.equal((repeated.run as Record<string, unknown>).executionId, context.executionId);
+    assert.equal(context.state.executions.find(context.executionId)?.lifecycle.phase, 'running');
+    assert.equal(context.state.executions.bySessionId(context.runId).length, 1);
   } finally {
-    rmSync(context.workspace, { recursive: true, force: true });
+    await cleanup(context);
   }
 });
 
-test('turn lifecycle updates preserve the live child handle for cancellation', async () => {
+test('turn lifecycle registers the exact execution child for cancellation', async () => {
   const context = fixture();
   const fakeCodex = join(context.workspace, 'fake-codex-live.mjs');
   const previousCodexBin = process.env.CODEX_BIN;
@@ -155,25 +196,17 @@ test('turn lifecycle updates preserve the live child handle for cancellation', a
   ].join('\n'));
   chmodSync(fakeCodex, 0o755);
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = { decisionOsRoot: context.decisionOsRoot };
-  enqueueCodexThreadProcess({
-    decisionOsRoot: context.decisionOsRoot,
-    id: context.staleRunId,
-    createdAt: '2026-07-15T08:00:00.000Z',
-    payload: { ledgerId: 'specs', threadId: context.threadId, cardId: context.cardId, runId: context.staleRunId, executionId: 'execution-stale' },
-  });
-  markCodexProcessQueueItemRunning(context.decisionOsRoot, context.staleRunId);
+  await context.state.executions.admit({ metadata: executionMetadata(context), executorNodeId: 'workstation' });
+  await context.state.executions.transition(context.executionId, { phase: 'queued' });
+  await context.state.executions.transition(context.executionId, { phase: 'starting' });
 
   try {
     const result = await startThreadCodexProcessController({
       action_payload: {
-        ledgerId: 'specs',
-        threadId: context.threadId,
-        cardId: context.cardId,
-        reservedRunId: context.staleRunId,
-        queueDispatch: true,
+        ...context.request,
+        epoch4Dispatch: true,
       },
-      runtime_state: runtime,
+      runtime_state: context.runtime,
     });
     assert.equal(result.ok, true);
     const stdoutFile = String((result.run as Record<string, unknown>).stdoutFile ?? '');
@@ -182,26 +215,26 @@ test('turn lifecycle updates preserve the live child handle for cancellation', a
       'the turn.started event',
     );
 
-    assert.equal(runtimeCodexRunOwnsLiveProcess(runtime, context.staleRunId), true);
+    assert.equal(taskExecutionProcess(context.runtime, context.executionId)?.sessionId, context.runId);
     const cancellation = await cancelCardSkillRunController({
-      action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.staleRunId, executionId: String((result.run as Record<string, unknown>).executionId ?? '') },
-      runtime_state: runtime,
+      action_payload: {
+        ledgerId: 'specs',
+        cardId: context.cardId,
+        runId: context.runId,
+        executionId: context.executionId,
+      },
+      runtime_state: context.runtime,
     });
     assert.equal(cancellation.ok, true);
     assert.equal(cancellation.statusCode, 202);
     assert.equal(cancellation.cancellationRequested, true);
     await waitForCondition(
-      () => Boolean((runtime.codexSkillRuns as Record<string, { settledAt?: string }>)[context.staleRunId]?.settledAt),
-      'the cancelled child to settle',
+      () => context.state.executions.find(context.executionId)?.lifecycle.phase === 'cancelled',
+      'the cancelled execution to settle',
     );
   } finally {
-    const run = (runtime.codexSkillRuns as Record<string, { child?: { kill?: (signal?: string) => boolean }; settledAt?: string }> | undefined)?.[context.staleRunId];
-    if (!run?.settledAt) {
-      run?.child?.kill?.('SIGKILL');
-      await waitForCondition(() => Boolean(run?.settledAt), 'the test child cleanup');
-    }
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
     else process.env.CODEX_BIN = previousCodexBin;
-    rmSync(context.workspace, { recursive: true, force: true });
+    await cleanup(context);
   }
 });

@@ -274,7 +274,7 @@
 17. **Session deletion.**
     1. Publish execution tombstones and session deletion state before local cleanup.
     2. Reject deletion while an execution remains active.
-    3. Garbage-collect local artifacts after retention and replicated-root convergence.
+    3. Garbage-collect local artifacts through the explicit project-scoped maintenance command after the operator-provided retention cutoff and recorded replicated-root convergence.
 18. **Compact status.**
     1. Read the execution entity and node observation.
     2. Return the canonical phase, timestamps, revision, assignment, executor, and valid actions.
@@ -433,7 +433,7 @@
 30. **Recovery interruption:** restart without the recorded process; require `interrupted` and preserved artifacts.
 31. **Live status:** read from the non-executor; require authenticated proxy to the exact executor.
 32. **Terminal status:** stop the executor; require terminal metadata and artifacts from replicated state plus lazy content.
-33. **Session deletion:** require replicated tombstones before artifact garbage collection.
+33. **Session deletion:** require replicated tombstones before artifact garbage collection; prove pre-cutoff retention, converged-root admission, shared-hash retention, eligible byte deletion, retry idempotency, and byte-identical causal state.
 34. **Capacity:** fill local capacity with mixed task execution and node-message work; require bounded queueing and no oversubscription.
 35. **Timeout containment:** time out one execution; require exact child termination, persisted incident, unrelated launches, health route, diagnostics, and federation availability.
 36. **Convergence:** require equal roots, equal task counts, equal assignments, equal execution histories, and byte-identical projections on Workstation, Mobile, and relay.
@@ -472,3 +472,4 @@
 12. **A remotely assigned task runs only on its assigned node.**
 13. **The existing creation modal persists the selected assignment across reload, restart, and federation convergence.**
 14. **Epoch-3 rollback remains intact until the complete production matrix passes.**
+15. **Session deletion retains artifacts before the explicit cutoff and the collector deletes only unreferenced bytes after the recorded converged root is supplied.**

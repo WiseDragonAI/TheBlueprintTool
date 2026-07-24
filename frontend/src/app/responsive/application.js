@@ -25,6 +25,13 @@ import { acceptedRunOwnsRoute, captureRouteSnapshot, cardPresentationIdentity, f
 import { completedTaskLabels, filterCompletedTasks } from './completed-tasks.js';
 import { createOptimisticLedgerTransactionCoordinator } from '/src/runtime/ledger/helper/optimistic-ledger-transaction.js';
 import { applyTaskIntentToProjection, taskIdentity, taskIntentConfirmed } from './optimistic-task-projection.js';
+import {
+  applyOptimisticExecutionIntent,
+  controlRoomTaskForExecution,
+  createOptimisticExecutionIntent,
+  optimisticExecutionConfirmed,
+} from './optimistic-execution-projection.js';
+import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
 
 installProjectRequestScope();
 
@@ -104,6 +111,7 @@ let queueDragOrigin = null;
 let pendingControlRoomRefresh = false;
 let controlRoomEventSource = null;
 let controlRoomRefreshTimer = 0;
+const controlRoomExecutionRevisions = new Map();
 let controlRoomEtag = '';
 let controlRoomHydrating = false;
 let controlRoomHydrationGeneration = 0;
@@ -396,18 +404,45 @@ function navigate(path, replace = false) {
   return true;
 }
 
-async function navigateVoiceSubmission() {
-  const task = state.controlRoom?.allTasks?.find((candidate) => candidate.projectId === state.resourceProjectId
-    && candidate.ledgerId === state.activeLedgerId
-    && candidate.cardId === state.activeCardId);
-  if (task) {
-    const acceptedAt = new Date().toISOString();
-    const waiting = { ...task, status: 'task-execution', executionStatus: 'preparing', executionSince: acceptedAt, codexStatus: 'preparing', codexQueued: false, codexProcessing: false, transcribingBeforeLaunch: true };
-    optimisticExecutionIntents.set(taskIdentity(task), waiting);
-    for (const column of ['queue', 'exec', 'backlog']) state.controlRoom[column] = (state.controlRoom[column] ?? []).filter((candidate) => taskIdentity(candidate) !== taskIdentity(task));
-    state.controlRoom.exec = [waiting, ...(state.controlRoom.exec ?? [])];
-    state.controlRoom.allTasks = (state.controlRoom.allTasks ?? []).map((candidate) => taskIdentity(candidate) === taskIdentity(task) ? waiting : candidate);
+function beginOptimisticExecution(detail) {
+  if (!state.controlRoom || !detail?.requestId) return '';
+  const task = controlRoomTaskForExecution(state.controlRoom, detail);
+  if (!task) return '';
+  const intent = createOptimisticExecutionIntent(task, detail);
+  const identity = taskIdentity(task);
+  optimisticExecutionIntents.set(identity, intent);
+  applyOptimisticExecutionIntent(state.controlRoom, intent);
+  if (location.pathname === '/') renderControlRoom();
+  return identity;
+}
+
+function acknowledgeOptimisticExecution(detail) {
+  const clientRequestId = String(detail?.clientRequestId ?? detail?.requestId ?? '');
+  const intent = [...optimisticExecutionIntents.values()].find((candidate) => candidate.requestId === clientRequestId);
+  if (intent) {
+    intent.requestId = String(detail.requestId ?? intent.requestId);
+    intent.executionId = String(detail.executionId ?? intent.executionId);
+    intent.revision = Math.max(intent.revision, Number(detail.revision ?? 0) || 0);
   }
+  void loadControlRoom({ force: true }).then(() => {
+    if (location.pathname === '/') renderControlRoom();
+  }).catch((error) => console.error('Execution admission confirmation failed.', error));
+}
+
+function rejectOptimisticExecution(detail) {
+  const rejectedRequestId = String(detail?.requestId ?? '');
+  for (const [identity, intent] of optimisticExecutionIntents) {
+    if (intent.requestId === rejectedRequestId) optimisticExecutionIntents.delete(identity);
+  }
+  elements['mutation-error-message'].textContent = String(detail?.error || 'Execution admission was rejected and confirmed state was restored.');
+  elements['mutation-error'].hidden = false;
+  void loadControlRoom({ force: true }).then(() => {
+    if (location.pathname === '/') renderControlRoom();
+  }).catch((error) => console.error('Execution admission reconciliation failed.', error));
+}
+
+async function navigateVoiceSubmission(detail) {
+  beginOptimisticExecution(detail);
   return navigate(controlRoomPath('exec'), true);
 }
 
@@ -1484,8 +1519,8 @@ function taskRow(task, tab, index) {
         : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
   const taskOwner = executing
-    ? task.executionNodeLabel || task.executionNodeId || task.ownerNodeLabel || task.ownerNodeId || 'This server'
-    : task.ownerNodeLabel || task.ownerNodeId || state.projects.find((project) => project.id === task.projectId)?.ownerNodeLabel || 'This server';
+    ? task.executionNodeLabel || task.executionNodeId || task.assignedNodeLabel || task.assignedNodeId || 'This server'
+    : task.assignedNodeLabel || task.assignedNodeId || 'Unassigned';
   if (summary.querySelector('.task-meta')) {
     summary.querySelector('.task-meta').textContent = `${task.projectName} · ${taskOwner} · ${task.ledger} · ${age}${process}`;
   }
@@ -1803,14 +1838,12 @@ async function loadControlRoom({ force = false, deferDuringQueueDrag = false, ow
   const nextControlRoom = await response.json();
   for (const [identity, intent] of optimisticExecutionIntents) {
     const serverTask = (nextControlRoom.allTasks ?? []).find((task) => taskIdentity(task) === identity);
-    if (serverTask?.status === 'task-execution') {
+    if (optimisticExecutionConfirmed(intent, serverTask)) {
       optimisticExecutionIntents.delete(identity);
       continue;
     }
-    const task = serverTask ?? intent;
-    for (const column of ['queue', 'exec', 'backlog']) nextControlRoom[column] = (nextControlRoom[column] ?? []).filter((candidate) => taskIdentity(candidate) !== identity);
-    nextControlRoom.exec = [{ ...task, ...intent }, ...(nextControlRoom.exec ?? [])];
-    nextControlRoom.allTasks = (nextControlRoom.allTasks ?? []).filter((candidate) => taskIdentity(candidate) !== identity).concat({ ...task, ...intent });
+    // Keep the request-owned preparing projection until the exact request revision is visible.
+    applyOptimisticExecutionIntent(nextControlRoom, { ...intent, task: { ...(serverTask ?? intent.task), ...intent.task } });
   }
   for (const [identity, intent] of optimisticTaskIntents) {
     const serverTask = (nextControlRoom.allTasks ?? []).find((task) => taskIdentity(task) === identity);
@@ -1865,7 +1898,19 @@ function subscribeControlRoomEvents() {
   };
   controlRoomEventSource.addEventListener('ledger-content-change', refresh);
   controlRoomEventSource.addEventListener('card-content-change', refresh);
-  controlRoomEventSource.addEventListener('codex-execution-change', refresh);
+  controlRoomEventSource.addEventListener('codex-execution-change', (event) => {
+    let payload = {};
+    try { payload = JSON.parse(event.data || '{}'); } catch {}
+    const identity = `${String(payload.projectId || '')}\0${String(payload.executionId || '')}`;
+    const revision = Number(payload.revision || 0);
+    if (identity !== '\0' && Number.isSafeInteger(revision) && revision > 0) {
+      const current = controlRoomExecutionRevisions.get(identity) || 0;
+      if (revision <= current) return;
+      controlRoomExecutionRevisions.set(identity, revision);
+    }
+    if (payload.phase === 'deleted') controlRoomExecutionRevisions.delete(identity);
+    refresh();
+  });
   controlRoomEventSource.addEventListener('project-sync-change', refresh);
   controlRoomEventSource.addEventListener('federation-replica-change', (event) => {
     refresh();
@@ -1929,7 +1974,7 @@ function parseMasterCandidate(card) {
   return labels.includes('master-task');
 }
 
-async function createTaskIntake(projectId, replicaNodeId) {
+async function createTaskIntake(projectId, assignedNodeId, replicaNodeId = assignedNodeId) {
   setResourceProject(projectId);
   if (state.resourceProjectId !== projectId) throw new Error('The project is no longer available.');
   const ledgerRef = state.ledgers.find((entry) => entry.id === 'tasks');
@@ -1945,7 +1990,8 @@ async function createTaskIntake(projectId, replicaNodeId) {
   const cardId = objectId('card');
   const timestamp = new Date().toISOString();
   const markdown = '## A. Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, and create actionable subtask cards in this zone.\n';
-  const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', createdAt: timestamp, labels: ['master-task'], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
+  const assignment = { nodeId: assignedNodeId, changedAt: timestamp, revision: 1 };
+  const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', createdAt: timestamp, assignment, labels: ['master-task'], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
   ledger.annotations = [...(ledger.annotations ?? []), zone];
   ledger.cards = [...(ledger.cards ?? []), { ...card, replicationState: 'local-only', persistenceState: 'creating' }];
   ledger.threadFiles = { ...(ledger.threadFiles ?? {}), [`thread-${cardId}`]: `.decision-os/threads/tasks/thread-${cardId}.md` };
@@ -1955,6 +2001,10 @@ async function createTaskIntake(projectId, replicaNodeId) {
     projectName: state.projectName,
     projectColor,
     ownerNodeId: replicaNodeId,
+    assignedNodeId,
+    assignedNodeLabel: state.projects.flatMap((project) => project.replicas ?? []).find((replica) => replica.nodeId === assignedNodeId)?.nodeLabel || assignedNodeId,
+    assignedNodeOnline: state.projects.flatMap((project) => project.replicas ?? []).find((replica) => replica.nodeId === assignedNodeId)?.online !== false,
+    assignment,
     ledgerId: ledgerRef.id,
     ledgerTitle: ledgerRef.title,
     cardId,
@@ -1983,7 +2033,7 @@ async function createTaskIntake(projectId, replicaNodeId) {
     onQuickVoiceSubmitted: navigateVoiceSubmission
   });
   navigate(replicaAddress(cardPathForProject(projectId, ledgerRef.id, zone.id, cardId), replicaNodeId));
-  void ledgerMutation(ledgerRef.id, { action: 'create-task-intake', annotation: zone, card }, projectId, replicaNodeId).then(() => {
+  void ledgerMutation(ledgerRef.id, { action: 'create-task-intake', assignedNodeId, annotation: zone, card }, projectId, replicaNodeId).then(() => {
     acknowledgeTaskIntent(optimisticIdentity);
     void loadControlRoom({ force: true }).catch((error) => console.error('Task intake confirmation failed.', error));
   }).catch((cause) => {
@@ -2006,7 +2056,7 @@ function openNewTaskProjectModal() {
     for (const replica of project.replicas ?? []) {
       const nodeId = replica.nodeId;
       const existing = groups.get(nodeId);
-      const routedProject = { ...project, selectedReplicaNodeId: nodeId };
+      const routedProject = { ...project, selectedAssignedNodeId: nodeId, replicaNodeId: nodeId };
       if (existing) existing.projects.push(routedProject);
       else groups.set(nodeId, {
         nodeId,
@@ -2035,7 +2085,7 @@ function openNewTaskProjectModal() {
     button.setAttribute('aria-busy', 'true');
     error.hidden = true;
     try {
-      await createTaskIntake(project.id, project.selectedReplicaNodeId);
+      await createTaskIntake(project.id, project.selectedAssignedNodeId, project.replicaNodeId);
       delete newTaskProjectModal.dataset.busy;
       newTaskProjectModal.close();
     } catch (cause) {
@@ -2403,7 +2453,12 @@ function renderCard(card) {
       delete persistedCard.persistenceError;
       delete persistedCard.replicationState;
       try {
-        await ledgerMutation(state.activeLedgerId, { action: 'create-task-intake', annotation, card: persistedCard });
+        await ledgerMutation(state.activeLedgerId, {
+          action: 'create-task-intake',
+          assignedNodeId: String(card.assignment?.nodeId || ''),
+          annotation,
+          card: persistedCard,
+        });
         const confirmed = state.ledger?.cards?.find((entry) => String(entry.id) === String(card.id));
         if (confirmed) renderCard(confirmed);
         void loadControlRoom({ force: true }).catch((error) => console.error('Task retry confirmation failed.', error));
@@ -2521,14 +2576,27 @@ function renderCard(card) {
     pipelineCompleteButton.addEventListener('click', async () => {
       const pipelineId = state.masterTaskCompletionPipelineId;
       if (!pipelineId) return;
+      const requestId = createExecutionRequestId('pipeline');
+      const executionDetail = {
+        requestId,
+        projectId: state.resourceProjectId,
+        ledgerId: state.activeLedgerId,
+        cardId: String(card.id),
+        acceptedAt: new Date().toISOString(),
+        kind: 'pipeline',
+      };
+      beginOptimisticExecution(executionDetail);
       pipelineCompleteButton.disabled = true;
       pipelineCompleteButton.textContent = 'Queueing pipeline…';
       try {
-        const result = await requestCodexPipelineRun({ ledgerId: state.activeLedgerId, sourceCardId: String(card.id), pipelineId });
+        const result = await requestCodexPipelineRun({ ledgerId: state.activeLedgerId, sourceCardId: String(card.id), pipelineId, requestId });
         if (!result.ok) throw new Error(result.error || 'Master-task completion pipeline admission failed.');
+        const receipt = result.receipts?.[0] ?? {};
+        acknowledgeOptimisticExecution({ ...executionDetail, clientRequestId: executionDetail.requestId, ...receipt });
         pipelineCompleteButton.textContent = 'Pipeline queued';
         navigate(controlRoomPath('exec'), true);
       } catch (cause) {
+        rejectOptimisticExecution({ ...executionDetail, error: cause instanceof Error ? cause.message : String(cause) });
         pipelineCompleteButton.textContent = 'Complete with pipeline';
         syncPipelineCompleteButton();
         elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master-task completion pipeline admission failed.';
@@ -2985,7 +3053,12 @@ window.addEventListener('popstate', () => {
     void loadRoute({ retainView: retained });
   }
 });
-window.addEventListener('decision-os:codex-run-enqueued', (event) => { void navigateAcceptedProcess(event.detail); });
+window.addEventListener('decision-os:codex-run-preparing', (event) => { beginOptimisticExecution(event.detail); });
+window.addEventListener('decision-os:codex-run-enqueued', (event) => {
+  acknowledgeOptimisticExecution(event.detail);
+  void navigateAcceptedProcess(event.detail);
+});
+window.addEventListener('decision-os:codex-run-rejected', (event) => { rejectOptimisticExecution(event.detail); });
 window.addEventListener('scroll', persistControlRoomScrollAnchor, { passive: true });
 window.addEventListener('keydown', async (event) => {
   const target = event.target instanceof HTMLElement ? event.target : null;

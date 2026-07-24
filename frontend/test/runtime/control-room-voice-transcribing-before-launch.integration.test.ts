@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { projectMasterTask } from '../../src/app/responsive/control-room.js';
+import { executionPresentation, projectMasterTask } from '../../src/app/responsive/control-room.js';
 
 test('node-local voice state cannot override replicated task lifecycle', () => {
   const task = projectMasterTask({
@@ -14,4 +14,19 @@ test('node-local voice state cannot override replicated task lifecycle', () => {
   });
   assert.equal(task.status, 'task-waiting');
   assert.equal(task.executionStatus, '');
+});
+
+test('cancelling uses the replicated phase timestamp for its stopwatch', () => {
+  const presentation = executionPresentation({
+    executionStatus: 'cancelling',
+    execution: { phase: 'cancelling', phaseSince: '2026-07-23T12:00:00.000Z' },
+  }, Date.parse('2026-07-23T12:01:05.000Z'));
+
+  assert.deepEqual(presentation, {
+    phase: 'cancelling',
+    since: '2026-07-23T12:00:00.000Z',
+    label: 'Cancelling',
+    elapsed: '01:05',
+    text: 'Cancelling · 01:05',
+  });
 });

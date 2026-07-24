@@ -7,7 +7,6 @@ import { applyLedgerMutation } from '@backend/business/ledger/helper/apply-ledge
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import type { PipelineLedgerContext } from '../helper/codex-pipeline-runner.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
-import { projectCardExecutionIntent } from '../helper/project-card-execution-intent.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -46,8 +45,6 @@ export async function createCodexPipelineStepCards(input: {
       codexPipelineStepName: step.name,
       codexPipelineName: input.run.pipelineName,
       codexRunId: firstSkill?.runId ?? '',
-      codexActiveRunId: firstSkill?.runId ?? '',
-      codexActiveExecutionId: firstSkill?.executionId ?? '',
       codexSkillName: firstSkill?.skillName ?? '',
       codexRunModel: firstSkill?.codexModel ?? '',
       codexRunEffort: firstSkill?.codexEffort ?? '',
@@ -83,17 +80,6 @@ export async function createCodexPipelineStepCards(input: {
     if (relationMutation.ok === false) return relationMutation.error?.body ?? { error: 'Could not create a pipeline step relationship.' };
     previousCardId = step.outputCardId;
   }
-  const firstSkill = input.run.steps[0]?.skills[0];
-  input.source.codexQueuedPipelineRunId = input.run.id;
-  input.source.codexQueuedRunId = firstSkill?.runId ?? '';
-  input.source.codexActiveRunId = firstSkill?.runId ?? '';
-  input.source.codexActiveExecutionId = firstSkill?.executionId ?? '';
-  if (input.context.ledgerId === 'tasks') projectCardExecutionIntent({
-    card: input.source,
-    intentId: input.run.id,
-    state: 'queued',
-    changedAt: input.run.createdAt,
-  });
   stripHydratedThreadNotes(input.context.ledger);
   await persistLedgerProjection({
     decisionOsRoot: input.decisionOsRoot,

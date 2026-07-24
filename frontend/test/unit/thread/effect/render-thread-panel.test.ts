@@ -396,7 +396,7 @@ test('rejected Codex preference mutation restores both surfaces to the durable p
   }
 });
 
-test('generated skill-result threads bind and render their durable card run id', async () => {
+test('generated skill-result threads bind and render their retained provider session id', async () => {
   const previousFetch = globalThis.fetch;
   const previousSetTimeout = globalThis.setTimeout;
   const previousClearTimeout = globalThis.clearTimeout;
@@ -436,7 +436,7 @@ test('generated skill-result threads bind and render their durable card run id',
     }) as typeof fetch;
     state.activeTab = 'ux';
     state.activeLedger = {
-      cards: [{ id: cardId, title: 'Generated skill result', cardType: 'codex-skill-run' }],
+      cards: [{ id: cardId, title: 'Generated skill result', cardType: 'codex-skill-run', codexThreadRunId: runId }],
       annotations: [],
       relationships: [],
       notes: { [threadId]: [] },
@@ -501,7 +501,7 @@ test('closing the desktop thread panel releases selected and active run polling'
     globalThis.fetch = (async () => new Response('{}', { status: 500 })) as typeof fetch;
     state.activeTab = 'specs';
     state.activeLedger = {
-      cards: [{ id: 'card-close', title: 'Close polling', codexThreadRunId: runId, codexActiveRunId: runId, codexActiveExecutionId: 'execution-close' }],
+      cards: [{ id: 'card-close', title: 'Close polling', codexThreadRunId: runId }],
       annotations: [], relationships: [], notes: { [threadId]: [] },
     };
     state.threadId = threadId;
@@ -698,7 +698,7 @@ test('queued thread runs expose exact cancellation and render their queue positi
   try {
     globalThis.fetch = (async () => new Response(JSON.stringify(summary), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
     state.activeTab = 'specs';
-    state.activeLedger = { cards: [{ id: 'card-a', title: 'Card A', codexThreadRunId: runId, codexActiveRunId: runId, codexActiveExecutionId: 'execution-queued' }], annotations: [], relationships: [], notes: { [threadId]: [] } };
+    state.activeLedger = { cards: [{ id: 'card-a', title: 'Card A', codexThreadRunId: runId }], annotations: [], relationships: [], notes: { [threadId]: [] } };
     state.threadId = threadId;
     state.renderedThreadId = '';
     state.threadPanelOpen = true;
@@ -735,12 +735,6 @@ test('queued thread runs expose exact cancellation and render their queue positi
     assert.equal(heading.querySelector('.thread-actions')?.hidden, true);
     assert.equal(heading.dataset.codexRunning, 'true');
 
-    delete state.activeLedger.cards[0].codexActiveRunId;
-    delete state.activeLedger.cards[0].codexActiveExecutionId;
-    state.threadActiveRunSummaryByThreadId = { [threadId]: summary };
-    renderThreadPanel();
-    assert.equal(state.threadActiveRunIdByThreadId[threadId], undefined);
-    assert.equal(state.threadActiveRunSummaryByThreadId[threadId], undefined);
   } finally {
     globalThis.fetch = previousFetch;
     state.threadId = '';
@@ -755,7 +749,7 @@ test('queued thread runs expose exact cancellation and render their queue positi
   }
 });
 
-test('persisted card execution fields cannot override a terminal run summary', async () => {
+test('a retained provider session cannot override a terminal execution summary', async () => {
   const previousFetch = globalThis.fetch;
   const { heading } = installDom();
   const { state } = await import('../../../../src/runtime/state.js');
@@ -770,9 +764,6 @@ test('persisted card execution fields cannot override a terminal run summary', a
         id: 'card-reopened',
         title: 'Reopened queued card',
         codexThreadRunId: runId,
-        codexActiveRunId: runId,
-        codexActiveExecutionId: 'execution-new',
-        executionStatus: 'pending',
       }],
       annotations: [], relationships: [], notes: { [threadId]: [] },
     };
@@ -838,7 +829,7 @@ test('persisted card execution fields cannot override a terminal run summary', a
   }
 });
 
-test('an active card lease makes the production panel revalidate a cached terminal session without painting authority', async () => {
+test('a retained provider session renders its cached terminal execution without lifecycle revalidation', async () => {
   const previousFetch = globalThis.fetch;
   const { heading } = installDom();
   const { state } = await import('../../../../src/runtime/state.js');
@@ -855,7 +846,6 @@ test('an active card lease makes the production panel revalidate a cached termin
     consumerId: 'seed-terminal-cache',
   };
   let requestCount = 0;
-  let resolveActiveStatus!: (response: Response) => void;
   const summary = (status: 'complete' | 'pending', executionId: string) => ({
     ok: true, active: status === 'pending', runId, runKind: 'thread', status, executionId,
     queuePosition: status === 'pending' ? 2 : null, lineCount: 4, nextSince: 4, events: [], diagnostics: [], executions: [], metadata: {},
@@ -864,8 +854,7 @@ test('an active card lease makes the production panel revalidate a cached termin
     globalThis.fetch = (async (input) => {
       if (!String(input).includes(runId)) return new Response(JSON.stringify(summary('complete', 'unrelated-execution')), { status: 200, headers: { 'content-type': 'application/json' } });
       requestCount += 1;
-      if (requestCount === 1) return new Response(JSON.stringify(summary('complete', 'execution-old')), { status: 200, headers: { 'content-type': 'application/json' } });
-      return new Promise<Response>((resolve) => { resolveActiveStatus = resolve; });
+      return new Response(JSON.stringify(summary('complete', 'execution-old')), { status: 200, headers: { 'content-type': 'application/json' } });
     }) as typeof fetch;
     let seeded = false;
     bindCardSkillRunLogConsumer({ ...identity, onSummary: () => { seeded = true; } });
@@ -876,7 +865,7 @@ test('an active card lease makes the production panel revalidate a cached termin
     state.replicaNodeId = identity.replicaNodeId;
     state.activeTab = 'specs';
     state.activeLedger = {
-      cards: [{ id: identity.cardId, title: 'Cached run', codexThreadRunId: runId, codexActiveRunId: runId, codexActiveExecutionId: 'execution-new' }],
+      cards: [{ id: identity.cardId, title: 'Cached run', codexThreadRunId: runId }],
       annotations: [], relationships: [], notes: { [threadId]: [] },
     };
     state.threadId = threadId;
@@ -893,11 +882,10 @@ test('an active card lease makes the production panel revalidate a cached termin
     state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
 
     renderThreadPanel();
-    await waitFor(() => requestCount === 2);
+    await Promise.resolve();
+    assert.equal(requestCount, 1);
     assert.equal(heading.dataset.codexRunning, 'false');
-    resolveActiveStatus(new Response(JSON.stringify(summary('pending', 'execution-new')), { status: 200, headers: { 'content-type': 'application/json' } }));
-    await waitFor(() => heading.dataset.codexRunning === 'true');
-    assert.equal(heading.dataset.codexStatus, 'pending');
+    assert.equal(heading.dataset.codexStatus, '');
   } finally {
     purgeCardSkillRunLog(identity);
     globalThis.fetch = previousFetch;

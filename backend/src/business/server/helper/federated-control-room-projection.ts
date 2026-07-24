@@ -32,8 +32,7 @@ function taskSemanticFingerprint(task: AnyRecord): string {
     'execution', 'executionObservations', 'executionNodeId', 'executionNodeLabel',
     'executionOwnerCardId', 'executionOwnerKind',
     'codexStatus', 'codexProcessing', 'codexQueued', 'codexQueuePosition', 'transcribingBeforeLaunch',
-    'codexRunId', 'codexPipelineRunId', 'codexActiveRunId', 'codexActiveExecutionId',
-    'codexThreadRunId', 'codexRunModel', 'codexRunEffort',
+    'codexRunId', 'codexPipelineRunId', 'codexThreadRunId', 'codexRunModel', 'codexRunEffort',
   ].includes(key)));
   return createHash('sha256').update(JSON.stringify(semantic)).digest('hex');
 }
@@ -51,6 +50,10 @@ export function federatedControlRoomProjection(input: {
   remoteProjections: Array<{ projection: AnyRecord; owner: Owner }>;
   diagnostics: AnyRecord[];
 }): AnyRecord {
+  const nodeCatalog = new Map([
+    [input.localOwner.nodeId, { label: input.localOwner.nodeLabel, online: true }],
+    ...input.remoteProjections.map(({ owner }) => [owner.nodeId, { label: owner.nodeLabel, online: owner.online !== false }] as const),
+  ]);
   const qualify = (projection: AnyRecord, owner: Owner): AnyRecord => {
     const projects = records(projection.projects).map((project) => {
       const localProjectId = text(project.id);
@@ -146,12 +149,11 @@ export function federatedControlRoomProjection(input: {
     const projectKey = text(members[0]?.logicalProjectKey);
     const projectAuthority = projectAuthorities.get(projectKey);
     const authority = members.find((member) => member.ownerNodeId === projectAuthority?.ownerNodeId) ?? authorityMember(members);
-    const authorityIntent = authority.executionIntent && typeof authority.executionIntent === 'object' && !Array.isArray(authority.executionIntent)
-      ? authority.executionIntent as AnyRecord
+    const authorityExecution = authority.execution && typeof authority.execution === 'object' && !Array.isArray(authority.execution)
+      ? authority.execution as AnyRecord
       : {};
-    const legacyState = text(authorityIntent.state);
-    const intentPhase = text(authorityIntent.phase) || (legacyState === 'waiting' ? 'preparing' : legacyState);
-    const intentExecutionId = text(authorityIntent.executionId) || text(authorityIntent.id);
+    const intentPhase = text(authorityExecution.phase);
+    const intentExecutionId = text(authorityExecution.executionId);
     const structuralExecution = ['preparing', 'queued', 'starting', 'running'].includes(intentPhase);
     const observationMembers = members.filter((member) => {
       const candidate = member.executionObservation && typeof member.executionObservation === 'object'
@@ -160,7 +162,7 @@ export function federatedControlRoomProjection(input: {
       if (!candidate) return false;
       if (!intentExecutionId) return true;
       return text(candidate.executionId) === intentExecutionId
-        && Number(candidate.revision) === Number(authorityIntent.revision)
+        && Number(candidate.revision) === Number(authorityExecution.revision)
         && Date.parse(text(candidate.expiresAt)) > Date.now();
     });
     const orderedObservationMembers = [...observationMembers].sort((left, right) => {
@@ -209,6 +211,8 @@ export function federatedControlRoomProjection(input: {
         message: 'Multiple replicas report verified execution for the same logical card.',
       });
     }
+    const assignedNodeId = text(authority.assignedNodeId);
+    const assignedNode = nodeCatalog.get(assignedNodeId);
     return {
       ...authority,
       status,
@@ -231,6 +235,9 @@ export function federatedControlRoomProjection(input: {
       transcribingBeforeLaunch: structuralExecution ? intentPhase === 'preparing' && authority.transcribingBeforeLaunch === true : observation?.kind === 'voice-transcription',
       executionNodeId: observation ? text(observation.executorNodeId) || text(observation.nodeId) : '',
       executionNodeLabel: observation ? text(observation.nodeLabel) || text(executionMember.ownerNodeLabel) : '',
+      assignedNodeId,
+      assignedNodeLabel: assignedNode?.label ?? assignedNodeId,
+      assignedNodeOnline: assignedNode?.online ?? false,
       conflict,
       replicaCount: members.length,
       replicas: [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId))).map((member) => ({

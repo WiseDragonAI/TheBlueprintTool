@@ -1,5 +1,5 @@
 /**
- * WHAT: Exposes the shared epoch-3 wire model plus node-local mutation and projection types.
+ * WHAT: Exposes the shared epoch-4 wire model plus node-local mutation and projection types.
  * WHY: Node state must compile against the exact schema used by the relay and offline migration.
  */
 export {
@@ -17,6 +17,14 @@ export type {
   TaskCurrentRegister,
   TaskDot,
   TaskEntityType,
+  TaskExecutionArtifacts,
+  TaskExecutionArtifactHead,
+  TaskExecutionError,
+  TaskExecutionKind,
+  TaskExecutionLifecycle,
+  TaskExecutionMetadata,
+  TaskExecutionPhase,
+  TaskExecutionResult,
   TaskFieldOperation,
   TaskRegisterCandidate,
 } from '../../../../../shared/task-current-state-core.js';
@@ -54,7 +62,7 @@ export type TaskStateDelta = {
 };
 
 export type TaskProjectionConflict = {
-  kind: 'state-conflict' | 'task-conflict';
+  kind: 'state-conflict' | 'task-conflict' | 'assignment-conflict' | 'execution-conflict';
   emittedAt: string;
   entityType: TaskEntityType;
   entityId: string;

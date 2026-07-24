@@ -1,7 +1,7 @@
 /** WHAT: Replays pending task mutations over any Control Room projection. */
 
 export function taskIdentity(task) {
-  return [task?.projectId, task?.ownerNodeId, task?.ledgerId, task?.cardId]
+  return [task?.projectId, task?.ledgerId, task?.cardId]
     .map((part) => encodeURIComponent(String(part ?? '')))
     .join('--');
 }

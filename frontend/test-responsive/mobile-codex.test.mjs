@@ -46,9 +46,13 @@ test('mobile processing guards duplicate submissions and delegates status to the
 test('successful responsive processing closes the card through the shared Control Room navigation lifecycle', () => {
   assert.match(script, /function finishProcessLaunch\(detail, launch\)/);
   assert.match(script, /const actionOwned = processLaunchOwned\(launch\)/);
+  assert.match(script, /const requestId = createExecutionRequestId\('(skill|pipeline)'\)/);
+  assert.match(script, /decision-os:codex-run-preparing/);
+  assert.match(script, /clientRequestId: executionDetail\.requestId, \.\.\.\(body\.receipts\?\.\[0\] \?\? \{\}\)/);
   assert.match(script, /decision-os:codex-run-enqueued/);
   assert.match(script, /threadPresentationGeneration/);
-  assert.match(mobile, /addEventListener\('decision-os:codex-run-enqueued', \(event\) => \{ void navigateAcceptedProcess\(event\.detail\); \}\)/);
+  assert.match(mobile, /addEventListener\('decision-os:codex-run-preparing', \(event\) => \{ beginOptimisticExecution\(event\.detail\); \}\)/);
+  assert.match(mobile, /addEventListener\('decision-os:codex-run-enqueued', \(event\) => \{[\s\S]*acknowledgeOptimisticExecution\(event\.detail\);[\s\S]*navigateAcceptedProcess\(event\.detail\)/);
   assert.match(mobile, /acceptedRunOwnsRoute\(detail, snapshot, threadGeneration\)/);
 });
 

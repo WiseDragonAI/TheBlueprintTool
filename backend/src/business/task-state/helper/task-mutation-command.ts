@@ -171,6 +171,10 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
     const id = String(mutation.cardId);
     activationTaskId = id;
     changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
+  } else if (action === 'reassign-task' && mutation.cardId) {
+    const id = String(mutation.cardId);
+    activationTaskId = id;
+    changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
   } else if (action === 'patch-card' && mutation.cardPatch?.id) {
     const id = String(mutation.cardPatch.id);
     activationTaskId = id;
@@ -204,10 +208,6 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
   } else if (action === 'patch-region' && mutation.region?.id) {
     const id = String(mutation.region.id);
     changes.push(...entity('annotation', id, recordById(before, 'annotations', id), recordById(after, 'annotations', id)));
-  } else if (action === 'create-execution-intent' && mutation.cardId) {
-    const id = String(mutation.cardId);
-    activationTaskId = id;
-    changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
   } else if (action === 'paste-selection') {
     const previousCardIds = new Set(records(before.cards).map((entry) => String(entry.id ?? '')));
     const previousAnnotationIds = new Set(records(before.annotations).map((entry) => String(entry.id ?? '')));

@@ -1,53 +1,17 @@
 /**
- * WHAT: Clears generated output and relaunches a terminal pipeline from its persisted option snapshot.
- * WHY: Restart must be deterministic, remove prior card/thread results, and retain resolved run settings.
+ * WHAT: Creates a linked replacement for one terminal saved pipeline run.
+ * WHY: Restart must preserve prior execution records, cards, logs, and artifact paths as immutable history.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
-import { dirname, resolve } from 'node:path';
-import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
-import { resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
-import { stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
-import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
-import {
-  resolvePipelineLedgerContext,
-} from '../helper/codex-pipeline-runner.js';
-import { scheduleCodexProcesses } from '../helper/codex-process-scheduler.js';
-import { readCodexPipelineRunController } from './read-codex-pipeline-run-controller.js';
-import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { resolve } from 'node:path';
+import type { CodexPipelineStep } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
+import { reassessPipelineAfterSkill } from '../helper/codex-pipeline-runner.js';
+import { startPipelineRun } from './start-codex-pipeline-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function resetRun(run: CodexPipelineRun, timestamp: string): CodexPipelineRun {
-  return {
-    ...run,
-    createdAt: timestamp,
-    status: 'pending',
-    steps: run.steps.map((step) => ({
-      ...step,
-      status: 'pending',
-      startedAt: null,
-      finishedAt: null,
-      error: '',
-      skills: step.skills.map((skill) => ({
-        ...skill,
-        executionId: `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`,
-        status: 'pending',
-        startedAt: null,
-        finishedAt: null,
-        error: '',
-      })),
-    })),
-    updatedAt: timestamp,
-    startedAt: null,
-    finishedAt: null,
-    resumedAt: timestamp,
-    error: '',
-  };
 }
 
 export async function restartCodexPipelineRunController(
@@ -59,66 +23,56 @@ export async function restartCodexPipelineRunController(
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
   const runId = text(payload.runId ?? payload.pipelineRunId);
   if (!runId) return { ok: false, statusCode: 400, error: 'Missing pipeline run id.' };
-  const normalized = readCodexPipelineStore({ decisionOsRoot });
-  const run = normalized.store.runs.find((entry) => entry.id === runId);
-  if (!run) return { ok: false, statusCode: 404, error: 'Pipeline run not found.', runId };
+  const stored = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === runId);
+  if (!stored) return { ok: false, statusCode: 404, error: 'Pipeline run not found.', runId };
+  if (stored.temporary) {
+    return { ok: false, statusCode: 409, error: 'Temporary skill runs cannot be restarted as saved pipelines.', runId };
+  }
+  const run = reassessPipelineAfterSkill({
+    decisionOsRoot,
+    runtime,
+    pipelineRunId: stored.id,
+  }) ?? stored;
   if (run.status !== 'complete' && run.status !== 'failed' && run.status !== 'cancelled') {
     return { ok: false, statusCode: 409, error: 'Only a terminal pipeline run can be restarted.', runId, status: run.status };
   }
-  const context = resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId: run.ledgerId });
-  if (!context) return { ok: false, statusCode: 404, error: 'Pipeline ledger not found.', ledgerId: run.ledgerId };
-  for (const step of run.steps) {
-    const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === step.outputCardId);
-    const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
-    const outputFile = resolveCardContentFile(decisionOsRoot, comment.contentFile);
-    if (outputFile) writeFileSync(outputFile, '', 'utf8');
-    writeThreadNotesFile({
-      decisionOsRoot,
-      ledger: context.ledger,
-      ledgerPath: context.ledgerPath,
-      threadId: `thread-${step.outputCardId}`,
-      notes: [],
-    });
-    for (const skill of step.skills) {
-      for (const file of [skill.stdoutFile, skill.stderrFile]) {
-        if (!file) continue;
-        mkdirSync(dirname(file), { recursive: true });
-        writeFileSync(file, '', 'utf8');
-      }
-      const runtimeRuns = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object'
-        ? runtime.codexSkillRuns as Record<string, AnyRecord>
-        : {};
-      delete runtimeRuns[skill.runId];
-    }
-  }
-  stripHydratedThreadNotes(context.ledger);
-  await persistLedgerProjection({
+  const timestamp = new Date().toISOString();
+  const steps: CodexPipelineStep[] = run.steps.map((step) => ({
+    id: step.stepId,
+    name: step.name,
+    purpose: step.purpose,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    skills: step.skills.map((skill) => ({
+      id: skill.pipelineSkillId,
+      skillName: skill.skillName,
+      codexModel: skill.codexModel as CodexPipelineStep['skills'][number]['codexModel'],
+      codexEffort: skill.codexEffort as CodexPipelineStep['skills'][number]['codexEffort'],
+    })),
+  }));
+  const replacement = await startPipelineRun({
     decisionOsRoot,
-    ledgerId: context.ledgerId,
-    ledgerPath: context.ledgerPath,
-    ledger: context.ledger,
     runtime,
-    command: { kind: 'restart-codex-pipeline', cardIds: [run.sourceCardId, ...run.steps.map((step) => step.outputCardId)] },
-  });
-  const restarted = resetRun(run, new Date().toISOString());
-  writeCodexPipelineStore({
-    decisionOsRoot,
-    store: {
-      ...normalized.store,
-      runs: normalized.store.runs.map((entry) => entry.id === run.id ? restarted : entry),
+    ledgerId: run.ledgerId,
+    sourceCardId: run.sourceCardId,
+    definition: {
+      pipelineId: run.pipelineId,
+      pipelineName: run.pipelineName,
+      temporary: false,
+      executionMode: run.executionMode,
+      steps,
     },
+    restartOfRun: run,
+    onLedgerChange: runtime.onPipelineLedgerChange,
+    plannedExecutors: run.executionMode === 'federated'
+      ? run.steps.flatMap((step) => step.skills.map((skill) => skill.executor)).filter(
+        (executor): executor is NonNullable<typeof executor> => Boolean(executor),
+      )
+      : undefined,
   });
-  if (typeof runtime.onPipelineLedgerChange === 'function') {
-    (runtime.onPipelineLedgerChange as (event: AnyRecord) => void)({
-      reason: 'pipeline-restarted',
-      ledgerId: run.ledgerId,
-      pipelineRunId: run.id,
-      cardIds: run.steps.map((step) => step.outputCardId),
-    });
-  }
-  const sharedSchedule = runtime.scheduleCodexProcesses;
-  if (typeof sharedSchedule === 'function') await sharedSchedule();
-  else await scheduleCodexProcesses({ decisionOsRoot, runtime });
-  const detail = await readCodexPipelineRunController({ action_payload: { runId: run.id }, runtime_state: runtime });
-  return { ...detail, statusCode: 202 };
+  return {
+    ...replacement,
+    statusCode: replacement.ok === false ? replacement.statusCode : 202,
+    restartOfPipelineRunId: run.id,
+  };
 }

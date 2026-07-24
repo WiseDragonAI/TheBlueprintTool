@@ -10,9 +10,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
+import type { ChildProcess } from 'node:child_process';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
-import { enqueueCodexContinuation, readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
+import { registerTaskExecutionProcess, removeTaskExecutionProcess, taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
+import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
+import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
 
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
@@ -21,6 +24,80 @@ async function waitForText(file: string, text: string): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   assert.fail(`Timed out waiting for ${text} in ${file}`);
+}
+
+function runExecutionMetadata(input: {
+  executionId: string;
+  runId: string;
+  cardId: string;
+  requestedAt: string;
+  kind?: 'thread' | 'pipeline-skill';
+  model?: string | null;
+  effort?: string | null;
+}): TaskExecutionMetadata {
+  const pipelineSkill = input.kind === 'pipeline-skill';
+  return {
+    executionId: input.executionId,
+    requestId: `request-${input.executionId}`,
+    sessionId: input.runId,
+    projectId: 'local',
+    ledgerId: 'specs',
+    taskId: input.cardId,
+    sourceCardId: input.cardId,
+    ownerCardId: input.cardId,
+    kind: input.kind ?? 'thread',
+    requestedAt: input.requestedAt,
+    model: input.model ?? null,
+    effort: input.effort ?? null,
+    pipelineRunId: pipelineSkill ? `pipeline-${input.runId}` : null,
+    pipelineStepId: pipelineSkill ? 'step-a' : null,
+    pipelineSkillRunId: pipelineSkill ? input.runId : null,
+    predecessorExecutionId: null,
+    restartOfExecutionId: null,
+  };
+}
+
+async function seedExecution(input: {
+  runtime: Record<string, unknown>;
+  metadata: TaskExecutionMetadata;
+  phase: 'running' | 'succeeded' | 'failed' | 'cancelled';
+  startedAt: string;
+  finishedAt?: string;
+  stdoutFile: string;
+  stderrFile: string;
+  error?: { code: string; message: string };
+}): Promise<void> {
+  const state = taskExecutionState(input.runtime);
+  assert.ok(state);
+  const metadata = { ...input.metadata, projectId: state.store.activeDelta().projectId };
+  await state.executions.admit({ metadata, executorNodeId: 'local' });
+  await state.executions.transition(input.metadata.executionId, { phase: 'queued', changedAt: input.startedAt });
+  await state.executions.transition(input.metadata.executionId, { phase: 'starting', changedAt: input.startedAt });
+  await state.executions.transition(input.metadata.executionId, { phase: 'running', changedAt: input.startedAt });
+  if (input.phase === 'running') {
+    registerTaskExecutionProcess(input.runtime, {
+      executionId: input.metadata.executionId,
+      sessionId: input.metadata.sessionId,
+      child: { pid: process.pid, exitCode: null, killed: false } as unknown as ChildProcess,
+      processId: process.pid,
+      processStartTime: '',
+      startedAt: input.startedAt,
+      stdoutFile: input.stdoutFile,
+      stderrFile: input.stderrFile,
+    });
+    return;
+  }
+  await state.executions.transition(input.metadata.executionId, {
+    phase: input.phase,
+    changedAt: input.finishedAt ?? new Date().toISOString(),
+    ...(input.phase === 'failed' ? { error: input.error ?? { code: 'codex_execution_failed', message: 'Codex execution failed.' } } : {}),
+    ...(input.phase === 'succeeded' ? { result: { status: 'succeeded' as const, summary: 'Codex execution completed.' } } : {}),
+    ...(input.phase === 'cancelled' ? { result: { status: 'cancelled' as const, summary: 'Cancelled by operator.' } } : {}),
+  });
+  await state.finalizeExecutionArtifacts(input.metadata.executionId, {
+    jsonl: input.stdoutFile,
+    stderr: input.stderrFile,
+  });
 }
 
 test('status read ignores a stale runtime execution when a newer queued execution owns the card lease', async () => {
@@ -59,14 +136,45 @@ test('status read ignores a stale runtime execution when a newer queued executio
     `decision-os:codex-run-segment ${JSON.stringify({ runId, executionId: 'execution-old', startedAt: new Date(Date.now() - 60000).toISOString(), segment: 'start', startLine: 0 })}`,
     `decision-os:codex-execution-finished ${JSON.stringify({ runId, executionId: 'execution-old', finishedAt: new Date(Date.now() - 30000).toISOString(), status: 'complete' })}`,
   ].join('\n'));
-  enqueueCodexContinuation({
+  const taskState = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'local',
     decisionOsRoot,
-    id: 'queue-execution-new',
-    createdAt: new Date().toISOString(),
-    payload: { ledgerId: 'specs', cardId, runId, executionId: 'execution-new' },
+    tasksLedgerFile: join(decisionOsRoot, 'specs.json'),
+    initialize: true,
   });
+  const executionMetadata = (executionId: string, requestedAt: string): TaskExecutionMetadata => ({
+    executionId,
+    requestId: `request-${executionId}`,
+    sessionId: runId,
+    projectId: 'project-a',
+    ledgerId: 'specs',
+    taskId: cardId,
+    sourceCardId: cardId,
+    ownerCardId: cardId,
+    kind: 'thread',
+    requestedAt,
+    model: null,
+    effort: null,
+    pipelineRunId: null,
+    pipelineStepId: null,
+    pipelineSkillRunId: null,
+    predecessorExecutionId: null,
+    restartOfExecutionId: null,
+  });
+  await taskState.executions.admit({
+    metadata: executionMetadata('execution-old', new Date(Date.now() - 60_000).toISOString()),
+    executorNodeId: 'local',
+  });
+  await taskState.executions.transition('execution-old', { phase: 'succeeded', result: { status: 'succeeded', summary: 'Prior execution complete.' } });
+  await taskState.executions.admit({
+    metadata: executionMetadata('execution-new', new Date().toISOString()),
+    executorNodeId: 'local',
+  });
+  await taskState.executions.transition('execution-new', { phase: 'queued' });
   const runtime: Record<string, unknown> = {
     decisionOsRoot,
+    taskExecutionState: taskState,
     codexSkillRuns: {
       [runId]: {
         id: runId,
@@ -89,6 +197,7 @@ test('status read ignores a stale runtime execution when a newer queued executio
     assert.equal(result.active, false);
     assert.equal(result.queuePosition, 1);
   } finally {
+    await taskState.flush();
     rmSync(workspace, { recursive: true, force: true });
   }
 });
@@ -166,6 +275,22 @@ test('thread-launched run reads return chronological diagnostics without changin
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
   const ledgerPath = join(workspace, '.decision-os', 'specs.json');
+  await seedExecution({
+    runtime,
+    metadata: runExecutionMetadata({
+      executionId: 'execution-thread-feed',
+      runId,
+      cardId,
+      requestedAt: new Date(startedAt).toISOString(),
+      model: 'gpt-5.5',
+      effort: 'xhigh',
+    }),
+    phase: 'succeeded',
+    startedAt: new Date(startedAt).toISOString(),
+    finishedAt: completedAt.toISOString(),
+    stdoutFile: jsonlPath,
+    stderrFile: logPath,
+  });
 
   try {
     const ledgerBefore = readFileSync(ledgerPath, 'utf8');
@@ -292,6 +417,21 @@ test('card skill run route returns command output containing thread markdown as 
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
+  await seedExecution({
+    runtime,
+    metadata: runExecutionMetadata({
+      executionId: 'execution-fenced-output',
+      runId,
+      cardId: outputCardId,
+      requestedAt: new Date(startedAt).toISOString(),
+      kind: 'pipeline-skill',
+    }),
+    phase: 'succeeded',
+    startedAt: new Date(startedAt).toISOString(),
+    finishedAt: new Date(startedAt + 60_000).toISOString(),
+    stdoutFile: jsonlPath,
+    stderrFile: logPath,
+  });
 
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
@@ -358,6 +498,21 @@ test('card skill run route infers status from the latest continued JSONL segment
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
+  const runningExecutionId = 'execution-continued-running';
+  await seedExecution({
+    runtime,
+    metadata: runExecutionMetadata({
+      executionId: runningExecutionId,
+      runId,
+      cardId: outputCardId,
+      requestedAt: new Date(startedAt).toISOString(),
+      kind: 'pipeline-skill',
+    }),
+    phase: 'running',
+    startedAt: new Date(startedAt).toISOString(),
+    stdoutFile: jsonlPath,
+    stderrFile: logPath,
+  });
 
   try {
     const runningResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
@@ -422,6 +577,14 @@ test('card skill run route infers status from the latest continued JSONL segment
     writeFileSync(logPath, 'Codex run cancelled: terminated by operator\n');
     const cancelledAt = new Date();
     utimesSync(logPath, cancelledAt, cancelledAt);
+    const executionState = taskExecutionState(runtime)!;
+    await executionState.executions.transition(runningExecutionId, {
+      phase: 'cancelled',
+      changedAt: cancelledAt.toISOString(),
+      result: { status: 'cancelled', summary: 'Cancelled by operator.' },
+    });
+    removeTaskExecutionProcess(runtime, runningExecutionId);
+    await executionState.finalizeExecutionArtifacts(runningExecutionId, { jsonl: jsonlPath, stderr: logPath });
     const cancelledResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
     assert.equal(cancelledResponse.status, 200);
     const cancelled = await cancelledResponse.json() as { ok: boolean; status: string; lineCount: number };
@@ -433,6 +596,22 @@ test('card skill run route infers status from the latest continued JSONL segment
     writeFileSync(logPath, 'spawn failed: ENOENT while starting Codex\n');
     const failedAt = new Date(Date.now() + 10);
     utimesSync(logPath, failedAt, failedAt);
+    await seedExecution({
+      runtime,
+      metadata: runExecutionMetadata({
+        executionId: 'execution-continued-failed',
+        runId,
+        cardId: outputCardId,
+        requestedAt: failedAt.toISOString(),
+        kind: 'pipeline-skill',
+      }),
+      phase: 'failed',
+      startedAt: failedAt.toISOString(),
+      finishedAt: new Date(failedAt.getTime() + 1).toISOString(),
+      stdoutFile: jsonlPath,
+      stderrFile: logPath,
+      error: { code: 'codex_spawn_failed', message: 'spawn failed: ENOENT while starting Codex' },
+    });
     const failedResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
     assert.equal(failedResponse.status, 200);
     const failed = await failedResponse.json() as { ok: boolean; status: string; errorCount: number; diagnostics: Array<{ kind: string; text: string }> };
@@ -455,6 +634,22 @@ test('card skill run route infers status from the latest continued JSONL segment
     writeFileSync(logPath, `${multilineCommandRejection}\n`);
     const multilineDiagnosticAt = new Date(Date.now() + 15);
     utimesSync(logPath, multilineDiagnosticAt, multilineDiagnosticAt);
+    await seedExecution({
+      runtime,
+      metadata: runExecutionMetadata({
+        executionId: 'execution-continued-command-rejected',
+        runId,
+        cardId: outputCardId,
+        requestedAt: multilineDiagnosticAt.toISOString(),
+        kind: 'pipeline-skill',
+      }),
+      phase: 'failed',
+      startedAt: multilineDiagnosticAt.toISOString(),
+      finishedAt: new Date(multilineDiagnosticAt.getTime() + 1).toISOString(),
+      stdoutFile: jsonlPath,
+      stderrFile: logPath,
+      error: { code: 'codex_command_rejected', message: multilineCommandRejection },
+    });
     const multilineDiagnosticResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
     assert.equal(multilineDiagnosticResponse.status, 200);
     const multilineDiagnostic = await multilineDiagnosticResponse.json() as { status: string; errorCount: number; diagnostics: Array<{ kind: string; title: string; text: string }> };
@@ -562,7 +757,6 @@ test('card skill continue route excludes codex artifact notes from resumed promp
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
-
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
       method: 'POST',
@@ -644,10 +838,39 @@ test('card skill run route measures active resumed segment from the latest persi
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
+  await seedExecution({
+    runtime,
+    metadata: runExecutionMetadata({
+      executionId: 'execution-a',
+      runId,
+      cardId: outputCardId,
+      requestedAt: new Date(firstStartedAt).toISOString(),
+      kind: 'pipeline-skill',
+    }),
+    phase: 'succeeded',
+    startedAt: new Date(firstStartedAt).toISOString(),
+    finishedAt: new Date(firstStartedAt + 45_000).toISOString(),
+    stdoutFile: jsonlPath,
+    stderrFile: logPath,
+  });
+  await seedExecution({
+    runtime,
+    metadata: runExecutionMetadata({
+      executionId: 'execution-b',
+      runId,
+      cardId: outputCardId,
+      requestedAt: resumedAtIso,
+      kind: 'pipeline-skill',
+    }),
+    phase: 'running',
+    startedAt: resumedAtIso,
+    stdoutFile: jsonlPath,
+    stderrFile: logPath,
+  });
 
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
-    const body = await response.json() as { ok: boolean; status: string; executionId: string; startedAt: string; elapsedMs: number; toolCallCount: number; agentMessageCount: number; fileChangeCount: number; latestEvent: unknown; events: Array<{ line: number }>; executions: Array<{ executionId: string; startLine: number; status: string; elapsedMs: number; toolCallCount: number }> };
+    const body = await response.json() as { ok: boolean; status: string; executionId: string; startedAt: string; elapsedMs: number; toolCallCount: number; agentMessageCount: number; fileChangeCount: number; latestEvent: unknown; events: Array<{ line: number }>; executions: Array<{ executionId: string; status: string; elapsedMs: number }> };
     if (response.status !== 200) {
       const diagnostics = await fetch(`http://127.0.0.1:${address.port}/api/diagnostics/incidents`).then((result) => result.json());
       assert.equal(response.status, 200, JSON.stringify({ body, diagnostics }));
@@ -662,11 +885,10 @@ test('card skill run route measures active resumed segment from the latest persi
     assert.equal(body.fileChangeCount, 0);
     assert.equal(body.latestEvent, null);
     assert.deepEqual(body.events.map((event) => event.line), [1, 2, 3]);
-    assert.deepEqual(body.executions.map((execution) => [execution.executionId, execution.startLine, execution.status]), [
-      ['execution-a', 0, 'complete'],
-      ['execution-b', 3, 'running'],
+    assert.deepEqual(body.executions.map((execution) => [execution.executionId, execution.status]), [
+      ['execution-a', 'complete'],
+      ['execution-b', 'running'],
     ]);
-    assert.deepEqual(body.executions.map((execution) => execution.toolCallCount), [1, 0]);
     assert.equal(body.executions[0].elapsedMs, 45000);
     assert.ok(body.executions[1].elapsedMs >= 29000 && body.executions[1].elapsedMs < 45000);
   } finally {
@@ -677,7 +899,7 @@ test('card skill run route measures active resumed segment from the latest persi
   }
 });
 
-test('server startup resumes a claimed thread run from its durable Codex session', async () => {
+test('server startup interrupts a replicated running execution whose process registry is missing', async () => {
   const originalCwd = process.cwd();
   const previousCodexBin = process.env.CODEX_BIN;
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-interrupted-thread-run-'));
@@ -689,17 +911,17 @@ test('server startup resumes a claimed thread run from its durable Codex session
   const fakeCodex = join(workspace, 'fake-codex.mjs');
   const invocationFile = join(workspace, 'invoked.txt');
   mkdirSync(runDirectory, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'restart-project', name: 'Restart project' }));
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
-    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+    ledgers: [
+      { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
+      { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' },
+    ]
   }, null, 2));
   writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({
     cards: [{
       id: cardId,
       title: 'Interrupted thread run',
-      codexThreadRunId: runId,
-      codexActiveRunId: runId,
-      codexActiveExecutionId: executionId,
-      codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`,
       comment: { what: 'Thread body.' },
       facts: [],
       fields: []
@@ -714,17 +936,38 @@ test('server startup resumes a claimed thread run from its durable Codex session
   ].join('\n'));
   writeFileSync(join(runDirectory, `${runId}.log`), '');
   writeFileSync(join(runDirectory, `${runId}.md`), '# Thread Codex Run\n\nStatus: processing\n');
-  writeFileSync(join(decisionOsRoot, 'codex-process-queue.json'), JSON.stringify({
-    version: 1,
-    items: [{
-      id: runId,
-      kind: 'thread',
-      status: 'running',
-      createdAt: new Date(Date.now() - 2000).toISOString(),
-      startedAt: new Date(Date.now() - 1000).toISOString(),
-      payload: { ledgerId: 'specs', threadId: `thread-${cardId}`, cardId, runId, executionId },
-    }],
-  }, null, 2));
+  const tasksLedgerFile = join(decisionOsRoot, 'tasks.json');
+  writeFileSync(tasksLedgerFile, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  const taskState = createProjectTaskState({
+    projectId: 'restart-project',
+    writerId: 'local',
+    decisionOsRoot,
+    tasksLedgerFile,
+    initialize: true,
+  });
+  const metadata: TaskExecutionMetadata = {
+    executionId,
+    requestId: 'request-restart1',
+    sessionId: runId,
+    projectId: 'restart-project',
+    ledgerId: 'specs',
+    taskId: '',
+    sourceCardId: cardId,
+    ownerCardId: cardId,
+    kind: 'thread',
+    requestedAt: new Date(Date.now() - 2000).toISOString(),
+    model: null,
+    effort: null,
+    pipelineRunId: null,
+    pipelineStepId: null,
+    pipelineSkillRunId: null,
+    predecessorExecutionId: null,
+    restartOfExecutionId: null,
+  };
+  await taskState.executions.admit({ metadata, executorNodeId: 'local' });
+  await taskState.executions.transition(executionId, { phase: 'queued' });
+  await taskState.executions.transition(executionId, { phase: 'starting' });
+  await taskState.executions.transition(executionId, { phase: 'running' });
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
     'import { writeFileSync } from "node:fs";',
@@ -741,19 +984,15 @@ test('server startup resumes a claimed thread run from its durable Codex session
   const address = server.address() as AddressInfo;
 
   try {
-    await waitForText(invocationFile, 'relaunched');
-    assert.equal(readFileSync(invocationFile, 'utf8'), 'relaunched');
-    const queueDeadline = Date.now() + 10000;
-    while (Date.now() < queueDeadline && readCodexProcessQueue(decisionOsRoot).length > 0) await new Promise((resolve) => setTimeout(resolve, 50));
-    assert.deepEqual(readCodexProcessQueue(decisionOsRoot), []);
-
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${cardId}`);
     assert.equal(response.status, 200);
-    const body = await response.json() as { status: string; active: boolean; queuePosition: number | null; interruptedAt: string | null; error: string };
-    assert.equal(body.status, 'complete');
+    const body = await response.json() as { status: string; phase: string; active: boolean; queuePosition: number | null };
+    assert.equal(body.status, 'failed');
+    assert.equal(body.phase, 'interrupted');
     assert.equal(body.active, false);
     assert.equal(body.queuePosition, null);
-    assert.equal(body.interruptedAt, null);
+    assert.equal(existsSync(invocationFile), false);
+    assert.equal(existsSync(join(decisionOsRoot, 'codex-process-queue.json')), false);
   } finally {
     server.close();
     await once(server, 'close');

@@ -15,6 +15,7 @@ export type LedgerMutation = {
   card?: Record<string, unknown>;
   cards?: Array<Record<string, unknown>>;
   cardId?: string;
+  assignedNodeId?: string;
   lifecycleStatus?: 'todo' | 'backlog' | 'done';
   masterTaskId?: string;
   imageSrc?: string;
@@ -28,10 +29,9 @@ export type LedgerMutation = {
   geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
   viewport?: { x?: number; y?: number; scale?: number };
   region?: { id?: string; kind?: string; label?: string; color?: string };
-  note?: { id?: string; threadId?: string; body?: string; role?: 'operator' | 'agent'; voiceFileRef?: string; reviewContext?: Record<string, string>; status?: string; transcriptionStartedAt?: string; uploadReceivedAt?: string; audioPersistedAt?: string; acceptedAt?: string; providerStartedAt?: string; providerSettledAt?: string; completedAt?: string; revision?: number; source?: string; error?: string; codexQueueStatus?: string; codexQueueRequestedAt?: string; codexQueueRunId?: string; codexQueueExecutionId?: string; codexQueueError?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
+  note?: { id?: string; threadId?: string; body?: string; role?: 'operator' | 'agent'; voiceFileRef?: string; reviewContext?: Record<string, string>; status?: string; transcriptionStartedAt?: string; uploadReceivedAt?: string; audioPersistedAt?: string; acceptedAt?: string; providerStartedAt?: string; providerSettledAt?: string; completedAt?: string; revision?: number; source?: string; error?: string; codexQueueRequestId?: string; codexQueueLaunchMode?: string; codexQueueCardId?: string; codexQueuePipelineId?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
   selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
   pasteSuffix?: string;
-  executionIntent?: { id?: string; state?: 'waiting' | 'queued' | 'running' | 'terminal' | 'failed'; launchMode?: 'run' | 'pipeline'; error?: string; updatedAt?: string };
 };
 
 type MutationError = { statusCode: number; body: Record<string, unknown> };
@@ -39,6 +39,17 @@ type MutationError = { statusCode: number; body: Record<string, unknown> };
 function finiteNumber(value: unknown, fallback: number): number {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function validAssignedNodeId(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-zA-Z0-9_-]+$/.test(value);
+}
+
+function assignment(nodeId: string, changedAt: unknown, revision: number): Record<string, unknown> {
+  const candidate = typeof changedAt === 'string' && Number.isFinite(Date.parse(changedAt))
+    ? new Date(changedAt).toISOString()
+    : new Date().toISOString();
+  return { nodeId, changedAt: candidate, revision };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,6 +116,39 @@ export function applyLedgerMutation(input: {
     hydrateLedgerThreadNotesFor(ledger, decisionOsRoot, mutation.note.threadId);
   }
   let mutationError: MutationError | undefined;
+  if (mutation.action === 'create-task-intake' || mutation.action === 'create-master-task') {
+    if (!validAssignedNodeId(mutation.assignedNodeId)) {
+      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'assigned_node_id_required' } } };
+    }
+    if (!mutation.card?.id || !mutation.annotation?.id) {
+      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'invalid_task_creation_payload' } } };
+    }
+    mutation.card.assignment = assignment(mutation.assignedNodeId, mutation.card.createdAt, 1);
+    if (mutation.action === 'create-master-task') {
+      const cards = [mutation.card, ...(mutation.cards ?? [])];
+      const ids = cards.map((card) => String(card.id ?? '')).filter(Boolean);
+      const invalidSubtaskRelationship = !Array.isArray(mutation.relationships) || mutation.relationships.some((relationship) => (
+        relationship.label !== 'subtask'
+        || !Number.isInteger(Number(relationship.position))
+        || Number(relationship.position) < 0
+      ));
+      if (ids.length !== cards.length || new Set(ids).size !== cards.length || invalidSubtaskRelationship) {
+        return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'Invalid master-task creation payload.' } } };
+      }
+      for (const card of mutation.cards ?? []) delete card.assignment;
+    }
+  }
+  if (mutation.action === 'reassign-task') {
+    const cardId = String(mutation.cardId ?? '');
+    const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+    const inherited = (ledger.relationships ?? []).some((relationship) => relationship.label === 'subtask' && String(relationship.to ?? '') === cardId);
+    if (!cardId || !card || !validAssignedNodeId(mutation.assignedNodeId)) {
+      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'invalid_task_assignment' } } };
+    }
+    if (inherited) return { ok: false, ledger, error: { statusCode: 409, body: { ok: false, error: 'task_assignment_inherited' } } };
+    const current = card.assignment && typeof card.assignment === 'object' && !Array.isArray(card.assignment) ? card.assignment as Record<string, unknown> : {};
+    card.assignment = assignment(mutation.assignedNodeId, new Date().toISOString(), Math.max(0, Number(current.revision) || 0) + 1);
+  }
 
   const voiceMetadata = (note: Record<string, unknown> | undefined): Record<string, unknown> => ({
     voiceFileRef: note?.voiceFileRef ?? '',
@@ -118,16 +162,15 @@ export function applyLedgerMutation(input: {
     completedAt: note?.completedAt ?? '',
     revision: Number.isFinite(Number(note?.revision)) ? Number(note?.revision) : 0,
     error: note?.error ?? '',
-    codexQueueStatus: note?.codexQueueStatus ?? '',
-    codexQueueRequestedAt: note?.codexQueueRequestedAt ?? '',
-    codexQueueRunId: note?.codexQueueRunId ?? '',
-    codexQueueExecutionId: note?.codexQueueExecutionId ?? '',
-    codexQueueError: note?.codexQueueError ?? '',
+    codexQueueRequestId: note?.codexQueueRequestId ?? '',
+    codexQueueLaunchMode: note?.codexQueueLaunchMode ?? '',
+    codexQueueCardId: note?.codexQueueCardId ?? '',
+    codexQueuePipelineId: note?.codexQueuePipelineId ?? '',
     reviewContext: note?.reviewContext ?? undefined
   });
 
   const patchVoiceMetadata = (target: Record<string, unknown>, note: Record<string, unknown> | undefined, options: { overwrite: boolean }): void => {
-    for (const key of ['voiceFileRef', 'reviewContext', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt', 'error', 'codexQueueStatus', 'codexQueueRequestedAt', 'codexQueueRunId', 'codexQueueExecutionId', 'codexQueueError']) {
+    for (const key of ['voiceFileRef', 'reviewContext', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt', 'error', 'codexQueueRequestId', 'codexQueueLaunchMode', 'codexQueueCardId', 'codexQueuePipelineId']) {
       if ((typeof note?.[key] === 'string' || (key === 'reviewContext' && typeof note?.[key] === 'object')) && (options.overwrite || !target[key])) target[key] = note[key];
     }
     if (Number.isFinite(Number(note?.revision)) && (options.overwrite || !target.revision)) target.revision = Number(note?.revision);
@@ -337,20 +380,6 @@ export function applyLedgerMutation(input: {
     const annotation = (ledger.annotations ?? []).find((entry) => String(entry.id ?? '') === mutation.region?.id);
     if (annotation && typeof mutation.region.label === 'string') annotation.label = mutation.region.label;
     if (annotation && mutation.region.kind === 'zone' && typeof mutation.region.color === 'string') annotation.color = mutation.region.color;
-  }
-  if (mutation.action === 'create-execution-intent' && mutation.cardId && mutation.executionIntent?.id) {
-    const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === String(mutation.cardId));
-    const current = card?.executionIntent && typeof card.executionIntent === 'object' ? card.executionIntent as Record<string, unknown> : null;
-    const active = current && ['waiting', 'queued', 'running'].includes(String(current.state ?? ''));
-    if (!card) mutationError = { statusCode: 404, body: { ok: false, error: 'Execution target card not found.' } };
-    else if (active && String(current.id ?? '') !== String(mutation.executionIntent.id)) mutationError = { statusCode: 409, body: { ok: false, error: 'An execution intent is already active.' } };
-    else card.executionIntent = {
-      id: String(mutation.executionIntent.id),
-      state: 'waiting',
-      launchMode: mutation.executionIntent.launchMode === 'pipeline' ? 'pipeline' : 'run',
-      error: '',
-      updatedAt: new Date().toISOString(),
-    };
   }
   if (mutation.action === 'append-note' && mutation.note?.threadId) {
     const notesByThread = normalizeLedgerNotes(ledger);

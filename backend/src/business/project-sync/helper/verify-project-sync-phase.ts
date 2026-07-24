@@ -14,7 +14,7 @@ export function verifyProjectSyncPhase(input: {
   if (!claimedHead || claimedHead !== snapshot.headSha) throw new Error('Codex HEAD claim does not match the fixed-command snapshot.');
   if (!claimedOrigin || claimedOrigin !== snapshot.originSha) throw new Error('Codex origin claim does not match the fixed-command snapshot.');
   if (snapshot.headSha !== snapshot.originSha) throw new Error('Repository HEAD does not equal its tracked origin SHA.');
-  if (snapshot.porcelain) throw new Error('Repository porcelain is not clean after Codex execution.');
+  if (snapshot.porcelain) throw new Error(`Repository porcelain is not clean after Codex execution: ${snapshot.porcelain}`);
   if (snapshot.worktrees.some((worktree) => !worktree.clean)) throw new Error('A retained worktree is dirty after Codex execution.');
   if (input.requiredSha && input.role !== 'source-publisher') {
     const required = String(input.result.requiredSha ?? '');

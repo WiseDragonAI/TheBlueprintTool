@@ -15,8 +15,9 @@ import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.j
 import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
 import { releaseVoiceCaptureOwnership } from '../helper/voice-capture-ownership.js';
 import type { VoiceCaptureLease } from '../helper/voice-capture-ownership.js';
+import type { VoiceExecutionHandoff } from '../effect/request-transcription.js';
 
-export async function stopVoiceRecording(input: { launchMode?: VoiceLaunchMode; onPersisted?: () => void; onCaptured?: (audio: Blob | null) => Promise<boolean> } = {}): Promise<boolean> {
+export async function stopVoiceRecording(input: { launchMode?: VoiceLaunchMode; onPersisted?: (detail: VoiceExecutionHandoff) => void; onCaptured?: (audio: Blob | null) => Promise<boolean> } = {}): Promise<boolean> {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
   const threadId = String(state.voice.threadId || state.threadId || 'conversation-ledger');
   const recorder = state.voice.recorder as MediaRecorder | undefined;

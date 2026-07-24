@@ -3,13 +3,15 @@
  * WHY: Optimistic callers need immediate scoped state while persistence and replication avoid workspace rewrites.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import type { CodexExecutionIntent } from '../../../../../shared/schemas/codex-execution-types.js';
+import { resolve } from 'node:path';
 import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
+import { captureTaskExecutionArtifact } from './capture-task-execution-artifact.js';
 import { createTaskCurrentStateStore } from './task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskEntityChange, type TaskStateDelta } from './task-current-state-types.js';
 import { createTaskContentObjectStore } from './task-content-object-store.js';
 import { taskContentReferences } from './task-content-resources.js';
 import { taskCommandForMutation, taskCommandForProjection, type TaskProjectionCommand } from './task-mutation-command.js';
+import { createTaskExecutionRepository } from './task-execution-repository.js';
 
 type AnyRecord = Record<string, unknown>;
 type TaskProjectionEntityChange = { entityType: TaskEntityChange['entityType']; entityId: string };
@@ -51,6 +53,7 @@ export function createProjectTaskState(input: {
   initialize?: boolean;
   canWrite?: () => boolean;
   onPersistenceError?: (error: Error) => void;
+  onExecutionChange?: (change: { executionId: string; record: ReturnType<ReturnType<typeof createTaskExecutionRepository>['find']> }) => void;
 }) {
   const store = createTaskCurrentStateStore({
     decisionOsRoot: input.decisionOsRoot,
@@ -74,6 +77,14 @@ export function createProjectTaskState(input: {
     await publish(result.delta);
     return result.delta;
   };
+  const executions = createTaskExecutionRepository({
+    store,
+    writerId: input.writerId,
+    projectId: input.projectId,
+    persist: (changes, emittedAt) => persistChanges(changes, { emittedAt }),
+    assertWritable,
+    onCommitted: input.onExecutionChange,
+  });
 
   const entityHash = (change: TaskEntityChange): string => {
     // WHAT: Read the state hash for exactly the lanes owned by one command change.
@@ -89,6 +100,39 @@ export function createProjectTaskState(input: {
   const assertLifecycleConflictFree = (taskIds: string[]): void => {
     const conflicted = [...new Set(taskIds)].filter(lifecycleConflict).sort();
     if (conflicted.length > 0) throw new Error(`task_lifecycle_conflict:${conflicted.join(',')}`);
+  };
+
+  const assignmentCandidates = (taskId: string): AnyRecord[] => {
+    const register = store.entity('card', taskId)?.fields.assignment;
+    if (!register) return [];
+    const values = new Map<string, AnyRecord>();
+    for (const candidate of register.candidates) {
+      if (candidate.operation !== 'set' || !candidate.value || typeof candidate.value !== 'object' || Array.isArray(candidate.value)) continue;
+      const value = candidate.value as AnyRecord;
+      values.set(JSON.stringify(value), value);
+    }
+    return [...values.values()];
+  };
+
+  const taskHasActiveExecution = (taskId: string): boolean => {
+    const activePhases = new Set(['preparing', 'queued', 'starting', 'running', 'cancelling']);
+    return store.activeDelta().entities.some((entity) => {
+      if (entity.entityType !== 'execution') return false;
+      const ownsTask = entity.fields.metadata?.candidates.some((candidate) => (
+        candidate.operation === 'set'
+        && candidate.value
+        && typeof candidate.value === 'object'
+        && !Array.isArray(candidate.value)
+        && String((candidate.value as AnyRecord).taskId ?? '') === taskId
+      ));
+      return ownsTask && entity.fields.lifecycle?.candidates.some((candidate) => (
+        candidate.operation === 'set'
+        && candidate.value
+        && typeof candidate.value === 'object'
+        && !Array.isArray(candidate.value)
+        && activePhases.has(String((candidate.value as AnyRecord).phase ?? ''))
+      ));
+    });
   };
 
   const activateTask = async (taskId: string): Promise<TaskStateDelta> => {
@@ -109,6 +153,32 @@ export function createProjectTaskState(input: {
       : { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     for (const head of changedHeads) await input.publishContent?.(head.key);
     return mergeDeltas(input.projectId, [contentDelta, await activateTask(taskId)]);
+  };
+
+  const finalizeExecutionArtifacts = async (executionId: string, files: {
+    jsonl?: string;
+    stderr?: string;
+    telemetry?: string;
+    result?: string;
+  }) => {
+    assertWritable();
+    const execution = executions.find(executionId);
+    if (!execution) throw new Error(`task_execution_not_found:${executionId}`);
+    const objectRoot = resolve(store.root, 'objects');
+    // WHAT: Give execution artifacts one replicated reachability owner.
+    // WHY: Publishing the same bytes as path-based resource heads prevents safe collection after the execution is tombstoned.
+    const [jsonl, stderr, telemetry, result] = await Promise.all([
+      files.jsonl ? captureTaskExecutionArtifact({ objectRoot, file: files.jsonl, mediaType: 'application/x-ndjson' }) : null,
+      files.stderr ? captureTaskExecutionArtifact({ objectRoot, file: files.stderr, mediaType: 'text/plain' }) : null,
+      files.telemetry ? captureTaskExecutionArtifact({ objectRoot, file: files.telemetry, mediaType: 'application/x-ndjson' }) : null,
+      files.result ? captureTaskExecutionArtifact({ objectRoot, file: files.result, mediaType: 'application/json' }) : null,
+    ]);
+    return executions.finalizeArtifacts(executionId, {
+      jsonl,
+      stderr,
+      telemetry,
+      result,
+    });
   };
 
   const queueContentContribution = (taskId: string, resourceIds: string | string[]): Promise<TaskStateDelta> => {
@@ -133,7 +203,22 @@ export function createProjectTaskState(input: {
         .map((relationship) => String(relationship.to ?? '')) : [];
       assertLifecycleConflictFree([masterTaskId, ...subtaskIds]);
     }
-    if (mutation.action === 'create-execution-intent' && mutation.cardId) assertLifecycleConflictFree([String(mutation.cardId)]);
+    if (mutation.action === 'reassign-task' && mutation.cardId) {
+      const taskId = String(mutation.cardId);
+      const nodeId = String(mutation.assignedNodeId ?? '');
+      if (!/^[a-zA-Z0-9_-]+$/.test(nodeId)) throw new Error('invalid_task_assignment');
+      if (taskHasActiveExecution(taskId)) throw new Error(`task_execution_active:${taskId}`);
+      const card = Array.isArray(after.cards) ? (after.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === taskId) : null;
+      if (!card) throw new Error(`task_card_not_found:${taskId}`);
+      const candidates = assignmentCandidates(taskId);
+      const nodeIds = new Set(candidates.map((candidate) => String(candidate.nodeId ?? '')));
+      if (candidates.length === 1 && nodeIds.size === 1 && nodeIds.has(nodeId)) {
+        card.assignment = structuredClone(candidates[0]);
+      } else {
+        const revision = Math.max(0, ...candidates.map((candidate) => Number(candidate.revision) || 0)) + 1;
+        card.assignment = { nodeId, changedAt: new Date().toISOString(), revision };
+      }
+    }
     const command = taskCommandForMutation({ mutation, before, after });
     const priorHashes = command.changes.map(entityHash);
     const delta = await persistChanges(command.changes, { activationTaskId: command.activationTaskId, replication: command.replication });
@@ -195,54 +280,9 @@ export function createProjectTaskState(input: {
     return operation;
   };
 
-  const transitionExecutionIntent = (taskId: string, patch: { id?: string; state: 'waiting' | 'queued' | 'running' | 'terminal' | 'failed'; launchMode?: 'run' | 'pipeline'; error?: string }): Promise<TaskStateDelta> => {
-    assertWritable();
-    const operation = commandQueue.then(async () => {
-      assertLifecycleConflictFree([taskId]);
-      const card = store.projectedEntity('card', taskId);
-      if (!card) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-      const current = card.executionIntent && typeof card.executionIntent === 'object' ? card.executionIntent as AnyRecord : {};
-      if (patch.id && current.id && String(current.id) !== patch.id && ['waiting', 'queued', 'running'].includes(String(current.state ?? ''))) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-      const changedAt = new Date().toISOString();
-      const state = patch.state;
-      return persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'executionIntent', operation: 'set', value: {
-        id: patch.id ?? current.id ?? null,
-        state,
-        changedAt,
-        startedAt: state === 'running' ? current.startedAt ?? changedAt : current.startedAt ?? null,
-        settledAt: state === 'terminal' || state === 'failed' ? changedAt : null,
-        error: patch.error ?? null,
-      } }] }]);
-    });
-    commandQueue = operation.then(() => undefined, () => undefined);
-    return operation;
-  };
-
-  const projectExecutionIntent = (taskId: string, intent: CodexExecutionIntent): Promise<TaskStateDelta> => {
-    assertWritable();
-    const operation = commandQueue.then(async () => {
-      assertLifecycleConflictFree([taskId]);
-      const card = store.projectedEntity('card', taskId);
-      if (!card) throw new Error(`task_card_not_found:${taskId}`);
-      const current = card.executionIntent && typeof card.executionIntent === 'object' && !Array.isArray(card.executionIntent)
-        ? card.executionIntent as AnyRecord
-        : null;
-      if (current && typeof current.executionId === 'string') {
-        if (current.executionId !== intent.executionId && ['preparing', 'queued', 'starting', 'running'].includes(String(current.phase ?? ''))) {
-          throw new Error(`task_execution_intent_conflict:${taskId}:${current.executionId}`);
-        }
-        if (current.executionId === intent.executionId && Number(current.revision ?? 0) >= intent.revision) {
-          return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-        }
-      }
-      return persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'executionIntent', operation: 'set', value: structuredClone(intent) }] }], { emittedAt: intent.changedAt });
-    });
-    commandQueue = operation.then(() => undefined, () => undefined);
-    return operation;
-  };
-
   return {
     store,
+    executions,
     executeMutation,
     executeMutationNow,
     transitionCardLifecycle,
@@ -250,8 +290,7 @@ export function createProjectTaskState(input: {
     executeProjectionCommandNow,
     activateTask: queueTaskActivation,
     recordContentContribution: queueContentContribution,
-    transitionExecutionIntent,
-    projectExecutionIntent,
+    finalizeExecutionArtifacts,
     flush: store.flush,
     projection: store.projection,
   };

@@ -11,6 +11,7 @@ import { createFederationTaskStateReplicator } from '../../../src/business/feder
 import type { FederationStateFrame } from '../../../src/business/federation/helper/federation-node-connector.js';
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskCurrentBucket, type TaskCurrentEntity } from '../../../src/business/task-state/helper/task-current-state-types.js';
+import { createTaskExecutionRepository } from '../../../src/business/task-state/helper/task-execution-repository.js';
 import { taskCurrentEntityKey } from '../../../../shared/task-current-state-core.js';
 import { migrateTaskCurrentState } from '../../../src/business/task-state/helper/task-current-state-migration.js';
 
@@ -143,6 +144,88 @@ test('offline replica repairs current mismatched buckets without an outbox or sn
   assert.equal((b.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].status, 'done');
 });
 
+test('relay publication failure retains a completed execution as dirty state and converges after reconnect', async (context) => {
+  const local = fixture('decision-os-execution-outage-local-');
+  const remote = fixture('decision-os-execution-outage-remote-');
+  const relay = fixture('decision-os-execution-outage-relay-');
+  const harness = relayHarness(relay.store);
+  let relayOnline = false;
+  context.after(async () => {
+    await harness.settle();
+    await Promise.all([local.store.flush(), remote.store.flush(), relay.store.flush()]);
+    [local, remote, relay].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  const localReplicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', local.store]]),
+    storeFor: () => local.store,
+    publish: (target, frame) => {
+      if (target === 'relay' && !relayOnline) return false;
+      void harness.publish('desktop', target, frame);
+      return true;
+    },
+  });
+  const remoteReplicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', remote.store]]),
+    storeFor: () => remote.store,
+    publish: (target, frame) => { void harness.publish('mobile', target, frame); return true; },
+  });
+  harness.register('desktop', localReplicator);
+  harness.register('mobile', remoteReplicator);
+  const executions = createTaskExecutionRepository({
+    store: local.store,
+    writerId: 'desktop',
+    projectId: 'project-a',
+  });
+  await executions.admit({
+    executorNodeId: 'desktop',
+    metadata: {
+      executionId: 'execution-outage',
+      requestId: 'request-outage',
+      sessionId: 'session-outage',
+      projectId: 'project-a',
+      ledgerId: 'tasks',
+      taskId: 'master-a',
+      sourceCardId: 'master-a',
+      ownerCardId: 'master-a',
+      kind: 'thread',
+      requestedAt: '2026-07-23T12:00:00.000Z',
+      model: null,
+      effort: null,
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      predecessorExecutionId: null,
+      restartOfExecutionId: null,
+    },
+  });
+  await executions.transition('execution-outage', { phase: 'queued' });
+  await executions.transition('execution-outage', { phase: 'starting' });
+  await executions.transition('execution-outage', { phase: 'running' });
+  await executions.transition('execution-outage', {
+    phase: 'succeeded',
+    result: { status: 'succeeded', summary: 'Completed while relay was unavailable.' },
+  });
+  const terminalEntity = local.store.entity('execution', 'execution-outage')!;
+  localReplicator.publishDelta({
+    version: taskCurrentStateVersion,
+    projectId: 'project-a',
+    entities: [terminalEntity],
+  });
+
+  assert.equal(executions.find('execution-outage')?.lifecycle.phase, 'succeeded');
+  assert.equal(relay.store.entity('execution', 'execution-outage'), null);
+  assert.deepEqual(localReplicator.diagnostics().runtimeDirty.map((entry) => entry.entityKey), [taskCurrentEntityKey(terminalEntity)]);
+
+  relayOnline = true;
+  localReplicator.reconcileRelay();
+  await waitFor(() => relay.store.entity('execution', 'execution-outage')?.stateHash === terminalEntity.stateHash);
+  remoteReplicator.reconcileRelay();
+  await waitFor(() => remote.store.entity('execution', 'execution-outage')?.stateHash === terminalEntity.stateHash);
+  await waitFor(() => localReplicator.diagnostics().runtimeDirty.length === 0);
+  assert.equal(local.store.rootHash(), relay.store.rootHash());
+  assert.equal(remote.store.rootHash(), relay.store.rootHash());
+});
+
 test('independently migrated nodes automatically join through an empty relay at startup', async (context) => {
   const rootA = mkdtempSync(resolve(tmpdir(), 'decision-os-migrated-repl-a-'));
   const rootB = mkdtempSync(resolve(tmpdir(), 'decision-os-migrated-repl-b-'));
@@ -185,6 +268,58 @@ test('independently migrated nodes automatically join through an empty relay at 
   const postCutover = await a.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'desktop-only', changes: [{ path: 'title', operation: 'set', value: 'Writable after convergence' }] }] });
   replicaA.publishDelta(postCutover.delta);
   await waitFor(() => relay.store.rootHash() === a.rootHash() && b.rootHash() === a.rootHash(), 2_000);
+  const executions = createTaskExecutionRepository({ store: a, writerId: 'desktop', projectId });
+  await executions.admit({
+    executorNodeId: 'desktop',
+    metadata: {
+      executionId: 'execution-convergence',
+      requestId: 'request-convergence',
+      sessionId: 'session-convergence',
+      projectId,
+      ledgerId: 'tasks',
+      taskId: 'desktop-only',
+      sourceCardId: 'desktop-only',
+      ownerCardId: 'desktop-only',
+      kind: 'thread',
+      requestedAt: '2026-07-23T12:30:00.000Z',
+      model: null,
+      effort: null,
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      predecessorExecutionId: null,
+      restartOfExecutionId: null,
+    },
+  });
+  await executions.transition('execution-convergence', { phase: 'queued' });
+  await executions.transition('execution-convergence', { phase: 'starting' });
+  await executions.transition('execution-convergence', { phase: 'running' });
+  await executions.transition('execution-convergence', {
+    phase: 'succeeded',
+    result: { status: 'succeeded', summary: 'Converged execution.' },
+  });
+  const executionEntity = a.entity('execution', 'execution-convergence')!;
+  replicaA.publishDelta({ version: taskCurrentStateVersion, projectId, entities: [executionEntity] });
+  await waitFor(() => relay.store.rootHash() === a.rootHash() && b.rootHash() === a.rootHash(), 2_000);
+  const projections = [a.projection(), b.projection(), relay.store.projection()];
+  const taskCards = projections.map((projection) => projection.ledger.cards as Array<Record<string, unknown>>);
+  const taskCounts = taskCards.map((cards) => cards.length);
+  const assignments = taskCards.map((cards) => JSON.stringify(cards.map((card) => ({
+    id: card.id,
+    assignment: card.assignment,
+  }))));
+  const executionHistories = [a, b, relay.store].map((store) => createTaskExecutionRepository({
+    store,
+    writerId: 'audit',
+    projectId,
+  }).all());
+  assert.deepEqual(new Set([a.rootHash(), b.rootHash(), relay.store.rootHash()]).size, 1);
+  assert.deepEqual(new Set(taskCounts).size, 1);
+  assert.deepEqual(new Set(assignments).size, 1);
+  assert.deepEqual(executionHistories[0], executionHistories[1]);
+  assert.deepEqual(executionHistories[0], executionHistories[2]);
+  assert.equal(JSON.stringify(projections[0]), JSON.stringify(projections[1]));
+  assert.equal(JSON.stringify(projections[0]), JSON.stringify(projections[2]));
   await Promise.all([a.flush(), b.flush()]);
   const restartedA = createTaskCurrentStateStore({ decisionOsRoot: rootA, projectId });
   const restartedB = createTaskCurrentStateStore({ decisionOsRoot: rootB, projectId });

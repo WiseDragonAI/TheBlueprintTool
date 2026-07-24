@@ -13,6 +13,9 @@
 1. Loose Markdown files currently under `documentation/` remain source material for later KB extraction.
 2. Root analysis files such as `TASK_SYNCHRONIZATION_RCA.md` and `TASK_REPLICATION_FUNDAMENTAL_ARCHITECTURE_ANALYSIS_2026-07-21.md` remain outside canon until reconciled.
 3. Decision OS cards and threads remain in `.decision-os/`; do not copy their full bodies into working documents without a concrete analysis need.
+4. [Epoch-4 task execution iteration status](./epoch-4-task-execution-iteration-status.md) is the authoritative implementation gate and cross-node progress ledger.
+5. [Epoch-4 artifact garbage-collection analysis](./epoch-4-artifact-garbage-collection-analysis.md) records the missing post-tombstone byte-collection boundary and its selected remediation.
+6. [Epoch-4 migration process assessment](./epoch-4-migration-process-assessment.md) records the interrupted Workstation proof, the unsafe transaction boundary, and the selected resumable shadow-cutover architecture.
 
 ---
 

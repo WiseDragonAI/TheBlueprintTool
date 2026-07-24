@@ -48,8 +48,6 @@ export type Card = {
   readonly codexThreadRunId?: string;
   readonly codexThreadRunIds?: readonly string[];
   readonly codexThreadRunOutputFiles?: Readonly<Record<string, string>>;
-  readonly codexActiveRunId?: string;
-  readonly codexActiveExecutionId?: string;
   readonly codexRunId?: string;
   readonly questionnaires?: CardQuestionnaires;
   readonly gitReviewNotes?: readonly GitReviewNote[];
