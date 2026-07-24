@@ -220,7 +220,7 @@ export function federatedControlRoomProjection(input: {
       executionObservation: observation ?? null,
       executionObservations: orderedObservationMembers.map((member) => member.executionObservation),
       executionStatus: structuralExecution
-        ? ((intentPhase === 'starting' || intentPhase === 'running') && !observation ? 'interrupted' : intentPhase)
+        ? intentPhase
         : observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'queued' : observation?.kind === 'voice-transcription' ? 'preparing' : '',
       executionSince: structuralExecution ? text(authority.executionSince) : observation?.kind === 'codex-process' ? text(executionMember.executionSince) : '',
       executionTime: structuralExecution ? Number(authority.executionTime) : observation?.kind === 'codex-process' ? Number(executionMember.executionTime) : Number.NaN,

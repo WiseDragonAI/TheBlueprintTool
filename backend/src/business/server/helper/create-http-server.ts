@@ -2283,7 +2283,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       activeResponse.end(JSON.stringify(hydrateLedgerCardContent(persistedLedger, activeDecisionOsRoot)));
     };
     const persistLedgerMutationAndRespond = async (ledgerId: string, ledgerPath: string, beforeLedger: AnyRecord, ledger: AnyRecord, mutation: LedgerMutation, activeResponse: ServerResponse): Promise<void> => {
-      stripHydratedThreadNotes(ledger);
+      // WHAT: Preserve hydrated task notes until the scoped command derives entity changes.
+      // WHY: Removing them here turns absent aggregate fields into thread-note tombstones.
+      if (ledgerId !== 'tasks') stripHydratedThreadNotes(ledger);
       context.watcher.ignoreNext(ledgerPath);
       let taskCommit: Awaited<ReturnType<ProjectTaskState['executeMutation']>> | null = null;
       try {

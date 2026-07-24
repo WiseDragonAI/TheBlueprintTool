@@ -8,6 +8,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startThreadCodexProcessController } from '@backend/business/codex/controller/start-thread-codex-process-controller.js';
+import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
 import { cancelCardSkillRunController } from '@backend/business/codex/controller/cancel-card-skill-run-controller.js';
 import { createTaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
 import { taskExecutionProcess, taskExecutionProcesses } from '@backend/business/codex/helper/task-execution-runtime.js';
@@ -233,6 +234,78 @@ test('turn lifecycle registers the exact execution child for cancellation', asyn
       'the cancelled execution to settle',
     );
   } finally {
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    await cleanup(context);
+  }
+});
+
+test('terminal execution remains readable while immutable artifacts are finalizing', async () => {
+  const context = fixture();
+  const fakeCodex = join(context.workspace, 'fake-codex-complete.mjs');
+  const previousCodexBin = process.env.CODEX_BIN;
+  let releaseFinalization!: () => void;
+  const finalizationGate = new Promise<void>((resolve) => {
+    releaseFinalization = resolve;
+  });
+  let reportFinalization!: () => void;
+  const finalizationStarted = new Promise<void>((resolve) => {
+    reportFinalization = resolve;
+  });
+  const originalFinalize = context.state.finalizeExecutionArtifacts.bind(context.state);
+  context.state.finalizeExecutionArtifacts = async (...args) => {
+    reportFinalization();
+    await finalizationGate;
+    return originalFinalize(...args);
+  };
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'process.stdin.resume();',
+    'process.stdin.on("end", () => {',
+    '  console.log(JSON.stringify({ type: "thread.started", thread_id: "session-complete" }));',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  process.env.CODEX_BIN = fakeCodex;
+  await context.state.executions.admit({ metadata: executionMetadata(context), executorNodeId: 'workstation' });
+  await context.state.executions.transition(context.executionId, { phase: 'queued' });
+  await context.state.executions.transition(context.executionId, { phase: 'starting' });
+
+  try {
+    const result = await startThreadCodexProcessController({
+      action_payload: {
+        ...context.request,
+        epoch4Dispatch: true,
+      },
+      runtime_state: context.runtime,
+    });
+    assert.equal(result.ok, true);
+    await finalizationStarted;
+    assert.equal(context.state.executions.find(context.executionId)?.lifecycle.phase, 'succeeded');
+    assert.equal(taskExecutionProcess(context.runtime, context.executionId)?.sessionId, context.runId);
+
+    const settling = await readCardSkillRunController({
+      action_payload: {
+        ledgerId: 'specs',
+        cardId: context.cardId,
+        runId: context.runId,
+        since: 0,
+      },
+      runtime_state: context.runtime,
+    });
+    assert.equal(settling.ok, true);
+    assert.equal(settling.phase, 'succeeded');
+    assert.equal(settling.lineCount, 1);
+    assert.equal((settling.events as Array<Record<string, unknown>>).length, 1);
+
+    releaseFinalization();
+    await waitForCondition(
+      () => taskExecutionProcess(context.runtime, context.executionId) === null,
+      'the settled process registration to be removed',
+    );
+    assert.ok(context.state.executions.find(context.executionId)?.artifacts.jsonl);
+  } finally {
+    releaseFinalization();
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
     else process.env.CODEX_BIN = previousCodexBin;
     await cleanup(context);

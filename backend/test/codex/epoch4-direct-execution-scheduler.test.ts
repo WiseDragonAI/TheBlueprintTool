@@ -180,6 +180,13 @@ test('offline local direct retry spawns one child and reaches terminal replicate
   const continuationSchedule = await scheduleCodexProcesses({ decisionOsRoot, runtime, launchLimit: 1 });
   assert.equal(continuationSchedule.ok, true);
   await waitFor(() => state.executions.find('execution-b')?.lifecycle.phase === 'succeeded', 'terminal continuation state');
+  await waitFor(() => {
+    const execution = state.executions.find('execution-b');
+    return execution?.artifacts.revision > 1
+      && execution.artifacts.jsonl !== null
+      && execution.artifacts.stderr !== null
+      && taskExecutionProcesses(runtime).length === 0;
+  }, 'terminal continuation artifacts and process cleanup');
   assert.deepEqual(taskExecutionProcesses(runtime), []);
   assert.equal(existsSync(join(decisionOsRoot, 'codex-process-queue.json')), false);
 });
