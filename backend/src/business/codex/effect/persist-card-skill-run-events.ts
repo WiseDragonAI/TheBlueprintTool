@@ -8,6 +8,7 @@ import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 import { queueLedgerProjectionPersistence } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -32,7 +33,9 @@ export function persistCardSkillRunEvents(input: {
   // WHAT: Reject persistence when the declared owning ledger no longer exists.
   // WHY: Falling back to a different ledger could leak lifecycle notes across scopes.
   if (!existsSync(input.ledgerPath)) throw new Error(`Ledger file not found: ${input.ledgerPath}`);
-  const ledger = JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord;
+  const ledger = input.ledgerId === 'tasks'
+    ? readLedgerProjection({ ledgerId: input.ledgerId, ledgerPath: input.ledgerPath, runtime: input.runtime })
+    : JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord;
   // WHAT: Keep lifecycle events for every card-owned run exclusively in its run artifacts.
   // WHY: Conversation threads contain operator messages and direct final replies, not synthetic diagnostics.
   if (resolveCardSkillRunOwnership({
@@ -102,6 +105,7 @@ export function persistCardSkillRunEvents(input: {
     command: {
       kind: 'persist-skill-run-notes',
       threadIds: [threadId],
+      threadNoteIds: { [threadId]: input.events.filter((event) => event.persist).map((event) => `codex-${safeSegment(input.runId)}-line-${event.line}`) },
       ...(assignedThreadFile ? { ledgerPaths: [`threadFiles/${threadId}`] } : {}),
     },
   });

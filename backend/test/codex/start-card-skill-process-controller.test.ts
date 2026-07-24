@@ -123,6 +123,7 @@ test('task run-event persistence keeps existing thread notes in the scoped proje
     resolveProjection = resolve;
   });
   const runtime = {
+    readTaskLedgerProjection: () => JSON.parse(readFileSync(ledgerPath, 'utf8')) as Record<string, unknown>,
     persistTaskLedgerProjection: async (ledger: Record<string, unknown>, command: Record<string, unknown>) => {
       resolveProjection({ ledger: structuredClone(ledger), command: structuredClone(command) });
       return { ledger };
@@ -143,7 +144,60 @@ test('task run-event persistence keeps existing thread notes in the scoped proje
     const persisted = await projection;
     const notes = (persisted.ledger.notes as Record<string, Array<Record<string, unknown>>>)[threadId];
     assert.deepEqual(notes.map((note) => note.id), ['note-existing', 'codex-codex-task-run-line-1']);
-    assert.deepEqual(persisted.command, { kind: 'persist-skill-run-notes', threadIds: [threadId] });
+    assert.deepEqual(persisted.command, {
+      kind: 'persist-skill-run-notes',
+      threadIds: [threadId],
+      threadNoteIds: { [threadId]: ['codex-codex-task-run-line-1'] },
+    });
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('task run-event persistence resolves thread ownership from epoch-4 instead of stale tasks JSON', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-task-run-ownership-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const ledgerPath = join(decisionOsRoot, 'tasks.json');
+  const cardId = 'card-task';
+  const runId = 'codex-task-run';
+  const threadId = `thread-${cardId}`;
+  const threadPath = join(decisionOsRoot, 'threads', 'tasks', `${threadId}.md`);
+  mkdirSync(join(decisionOsRoot, 'threads', 'tasks'), { recursive: true });
+  const staleLedger = {
+    cards: [{ id: cardId, title: 'Task' }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+    threadFiles: { [threadId]: `.decision-os/threads/tasks/${threadId}.md` },
+  };
+  writeFileSync(ledgerPath, JSON.stringify(staleLedger));
+  writeFileSync(threadPath, [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-existing","timestamp":"2026-07-24T01:00:00.000Z"} -->',
+    '',
+    'Keep this note.',
+    '',
+  ].join('\n'));
+  const threadBefore = readFileSync(threadPath, 'utf8');
+
+  try {
+    const changed = persistCardSkillRunEvents({
+      decisionOsRoot,
+      ledgerId: 'tasks',
+      ledgerPath,
+      cardId,
+      runId,
+      events: [normalizeCardSkillRunEvent({ line: 1, event: { type: 'thread.started' } })],
+      runtime: {
+        readTaskLedgerProjection: () => ({
+          ...staleLedger,
+          cards: [{ id: cardId, title: 'Task', codexThreadRunId: runId }],
+        }),
+      },
+    });
+
+    assert.equal(changed, 0);
+    assert.equal(readFileSync(threadPath, 'utf8'), threadBefore);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

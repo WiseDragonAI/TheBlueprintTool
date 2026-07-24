@@ -98,10 +98,14 @@ function threadContentFile(input: { decisionOsRoot: string; ledger: AnyRecord; l
   return resolveThreadContentFile(input.decisionOsRoot, threadFiles[input.threadId]) ?? '';
 }
 
-function threadMarkdownForPrompt(input: { decisionOsRoot: string; ledger: AnyRecord; threadId: string }): { markdown: string; operatorNoteTimestamp: string } | null {
+export function threadMarkdownForPrompt(input: { decisionOsRoot: string; ledger: AnyRecord; threadId: string }): { markdown: string; operatorNoteTimestamp: string } | null {
   hydrateLedgerThreadNotesFor(input.ledger, input.decisionOsRoot, input.threadId);
+  const deletedByThread = input.ledger.deletedNoteIds && typeof input.ledger.deletedNoteIds === 'object' && !Array.isArray(input.ledger.deletedNoteIds)
+    ? input.ledger.deletedNoteIds as Record<string, unknown>
+    : {};
+  const deleted = new Set(Array.isArray(deletedByThread[input.threadId]) ? (deletedByThread[input.threadId] as unknown[]).map(String) : []);
   const notes = (normalizeLedgerNotes(input.ledger)[input.threadId] ?? [])
-    .filter((note) => !isCodexThreadArtifactNote(note));
+    .filter((note) => !deleted.has(String(note.id ?? '')) && !isCodexThreadArtifactNote(note));
   let operatorNote: AnyRecord | undefined;
   for (let index = notes.length - 1; index >= 0; index -= 1) {
     if (String(notes[index].role ?? '').toLowerCase() !== 'operator') continue;

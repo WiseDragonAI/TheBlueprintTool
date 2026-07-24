@@ -21,6 +21,7 @@ export type TaskProjectionCommand = {
   annotationIds?: string[];
   relationshipIds?: string[];
   threadIds?: string[];
+  threadNoteIds?: Record<string, string[]>;
   ledgerPaths?: string[];
 };
 
@@ -86,7 +87,7 @@ export function taskCommandForProjection(input: { command: TaskProjectionCommand
     changes.push(...entity('relationship', id, recordById(input.before, 'relationships', id), recordById(input.after, 'relationships', id)));
   }
   for (const threadId of new Set(input.command.threadIds ?? [])) {
-    changes.push(...threadNoteChanges(input.before, input.after, threadId));
+    changes.push(...threadNoteChanges(input.before, input.after, threadId, input.command.threadNoteIds?.[threadId]));
   }
   for (const path of new Set(input.command.ledgerPaths ?? [])) {
     changes.push(...ledgerField(path, valueAtPath(input.before, path), valueAtPath(input.after, path)));
@@ -98,7 +99,7 @@ function taskIdFromThread(threadId: string): string {
   return threadId.startsWith('thread-') ? threadId.slice('thread-'.length) : '';
 }
 
-function threadNoteChanges(before: AnyRecord, after: AnyRecord, threadId: string): TaskCommandChange[] {
+function threadNoteChanges(before: AnyRecord, after: AnyRecord, threadId: string, noteIds?: string[]): TaskCommandChange[] {
   const notes = (ledger: AnyRecord): AnyRecord[] => {
     const values = ledger.notes && typeof ledger.notes === 'object' && !Array.isArray(ledger.notes)
       ? (ledger.notes as Record<string, unknown>)[threadId]
@@ -107,12 +108,20 @@ function threadNoteChanges(before: AnyRecord, after: AnyRecord, threadId: string
   };
   const left = new Map(notes(before).map((note) => [String(note.id ?? ''), note]));
   const right = new Map(notes(after).map((note) => [String(note.id ?? ''), note]));
-  return [...new Set([...left.keys(), ...right.keys()])].filter(Boolean).flatMap((noteId) => entity(
+  const ownedIds = noteIds ?? [...left.keys(), ...right.keys()];
+  return [...new Set(ownedIds)].filter(Boolean).flatMap((noteId) => entity(
     'thread-note',
     `${threadId}/${noteId}`,
     left.has(noteId) ? { ...left.get(noteId), threadId } : null,
     right.has(noteId) ? { ...right.get(noteId), threadId } : null,
   ));
+}
+
+function restoreThreadNote(before: AnyRecord, after: AnyRecord, threadId: string, noteId: string): TaskCommandChange[] {
+  const scoped = threadNoteChanges(before, after, threadId, [noteId]);
+  if (scoped.length === 0) return [];
+  scoped[0].changes.unshift({ path: '$entity', operation: 'remove' });
+  return scoped;
 }
 
 /** Converts one accepted UI operation into changes for only the entities that operation owns. */
@@ -213,9 +222,15 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
     const previousAnnotationIds = new Set(records(before.annotations).map((entry) => String(entry.id ?? '')));
     for (const card of records(after.cards).filter((entry) => !previousCardIds.has(String(entry.id ?? '')))) changes.push(...entity('card', String(card.id ?? ''), null, card));
     for (const annotation of records(after.annotations).filter((entry) => !previousAnnotationIds.has(String(entry.id ?? '')))) changes.push(...entity('annotation', String(annotation.id ?? ''), null, annotation));
-  } else if (['append-note', 'update-note', 'delete-note', 'delete-card-image'].includes(action)) {
+  } else if (['append-note', 'update-note', 'delete-note', 'restore-note', 'delete-card-image'].includes(action)) {
     activationTaskId = taskIdFromThread(String(mutation.note?.threadId ?? '')) || String(mutation.cardId ?? '');
-    if (mutation.note?.threadId) changes.push(...threadNoteChanges(before, after, mutation.note.threadId));
+    if (mutation.note?.threadId) {
+      const noteId = String(mutation.note.id ?? '');
+      if (!noteId) throw new Error(`note_identity_required:${action}`);
+      changes.push(...(action === 'restore-note'
+        ? restoreThreadNote(before, after, mutation.note.threadId, noteId)
+        : threadNoteChanges(before, after, mutation.note.threadId, [noteId])));
+    }
   } else {
     throw new Error(`unsupported_task_command:${action || 'missing'}`);
   }

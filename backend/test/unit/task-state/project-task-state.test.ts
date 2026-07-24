@@ -140,13 +140,70 @@ test('task intake publishes no state until its first durable content contributio
   assert.equal(published.length, 0);
   await execute({ action: 'append-note', note: { id: 'note-a', threadId: 'thread-card-a', body: 'Activate it.', role: 'agent' } });
   assert.ok(published.flatMap((delta) => delta.entities).some((entity) => entity.entityType === 'card' && entity.entityId === 'card-a'));
-  assert.ok(published.flatMap((delta) => delta.entities).some((entity) => entity.entityType === 'thread-note' && entity.entityId === 'thread-card-a/note-a'));
-  assert.deepEqual(content, []);
+  const noteDelta = published.find((delta) => delta.entities.some((entity) => entity.entityType === 'thread-note' && entity.entityId === 'thread-card-a/note-a'));
+  assert.ok(noteDelta);
+  assert.ok(noteDelta.entities.some((entity) => entity.entityType === 'resource' && entity.entityId === '.decision-os/threads/tasks/thread-card-a.md'));
+  assert.deepEqual(content, ['.decision-os/threads/tasks/thread-card-a.md']);
   assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).message, undefined);
   assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).role, 'agent');
   assert.match(readFileSync(resolve(root, 'threads', 'tasks', 'thread-card-a.md'), 'utf8'), /Activate it\./);
   assert.equal((state.projection().ledger.cards as Array<Record<string, unknown>>)[0].replicationState, undefined);
   assert.equal(state.store.entity('card', 'card-a')?.fields.replicationState, undefined);
+});
+
+test('restore-note causally replaces a tombstone without importing unrelated sidecar notes', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-note-restore-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const threadId = 'thread-card-a';
+  const threadFile = resolve(root, 'threads', 'tasks', `${threadId}.md`);
+  mkdirSync(dirname(threadFile), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify({
+    modelName: 'tasks',
+    cards: [{ id: 'card-a', title: 'Task', status: 'todo' }],
+    annotations: [],
+    relationships: [],
+    threadFiles: { [threadId]: `.decision-os/threads/tasks/${threadId}.md` },
+    notes: {},
+    deletedNoteIds: { [threadId]: ['note-test'] },
+  }));
+  writeFileSync(threadFile, [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-test","timestamp":"2026-07-23T07:23:23.028Z"} -->',
+    '',
+    'test',
+    '',
+    '# AGENT',
+    '<!-- decision-os:note {"id":"sidecar-only","timestamp":"2026-07-23T07:24:00.000Z"} -->',
+    '',
+    'Do not import me.',
+    '',
+  ].join('\n'));
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'workstation', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const before = structuredClone(state.projection().ledger);
+  const after = structuredClone(before);
+  const mutation: LedgerMutation = { action: 'restore-note', note: { id: 'note-test', threadId } };
+
+  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
+  const restored = await state.executeMutation(mutation, before, after);
+
+  assert.equal(restored.changed, true);
+  assert.deepEqual((state.projection().ledger.deletedNoteIds as Record<string, string[]>)[threadId], []);
+  assert.deepEqual(
+    ((state.projection().ledger.notes as Record<string, AnyRecord[]>)[threadId] ?? []).map((note) => note.id),
+    ['note-test'],
+  );
+  assert.equal(state.store.entity('thread-note', `${threadId}/note-test`)?.fields.$entity?.candidates[0]?.operation, 'remove');
+  assert.equal(state.store.entity('thread-note', `${threadId}/sidecar-only`), null);
+  assert.ok(restored.deltas[0].entities.some((entity) => entity.entityType === 'resource' && entity.entityId === `.decision-os/threads/tasks/${threadId}.md`));
+
+  const retryBefore = structuredClone(state.projection().ledger);
+  const retryAfter = structuredClone(retryBefore);
+  const retryMutation: LedgerMutation = { action: 'restore-note', note: { id: 'note-test', threadId } };
+  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: retryAfter, mutation: retryMutation }).ok, true);
+  const retry = await state.executeMutation(retryMutation, retryBefore, retryAfter);
+  assert.equal(retry.changed, false);
+  assert.deepEqual(retry.deltas.flatMap((delta) => delta.entities), []);
 });
 
 test('assigned held task activates and reloads with one logical identity on both replicas', async (context) => {

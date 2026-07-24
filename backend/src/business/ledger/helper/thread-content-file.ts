@@ -2,7 +2,8 @@
  * WHAT: Reads and writes thread conversations as Markdown content files.
  * WHY: agents should answer by patching a thread file instead of regenerating ledger JSON note arrays.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, extname, isAbsolute, relative, resolve, basename } from 'node:path';
 
 type AnyRecord = Record<string, unknown>;
@@ -174,7 +175,14 @@ export function writeThreadNotesFile(input: { decisionOsRoot: string; ledger: An
   const file = resolveThreadContentFile(input.decisionOsRoot, contentFile);
   if (!file) throw new Error(`Invalid thread content file for ${input.threadId}`);
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, formatThreadMarkdown(input.notes), 'utf8');
+  const temporary = `${file}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    writeFileSync(temporary, formatThreadMarkdown(input.notes), { encoding: 'utf8', flag: 'wx' });
+    renameSync(temporary, file);
+  } catch (error) {
+    rmSync(temporary, { force: true });
+    throw error;
+  }
   threadFiles[input.threadId] = contentFile;
 }
 
