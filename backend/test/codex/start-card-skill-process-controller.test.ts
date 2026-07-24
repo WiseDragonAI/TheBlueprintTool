@@ -90,6 +90,65 @@ async function waitForStableEventCount(events: ContentChangeEvent[]): Promise<vo
   assert.fail('Timed out waiting for the content-event stream to settle.');
 }
 
+test('task run-event persistence keeps existing thread notes in the scoped projection command', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-task-run-events-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const ledgerPath = join(decisionOsRoot, 'tasks.json');
+  const cardId = 'card-task';
+  const threadId = `thread-${cardId}`;
+  const threadPath = join(decisionOsRoot, 'threads', 'tasks', `${threadId}.md`);
+  mkdirSync(join(decisionOsRoot, 'threads', 'tasks'), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify({
+    cards: [{ id: cardId, title: 'Task' }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+    threadFiles: { [threadId]: `.decision-os/threads/tasks/${threadId}.md` },
+  }));
+  writeFileSync(threadPath, [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-existing","timestamp":"2026-07-24T01:00:00.000Z"} -->',
+    '',
+    'Keep this note.',
+    '',
+  ].join('\n'));
+  let resolveProjection!: (value: {
+    ledger: Record<string, unknown>;
+    command: Record<string, unknown>;
+  }) => void;
+  const projection = new Promise<{
+    ledger: Record<string, unknown>;
+    command: Record<string, unknown>;
+  }>((resolve) => {
+    resolveProjection = resolve;
+  });
+  const runtime = {
+    persistTaskLedgerProjection: async (ledger: Record<string, unknown>, command: Record<string, unknown>) => {
+      resolveProjection({ ledger: structuredClone(ledger), command: structuredClone(command) });
+      return { ledger };
+    },
+  };
+
+  try {
+    const changed = persistCardSkillRunEvents({
+      decisionOsRoot,
+      ledgerId: 'tasks',
+      ledgerPath,
+      cardId,
+      runId: 'codex-task-run',
+      events: [normalizeCardSkillRunEvent({ line: 1, event: { type: 'thread.started' } })],
+      runtime,
+    });
+    assert.equal(changed, 1);
+    const persisted = await projection;
+    const notes = (persisted.ledger.notes as Record<string, Array<Record<string, unknown>>>)[threadId];
+    assert.deepEqual(notes.map((note) => note.id), ['note-existing', 'codex-codex-task-run-line-1']);
+    assert.deepEqual(persisted.command, { kind: 'persist-skill-run-notes', threadIds: [threadId] });
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < 3000) {

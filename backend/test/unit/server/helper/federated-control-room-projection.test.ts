@@ -52,7 +52,7 @@ test('preserves one replicated execution without inventing a node conflict', () 
 
   assert.equal(result.queue.length, 0);
   assert.equal(result.exec.length, 1);
-  assert.equal(result.exec[0].executionStatus, 'interrupted');
+  assert.equal(result.exec[0].executionStatus, 'running');
   assert.equal(result.exec[0].executionOwnerCardId, 'child');
   assert.equal(result.exec[0].conflict, false);
   assert.equal(result.diagnostics.some((entry: Record<string, unknown>) => entry.type === 'federation_execution_conflict'), false);

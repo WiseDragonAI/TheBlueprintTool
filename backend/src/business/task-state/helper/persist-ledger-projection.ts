@@ -17,9 +17,9 @@ export async function persistLedgerProjection(input: {
   runtime?: AnyRecord;
   command?: TaskProjectionCommand;
 }): Promise<AnyRecord> {
-  stripHydratedThreadNotes(input.ledger);
   const isTaskLedger = input.ledgerId === 'tasks' || basename(input.ledgerPath) === 'tasks.json';
   if (!isTaskLedger) {
+    stripHydratedThreadNotes(input.ledger);
     writeFileSync(input.ledgerPath, `${JSON.stringify(input.ledger, null, 2)}\n`, 'utf8');
     return input.ledger;
   }
