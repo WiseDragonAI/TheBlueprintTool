@@ -79,7 +79,7 @@ test('offline migration installs current shards, references current content, and
   assert.equal(report.semanticInventory.deletions, 1);
   assert.equal(report.semanticInventory.entityDeletions, 1);
   assert.equal(report.semanticInventory.resourceHeads, 2);
-  assert.deepEqual(report.objectInventory, { referencedObjects: 2, installedObjects: 0, installedBytes: 0, referencedWorkspaceBytes: 136 });
+  assert.deepEqual(report.objectInventory, { referencedObjects: 2, installedObjects: 0, installedBytes: 0, deferredRemoteObjects: 0, referencedWorkspaceBytes: 136 });
   assert.equal(existsSync(resolve(result.root, 'objects', retainedObjectHash.slice(0, 2), retainedObjectHash)), false);
   assert.deepEqual(report.recoveredNoteDeletions, [{ threadId: 'thread-card-a', noteId: 'note-a' }]);
   assert.equal(report.sourceValueAudit.find((entry: Record<string, unknown>) => entry.cardId === 'card-a').waitingAtSource, 'card-markdown');
@@ -419,7 +419,7 @@ test('migration preserves corrupt execution evidence byte-identically and perfor
   assert.equal(existsSync(rollbackRoot), false);
 });
 
-test('migration refuses to publish epoch 3 when a retained resource head has no collected object', async (context) => {
+test('migration refuses to publish epoch 4 when a locally owned resource head has no collected object', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-missing-object-'));
   const rollbackRoot = `${root}-rollback`;
   context.after(() => {
@@ -434,7 +434,7 @@ test('migration refuses to publish epoch 3 when a retained resource head has no 
   writeFileSync(resolve(stateRoot, 'format.json'), JSON.stringify({ version: 2, projectId, baselineRoot: 'legacy' }));
   writeFileSync(resolve(stateRoot, 'current', 'resource', 'missing.json'), JSON.stringify({
     version: 2, projectId, entityType: 'resource', entityId: '.decision-os/files/missing.bin', replication: 'active', stateHash: 'legacy',
-    fields: { head: { clock: { desktop: 1 }, candidates: [{ dot: { replicaId: 'desktop', counter: 1 }, operation: 'set', value: { type: 'managed-asset', key: '.decision-os/files/missing.bin', hash: missingHash, bytes: 7, changedAt: '2026-07-21T00:00:00.000Z' } }] } },
+    fields: { head: { clock: { workstation: 1 }, candidates: [{ dot: { replicaId: 'workstation', counter: 1 }, operation: 'set', value: { type: 'managed-asset', key: '.decision-os/files/missing.bin', hash: missingHash, bytes: 7, changedAt: '2026-07-21T00:00:00.000Z' } }] } },
   }));
   writeFileSync(tasksFile, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
 
@@ -442,6 +442,34 @@ test('migration refuses to publish epoch 3 when a retained resource head has no 
 
   assert.equal(JSON.parse(readFileSync(resolve(stateRoot, 'format.json'), 'utf8')).version, 2);
   assert.equal(existsSync(rollbackRoot), true);
+});
+
+test('migration retains an unavailable remote object as an on-demand content reference', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-deferred-object-'));
+  const rollbackRoot = `${root}-rollback`;
+  context.after(() => [root, rollbackRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'project-a';
+  const stateRoot = resolve(root, 'task-state', projectId);
+  const tasksFile = resolve(root, 'tasks.json');
+  const hash = createHash('sha256').update('remote-missing').digest('hex');
+  const key = '.decision-os/files/phone-owned.bin';
+  mkdirSync(resolve(stateRoot, 'current', 'resource'), { recursive: true });
+  writeFileSync(resolve(stateRoot, 'format.json'), JSON.stringify({ version: 3, projectId, baselineRoot: 'legacy' }));
+  writeFileSync(resolve(stateRoot, 'current', 'resource', 'phone-owned.json'), JSON.stringify({
+    version: 3, projectId, entityType: 'resource', entityId: key, replication: 'active', stateHash: 'legacy',
+    fields: { head: { clock: { phone: 1 }, candidates: [{ dot: { replicaId: 'phone', counter: 1 }, operation: 'set', value: { type: 'managed-asset', key, hash, bytes: 14, changedAt: '2026-07-21T00:00:00.000Z' } }] } },
+  }));
+  writeFileSync(tasksFile, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+
+  const result = await migrateTaskCurrentState({ decisionOsRoot: root, projectId, nodeId: 'workstation', tasksLedgerFile: tasksFile, backupRoot: rollbackRoot });
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId });
+  const report = JSON.parse(readFileSync(result.report, 'utf8')) as Record<string, any>;
+
+  assert.equal(existsSync(resolve(result.root, 'objects', hash.slice(0, 2), hash)), false);
+  assert.deepEqual(store.contentHeads(key).map((head) => ({ hash: head.hash, sourceReplicaId: head.sourceReplicaId })), [{ hash, sourceReplicaId: 'phone' }]);
+  assert.equal(report.missingObjects, 0);
+  assert.deepEqual(report.deferredRemoteObjects, [{ key, hash, bytes: 14, sourceReplicaId: 'phone' }]);
+  assert.equal(report.objectInventory.deferredRemoteObjects, 1);
 });
 
 test('migration selectively installs a retained remote object from a verified content cache', async (context) => {

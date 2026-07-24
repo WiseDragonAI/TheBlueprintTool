@@ -500,6 +500,7 @@ export async function buildTaskCurrentStateMigrationShadow(plan: TaskCurrentStat
   let installedObjects = 0;
   let installedBytes = 0;
   let missingObjects = 0;
+  const deferredRemoteObjects: Array<{ key: string; hash: string; bytes: number; sourceReplicaId: string }> = [];
   const localHeads = new Set(plan.manifest.resources.map((resource) => `${resource.key}\u0000${resource.hash}`));
   for (const head of store.contentHeads()) {
     if (localHeads.has(`${head.key}\u0000${head.hash}`)) continue;
@@ -520,6 +521,12 @@ export async function buildTaskCurrentStateMigrationShadow(plan: TaskCurrentStat
       await copyFile(source, target);
       installedObjects += 1;
       installedBytes += statSync(target).size;
+      continue;
+    }
+    if (head.sourceReplicaId !== plan.nodeId) {
+      // WHAT: Preserve a remote causal head when this node has not materialized its immutable bytes.
+      // WHY: Epoch-4 content reads already fetch exact remote hashes on demand; cutover must not duplicate or invent unavailable media.
+      deferredRemoteObjects.push({ key: head.key, hash: head.hash, bytes: head.bytes, sourceReplicaId: head.sourceReplicaId });
       continue;
     }
     missingObjects += 1;
@@ -565,6 +572,7 @@ export async function buildTaskCurrentStateMigrationShadow(plan: TaskCurrentStat
     },
     executionMigration: plan.executions.report,
     missingObjects,
+    deferredRemoteObjects,
     bodyRewriteReport: plan.prepared.bodyRewrites.map(({ before, after, ...entry }) => ({ ...entry, beforeHash: createHash('sha256').update(before).digest('hex'), afterHash: createHash('sha256').update(after).digest('hex') })),
     relationshipRepairReport: plan.prepared.relationshipRepairs,
     recoveredNoteDeletions: plan.prepared.recoveredNoteDeletions,
@@ -572,6 +580,7 @@ export async function buildTaskCurrentStateMigrationShadow(plan: TaskCurrentStat
       referencedObjects: store.contentHeads().length,
       installedObjects,
       installedBytes,
+      deferredRemoteObjects: deferredRemoteObjects.length,
       referencedWorkspaceBytes: plan.manifest.resources.reduce((sum, resource) => sum + resource.bytes, 0),
     },
     sourceEntityInventory: inventoryEntities([...plan.source.legacyEntities, ...plan.projectionSources.flatMap((source) => [...source.entities, ...source.resourceEntities])]),
