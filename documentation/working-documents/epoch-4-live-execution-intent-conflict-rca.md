@@ -68,4 +68,38 @@
 2. This is one catalog migration, not a per-task repair.
 3. Migration preserves the two failed attempts as terminal `interrupted` history. It does not automatically start the latest attempt.
 4. After the verified epoch-4 restart, the operator must submit one fresh Run request.
-5. Earlier instructions prohibit starting that migration without new explicit authorization.
+5. The operator authorized the Workstation migration and registered-server restart on `2026-07-24`.
+
+---
+
+## F. Verified Workstation Cutover
+
+1. **The successful node transaction is `ab0ab732-64d8-464b-b0e7-d2f1266681c4`.**
+   1. Rollback root: `/media/jbb/57af6506-cd41-47dd-bcb1-5280ec4da1e7/decision-os-epoch4-rollbacks/workstation-20260724T035010Z`.
+   2. The migration command and independent verifier both returned phase `verified`.
+   3. All seven registered projects now expose `stateProtocol: decision-os-task-state/4`, `stateSchema: 4`, and `baselineEpoch: 4`.
+   4. Every migration report has `missingObjects: 0` and `journalCount: 0`.
+2. **The registered Workstation server restarted through MultiTerm.**
+   1. Registered process: `decision-os-workstation`.
+   2. Port: `50150`.
+   3. Root route returned HTTP `200`.
+   4. `/api/health` returned `ready` with zero active incidents and no paused scopes.
+3. **The contradicted task state is repaired.**
+   1. Card `card-bd584783-c1ae-4e9d-87c6-0fb45daec114` has no `executionIntent`.
+   2. It is assigned to `workstation` and remains lifecycle `todo`.
+   3. Executions `codex-execution-1784791404631-c98a5a47` and `codex-execution-1784858311933-3bfdb13a` are terminal `interrupted`.
+   4. The epoch-4 execution repository reports no diagnostic for the task.
+   5. A fresh operator Run request is required; migration does not replay a stale request.
+
+---
+
+## G. Binary-Content Audit
+
+1. **Workstation-owned workspace content remains referenced in place.**
+   1. The catalog referenced `993,873,984` workspace bytes.
+   2. Those local audio and image files were not copied into rollback archives or epoch-4 object storage.
+2. **Remote cached content is still duplicated by the successful migrator.**
+   1. The Decision OS project installed `199` phone-owned managed assets totaling `389,746,672` bytes.
+   2. The same immutable hashes already exist in `/home/jbb/.decision-os/cache/federation-content-current/objects`.
+   3. This duplication is not required for task execution or causal state.
+   4. The server is operational, but the remote-content materialization path remains technical debt.
