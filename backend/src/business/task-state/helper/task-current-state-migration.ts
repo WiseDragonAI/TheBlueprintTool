@@ -202,6 +202,7 @@ export type TaskCurrentStateMigrationInput = {
   defaultAssignedNodeId?: string;
   backupRoot?: string;
   sourceStateRoots?: string[];
+  contentObjectRoots?: string[];
 };
 
 export type TaskCurrentStateMigrationSnapshot = {
@@ -225,6 +226,7 @@ export type TaskCurrentStateMigrationPlan = {
   defaultAssignedNodeId: string;
   activeRoot: string;
   sourceStateRoots: string[];
+  contentObjectSources: Array<{ hash: string; file: string; bytes: number }>;
   source: MigrationSource;
   projectionSources: PreparedProjectionSource[];
   baselineCounter: number;
@@ -272,6 +274,7 @@ async function sourceSnapshots(input: {
   sourceStateRoots: string[];
   sidecars: TaskCurrentStateMigrationSidecar[];
   manifest: FederationContentManifest;
+  contentObjectSources: Array<{ hash: string; file: string; bytes: number }>;
 }): Promise<TaskCurrentStateMigrationSnapshot[]> {
   const files = new Map<string, { archive: boolean; knownHash?: string; knownBytes?: number }>();
   const include = (file: string, archive: boolean, knownHash?: string, knownBytes?: number): void => {
@@ -292,6 +295,7 @@ async function sourceSnapshots(input: {
     const file = resolve(input.decisionOsRoot, resource.key.replace(/^\/?\.decision-os\//, ''));
     include(file, false, resource.hash, resource.bytes);
   }
+  for (const source of input.contentObjectSources) include(source.file, false, source.hash, source.bytes);
   const snapshots: TaskCurrentStateMigrationSnapshot[] = [];
   for (const [file, value] of [...files].sort(([left], [right]) => left.localeCompare(right))) {
     if (!existsSync(file)) throw new Error(`task_migration_source_disappeared:${file}`);
@@ -306,6 +310,21 @@ async function sourceSnapshots(input: {
     });
   }
   return snapshots;
+}
+
+function legacyContentHashes(entities: LegacyEntity[]): string[] {
+  const hashes = new Set<string>();
+  for (const entity of entities) {
+    if (entity.entityType !== 'resource') continue;
+    for (const register of Object.values(entity.fields)) {
+      for (const candidate of register.candidates) {
+        if (candidate.operation !== 'set' || !candidate.value || typeof candidate.value !== 'object') continue;
+        const hash = String((candidate.value as Record<string, unknown>).hash ?? '');
+        if (/^[a-f0-9]{64}$/.test(hash)) hashes.add(hash);
+      }
+    }
+  }
+  return [...hashes].sort();
 }
 
 export async function verifyTaskCurrentStateMigrationPlan(plan: TaskCurrentStateMigrationPlan): Promise<void> {
@@ -342,6 +361,11 @@ export async function prepareTaskCurrentStateMigrationPlan(input: TaskCurrentSta
     defaultAssignedNodeId,
   });
   const source = projectionSource(sourceStateRoots, input.tasksLedgerFile, input.projectId, input.decisionOsRoot, projectionSources);
+  const contentObjectSources = await prepareContentObjectSources({
+    hashes: legacyContentHashes(source.legacyEntities),
+    sourceStateRoots,
+    contentObjectRoots: [...new Set((input.contentObjectRoots ?? []).map((root) => resolve(root)))],
+  });
   const baselineCounter = migrationCounter(source.legacyEntities, input.nodeId);
   const hydrated = structuredClone(source.ledger ?? {});
   const executions = prepareEpoch4ExecutionMigration({
@@ -385,7 +409,7 @@ export async function prepareTaskCurrentStateMigrationPlan(input: TaskCurrentSta
   for (const sidecar of sidecars) {
     if (!inside(input.decisionOsRoot, sidecar.file)) throw new Error(`task_migration_sidecar_outside_project:${sidecar.file}`);
   }
-  const snapshots = await sourceSnapshots({ decisionOsRoot: input.decisionOsRoot, activeRoot, sourceStateRoots, sidecars, manifest });
+  const snapshots = await sourceSnapshots({ decisionOsRoot: input.decisionOsRoot, activeRoot, sourceStateRoots, sidecars, manifest, contentObjectSources });
   const sourceFingerprint = createHash('sha256').update(canonicalJson(snapshots.map(({ file, hash, bytes, mode }) => ({ file, hash, bytes, mode })))).digest('hex');
   return {
     decisionOsRoot: resolve(input.decisionOsRoot),
@@ -394,6 +418,7 @@ export async function prepareTaskCurrentStateMigrationPlan(input: TaskCurrentSta
     defaultAssignedNodeId,
     activeRoot,
     sourceStateRoots,
+    contentObjectSources,
     source,
     projectionSources,
     baselineCounter,
@@ -419,6 +444,25 @@ async function sourceObject(sourceRoots: string[], hash: string): Promise<string
     return file;
   }
   return '';
+}
+
+async function prepareContentObjectSources(input: {
+  hashes: string[];
+  sourceStateRoots: string[];
+  contentObjectRoots: string[];
+}): Promise<Array<{ hash: string; file: string; bytes: number }>> {
+  const sources: Array<{ hash: string; file: string; bytes: number }> = [];
+  for (const hash of input.hashes) {
+    if (await sourceObject(input.sourceStateRoots, hash)) continue;
+    for (const root of input.contentObjectRoots) {
+      const file = resolve(root, hash.slice(0, 2), hash);
+      if (!existsSync(file)) continue;
+      if (await sha256(file) !== hash) throw new Error(`invalid_task_content_object_hash:${file}`);
+      sources.push({ hash, file, bytes: statSync(file).size });
+      break;
+    }
+  }
+  return sources;
 }
 
 export async function buildTaskCurrentStateMigrationShadow(plan: TaskCurrentStateMigrationPlan, shadowDecisionOsRoot: string, backup: string): Promise<TaskCurrentStateMigrationBuild> {
@@ -468,7 +512,9 @@ export async function buildTaskCurrentStateMigrationShadow(plan: TaskCurrentStat
       installedBytes += projectionBytes.byteLength;
       continue;
     }
-    const source = await sourceObject(plan.sourceStateRoots, head.hash);
+    const source = await sourceObject(plan.sourceStateRoots, head.hash)
+      || plan.contentObjectSources.find((entry) => entry.hash === head.hash)?.file
+      || '';
     if (source) {
       await mkdir(dirname(target), { recursive: true });
       await copyFile(source, target);

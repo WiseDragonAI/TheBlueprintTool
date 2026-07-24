@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -50,6 +51,49 @@ test('node migrator converts every registered project and writes one offline rep
   const store = createTaskCurrentStateStore({ decisionOsRoot, projectId: 'project-a' });
   assert.equal((store.projection().ledger.cards as Array<{ id: string }>)[0].id, 'card-a');
   assert.equal(store.contentHeads('.decision-os/cards/tasks/card-a.md')[0].sourceReplicaId, 'workstation');
+});
+
+test('node migrator resolves reachable remote objects from the node federation cache', async (context) => {
+  const catalogRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-node-cached-object-'));
+  const backupRoot = `${catalogRoot}-backup`;
+  context.after(() => [catalogRoot, backupRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'project-a';
+  const masterDecisionOsRoot = resolve(catalogRoot, '.decision-os');
+  const decisionOsRoot = resolve(catalogRoot, projectId, '.decision-os');
+  const stateRoot = resolve(decisionOsRoot, 'task-state', projectId);
+  const bytes = Buffer.from('phone-owned cached object');
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  const key = '.decision-os/files/phone-owned.bin';
+  const cacheFile = resolve(masterDecisionOsRoot, 'cache', 'federation-content-current', 'objects', hash.slice(0, 2), hash);
+  mkdirSync(resolve(stateRoot, 'current', 'resource'), { recursive: true });
+  mkdirSync(resolve(cacheFile, '..'), { recursive: true });
+  writeFileSync(resolve(masterDecisionOsRoot, 'projects.json'), JSON.stringify({ version: 2, projects: {
+    [projectId]: { id: projectId, relativePath: projectId, name: 'Project A', description: '', color: '#38d9e8', registeredAt: '2026-07-22T00:00:00.000Z', cardId: `project-card:${projectId}` },
+  } }));
+  writeFileSync(resolve(masterDecisionOsRoot, '.settings.json'), JSON.stringify({ federationNodeId: 'workstation' }));
+  writeFileSync(resolve(decisionOsRoot, 'project.json'), JSON.stringify({ id: projectId }));
+  writeFileSync(resolve(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(resolve(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  writeFileSync(resolve(stateRoot, 'format.json'), JSON.stringify({ version: 3, projectId, baselineRoot: 'legacy' }));
+  writeFileSync(resolve(stateRoot, 'current', 'resource', 'phone-owned.json'), JSON.stringify({
+    version: 3, projectId, entityType: 'resource', entityId: key, replication: 'active', stateHash: 'legacy',
+    fields: { head: { clock: { phone: 1 }, candidates: [{ dot: { replicaId: 'phone', counter: 1 }, operation: 'set', value: { type: 'managed-asset', key, hash, bytes: bytes.byteLength, changedAt: '2026-07-21T00:00:00.000Z' } }] } },
+  }));
+  writeFileSync(cacheFile, bytes);
+
+  const result = await migrateNodeTaskCurrentState({
+    catalogRoot,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+    backupRoot,
+  });
+
+  assert.deepEqual(readFileSync(resolve(result.projects[0].root, 'objects', hash.slice(0, 2), hash)), bytes);
+  const sourceManifest = JSON.parse(readFileSync(resolve(backupRoot, 'source-manifest.json'), 'utf8')) as {
+    entries: Array<{ file: string; hash: string; archiveFile: string }>;
+  };
+  assert.equal(sourceManifest.entries.find((entry) => entry.file === cacheFile && entry.hash === hash)?.archiveFile, '');
 });
 
 test('node migrator rejects a node identity that differs from federation settings', async (context) => {
