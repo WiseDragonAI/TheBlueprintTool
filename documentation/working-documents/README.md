@@ -16,6 +16,7 @@
 4. [Epoch-4 task execution iteration status](./epoch-4-task-execution-iteration-status.md) is the authoritative implementation gate and cross-node progress ledger.
 5. [Epoch-4 artifact garbage-collection analysis](./epoch-4-artifact-garbage-collection-analysis.md) records the missing post-tombstone byte-collection boundary and its selected remediation.
 6. [Epoch-4 migration process assessment](./epoch-4-migration-process-assessment.md) records the interrupted Workstation proof, the unsafe transaction boundary, and the selected resumable shadow-cutover architecture.
+7. [Epoch-4 live execution-intent conflict RCA](./epoch-4-live-execution-intent-conflict-rca.md) traces the stale epoch-3 card owner that blocks a newly durable execution and records the required node-wide cutover.
 
 ---
 
