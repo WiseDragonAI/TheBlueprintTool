@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
@@ -94,4 +94,41 @@ test('hosted project card read demands an empty phone-owned migrated object by e
   assert.equal(card.state.content.status, 'available');
   assert.ok(card.state.content.candidates.some((candidate) => candidate.ownerNodeId === 'phone' && candidate.hash === phoneHash));
   assert.equal(requestedPath, `/api/federation/content-object?projectId=${projectId}&hash=${phoneHash}`);
+});
+
+test('content-object serves a migrated local media reference without an object-store copy', async (context) => {
+  const catalogRoot = mkdtempSync(join(tmpdir(), 'decision-os-local-content-reference-'));
+  const projectRoot = join(catalogRoot, 'shared');
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const projectId = 'shared-project';
+  const imageRef = '.decision-os/assets/image.png';
+  const image = Buffer.from('workspace image bytes');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(decisionOsRoot, 'assets'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: projectId }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Card A', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } }],
+    annotations: [],
+    relationships: [],
+  }));
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'card-a.md'), `![image](${imageRef})\n`);
+  writeFileSync(join(decisionOsRoot, 'assets', 'image.png'), image);
+  const backupRoot = `${catalogRoot}-rollback`;
+  const migrated = await migrateTaskCurrentState({ decisionOsRoot, projectId, nodeId: 'workstation', tasksLedgerFile: join(decisionOsRoot, 'tasks.json'), backupRoot });
+  const hash = createHash('sha256').update(image).digest('hex');
+  assert.equal(existsSync(join(migrated.root, 'objects', hash.slice(0, 2), hash)), false);
+
+  const runtime: Record<string, unknown> = { decisionOsSettings: { federationNodeId: 'workstation' } };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: catalogRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  context.after(async () => {
+    if (server.listening) { server.close(); await once(server, 'close'); }
+    [catalogRoot, backupRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true }));
+  });
+
+  const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/federation/content-object?projectId=${projectId}&hash=${hash}`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), image);
 });

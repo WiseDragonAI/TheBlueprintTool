@@ -52,6 +52,7 @@ export type Epoch4ExecutionMigration = {
     artifactCount: number;
     artifactBytes: number;
     missingArtifacts: string[];
+    retainedDeletedTaskIds: string[];
     executionIndex: {
       valid: true;
       executionIds: number;
@@ -516,8 +517,11 @@ export function prepareEpoch4ExecutionMigration(input: {
   ]);
   const executionIds = new Set(attempts.map((attempt) => attempt.metadata.executionId));
   const taskIds = new Set(records(input.ledger.cards).map((card) => text(card.id)).filter(Boolean));
+  const retainedDeletedTaskIds = [...new Set(attempts
+    .map((attempt) => attempt.metadata.taskId)
+    .filter((taskId) => taskId && !taskIds.has(taskId)))]
+    .sort();
   for (const attempt of attempts) {
-    if (attempt.metadata.taskId && !taskIds.has(attempt.metadata.taskId)) throw new Error(`task_migration_execution_task_missing:${attempt.metadata.executionId}:${attempt.metadata.taskId}`);
     if (attempt.metadata.predecessorExecutionId && !executionIds.has(attempt.metadata.predecessorExecutionId)) {
       throw new Error(`task_migration_execution_predecessor_missing:${attempt.metadata.executionId}:${attempt.metadata.predecessorExecutionId}`);
     }
@@ -543,6 +547,9 @@ export function prepareEpoch4ExecutionMigration(input: {
       artifactCount: artifacts.objects.length,
       artifactBytes: artifacts.objects.reduce((sum, object) => sum + object.bytes.byteLength, 0),
       missingArtifacts: artifacts.missing,
+      // WHAT: Preserve immutable execution history after its source task has been deleted.
+      // WHY: Execution entities are independently indexed, and deleting a task must not erase its terminal audit trail.
+      retainedDeletedTaskIds,
       executionIndex: {
         valid: true,
         executionIds: executionIds.size,

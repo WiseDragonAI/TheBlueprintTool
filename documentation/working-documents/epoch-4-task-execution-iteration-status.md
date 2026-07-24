@@ -4,7 +4,7 @@
 2. **Implementation branch:** `feature/epoch4-task-execution`.
 3. **Base commit:** `0c72b4ed95c12bcfb0a27ddcbf56f4ecfdba5df7`.
 4. **Production branch:** `main`.
-5. **Current phase:** `J.13 served verification and J.14 cutover preflight`.
+5. **Current phase:** `J.13 served verification and J.14 Workstation cutover admission`.
 6. **Overall state:** `in-progress`.
 7. **Production state:** epoch `3` remains active. Epoch `4` is not admitted for production use.
 
@@ -58,9 +58,14 @@
    4. Converts canonical execution records, direct queue entries, all pipeline skills, active card intents, and retained thread sessions into execution entities.
    5. Converts every non-terminal legacy attempt to `interrupted`, retains terminal history, links pipeline predecessors, and captures available artifacts by exact hash.
    6. Preserves pipeline definitions while removing mutable run manifests after backup; retires the canonical legacy execution file and direct queue after entity installation.
-   7. Reports protocol, schema, epoch, assignment coverage, execution-index validity, missing artifacts, missing objects, semantic inventory, zero journals, checksums, roots, and external rollback paths.
-   8. Focused migration result: `11` tests passed.
-   9. Backend typecheck passed.
+   7. Prepares every registered project before mutation, archives only the exact mutable files, builds all epoch-4 state in shadow roots, then uses one durable node transaction with write-ahead swap intents, deterministic rollback, interruption recovery, and independent verification.
+   8. Accepts identity-verified external project symlinks and rejects a live catalog-owned Decision OS process before mutation.
+   9. References verified local audio and image bytes at their existing paths. Raw media, caches, settings, historical runs, and prior rollback directories are excluded from backup and epoch-4 object installation.
+   10. Retains terminal execution history whose task was subsequently deleted and reports the referenced deleted task IDs in the migration audit.
+   11. Reports protocol, schema, epoch, assignment coverage, execution-index validity, missing artifacts, missing objects, semantic inventory, exact archive bytes, referenced workspace bytes, zero journals, checksums, roots, and external rollback paths.
+   12. Focused migration, transaction, node-admission, media-reference, and runtime-admission result: `30/30`.
+   13. Full backend result: `394/394`.
+   14. Backend typecheck passed.
 3. **J.3 — Persist task assignment:** `verified`.
    1. The existing creation modal keeps its node tabs, presence, project selection, keyboard behavior, and request routing while persisting the selected node as `assignedNodeId`.
    2. Optimistic task identity is now `projectId`, `ledgerId`, and `cardId`; serving-replica ownership no longer splits one logical task.
@@ -186,16 +191,18 @@
     1. The feature branch includes current `main` at merge commit `742d23c3` and is pushed to `origin/feature/epoch4-task-execution`.
     2. Before the Mobile disconnect, Workstation preflight verified the registered MultiTerm process, epoch-3 health, zero active incidents, seven valid registered projects, zero staged project changes, configured federation credentials, matching relay roots, and no live Decision OS-owned child.
     3. Relay credential admission and the epoch-4 Wrangler dry-run passed without deployment.
-    4. Workstation migration requires an explicit backup root on `/media/jbb/57af6506-cd41-47dd-bcb1-5280ec4da1e7`; the migrator default resolves below unwritable `/home`.
-    5. The Mobile read-only preflight ended with `federation_outcome_unknown` when Mobile disconnected. Its exact repository state, registered service commands, catalog root, and external backup path remain unverified. Workstation stayed online with no paused scope; three background federated-library incidents now retain the failed Mobile manifest and skill-snapshot requests.
-    6. No node process, relay deployment, repository installation, migration state, or durable project state changed during preflight.
+    4. The replacement migrator requires an explicit backup root outside the catalog and calculates capacity from the exact mutable archive plus a `25%` margin.
+    5. The Workstation read-only planner completed against the real seven-project catalog, including the external `Ardaria_57` symlink. It calculated `11,576,346` archive bytes and `993,873,984` referenced workspace bytes.
+    6. The planner retained the Lys terminal execution history for deleted task `card-project-sync-8112b626-7a0c-4573-9031-f253eeb029d7` and reported that deleted-task reference instead of rejecting the catalog.
+    7. The Mobile read-only preflight ended with `federation_outcome_unknown` when Mobile disconnected. Its exact repository state, registered service commands, catalog root, and external backup path remain unverified. Workstation stayed online with no paused scope; three background federated-library incidents now retain the failed Mobile manifest and skill-snapshot requests.
+    8. No migration, backup, node process change, relay deployment, repository installation, migration marker, or durable project-state change occurred during the Workstation planner proof.
 
 ---
 
 ## D. Current Verified Gaps
 
 1. Served Workstation and Mobile interaction verification remains for `J.13`.
-2. Production migration, relay namespace deployment, node restart, and three-party convergence proof remain for `J.14`.
+2. The authorized Workstation migration, relay namespace deployment, node restart, and three-party convergence proof remain for `J.14`.
 3. Mobile must reconnect, complete the read-only cutover preflight, and clear the three retained federated-library incidents before the production maintenance window is admitted.
 4. Operator authorization is required before either registered server process changes.
 

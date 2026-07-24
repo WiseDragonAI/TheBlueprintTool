@@ -74,7 +74,7 @@ import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.
 import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
 import { executeNodeMessage } from '../../federation/helper/execute-node-message.js';
 import { createFederationTaskStateReplicator } from '../../federation/helper/federation-task-state-replicator.js';
-import type { FederationContentManifest } from '../../federation/helper/federation-content-manifest.js';
+import { resolveVerifiedManifestResourceFile, type FederationContentManifest } from '../../federation/helper/federation-content-manifest.js';
 import { createFederationContentReplicaStore } from '../../federation/helper/federation-content-replica-store.js';
 import { createFederationContentScheduler } from '../../federation/helper/federation-content-scheduler.js';
 import { readTaskContentOnDemand } from '../../federation/helper/read-task-content-on-demand.js';
@@ -266,6 +266,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const masterDecisionOsRoot = resolveDecisionOsRoot({ action_payload: payload, runtime_state: runtime });
   const masterRoot = dirname(masterDecisionOsRoot);
   const decisionOsRoot = masterDecisionOsRoot;
+  const migrationAdmissionFile = resolve(masterDecisionOsRoot, 'runtime', 'epoch-4-migration-admission.json');
+  let migrationAdmission: AnyRecord | null = null;
+  if (existsSync(migrationAdmissionFile)) {
+    try { migrationAdmission = JSON.parse(readFileSync(migrationAdmissionFile, 'utf8')) as AnyRecord; }
+    catch (error) { migrationAdmission = { phase: 'invalid', error: error instanceof Error ? error.message : String(error) }; }
+  }
+  const migrationAdmissionBlocked = Boolean(migrationAdmission && !['verified', 'rolled-back'].includes(String(migrationAdmission.phase ?? '')));
   const incidentLedger = createRuntimeIncidentLedger({ decisionOsRoot: masterDecisionOsRoot });
   runtime.decisionOsRoot = masterDecisionOsRoot;
   runtime.serverRoot = masterRoot;
@@ -437,6 +444,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const taskStateForProject = (project: DecisionOsProject): ProjectTaskState => {
     const paused = pausedTaskProjects.get(project.id);
     if (paused) throw new RuntimeScopePausedError(paused.scope, paused.id);
+    if (migrationAdmissionBlocked) {
+      throw pauseTaskProject(project, new Error(`task_migration_transaction_incomplete:${String(migrationAdmission?.phase ?? 'unknown')}`), 'admit-migrated-task-state');
+    }
     const current = projectTaskStates.get(project.id);
     if (current) return current;
     try {
@@ -2503,9 +2513,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         ? resolve(taskStateForProject(project).store.root, 'objects', hash.slice(0, 2), hash)
         : '';
       const cachedFile = /^[a-f0-9]{64}$/i.test(hash) ? federationContentStore.objectFile(hash) : '';
-      const file = localFile && existsSync(localFile) ? localFile : cachedFile;
+      const referencedHead = project && /^[a-f0-9]{64}$/i.test(hash)
+        ? taskStateForProject(project).store.contentHeads().find((head) => head.hash === hash)
+        : undefined;
+      const referencedFile = project && referencedHead
+        ? await resolveVerifiedManifestResourceFile({ decisionOsRoot: project.decisionOsRoot, key: referencedHead.key, hash })
+        : '';
+      const file = localFile && existsSync(localFile) ? localFile : referencedFile || cachedFile;
       // WHAT: Prefer locally authoritative bytes, then an already verified replica object.
-      // WHY: Any verified replica can keep exact content available when the owner is offline.
+      // WHY: Migration-owned local heads reference immutable workspace files without duplicating binary payloads.
       if (!file || !existsSync(file)) {
         response.statusCode = 404;
         response.end();

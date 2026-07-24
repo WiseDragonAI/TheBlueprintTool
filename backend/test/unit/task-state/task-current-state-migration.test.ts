@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import test from 'node:test';
@@ -19,7 +19,7 @@ test('offline migration rejects a project identifier that can escape task-state 
   );
 });
 
-test('offline migration installs current shards, immutable content, and a final format marker', async (context) => {
+test('offline migration installs current shards, references current content, and publishes a final format marker', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));
   const projectId = 'project-a';
@@ -50,8 +50,8 @@ test('offline migration installs current shards, immutable content, and a final 
   writeFileSync(resolve(stateRoot, 'old-event-segment.jsonl'), '{}\n');
   const result = await migrateTaskCurrentState({ decisionOsRoot: root, projectId, nodeId: 'workstation', tasksLedgerFile: tasksFile });
   context.after(() => rmSync(resolve(root, '..', `${basename(root)}-task-state-rollback`), { recursive: true, force: true }));
-  assert.equal(existsSync(resolve(result.backup, 'decision-os', 'task-state', projectId, 'old-event-segment.jsonl')), true);
-  assert.equal(existsSync(resolve(result.backup, 'decision-os', 'tasks.json')), true);
+  assert.equal(existsSync(resolve(result.backup, 'projects', projectId, 'decision-os', 'task-state', projectId, 'old-event-segment.jsonl')), true);
+  assert.equal(existsSync(resolve(result.backup, 'projects', projectId, 'decision-os', 'tasks.json')), true);
   assert.equal(existsSync(resolve(result.root, 'format.json')), true);
   assert.equal(existsSync(resolve(result.root, 'old-event-segment.jsonl')), false);
   const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId });
@@ -62,7 +62,8 @@ test('offline migration installs current shards, immutable content, and a final 
   assert.equal((store.projection().ledger.relationships as Array<Record<string, unknown>>)[0].position, 0);
   const head = store.contentHeads('.decision-os/cards/tasks/card-a.md')[0];
   assert.ok(head.hash);
-  const rewrittenBody = readFileSync(resolve(result.root, 'objects', head.hash.slice(0, 2), head.hash), 'utf8');
+  assert.equal(existsSync(resolve(result.root, 'objects', head.hash.slice(0, 2), head.hash)), false);
+  const rewrittenBody = readFileSync(resolve(root, 'cards', 'tasks', 'card-a.md'), 'utf8');
   assert.match(rewrittenBody, /Migrated body/);
   assert.doesNotMatch(rewrittenBody, /Waiting since:|## B\. Subtasks|#task-active/);
   const note = (store.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0];
@@ -70,18 +71,69 @@ test('offline migration installs current shards, immutable content, and a final 
   assert.equal(note.timestamp, '2026-07-21T00:00:00.000Z');
   const threadHead = store.contentHeads('.decision-os/threads/tasks/thread-card-a.md')[0];
   assert.ok(threadHead.hash);
-  assert.match(readFileSync(resolve(result.root, 'objects', threadHead.hash.slice(0, 2), threadHead.hash), 'utf8'), /Migrated note\./);
+  assert.equal(existsSync(resolve(result.root, 'objects', threadHead.hash.slice(0, 2), threadHead.hash)), false);
+  assert.match(readFileSync(threadFile, 'utf8'), /Migrated note\./);
   const report = JSON.parse(readFileSync(result.report, 'utf8')) as Record<string, any>;
   assert.equal(report.semanticInventory.cards, 2);
   assert.equal(report.semanticInventory.notes, 1);
   assert.equal(report.semanticInventory.deletions, 1);
   assert.equal(report.semanticInventory.entityDeletions, 1);
   assert.equal(report.semanticInventory.resourceHeads, 2);
-  assert.deepEqual(report.objectInventory, { sourceObjects: 1, installedObjects: 1, installedBytes: retainedObject.byteLength });
-  assert.equal(readFileSync(resolve(result.root, 'objects', retainedObjectHash.slice(0, 2), retainedObjectHash), 'utf8'), retainedObject.toString());
+  assert.deepEqual(report.objectInventory, { referencedObjects: 2, installedObjects: 0, installedBytes: 0, referencedWorkspaceBytes: 136 });
+  assert.equal(existsSync(resolve(result.root, 'objects', retainedObjectHash.slice(0, 2), retainedObjectHash)), false);
   assert.deepEqual(report.recoveredNoteDeletions, [{ threadId: 'thread-card-a', noteId: 'note-a' }]);
   assert.equal(report.sourceValueAudit.find((entry: Record<string, unknown>) => entry.cardId === 'card-a').waitingAtSource, 'card-markdown');
   assert.match(report.canonicalProjectionChecksum, /^[a-f0-9]{64}$/);
+});
+
+test('epoch-3 removed ledger fields become causal tombstones when their presence lane remained set', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-removed-ledger-field-migration-'));
+  const rollbackRoot = `${root}-rollback`;
+  context.after(() => [root, rollbackRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'project-a';
+  const stateRoot = resolve(root, 'task-state', projectId);
+  const entityId = 'tasks:threadFiles/thread-obsolete';
+  const path = 'threadFiles/thread-obsolete';
+  const tasksFile = resolve(root, 'tasks.json');
+  mkdirSync(resolve(stateRoot, 'current', 'ledger'), { recursive: true });
+  writeFileSync(tasksFile, JSON.stringify({ cards: [], annotations: [], relationships: [], threadFiles: {} }));
+  writeFileSync(resolve(stateRoot, 'format.json'), JSON.stringify({
+    stateProtocol: 'decision-os-task-state/3',
+    stateSchema: 3,
+    baselineEpoch: 3,
+    projectId,
+    baselineRoot: 'epoch-3-root',
+  }));
+  writeFileSync(resolve(stateRoot, 'current', 'ledger', `${encodeURIComponent(entityId)}.json`), JSON.stringify({
+    version: 3,
+    projectId,
+    entityType: 'ledger',
+    entityId,
+    fields: {
+      $entity: {
+        clock: { workstation: 7 },
+        candidates: [{ dot: { replicaId: 'workstation', counter: 7 }, operation: 'set', value: true }],
+      },
+      [path]: {
+        clock: { workstation: 7 },
+        candidates: [{ dot: { replicaId: 'workstation', counter: 7 }, operation: 'remove' }],
+      },
+    },
+    stateHash: 'legacy',
+  }));
+
+  const result = await migrateTaskCurrentState({
+    decisionOsRoot: root,
+    projectId,
+    nodeId: 'workstation',
+    tasksLedgerFile: tasksFile,
+    backupRoot: rollbackRoot,
+  });
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId });
+  const presence = store.entity('ledger', entityId)?.fields.$entity;
+  assert.equal(presence?.candidates[0].operation, 'tombstone');
+  assert.equal((store.projection().ledger.threadFiles as Record<string, unknown> | undefined)?.['thread-obsolete'], undefined);
+  assert.equal(JSON.parse(readFileSync(result.report, 'utf8')).semanticInventory.entityDeletions, 1);
 });
 
 test('epoch-3 migration assigns master tasks and collapses every legacy execution authority into epoch-4 entities', async (context) => {
@@ -152,6 +204,30 @@ test('epoch-3 migration assigns master tasks and collapses every legacy executio
       result: null,
       error: null,
       revision: 4,
+    }, {
+      executionId: 'deleted-task-execution',
+      sessionId: 'deleted-task-session',
+      projectId,
+      ledgerId: 'tasks',
+      taskId: 'deleted-task',
+      ownerCardId: 'deleted-task',
+      kind: 'thread',
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      phase: 'cancelled',
+      requestedAt: '2026-07-21T01:00:00.000Z',
+      phaseSince: '2026-07-21T01:01:00.000Z',
+      startedAt: null,
+      finishedAt: '2026-07-21T01:01:00.000Z',
+      executorNodeId: null,
+      processId: null,
+      processStartTime: null,
+      stdoutFile: null,
+      stderrFile: null,
+      result: { status: 'cancelled', summary: 'Task was deleted after cancellation.' },
+      error: null,
+      revision: 2,
     }],
   }));
   writeFileSync(resolve(root, 'codex-process-queue.json'), JSON.stringify({
@@ -261,28 +337,30 @@ test('epoch-3 migration assigns master tasks and collapses every legacy executio
   assert.equal((store.entity('execution', 'pipeline-execution-b')?.fields.metadata.candidates[0].value as Record<string, unknown>).predecessorExecutionId, 'pipeline-execution-a');
   assert.equal((store.entity('execution', 'historic-session:execution:0')?.fields.lifecycle.candidates[0].value as Record<string, unknown>).phase, 'interrupted');
   const executions = createTaskExecutionRepository({ store, writerId: 'workstation', projectId });
-  assert.equal(executions.all().length, 5, JSON.stringify(executions.diagnostics()));
+  assert.equal(executions.all().length, 6, JSON.stringify(executions.diagnostics()));
   assert.equal(executions.byTaskId('master-a').length, 5);
+  assert.equal(executions.byTaskId('deleted-task').length, 1);
   assert.equal(executions.byPipelineRunId('pipeline-run').length, 2);
   assert.equal(executions.byPhase('interrupted').length, 4);
-  assert.equal(executions.byExecutorNodeId('workstation').length, 5);
+  assert.equal(executions.byExecutorNodeId('workstation').length, 6);
   assert.deepEqual(executions.diagnostics(), []);
   const artifact = (store.entity('execution', 'direct-execution')?.fields.artifacts.candidates[0].value as Record<string, any>).jsonl;
   assert.equal(readFileSync(resolve(result.root, 'objects', artifact.hash.slice(0, 2), artifact.hash), 'utf8'), '{"type":"turn.started"}\n');
   assert.equal(existsSync(resolve(root, 'codex-executions.json')), false);
   assert.equal(existsSync(resolve(root, 'codex-process-queue.json')), false);
   assert.deepEqual(JSON.parse(readFileSync(resolve(root, 'codex-pipelines.json'), 'utf8')).runs, []);
-  assert.equal(existsSync(resolve(result.backup, 'decision-os', 'codex-executions.json')), true);
-  assert.equal(existsSync(resolve(result.backup, 'decision-os', 'codex-process-queue.json')), true);
+  assert.equal(existsSync(resolve(result.backup, 'projects', projectId, 'decision-os', 'codex-executions.json')), true);
+  assert.equal(existsSync(resolve(result.backup, 'projects', projectId, 'decision-os', 'codex-process-queue.json')), true);
   const report = JSON.parse(readFileSync(result.report, 'utf8')) as Record<string, any>;
   assert.deepEqual(
     { stateProtocol: report.stateProtocol, stateSchema: report.stateSchema, baselineEpoch: report.baselineEpoch },
     { stateProtocol: 'decision-os-task-state/4', stateSchema: 4, baselineEpoch: 4 },
   );
   assert.deepEqual(report.assignmentCoverage, { assignedTasks: 1, inheritedSubtasks: 1, missingAssignments: [] });
-  assert.equal(report.executionMigration.executionCount, 5);
+  assert.equal(report.executionMigration.executionCount, 6);
   assert.equal(report.executionMigration.interruptedCount, 4);
   assert.equal(report.executionMigration.artifactCount, 2);
+  assert.deepEqual(report.executionMigration.retainedDeletedTaskIds, ['deleted-task']);
   assert.equal(report.missingObjects, 0);
   assert.equal(report.journalCount, 0);
 });
@@ -362,7 +440,7 @@ test('migration refuses to publish epoch 3 when a retained resource head has no 
 
   await assert.rejects(migrateTaskCurrentState({ decisionOsRoot: root, projectId, nodeId: 'workstation', tasksLedgerFile: tasksFile, backupRoot: rollbackRoot }), /missing_migrated_task_content_object/);
 
-  assert.equal(existsSync(resolve(stateRoot, 'format.json')), false);
+  assert.equal(JSON.parse(readFileSync(resolve(stateRoot, 'format.json'), 'utf8')).version, 2);
   assert.equal(existsSync(rollbackRoot), true);
 });
 
@@ -444,7 +522,7 @@ test('migration joins epoch-3 current entities from every writable node before e
   const card = (store.projection().ledger.cards as Array<Record<string, any>>)[0];
   assert.equal(card.title, 'Joined title');
   assert.equal(card.lifecycle.status, 'done');
-  assert.equal(existsSync(resolve(result.backup, 'source-state-roots', '1', 'current', 'card', 'card-a.json')), true);
+  assert.equal(existsSync(resolve(result.backup, 'projects', projectId, 'source-state-roots', '1', 'current', 'card', 'card-a.json')), true);
   assert.equal(store.entity('card', 'deleted-card')?.fields.$entity.candidates[0].operation, 'tombstone');
   assert.equal(store.entity('card', 'deleted-card')?.fields.$entity.clock.mobile, 1);
   assert.deepEqual(store.contentHeads(localKey).map((head) => ({ sourceReplicaId: head.sourceReplicaId, hash: head.hash })), [{ sourceReplicaId: 'workstation', hash: createHash('sha256').update(localBody).digest('hex') }]);
@@ -534,7 +612,10 @@ test('migration preserves projection-only node entities, conflicts, notes, and c
     createHash('sha256').update(phoneSharedBody).digest('hex'),
   ]));
   assert.deepEqual(new Set(sharedHeads.map((head) => head.sourceReplicaId)), new Set(['workstation', 'phone']));
-  for (const head of sharedHeads) assert.equal(existsSync(resolve(result.root, 'objects', head.hash.slice(0, 2), head.hash)), true);
+  const localSharedHead = sharedHeads.find((head) => head.sourceReplicaId === 'workstation')!;
+  const phoneSharedHead = sharedHeads.find((head) => head.sourceReplicaId === 'phone')!;
+  assert.equal(existsSync(resolve(result.root, 'objects', localSharedHead.hash.slice(0, 2), localSharedHead.hash)), false);
+  assert.equal(existsSync(resolve(result.root, 'objects', phoneSharedHead.hash.slice(0, 2), phoneSharedHead.hash)), true);
   const report = JSON.parse(readFileSync(result.report, 'utf8')) as Record<string, any>;
   assert.deepEqual(report.projectionSources, [{ sourceNodeId: 'phone', entityCount: 6, resourceCount: 3 }]);
 });
@@ -586,6 +667,58 @@ test('independent node migrations converge and retain routable content sources',
   assert.deepEqual(new Set(workstation.contentHeads(sharedRef).map((head) => head.sourceReplicaId)), new Set(['workstation', 'phone']));
   const phoneOnlyHead = workstation.contentHeads(phoneOnlyRef)[0];
   assert.equal(phoneOnlyHead.sourceReplicaId, 'phone');
-  assert.equal(readFileSync(resolve(phoneResult.root, 'objects', phoneOnlyHead.hash.slice(0, 2), phoneOnlyHead.hash), 'utf8'), 'phone-only body.\n');
+  assert.equal(readFileSync(resolve(phoneRoot, phoneOnlyRef.replace(/^\.decision-os\//, '')), 'utf8'), 'phone-only body.\n');
+  assert.equal(existsSync(resolve(phoneResult.root, 'objects', phoneOnlyHead.hash.slice(0, 2), phoneOnlyHead.hash)), false);
   assert.equal(existsSync(resolve(workstationResult.root, 'objects', phoneOnlyHead.hash.slice(0, 2), phoneOnlyHead.hash)), false);
+});
+
+test('migration references local audio and images without copying their bytes into backup or epoch-4 objects', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-media-reference-'));
+  const rollbackRoot = `${root}-rollback`;
+  context.after(() => [root, rollbackRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'project-a';
+  const tasksFile = resolve(root, 'tasks.json');
+  const cardFile = resolve(root, 'cards', 'tasks', 'card-a.md');
+  const threadFile = resolve(root, 'threads', 'tasks', 'thread-card-a.md');
+  const imageFile = resolve(root, 'assets', 'large-image.png');
+  const voiceFile = resolve(root, 'voice-uploads', 'large-voice.webm');
+  mkdirSync(resolve(root, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(resolve(root, 'threads', 'tasks'), { recursive: true });
+  mkdirSync(resolve(root, 'assets'), { recursive: true });
+  mkdirSync(resolve(root, 'voice-uploads'), { recursive: true });
+  const image = Buffer.alloc(1024 * 1024, 0x49);
+  const voice = Buffer.alloc(2 * 1024 * 1024, 0x56);
+  writeFileSync(imageFile, image);
+  writeFileSync(voiceFile, voice);
+  writeFileSync(cardFile, 'Card body.\n\n![Large](.decision-os/assets/large-image.png)\n');
+  writeFileSync(threadFile, `# OPERATOR\n<!-- decision-os:note ${JSON.stringify({ id: 'note-a', timestamp: '2026-07-21T00:00:00.000Z', voiceFileRef: voiceFile })} -->\n\nVoice note.\n`);
+  writeFileSync(tasksFile, JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Card A', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } }],
+    annotations: [],
+    relationships: [],
+    threadFiles: { 'thread-card-a': '.decision-os/threads/tasks/thread-card-a.md' },
+  }));
+
+  const result = await migrateTaskCurrentState({ decisionOsRoot: root, projectId, nodeId: 'workstation', tasksLedgerFile: tasksFile, backupRoot: rollbackRoot });
+  const imageHash = createHash('sha256').update(image).digest('hex');
+  const voiceHash = createHash('sha256').update(voice).digest('hex');
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId });
+  assert.equal(store.contentHeads('.decision-os/assets/large-image.png')[0].hash, imageHash);
+  assert.equal(store.contentHeads('.decision-os/voice-uploads/large-voice.webm')[0].hash, voiceHash);
+  assert.equal(existsSync(resolve(result.root, 'objects', imageHash.slice(0, 2), imageHash)), false);
+  assert.equal(existsSync(resolve(result.root, 'objects', voiceHash.slice(0, 2), voiceHash)), false);
+  assert.deepEqual(readFileSync(imageFile), image);
+  assert.deepEqual(readFileSync(voiceFile), voice);
+  const manifest = JSON.parse(readFileSync(resolve(result.backup, 'source-manifest.json'), 'utf8')) as { entries: Array<{ file: string; archive: boolean; archiveFile: string }> };
+  const media = manifest.entries.filter((entry) => entry.file === imageFile || entry.file === voiceFile);
+  assert.deepEqual(media.map((entry) => ({ file: entry.file, archive: entry.archive, archiveFile: entry.archiveFile })), [
+    { file: imageFile, archive: false, archiveFile: '' },
+    { file: voiceFile, archive: false, archiveFile: '' },
+  ]);
+  const backupNames = (directory: string): string[] => readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const file = resolve(directory, entry.name);
+    return entry.isDirectory() ? backupNames(file) : [entry.name];
+  });
+  assert.equal(backupNames(result.backup).includes('large-image.png'), false);
+  assert.equal(backupNames(result.backup).includes('large-voice.webm'), false);
 });

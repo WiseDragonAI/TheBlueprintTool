@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
-import { buildFederationContentManifest } from '../../../src/business/federation/helper/federation-content-manifest.js';
+import { buildFederationContentManifest, resolveVerifiedManifestResourceFile } from '../../../src/business/federation/helper/federation-content-manifest.js';
 import { createFederationContentReplicaStore } from '../../../src/business/federation/helper/federation-content-replica-store.js';
 import { createFederationContentScheduler } from '../../../src/business/federation/helper/federation-content-scheduler.js';
 
@@ -54,6 +54,19 @@ test('content manifest covers normal file links and voice metadata across ledger
     '.decision-os/threads/tasks/thread-a.md',
     '.decision-os/voice-uploads/note.wav',
   ]);
+});
+
+test('a referenced workspace object is served only while its path still matches the advertised hash', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-content-reference-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(resolve(root, 'assets'), { recursive: true });
+  const file = resolve(root, 'assets', 'image.png');
+  const bytes = Buffer.from('immutable image');
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  writeFileSync(file, bytes);
+  assert.equal(await resolveVerifiedManifestResourceFile({ decisionOsRoot: root, key: '.decision-os/assets/image.png', hash }), file);
+  writeFileSync(file, Buffer.from('changed image'));
+  assert.equal(await resolveVerifiedManifestResourceFile({ decisionOsRoot: root, key: '.decision-os/assets/image.png', hash }), '');
 });
 
 test('resource-scoped manifests preserve unrelated cache entries and prioritize exact repair', (context) => {

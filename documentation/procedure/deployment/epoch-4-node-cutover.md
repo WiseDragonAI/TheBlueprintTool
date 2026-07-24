@@ -17,9 +17,21 @@
 5. Each node has its configured federation identity and credential.
 6. The repository `.env` contains `ADMIN_SECRET`; verify presence without printing it.
 7. Every project repository has no staged operator work.
-8. Workstation uses an explicit backup path below `/media/jbb/57af6506-cd41-47dd-bcb1-5280ec4da1e7/decision-os-epoch4-rollbacks`. The migrator's default path resolves below `/home`, which is not writable by the Workstation operator.
-9. Require at least `12 GiB` free at the Workstation backup mount before migration.
-10. Require both node health routes ready, zero active incidents, and zero paused scopes before quiescence.
+8. Run the read-only Workstation inventory while the server remains online:
+
+   ```bash
+   node /home/jbb/dev/EditorBP/decision-os/bin/decision-os-plan-node-migration.mjs \
+     --catalog-root /home/jbb \
+     --node-id workstation \
+     --target-epoch 4 \
+     --default-assigned-node workstation
+   ```
+
+9. Require exactly seven Workstation projects, including the identity-verified external `Ardaria_57` symlink.
+10. Record `archiveBytes`, `referencedWorkspaceBytes`, every project source fingerprint, and available space at the backup mount. Available space must exceed `archiveBytes` plus `25%`.
+11. Workstation uses an explicit transaction path below `/media/jbb/57af6506-cd41-47dd-bcb1-5280ec4da1e7/decision-os-epoch4-rollbacks`.
+12. The archive contains only task-state metadata and files the migration mutates. Audio, images, caches, settings, historical runs, and prior rollback directories remain at their original paths and enter the transaction only as verified hashes.
+13. Require both node health routes ready, zero active incidents, and zero paused scopes before quiescence.
 
 ---
 
@@ -68,6 +80,9 @@
 3. Mobile supplies one explicit writable backup path outside its catalog root.
 4. Keep both servers stopped until both reports pass section `F`.
 5. Do not copy migrated state between nodes.
+6. The command prepares and validates every project shadow before the first live swap.
+7. The transaction retains each legacy task-state root through a same-filesystem rename, journals every swap and sidecar write, and automatically restores completed swaps after a normal failure.
+8. Reinvoking the command with the same `--backup-root` rolls back a nonterminal interrupted transaction. Reinvoking a verified transaction returns its independently checked result without copying data again.
 
 ---
 
@@ -79,10 +94,18 @@
 4. Require one result for every registered project.
 5. Require complete task assignment coverage.
 6. Require valid execution entity indexes.
-7. Require zero missing locally owned objects.
+7. Require zero missing content. Locally owned audio and images must resolve through their original path and advertised hash without an object-store copy.
 8. Require zero journals.
-9. Require a complete byte-preserving external rollback backup.
+9. Require `source-manifest.json` to report `complete: true`, verified hashes for every archived mutation input, and empty `archiveFile` values for referenced media.
 10. Require the configured node identity in every report.
+11. Run the independent verifier on each node:
+
+    ```bash
+    node <decision-os-repository>/bin/decision-os-verify-node-migration.mjs \
+      --backup-root <exact-transaction-path>
+    ```
+
+12. Require transaction phase `verified`.
 
 ---
 
@@ -156,11 +179,18 @@
 
 1. Stop both nodes.
 2. Repoint the relay deployment to the retained epoch-3 namespace.
-3. Restore each node from its own external migration backup.
-4. Restore the reviewed epoch-3 code commit.
-5. Start Workstation, then Mobile.
-6. Require epoch-3 roots and projections to match their pre-cutover evidence.
-7. Preserve failed epoch-4 state and reports as incident evidence.
+3. Execute recorded node rollback independently on each node:
+
+   ```bash
+   node <decision-os-repository>/bin/decision-os-recover-node-migration.mjs \
+     --backup-root <exact-transaction-path>
+   ```
+
+4. Require state `rolled-back`.
+5. Restore the reviewed epoch-3 code commit.
+6. Start Workstation, then Mobile.
+7. Require epoch-3 roots and projections to match their pre-cutover evidence.
+8. Preserve failed epoch-4 state, transaction journals, and reports as incident evidence.
 
 ---
 

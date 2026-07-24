@@ -270,3 +270,42 @@ test('task-state journal write failure preserves invalid bytes and pauses only i
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('keeps diagnostics online and pauses task admission for an interrupted epoch-4 transaction', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'decision-os-runtime-migration-admission-'));
+  const decisionOsRoot = join(home, '.decision-os');
+  const projectId = 'project-a';
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: projectId }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {}, threadFiles: {} }));
+  await migrateTaskCurrentState({ decisionOsRoot, projectId, nodeId: 'workstation', tasksLedgerFile: join(decisionOsRoot, 'tasks.json') });
+  mkdirSync(join(decisionOsRoot, 'runtime'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'runtime', 'epoch-4-migration-admission.json'), JSON.stringify({
+    version: 1,
+    runId: 'interrupted-run',
+    phase: 'committing',
+    backupRoot: join(home, 'rollback'),
+    updatedAt: '2026-07-24T00:00:00.000Z',
+  }));
+
+  const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
+  const runtime: Record<string, unknown> = { decisionOsSettings: { federationNodeId: 'workstation' } };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; pausedTaskProjectIds: string[] };
+    assert.equal(health.status, 'degraded');
+    assert.deepEqual(health.pausedTaskProjectIds, [projectId]);
+    assert.equal((await fetch(`${baseUrl}/api/diagnostics/incidents`)).status, 200);
+    assert.equal((await fetch(`${baseUrl}/`)).status, 200);
+    const incidents = JSON.parse(readFileSync(join(decisionOsRoot, 'runtime-incidents.json'), 'utf8')) as { incidents: Array<{ scope: string; code: string }> };
+    assert.equal(incidents.incidents.some((incident) => incident.scope === `project-task-state:${projectId}` && incident.code === 'task_migration_transaction_incomplete'), true);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(home, { recursive: true, force: true });
+  }
+});
