@@ -112,7 +112,7 @@ export function applyLedgerMutation(input: {
   mutation: LedgerMutation;
 }): { ok: boolean; ledger: Record<string, unknown>; error?: MutationError } {
   const { decisionOsRoot, ledgerPath, ledger, mutation } = input;
-  if (['append-note', 'update-note', 'delete-note'].includes(String(mutation.action)) && mutation.note?.threadId) {
+  if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(String(mutation.action)) && mutation.note?.threadId) {
     hydrateLedgerThreadNotesFor(ledger, decisionOsRoot, mutation.note.threadId);
   }
   let mutationError: MutationError | undefined;
@@ -385,6 +385,7 @@ export function applyLedgerMutation(input: {
     const notesByThread = normalizeLedgerNotes(ledger);
     const notes = notesByThread[mutation.note.threadId] ?? [];
     const noteId = String(mutation.note.id ?? `note-${Date.now()}`);
+    mutation.note.id = noteId;
     const deletedNoteIds = ledger.deletedNoteIds?.[mutation.note.threadId] ?? [];
     if (deletedNoteIds.map((id) => String(id)).includes(noteId)) {
       notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
@@ -422,6 +423,7 @@ export function applyLedgerMutation(input: {
       notes.push(note);
     }
     if (note) {
+      mutation.note.id = String(note.id ?? noteId);
       if (typeof mutation.note.body === 'string') note.message = mutation.note.body;
       patchVoiceMetadata(note, mutation.note, { overwrite: true });
       if (mutation.note.imageSizes && typeof mutation.note.imageSizes === 'object') note.imageSizes = mutation.note.imageSizes;
@@ -436,12 +438,40 @@ export function applyLedgerMutation(input: {
     const noteId = String(mutation.note.id ?? '');
     const tombstonedId = noteId || String(notes.at(-1)?.id ?? '');
     if (tombstonedId) {
+      mutation.note.id = tombstonedId;
       const deletedNoteIds = ledger.deletedNoteIds && typeof ledger.deletedNoteIds === 'object' ? ledger.deletedNoteIds : {};
       deletedNoteIds[mutation.note.threadId] = Array.from(new Set([...(deletedNoteIds[mutation.note.threadId] ?? []), tombstonedId]));
       ledger.deletedNoteIds = deletedNoteIds;
     }
     notesByThread[mutation.note.threadId] = noteId ? notes.filter((entry) => String(entry.id ?? '') !== noteId) : notes.slice(0, -1);
     writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
+  }
+  if (mutation.action === 'restore-note' && mutation.note?.threadId) {
+    const noteId = String(mutation.note.id ?? '').trim();
+    if (!noteId) {
+      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'note_id_required' } } };
+    }
+    const notesByThread = normalizeLedgerNotes(ledger);
+    const notes = notesByThread[mutation.note.threadId] ?? [];
+    let note = notes.find((entry) => String(entry.id ?? '') === noteId);
+    if (!note) {
+      if (typeof mutation.note.body !== 'string') {
+        return { ok: false, ledger, error: { statusCode: 409, body: { ok: false, error: 'note_content_required' } } };
+      }
+      note = {
+        id: noteId,
+        role: mutation.note.role === 'agent' ? 'agent' : 'operator',
+        message: mutation.note.body,
+        timestamp: new Date().toISOString(),
+        ...voiceMetadata(mutation.note),
+      };
+      notes.push(note);
+    }
+    const deletedNoteIds = ledger.deletedNoteIds && typeof ledger.deletedNoteIds === 'object' ? ledger.deletedNoteIds : {};
+    deletedNoteIds[mutation.note.threadId] = (deletedNoteIds[mutation.note.threadId] ?? []).filter((id) => String(id) !== noteId);
+    ledger.deletedNoteIds = deletedNoteIds;
+    notesByThread[mutation.note.threadId] = notes;
+    writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
   }
   if (mutation.action === 'paste-selection' && mutation.selection) {
     const requestedSuffix = String(mutation.pasteSuffix ?? '').trim();

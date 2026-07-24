@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startThreadCodexProcessController } from '@backend/business/codex/controller/start-thread-codex-process-controller.js';
+import { startThreadCodexProcessController, threadMarkdownForPrompt } from '@backend/business/codex/controller/start-thread-codex-process-controller.js';
 import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
 import { cancelCardSkillRunController } from '@backend/business/codex/controller/cancel-card-skill-run-controller.js';
 import { createTaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
@@ -109,6 +109,36 @@ function executionMetadata(context: ReturnType<typeof fixture>): TaskExecutionMe
     restartOfExecutionId: null,
   };
 }
+
+test('thread launch context excludes tombstoned notes that remain in the Markdown sidecar', async () => {
+  const context = fixture();
+  try {
+    writeFileSync(join(context.decisionOsRoot, 'threads', 'specs', context.threadId + '.md'), [
+      '# OPERATOR',
+      '<!-- decision-os:note {"id":"note-deleted","timestamp":"2026-07-15T08:00:00.000Z"} -->',
+      '',
+      'Deleted operator text.',
+      '',
+      '# OPERATOR',
+      '<!-- decision-os:note {"id":"note-live","timestamp":"2026-07-15T08:10:40.966Z"} -->',
+      '',
+      'Live operator text.',
+      '',
+    ].join('\n'));
+    const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as Record<string, unknown>;
+    ledger.deletedNoteIds = { [context.threadId]: ['note-deleted'] };
+
+    const result = threadMarkdownForPrompt({ decisionOsRoot: context.decisionOsRoot, ledger, threadId: context.threadId });
+
+    assert.ok(result);
+    assert.doesNotMatch(result.markdown, /Deleted operator text/);
+    assert.match(result.markdown, /Live operator text/);
+    assert.equal(result.operatorNoteTimestamp, '2026-07-15T08:10:40.966Z');
+  } finally {
+    await context.state.flush();
+    rmSync(context.workspace, { recursive: true, force: true });
+  }
+});
 
 async function cleanup(context: ReturnType<typeof fixture>): Promise<void> {
   for (const process of taskExecutionProcesses(context.runtime)) {

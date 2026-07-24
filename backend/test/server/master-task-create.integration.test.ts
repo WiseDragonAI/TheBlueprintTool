@@ -87,6 +87,27 @@ test('master-task creation persists the complete graph and returns absolute Mark
   const threadMarkdown = readFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-card-master.md'), 'utf8');
   assert.match(threadMarkdown, /First operator note\./);
   assert.match(threadMarkdown, /Second operator note\./);
+  const deleteNoteResponse = await fetch(`${baseUrl}/p/${projectId}/decision-os/tasks`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'delete-note', note: { id: 'note-first', threadId: 'thread-card-master' } }),
+  });
+  assert.equal(deleteNoteResponse.status, 200);
+  const restoreNoteResponse = await fetch(`${baseUrl}/p/${projectId}/decision-os/tasks`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'restore-note', note: { id: 'note-first', threadId: 'thread-card-master', body: 'First operator note.' } }),
+  });
+  assert.equal(restoreNoteResponse.status, 200, await restoreNoteResponse.clone().text());
+  const restoredProjection = await fetch(`${baseUrl}/api/task-state/projection?projectId=${encodeURIComponent(projectId)}`).then((result) => result.json()) as {
+    ledger: {
+      notes: Record<string, Array<{ id: string }>>;
+      deletedNoteIds: Record<string, string[]>;
+    };
+  };
+  assert.deepEqual(restoredProjection.ledger.deletedNoteIds['thread-card-master'], []);
+  assert.deepEqual(restoredProjection.ledger.notes['thread-card-master'].map((note) => note.id).sort(), ['note-first', 'note-second']);
+  assert.match(readFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-card-master.md'), 'utf8'), /First operator note\./);
   const inheritedReassignment = await fetch(`${baseUrl}/p/${projectId}/decision-os/tasks`, {
     method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
       action: 'reassign-task', cardId: 'card-subtask', assignedNodeId: 'phone',

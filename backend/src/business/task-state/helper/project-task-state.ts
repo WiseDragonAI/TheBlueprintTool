@@ -220,11 +220,28 @@ export function createProjectTaskState(input: {
       }
     }
     const command = taskCommandForMutation({ mutation, before, after });
+    let changedThreadResource = '';
+    if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(command.kind) && mutation.note?.threadId) {
+      const threadFiles = after.threadFiles && typeof after.threadFiles === 'object' && !Array.isArray(after.threadFiles)
+        ? after.threadFiles as Record<string, unknown>
+        : {};
+      const resourceId = String(threadFiles[mutation.note.threadId] ?? '');
+      const head = await contentObjects.capture(resourceId);
+      if (!head) throw new Error(`task_thread_content_capture_failed:${mutation.note.threadId}`);
+      const headChanged = !store.contentHeads(head.key).some((current) => (
+        current.type === head.type && current.hash === head.hash && current.bytes === head.bytes
+      ));
+      if (headChanged) {
+        command.changes.push({ entityType: 'resource', entityId: head.key, changes: [{ path: 'head', operation: 'set', value: head }] });
+        changedThreadResource = head.key;
+      }
+    }
     const priorHashes = command.changes.map(entityHash);
     const delta = await persistChanges(command.changes, { activationTaskId: command.activationTaskId, replication: command.replication });
+    if (changedThreadResource) await input.publishContent?.(changedThreadResource);
     const changed = command.changes.some((change, index) => entityHash(change) !== priorHashes[index]);
     const deltas = delta.entities.length > 0 ? [delta] : [];
-    if (['append-note', 'update-note', 'delete-note', 'delete-card-image'].includes(command.kind)) {
+    if (['append-note', 'update-note', 'delete-note', 'restore-note', 'delete-card-image'].includes(command.kind)) {
       const body = String(mutation.note?.body ?? '');
       const card = Array.isArray(after.cards) ? (after.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === String(mutation.cardId ?? '')) : null;
       const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
