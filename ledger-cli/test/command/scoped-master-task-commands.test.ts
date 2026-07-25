@@ -17,10 +17,14 @@ function taskWorkerFixture(): {
 } {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-scoped-master-task-'));
   const cardsDirectory = join(workspace, '.decision-os', 'cards', 'tasks');
+  const threadsDirectory = join(workspace, '.decision-os', 'threads', 'tasks');
   mkdirSync(cardsDirectory, { recursive: true });
+  mkdirSync(threadsDirectory, { recursive: true });
   const ledgerJsonFile = join(workspace, '.decision-os', 'tasks.json');
   const masterContentFile = '.decision-os/cards/tasks/master.md';
+  const masterThreadFile = '.decision-os/threads/tasks/thread-master.md';
   writeFileSync(join(workspace, masterContentFile), 'Intake\n', 'utf8');
+  writeFileSync(join(workspace, masterThreadFile), '# OPERATOR\n<!-- decision-os:note {\"id\":\"operator-note\",\"timestamp\":\"2026-07-25T20:00:00.000Z\"} -->\n\nCreate the graph.\n', 'utf8');
   const ledger: AnyRecord = {
     cards: [
       {
@@ -42,8 +46,8 @@ function taskWorkerFixture(): {
       { id: 'zone-a', variant: 'zone', label: 'Intake', x: 0, y: 0, width: 1200, height: 900 },
     ],
     relationships: [],
-    notes: { 'thread-master': [{ id: 'operator-note', role: 'operator', message: 'Create the graph.' }] },
-    threadFiles: { 'thread-master': '.decision-os/threads/tasks/thread-master.md' },
+    notes: { 'thread-master': [{ id: 'operator-note', role: 'operator', timestamp: '2026-07-25T20:00:00.000Z' }] },
+    threadFiles: { 'thread-master': masterThreadFile },
   };
   const mutations: AnyRecord[] = [];
   const previousFetch = globalThis.fetch;
@@ -71,11 +75,19 @@ function taskWorkerFixture(): {
       ledger.cards.push(card);
       ledger.threadFiles[`thread-${card.id}`] = `.decision-os/threads/tasks/thread-${card.id}.md`;
       ledger.notes[`thread-${mutation.card.id}`] = [];
+      writeFileSync(join(threadsDirectory, `thread-${card.id}.md`), '', 'utf8');
     }
     if (mutation.action === 'append-note') {
       const notes = ledger.notes[mutation.note.threadId] ?? [];
-      notes.push({ ...mutation.note, message: mutation.note.body, timestamp: '2026-07-25T20:30:00.000Z' });
+      const timestamp = '2026-07-25T20:30:00.000Z';
+      notes.push({ id: mutation.note.id, role: mutation.note.role, timestamp });
       ledger.notes[mutation.note.threadId] = notes;
+      const threadFile = String(ledger.threadFiles[mutation.note.threadId]);
+      writeFileSync(
+        join(workspace, threadFile),
+        `# AGENT\n<!-- decision-os:note ${JSON.stringify({ id: mutation.note.id, timestamp })} -->\n\n${mutation.note.body}\n`,
+        { encoding: 'utf8', flag: 'a' },
+      );
     }
     if (mutation.action === 'create-relationship') ledger.relationships.push(structuredClone(mutation.relationship));
     if (mutation.action === 'patch-geometry') {
