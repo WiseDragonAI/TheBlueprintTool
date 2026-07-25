@@ -138,17 +138,34 @@ test('task intake publishes no state until its first durable content contributio
   };
   await execute({ action: 'create-task-intake', assignedNodeId: 'workstation', annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' }, card: { id: 'card-a', title: 'Local task', status: 'todo', labels: ['master-task'], domainId: 'tasks', comment: { what: 'Task' } } });
   assert.equal(published.length, 0);
-  await execute({ action: 'append-note', note: { id: 'note-a', threadId: 'thread-card-a', body: 'Activate it.', role: 'agent' } });
+  await execute({ action: 'append-note', note: { id: 'note-a', threadId: 'thread-card-a', body: 'Activate it.', role: 'operator', status: 'pending' } });
   assert.ok(published.flatMap((delta) => delta.entities).some((entity) => entity.entityType === 'card' && entity.entityId === 'card-a'));
   const noteDelta = published.find((delta) => delta.entities.some((entity) => entity.entityType === 'thread-note' && entity.entityId === 'thread-card-a/note-a'));
   assert.ok(noteDelta);
+  assert.ok(noteDelta.entities.some((entity) => (
+    entity.entityType === 'thread-note'
+    && entity.entityId === 'thread-card-a/note-a'
+    && entity.fields.status?.candidates.some((candidate) => candidate.value === 'pending')
+  )));
   assert.ok(noteDelta.entities.some((entity) => entity.entityType === 'resource' && entity.entityId === '.decision-os/threads/tasks/thread-card-a.md'));
   assert.deepEqual(content, ['.decision-os/threads/tasks/thread-card-a.md']);
   assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).message, undefined);
-  assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).role, 'agent');
+  assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).role, 'operator');
+  assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).status, 'pending');
+  assert.equal((state.projection().ledger.threadFiles as Record<string, string>)['thread-card-a'], '.decision-os/threads/tasks/thread-card-a.md');
   assert.match(readFileSync(resolve(root, 'threads', 'tasks', 'thread-card-a.md'), 'utf8'), /Activate it\./);
   assert.equal((state.projection().ledger.cards as Array<Record<string, unknown>>)[0].replicationState, undefined);
   assert.equal(state.store.entity('card', 'card-a')?.fields.replicationState, undefined);
+
+  await state.flush();
+  const restarted = createProjectTaskState({
+    projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath,
+  });
+  assert.equal((restarted.projection().ledger.threadFiles as Record<string, string>)['thread-card-a'], '.decision-os/threads/tasks/thread-card-a.md');
+  assert.equal(((restarted.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).status, 'pending');
+  assert.equal(restarted.store.contentHeads('.decision-os/threads/tasks/thread-card-a.md').length, 1);
+  assert.match(readFileSync(resolve(root, 'threads', 'tasks', 'thread-card-a.md'), 'utf8'), /Activate it\./);
+  await restarted.flush();
 });
 
 test('voice note mutations replicate the transcript sidecar without publishing raw audio heads', async (context) => {
@@ -164,7 +181,7 @@ test('voice note mutations replicate the transcript sidecar without publishing r
     cards: [{ id: 'card-a', title: 'Task', status: 'todo' }],
     annotations: [],
     relationships: [],
-    threadFiles: { [threadId]: `.decision-os/threads/tasks/${threadId}.md` },
+    threadFiles: {},
   }));
   writeFileSync(threadFile, '');
   writeFileSync(voiceFile, 'raw voice bytes');
@@ -185,7 +202,7 @@ test('voice note mutations replicate the transcript sidecar without publishing r
       threadId,
       body: 'Persisted transcript.',
       role: 'operator',
-      status: 'transcribed',
+      status: 'pending',
       voiceFileRef: voiceFile,
       revision: 4,
     },
@@ -196,6 +213,16 @@ test('voice note mutations replicate the transcript sidecar without publishing r
 
   assert.ok(committed.deltas.flatMap((delta) => delta.entities).some((entity) => (
     entity.entityType === 'thread-note' && entity.entityId === `${threadId}/note-voice`
+  )));
+  assert.ok(committed.deltas.flatMap((delta) => delta.entities).some((entity) => (
+    entity.entityType === 'ledger'
+    && entity.entityId === `tasks:threadFiles/${threadId}`
+    && entity.fields[`threadFiles/${threadId}`]?.candidates.some((candidate) => candidate.value === `.decision-os/threads/tasks/${threadId}.md`)
+  )));
+  assert.ok(committed.deltas.flatMap((delta) => delta.entities).some((entity) => (
+    entity.entityType === 'thread-note'
+    && entity.entityId === `${threadId}/note-voice`
+    && entity.fields.status?.candidates.some((candidate) => candidate.value === 'pending')
   )));
   assert.equal(state.store.contentHeads(`.decision-os/threads/tasks/${threadId}.md`).length, 1);
   assert.equal(state.store.contentHeads(voiceFile).length, 0);
