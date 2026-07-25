@@ -49,12 +49,13 @@ export function projectMasterTask({ card, cards = [], relationships = [], execut
   const executionActive = Boolean(execution);
   const subtasks = orderedRelationships.map((relationship) => {
     const linked = cards.find((candidate) => String(candidate?.id) === String(relationship.to));
+    const linkedLifecycleStatus = String(linked?.lifecycle?.status ?? linked?.status ?? '');
     return {
       title: String(linked?.title || `Card ${relationship.to}`),
       cardId: String(relationship.to),
       relationshipId: String(relationship.id),
       position: Number(relationship.position),
-      status: linked?.lifecycle?.status === 'done' ? 'complete' : 'waiting'
+      status: linkedLifecycleStatus === 'done' ? 'complete' : 'waiting'
     };
   });
   const complete = subtasks.filter((task) => task.status === 'complete').length;
