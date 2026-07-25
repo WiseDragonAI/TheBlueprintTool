@@ -46,6 +46,16 @@
 
    Existing tests cover migration retention, remote on-demand content, restore-note sidecar adoption, and missing task identities. They do not exercise missing card/thread sidecars with active heads across append, update, delete, restore, voice lifecycle, Codex start, and legacy run-event persistence.
 
+8. **High — the demanded relay-response acceptance gate was reduced to event deduplication.**
+
+   The local-first master task required events to be revision-aware invalidations and required already-installed revisions to be ignored. Commit `33060294` implemented that narrow event rule in `acceptLedgerInvalidationRevision()`. The function checks only a ledger revision number and accepts every event without a valid positive revision. It does not inspect local pending state, domain lifecycle, the local mutation receipt, the installed content head, or causal acknowledgement of the local intent.
+
+   The gate runs before a refetch in `frontend/src/runtime/refresh/effect/subscribe-ledger-content-events.ts:108-154`. The actual projection installation in `reconcileActiveLedgerState()` rejects only older server revisions and older request sequences. Once the frontend transaction coordinator considers a local request settled, a later numerically newer relay-derived projection remains eligible even when it does not acknowledge the locally committed intent.
+
+   Voice reconciliation has a separate status helper, but `shouldApplyVoiceServerNote()` accepts every higher incoming revision before comparing status ranks at `frontend/src/runtime/voice/helper/voice-transcription-lifecycle.ts:62-69`. A `transcribing` response at revision `5` therefore replaces a local `transcribed` note at revision `4`. The existing regression proves only that revision `2` cannot replace revision `4`.
+
+   Execution invalidation frames carry `phase` and `revision`, but `bind-thread-codex-run-log.ts:156-169` ignores both and refetches on every matching event. There is no shared status-aware acceptance boundary for messages, images, queued executions, pipeline executions, and content-head installation.
+
 ---
 
 ## D. Audited Paths Without This Defect
@@ -75,6 +85,12 @@
     3. the intended mutation preserves unrelated content;
     4. the watcher publishes only the post-mutation head;
     5. a rejected Codex launch publishes no head.
+11. Add one projection-install acceptance gate keyed by entity identity and local mutation receipt.
+12. Keep locally committed intent installed until an incoming projection causally acknowledges that receipt.
+13. Accept only declared forward lifecycle transitions. Keep terminal voice and execution states terminal; an explicit retry creates a new lifecycle revision.
+14. Permit rejected-mutation reconciliation to remove local optimistic intent only from the response to that exact mutation receipt.
+15. Apply the same gate to event-triggered reads, polling responses, direct mutation responses, and federation refreshes.
+16. Add delayed-relay regressions where numerically newer but causally stale `message`, `voice`, `queued execution`, `pipeline`, and content-head projections cannot replace local state.
 
 ---
 
@@ -83,3 +99,4 @@
 1. **The one-byte Codex incident is one manifestation of a shared missing-materialization defect.**
 2. **The highest-yield correction is the shared pre-mutation materialization boundary.** Fixing only Codex launch leaves messages, voice lifecycle persistence, card Markdown, and legacy run events exposed.
 3. Asset synchronization optimization remains a separate master task because asset availability policy and payload replication differ from text-content safety.
+4. **The demanded ignore gate is only partially implemented.** Event revision deduplication exists; status-aware, receipt-aware projection installation does not.
