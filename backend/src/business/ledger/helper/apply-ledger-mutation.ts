@@ -13,6 +13,7 @@ import { normalizeGitReviewNotes, type GitReviewNote } from '../../../../../shar
 
 export type LedgerMutation = {
   action?: string;
+  mutationId?: string;
   card?: Record<string, unknown>;
   cards?: Array<Record<string, unknown>>;
   cardId?: string;
@@ -114,6 +115,20 @@ export function applyLedgerMutation(input: {
 }): { ok: boolean; ledger: Record<string, unknown>; error?: MutationError } {
   const { decisionOsRoot, ledgerPath, ledger, mutation } = input;
   if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(String(mutation.action)) && mutation.note?.threadId) {
+    const referencedThreadFile = ledger.threadFiles?.[mutation.note.threadId];
+    const resolvedThreadFile = resolveThreadContentFile(decisionOsRoot, referencedThreadFile);
+    // WHAT: Reject mutation of an explicitly referenced thread whose bytes are not materialized.
+    // WHY: Missing Epoch 4 bytes mean unavailable content, not an intentionally empty conversation.
+    if (typeof referencedThreadFile === 'string' && (!resolvedThreadFile || !existsSync(resolvedThreadFile))) {
+      return {
+        ok: false,
+        ledger,
+        error: {
+          statusCode: 503,
+          body: { ok: false, error: 'task_content_not_materialized', contentFile: referencedThreadFile },
+        },
+      };
+    }
     if (mutation.action === 'restore-note') {
       const threadFiles = ledger.threadFiles && typeof ledger.threadFiles === 'object' && !Array.isArray(ledger.threadFiles)
         ? ledger.threadFiles

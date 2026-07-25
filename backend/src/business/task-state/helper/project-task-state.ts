@@ -173,6 +173,14 @@ export function createProjectTaskState(input: {
       files.telemetry ? captureTaskExecutionArtifact({ objectRoot, file: files.telemetry, mediaType: 'application/x-ndjson' }) : null,
       files.result ? captureTaskExecutionArtifact({ objectRoot, file: files.result, mediaType: 'application/json' }) : null,
     ]);
+    for (const [kind, requested, captured] of [
+      ['jsonl', files.jsonl, jsonl],
+      ['stderr', files.stderr, stderr],
+    ] as const) {
+      // WHAT: Reject a missing primary execution artifact while retaining optional telemetry and result semantics.
+      // WHY: JSONL and stderr are the required evidence pair; optional diagnostic files are not emitted by every runner.
+      if (requested && !captured) throw new Error(`task_execution_artifact_missing:${kind}:${executionId}`);
+    }
     return executions.finalizeArtifacts(executionId, {
       jsonl,
       stderr,

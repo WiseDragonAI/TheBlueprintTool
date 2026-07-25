@@ -382,7 +382,9 @@ test('thread selection persists the complete default pair and synchronizes a mou
     assert.equal(button.dataset.codexModel, 'gpt-5.4');
     await waitFor(() => requests.length === 1 && state.activeLedger.cards[0].codexRunModel === 'gpt-5.4');
 
-    assert.deepEqual(requests[0], {
+    const { mutationId: modelMutationId, ...modelRequest } = requests[0] as Record<string, unknown>;
+    assert.match(String(modelMutationId), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    assert.deepEqual(modelRequest, {
       action: 'patch-card',
       cardPatch: { id: 'card-a', codexRunModel: 'gpt-5.4', codexRunEffort: 'medium' }
     });
@@ -392,7 +394,10 @@ test('thread selection persists the complete default pair and synchronizes a mou
 
     widgetEffort.value = 'ultra';
     await persistCardCodexRunPreference({ cardId: 'card-a', model: widgetModel.value, effort: widgetEffort.value });
-    assert.deepEqual(requests[1], {
+    const { mutationId: effortMutationId, ...effortRequest } = requests[1] as Record<string, unknown>;
+    assert.match(String(effortMutationId), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    assert.notEqual(effortMutationId, modelMutationId);
+    assert.deepEqual(effortRequest, {
       action: 'patch-card',
       cardPatch: { id: 'card-a', codexRunModel: 'gpt-5.4', codexRunEffort: 'ultra' }
     });

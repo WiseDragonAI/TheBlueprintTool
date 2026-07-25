@@ -62,9 +62,24 @@ export function voicePhaseElapsedSeconds(note: Record<string, unknown>, now = Da
 export function shouldApplyVoiceServerNote(local: Record<string, unknown>, incoming: Record<string, unknown>): boolean {
   const localRevision = Number(local.revision ?? 0);
   const incomingRevision = Number(incoming.revision ?? 0);
+  const localStatus = String(local.status ?? '').toLowerCase();
+  const incomingStatus = String(incoming.status ?? '').toLowerCase();
+  // WHAT: Keep a completed local lifecycle terminal even when a delayed relay snapshot has a larger revision.
+  // WHY: Replica counters order contributions; they do not authorize a backwards domain transition.
+  if (!shouldAcceptReplicatedTaskState({
+    domain: 'voice',
+    local,
+    incoming,
+    pendingReceipt: null,
+    source: 'relay-refresh',
+  })) return false;
+  const localRank = statusRank[localStatus] ?? -1;
+  const incomingRank = statusRank[incomingStatus] ?? -1;
+  // WHAT: Enforce declared forward voice transitions independently from replica revision order.
+  // WHY: A larger relay counter cannot authorize finalizing-to-queued or transcribing-to-uploading regression.
+  if (incomingRank < localRank) return false;
   if (incomingRevision > localRevision) return true;
   if (incomingRevision < localRevision) return false;
-  const localRank = statusRank[String(local.status ?? '').toLowerCase()] ?? -1;
-  const incomingRank = statusRank[String(incoming.status ?? '').toLowerCase()] ?? -1;
   return incomingRank >= localRank;
 }
+import { shouldAcceptReplicatedTaskState } from '../../refresh/helper/task-projection-acceptance.js';
