@@ -6,6 +6,7 @@
 2. **Task assignment and execution are replicated domain state.** They join through the same causal current-state store as cards, relationships, thread notes, and content heads.
 3. **Process state remains node-local.** Child handles, PIDs, process-start identities, growing JSONL files, stderr files, and timers belong only to the executor node.
 4. **Mobile production admission remains open.** The complete gate still requires Mobile migration, the epoch-4 relay deployment, three-party convergence, and cross-node execution proof.
+5. **Relay identity is epoch-independent.** The stable `FederationRelay` Durable Object namespace owns node credential hashes, manifests, and labels across state epochs. Epoch-3 and Epoch-4 replicated state coexist without collision under `state:v3:*` and `state:v4:*`; changing the state epoch does not rotate credentials.
 
 ---
 

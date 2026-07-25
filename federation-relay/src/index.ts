@@ -39,7 +39,7 @@ import {
 } from './state-storage';
 
 type Env = {
-  FEDERATIONS: DurableObjectNamespace<FederationRelayV4>;
+  FEDERATIONS: DurableObjectNamespace<FederationRelay>;
   ADMIN_SECRET: string;
 };
 
@@ -445,8 +445,8 @@ export class FederationRelayV4 extends DurableObject<Env> {
 }
 
 /**
- * WHAT: Retains the exported class identity owned by the preserved epoch-3 namespace.
- * WHY: Cloudflare rejects a script update that drops a class with existing Durable Objects,
- * while the live FEDERATIONS binding and all new objects remain isolated on FederationRelayV4.
+ * WHAT: Runs the epoch-4 relay implementation in the original stable Durable Object namespace.
+ * WHY: Credentials and manifests are epoch-independent, while state:v3 and state:v4 keys
+ * already isolate rollback state without rotating node credentials.
  */
 export class FederationRelay extends FederationRelayV4 {}
