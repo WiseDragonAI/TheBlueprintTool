@@ -238,14 +238,29 @@ export async function applyScopedMasterTaskPlan(input: { ledgerJsonFile: string;
     ok: true,
     value: JSON.stringify({
       version: 2,
+      operation: 'master-task-apply',
+      outcome: 'verified',
       masterCardId: parsed.value.masterCardId,
       zoneId: String(zone.id ?? ''),
       subtasks: subtasks.map((subtask) => ({
         cardId: subtask.cardId,
         relationshipId: subtask.relationshipId,
         title: subtask.title,
+        status: String(verifiedCards.find((card) => String(card.id ?? '') === subtask.cardId)?.status ?? ''),
+        published: true,
+        position: subtask.position,
         canonicalLink: `card:${subtask.cardId}`,
       })),
+      verification: {
+        authoritativeProjectionRead: true,
+        masterContent: true,
+        zoneTitle: true,
+        zoneIsolation: true,
+        relationshipOrder: true,
+        subtaskContent: true,
+        subtaskPublication: true,
+        followUpRequired: false,
+      },
     }, null, 2),
   };
 }
