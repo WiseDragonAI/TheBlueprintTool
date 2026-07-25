@@ -158,6 +158,11 @@
 9. Require `assigned_node_unreachable`, no execution entity, and no Mobile child process.
 10. Reassign an idle task to Mobile.
 11. Launch it from Workstation and require execution only on Mobile.
+12. On both nodes, read `/p/:projectId/api/tasks/:taskId/execution-state` for the same task and require the same complete session-execution hierarchy and default execution identity.
+13. Select one active execution and read `/p/:projectId/api/task-executions/:executionId` from its executor and the other node. Require the same execution metadata and presentation events.
+14. Select one terminal execution owned by the other node and require exact-hash retrieval of only its JSONL and stderr artifacts before presentation.
+15. Inspect the presentation JSON and require no raw tool result field, `stdout`, `stderr`, aggregated output, physical line position, artifact path, content hash, telemetry body, or result body.
+16. Use an execution fixture containing a todo update and a comment. Require the latest todo state as typed `todo_list` items and the comment as a chronological `comment` event.
 
 ---
 
@@ -265,7 +270,10 @@
    1. `e9f1e61a` repairs scoped note derivation, terminal artifact publication ordering, and durable active-phase projection.
    2. `0d4a0338` repairs exact note restoration, thread Markdown content-head persistence, prompt tombstone filtering, and epoch-4 task-run ownership.
    3. Merge `3fc1b01f` contains the complete repair.
-4. **The complete production gate remains open.**
+4. **The Workstation execution presentation cutover is installed on `origin/main`.**
+   1. `d99954eb` adds the task summary resource, exact lightweight execution presentation, todo overlay, comment fidelity, and selected-execution frontend flow.
+   2. Merge `724fa0ef` contains the cutover and was verified against the restarted Workstation Rudy task.
+5. **The complete production gate remains open.**
    1. Mobile read-only preflight and migration evidence are missing.
    2. Epoch-4 relay deployment evidence is missing.
    3. Workstation, Mobile, and relay root convergence evidence is missing.

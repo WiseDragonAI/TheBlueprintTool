@@ -12,7 +12,9 @@ import type {
 } from '../../../../../shared/schemas/task-execution-presentation-types.js';
 import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-card-markdown.js';
 import { bindThreadCodexRunLog } from '../../codex/effect/bind-thread-codex-run-log.js';
+import { findTaskExecution } from '../../codex/helper/find-task-execution.js';
 import { groupTaskExecutionPresentationEvents } from '../../codex/helper/group-task-execution-presentation-events.js';
+import { taskExecutionDisplayStatus } from '../../codex/helper/task-execution-display-status.js';
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 import { state } from '../../state.js';
 import { renderThreadCodexLogStatus, type CodexLogStatusSummary } from '../component/render-thread-codex-log-status.js';
@@ -49,23 +51,6 @@ function historyEntries(summary: TaskExecutionStateSummary | null): HistoryEntry
   }))) ?? [];
 }
 
-function executionFor(summary: TaskExecutionStateSummary | null, executionId: string): TaskExecutionStateItem | null {
-  if (!summary) return null;
-  for (const session of summary.sessions) {
-    const execution = session.executions.find((candidate) => candidate.executionId === executionId);
-    if (execution) return execution;
-  }
-  return null;
-}
-
-function statusForPhase(phase: string): 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' {
-  if (phase === 'preparing' || phase === 'queued') return 'pending';
-  if (phase === 'starting' || phase === 'running' || phase === 'cancelling') return 'running';
-  if (phase === 'succeeded') return 'complete';
-  if (phase === 'cancelled') return 'cancelled';
-  return 'failed';
-}
-
 function elapsedMs(execution: TaskExecutionStateItem): number {
   const start = Date.parse(execution.startedAt ?? execution.requestedAt);
   const end = execution.finishedAt ? Date.parse(execution.finishedAt) : Date.now();
@@ -81,7 +66,7 @@ function statusSummary(input: {
   const counts = input.presentation?.execution.executionId === input.execution.executionId
     ? input.presentation.execution.counts
     : { tools: 0, warnings: 0, errors: 0 };
-  const status = statusForPhase(input.execution.phase);
+  const status = taskExecutionDisplayStatus(input.execution.phase);
   return {
     ok: true,
     active: status === 'pending' || status === 'running',
@@ -293,15 +278,15 @@ export function renderThreadCodexLog(): void {
   const taskSummary = (recordState('threadTaskExecutionStateByThreadId')[threadId] as TaskExecutionStateSummary | undefined) ?? null;
   const entries = historyEntries(taskSummary);
   const requestedExecutionId = String(recordState('threadSelectedExecutionIdByThreadId')[threadId] ?? '');
-  const selectedExecutionId = executionFor(taskSummary, requestedExecutionId)
+  const selectedExecutionId = findTaskExecution(taskSummary, requestedExecutionId)
     ? requestedExecutionId
     : String(taskSummary?.defaultExecutionId ?? '');
   if (selectedExecutionId) recordState('threadSelectedExecutionIdByThreadId')[threadId] = selectedExecutionId;
-  const selectedExecution = executionFor(taskSummary, selectedExecutionId);
+  const selectedExecution = findTaskExecution(taskSummary, selectedExecutionId);
   const presentation = (recordState('threadExecutionPresentationByThreadId')[threadId] as TaskExecutionPresentation | undefined) ?? null;
   const selectedPresentation = presentation?.execution.executionId === selectedExecutionId ? presentation : null;
   const activeExecution = taskSummary?.activeExecutionIds
-    .map((executionId) => executionFor(taskSummary, executionId))
+    .map((executionId) => findTaskExecution(taskSummary, executionId))
     .filter((execution): execution is TaskExecutionStateItem => Boolean(execution))
     .at(-1) ?? null;
   const selectedStatus = statusSummary({ execution: selectedExecution, presentation: selectedPresentation, card });

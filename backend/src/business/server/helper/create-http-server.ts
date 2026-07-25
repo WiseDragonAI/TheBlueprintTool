@@ -62,6 +62,7 @@ import { taskExecutionState } from '../../codex/helper/task-execution-runtime.js
 import { cancelTaskExecutionLocally } from '../../codex/helper/cancel-task-execution.js';
 import { projectTaskExecutionState } from '../../codex/helper/project-task-execution-state.js';
 import { buildTaskExecutionPresentation } from '../../codex/helper/task-execution-presentation.js';
+import { taskExecutionPresentationHttpResult } from '../../codex/helper/task-execution-presentation-http-result.js';
 import { executeFederatedPipelineSkill } from '../../codex/helper/codex-pipeline-runner.js';
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { TaskExecutionMetadata } from '../../task-state/helper/task-current-state-types.js';
@@ -1749,12 +1750,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         enumerable: false,
       });
       const result = buildTaskExecutionPresentation({ executionId, state, runtime: presentationRuntime });
-      response.statusCode = 'presentation' in result ? 200 : result.statusCode;
-      response.end(JSON.stringify('presentation' in result ? result.presentation : {
-        ok: false,
-        error: result.error,
-        executionId,
-      }));
+      const httpResult = taskExecutionPresentationHttpResult(executionId, result);
+      response.statusCode = httpResult.statusCode;
+      response.end(httpResult.body);
       return;
     }
     const internalExecutionStatus = request.method === 'GET'
@@ -2451,12 +2449,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         state: executionState,
         runtime: presentationRuntime,
       });
-      response.statusCode = 'presentation' in result ? 200 : result.statusCode;
-      response.end(JSON.stringify('presentation' in result ? result.presentation : {
-        ok: false,
-        error: result.error,
-        executionId,
-      }));
+      const httpResult = taskExecutionPresentationHttpResult(executionId, result);
+      response.statusCode = httpResult.statusCode;
+      response.end(httpResult.body);
       return;
     }
     const persistLedgerAndRespond = async (ledgerId: string, ledgerPath: string, ledger: AnyRecord, activeResponse: ServerResponse, activeDecisionOsRoot = decisionOsRoot): Promise<void> => {
