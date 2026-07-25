@@ -109,12 +109,17 @@ function threadNoteChanges(before: AnyRecord, after: AnyRecord, threadId: string
   const left = new Map(notes(before).map((note) => [String(note.id ?? ''), note]));
   const right = new Map(notes(after).map((note) => [String(note.id ?? ''), note]));
   const ownedIds = noteIds ?? [...left.keys(), ...right.keys()];
-  return [...new Set(ownedIds)].filter(Boolean).flatMap((noteId) => entity(
+  const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
+  const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};
+  return [
+    ...ledgerField(`threadFiles/${threadId}`, beforeRefs[threadId], afterRefs[threadId]),
+    ...[...new Set(ownedIds)].filter(Boolean).flatMap((noteId) => entity(
     'thread-note',
     `${threadId}/${noteId}`,
     left.has(noteId) ? { ...left.get(noteId), threadId } : null,
     right.has(noteId) ? { ...right.get(noteId), threadId } : null,
-  ));
+    )),
+  ];
 }
 
 function restoreThreadNote(before: AnyRecord, after: AnyRecord, threadId: string, noteId: string): TaskCommandChange[] {

@@ -256,6 +256,50 @@ test('restore-note causally replaces a tombstone without importing unrelated sid
   assert.deepEqual(retry.deltas.flatMap((delta) => delta.entities), []);
 });
 
+test('restore-note adopts an orphan sidecar without rewriting its notes', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-note-orphan-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const threadId = 'thread-card-orphan';
+  const threadRef = `.decision-os/threads/tasks/${threadId}.md`;
+  const threadFile = resolve(root, 'threads', 'tasks', `${threadId}.md`);
+  const original = [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-operator","timestamp":"2026-07-25T12:29:56.759Z"} -->',
+    '',
+    '# AGENT',
+    '<!-- decision-os:note {"id":"note-agent","timestamp":"2026-07-25T12:35:25.075Z"} -->',
+    '',
+    'Persisted answer.',
+    '',
+  ].join('\n');
+  mkdirSync(dirname(threadFile), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify({
+    modelName: 'tasks',
+    cards: [{ id: 'card-orphan', title: 'Task', status: 'todo' }],
+    annotations: [],
+    relationships: [],
+    threadFiles: {},
+    notes: {},
+  }));
+  writeFileSync(threadFile, original);
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'workstation', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const before = structuredClone(state.projection().ledger);
+  const after = structuredClone(before);
+  const mutation: LedgerMutation = { action: 'restore-note', note: { id: 'note-agent', threadId } };
+
+  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
+  const restored = await state.executeMutation(mutation, before, after);
+
+  assert.equal(restored.changed, true);
+  assert.equal((state.projection().ledger.threadFiles as Record<string, string>)[threadId], threadRef);
+  assert.equal(readFileSync(threadFile, 'utf8'), original);
+  assert.deepEqual(
+    ((state.projection().ledger.notes as Record<string, AnyRecord[]>)[threadId] ?? []).map((note) => [note.id, note.timestamp]),
+    [['note-agent', '2026-07-25T12:35:25.075Z']],
+  );
+});
+
 test('assigned held task activates and reloads with one logical identity on both replicas', async (context) => {
   const workstationRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-assigned-held-workstation-'));
   const phoneRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-assigned-held-phone-'));
