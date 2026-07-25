@@ -8,6 +8,7 @@ import {
   parseMasterTaskProgressPlan,
   renderMasterTaskProgressSections,
 } from '../helper/apply-master-task-progress.js';
+import { hydrateLedgerCardContent } from '../helper/card-content-file.js';
 import { canonicalSubtaskRelationships, isMasterCard, labelsOf, record, stripLegacyTaskProjection } from '../helper/master-task-model.js';
 import { readLedgerJson } from '../helper/read-ledger-json.js';
 import { validateMasterTasks } from '../helper/validate-master-tasks.js';
@@ -73,11 +74,12 @@ export async function applyScopedMasterTaskProgress(input: { ledgerJsonFile: str
 
   const verified = await readLedgerJson(input.ledgerJsonFile);
   if (!verified.ok) return verified;
-  const validation = validateMasterTasks(verified.value, parsed.value.masterCardId);
+  const hydratedVerified = await hydrateLedgerCardContent(verified.value, input.ledgerJsonFile);
+  const validation = validateMasterTasks(hydratedVerified, parsed.value.masterCardId);
   if (validation.errors.length > 0) {
     return { ok: false, error: JSON.stringify({ version: 1, code: 'invalid_master_task', validation }) };
   }
-  const verifiedLedger = record(verified.value) ? verified.value : {};
+  const verifiedLedger = record(hydratedVerified) ? hydratedVerified : {};
   const statuses = new Map(
     Array.isArray(verifiedLedger.cards)
       ? verifiedLedger.cards.filter(record).map((card) => [String(card.id ?? ''), String(card.status ?? '')])

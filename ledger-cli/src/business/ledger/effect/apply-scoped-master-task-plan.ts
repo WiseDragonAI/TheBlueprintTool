@@ -9,6 +9,7 @@ import {
   renderMasterTaskSections,
   type MasterTaskPlan,
 } from '../helper/apply-master-task-plan.js';
+import { hydrateLedgerCardContent } from '../helper/card-content-file.js';
 import { canonicalSubtaskRelationships, isMasterCard, record } from '../helper/master-task-model.js';
 import { readLedgerJson } from '../helper/read-ledger-json.js';
 import { resolveCardZone } from '../helper/resolve-ledger-zone-context.js';
@@ -177,11 +178,12 @@ export async function applyScopedMasterTaskPlan(input: { ledgerJsonFile: string;
 
   const verified = await readLedgerJson(input.ledgerJsonFile);
   if (!verified.ok) return verified;
-  const validation = validateMasterTasks(verified.value, parsed.value.masterCardId);
+  const hydratedVerified = await hydrateLedgerCardContent(verified.value, input.ledgerJsonFile);
+  const validation = validateMasterTasks(hydratedVerified, parsed.value.masterCardId);
   if (validation.errors.length > 0) {
     return { ok: false, error: JSON.stringify({ version: 1, code: 'invalid_master_task', validation }) };
   }
-  const verifiedLedger = record(verified.value) ? verified.value : {};
+  const verifiedLedger = record(hydratedVerified) ? hydratedVerified : {};
   const verifiedMaster = Array.isArray(verifiedLedger.cards)
     ? verifiedLedger.cards.filter(record).find((card) => String(card.id ?? '') === parsed.value.masterCardId)
     : undefined;
