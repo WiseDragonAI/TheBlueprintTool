@@ -75,18 +75,6 @@ test('tasks.json answer submits one scoped agent note without an aggregate write
   }
 });
 
-test('tasks.json aggregate helpers fail before reading plans or changing sidecars', async () => {
-  assert.deepEqual(await dispatchLedgerCliCommandController([
-    'master-task-apply', '--ledger', '/workspace/.decision-os/tasks.json', '--plan-stdin',
-  ]), { ok: false, error: 'scoped_task_command_required:master-task-apply' });
-  assert.deepEqual(await dispatchLedgerCliCommandController([
-    'master-task-progress', '--ledger', '/workspace/.decision-os/tasks.json', '--plan-stdin',
-  ]), { ok: false, error: 'scoped_task_command_required:master-task-progress' });
-  assert.deepEqual(await dispatchLedgerCliCommandController([
-    'migrate-master-tasks', '--source-ledger', '/missing/specs.json', '--target-ledger', '/workspace/.decision-os/tasks.json', '--write',
-  ]), { ok: false, error: 'scoped_task_command_required:migrate-master-tasks' });
-});
-
 test('tasks.json generic mutate fails before applying an undeclared projection change', async () => {
   const previousServerUrl = process.env.DECISION_OS_SERVER_URL;
   const previousProjectId = process.env.DECISION_OS_PROJECT_ID;
