@@ -1,10 +1,12 @@
 ## A. Admission State
 
-1. **Current state:** local implementation and automated verification rows `1` through `36` pass. Served verification row `37` remains open.
-2. Keep both node servers unchanged until the operator explicitly authorizes the production maintenance window.
-3. Do not start migration until the progress ledger records the exact reviewed commit installed on both stopped nodes.
-4. Do not admit the maintenance window until Mobile reports its exact registered stop and start commands, repository state, catalog root, and external backup path.
-5. Epoch `3` remains the production rollback authority until section `O` passes.
+1. **Current state:** Workstation is verified on epoch `4`. Mobile migration, relay epoch-4 deployment, and the complete cross-node proof remain open.
+2. Keep the Workstation server, Mobile server, and relay deployment unchanged until the operator explicitly authorizes the remaining production maintenance window.
+3. Runtime start and restart never launch migration. Migration begins only through the explicit offline CLI after operator authorization.
+4. Do not create a new transaction while one exists. Reuse the exact backup root only for deterministic recovery or independent verification.
+5. Do not start Mobile migration until the progress ledger records the exact reviewed commit installed on the stopped node.
+6. Do not admit the Mobile maintenance window until Mobile reports its exact registered stop and start commands, repository state, catalog root, and external backup path.
+7. Retained epoch-3 backups and relay namespace remain rollback authority until section `O` passes.
 
 ---
 
@@ -94,18 +96,23 @@
 4. Require one result for every registered project.
 5. Require complete task assignment coverage.
 6. Require valid execution entity indexes.
-7. Require zero missing content. Locally owned audio and images must resolve through their original path and advertised hash without an object-store copy.
-8. Require zero journals.
-9. Require `source-manifest.json` to report `complete: true`, verified hashes for every archived mutation input, and empty `archiveFile` values for referenced media.
-10. Require the configured node identity in every report.
-11. Run the independent verifier on each node:
+7. Require zero missing locally owned content. Locally owned audio and images must resolve through their original path and advertised hash without an object-store copy.
+8. Require every unavailable remote-owned object to appear in `deferredRemoteObjects` with its exact key, hash, byte length, and source replica. Deferred remote content resolves through normal exact-hash retrieval after its owner is available.
+9. Require zero journals.
+10. Require `source-manifest.json` to report `complete: true`, verified hashes for every archived mutation input, and empty `archiveFile` values for referenced media.
+11. Require the configured node identity in every report.
+12. Run the independent verifier on each node:
 
     ```bash
     node <decision-os-repository>/bin/decision-os-verify-node-migration.mjs \
       --backup-root <exact-transaction-path>
     ```
 
-12. Require transaction phase `verified`.
+13. Require transaction phase `verified`.
+14. For every task thread, require the live projected note IDs to equal the legitimate note IDs in the Markdown sidecar.
+15. Require no tombstoned note ID to remain agent-visible in Markdown prompt construction.
+16. Require every thread resource head hash and byte length to match the sidecar.
+17. Read each scoped task thread through `/p/:projectId/api/ledgers/tasks/threads/:threadId` and require the same note identities, roles, order, and bodies as the sidecar after tombstone filtering.
 
 ---
 
@@ -239,3 +246,27 @@
 5. Require the report to name the exact node, project, cutoff, and converged root.
 6. Preserve every retained shared hash and every causal tombstone.
 7. Start Workstation, then Mobile, through their registered process controls and require unchanged project roots.
+
+---
+
+## Q. Current Production Status
+
+1. **Workstation migration is verified.**
+   1. Transaction: `ab0ab732-64d8-464b-b0e7-d2f1266681c4`.
+   2. Projects: `7`.
+   3. Every project reports `decision-os-task-state/4`, schema `4`, baseline epoch `4`, `missingObjects: 0`, and `journalCount: 0`.
+   4. The registered Workstation server returned HTTP `200` after restart.
+2. **Workstation content behavior is measured.**
+   1. Mutable archive input: `11,576,346` bytes.
+   2. Referenced workspace content: `993,873,984` bytes.
+   3. Workstation-owned audio and images remained at their source paths.
+   4. The cutover installed `199` verified phone-owned cached assets totaling `389,746,672` bytes; deduplicating this remote cache materialization remains open technical debt.
+3. **Post-cutover consistency repairs are installed on `origin/main`.**
+   1. `e9f1e61a` repairs scoped note derivation, terminal artifact publication ordering, and durable active-phase projection.
+   2. `0d4a0338` repairs exact note restoration, thread Markdown content-head persistence, prompt tombstone filtering, and epoch-4 task-run ownership.
+   3. Merge `3fc1b01f` contains the complete repair.
+4. **The complete production gate remains open.**
+   1. Mobile read-only preflight and migration evidence are missing.
+   2. Epoch-4 relay deployment evidence is missing.
+   3. Workstation, Mobile, and relay root convergence evidence is missing.
+   4. Bidirectional assigned-node execution and artifact retrieval evidence is missing.

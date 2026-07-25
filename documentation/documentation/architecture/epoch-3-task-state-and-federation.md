@@ -2,11 +2,12 @@
 
 ## A. Runtime Topology
 
-1. **Node:** A Decision OS server owns one catalog root, one federation identity, and every local project registered in `<catalog-root>/.decision-os/projects.json`.
-2. **Workstation deployment:** The repository launcher is `/home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs`; its production `cwd` is `/home/jbb`; its HTTP origin is `http://127.0.0.1:50150`.
-3. **Phone deployment:** Termux runs the same launcher revision against its own catalog root with `federationNodeId` `phone`.
-4. **Relay:** `federation-relay/` maintains federation membership and joined epoch-3 structural state. It does not own project source files.
-5. **Catalog boundary:** Launcher path chooses code. Process `cwd` chooses `.decision-os/.settings.json`, `.decision-os/projects.json`, and the project catalog served by that process.
+1. **Historical status:** This page records the Epoch-3 architecture and remains the rollback reference. Workstation current behavior is owned by [Epoch-4 task assignment, execution, and content](./epoch-4-task-assignment-execution-and-content.md).
+2. **Node:** A Decision OS server owns one catalog root, one federation identity, and every local project registered in `<catalog-root>/.decision-os/projects.json`.
+3. **Workstation deployment:** The repository launcher is `/home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs`; its production `cwd` is `/home/jbb`; its HTTP origin is `http://127.0.0.1:50150`.
+4. **Phone deployment:** Termux runs the same launcher revision against its own catalog root with `federationNodeId` `phone`.
+5. **Relay:** `federation-relay/` maintains federation membership and joined epoch-3 structural state. It does not own project source files.
+6. **Catalog boundary:** Launcher path chooses code. Process `cwd` chooses `.decision-os/.settings.json`, `.decision-os/projects.json`, and the project catalog served by that process.
 
 ---
 

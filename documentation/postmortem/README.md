@@ -11,7 +11,8 @@
 ## B. Current Population
 
 1. [Epoch-3 workstation and phone production cutover](./epoch-3-production-cutover-2026-07-21.md) records the offline migration, restart failures, recovery, convergence evidence, and remaining deployment evidence from `2026-07-21`.
-2. Existing root-cause and reassessment files remain migration sources until their claims are reconciled with current code and Specs.
+2. [Epoch-4 Workstation cutover and thread consistency](./epoch-4-workstation-cutover-2026-07-24.md) records the recoverable migration redesign, in-place media contract, Workstation activation, post-cutover note corruption, and consistency repairs.
+3. Existing root-cause and reassessment files remain migration sources until their claims are reconciled with current code and Specs.
 
 ---
 

@@ -147,7 +147,7 @@ Codex child processes receive `DECISION_OS_LEDGER_ROOT` as the filesystem bounda
 
 ## Create And Publish Tasks From The CLI
 
-Epoch-3 Tasks are created through the running server's scoped command API. Do not create them by editing `.decision-os/tasks.json` or `.decision-os/task-state/**`.
+Epoch-4 Tasks are created through the running server's scoped command API. Do not create them by editing the retired `.decision-os/tasks.json` aggregate or `.decision-os/task-state/**`.
 
 The required workflow is:
 
@@ -157,6 +157,8 @@ The required workflow is:
 4. Stage the intended card/thread Markdown explicitly, create a commit with `WHAT:` and `WHY:` paragraphs, then push the current branch to `origin`.
 
 Use the complete copyable procedure: [Create and publish tasks from the CLI](documentation/procedure/tasks/create-and-publish-tasks-from-cli.md).
+
+Current task assignment, execution, thread-note, content, and migration ownership is documented in [Epoch-4 task assignment, execution, and content](documentation/documentation/architecture/epoch-4-task-assignment-execution-and-content.md).
 
 ## Federation Node Messages
 

@@ -2,7 +2,7 @@
 
 ## A. Purpose
 
-1. Task procedures define safe command-line workflows for epoch-3 task-state mutations and versioned task content.
+1. Task procedures define safe command-line workflows for epoch-4 task-state mutations and versioned task content.
 2. Structural task state is owned by the scoped Decision OS command API and federation.
 3. Git owns the intentionally versioned card/thread Markdown and source changes; it does not replace task-state federation.
 
@@ -11,6 +11,7 @@
 ## B. Runbooks
 
 1. [Create and publish tasks from the CLI](./create-and-publish-tasks-from-cli.md)
+2. [Restore an accidentally tombstoned Epoch-4 note](./restore-accidentally-tombstoned-note.md)
 
 ---
 

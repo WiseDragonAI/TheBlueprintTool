@@ -1,8 +1,9 @@
 ## A. Repository Intent
 
-1. **A card owns a deterministic thread identity.** Card `cardId` maps to `thread-${cardId}`. `ledger.threadFiles[threadId]` resolves the durable Markdown sidecar, while `ledger.notes[threadId]` is the hydrated/current-state representation rendered by the thread UI.
-2. **Task-state v2 is authoritative for task structure and replicated thread-note state.** Migration must preserve cards, thread references, note identity, note order, intentional deletions, and the ability to reconstruct the same projection after restart and after federation merges.
-3. **Thread Markdown remains durable content.** A state migration must never interpret omission caused by stripping hydrated sidecar content as a user deletion.
+1. **Historical status:** This RCA records the task-state-v2 corruption that motivated the Epoch-3 and Epoch-4 repairs. Current behavior is owned by [Epoch-4 task assignment, execution, and content](./documentation/architecture/epoch-4-task-assignment-execution-and-content.md).
+2. **A card owns a deterministic thread identity.** Card `cardId` maps to `thread-${cardId}`. `ledger.threadFiles[threadId]` resolves the durable Markdown sidecar, while `ledger.notes[threadId]` is the hydrated/current-state representation rendered by the thread UI.
+3. **Task-state v2 was authoritative for task structure and replicated thread-note state.** Migration had to preserve cards, thread references, note identity, note order, intentional deletions, and the ability to reconstruct the same projection after restart and after federation merges.
+4. **Thread Markdown remains durable content.** A state migration must never interpret omission caused by stripping hydrated sidecar content as a user deletion.
 
 ---
 
