@@ -905,10 +905,23 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'mutated by node-a' } }),
     });
     assert.equal(mutation.status, 200);
+    const mutationBody = await mutation.json() as {
+      locallyCommitted: boolean;
+      ledger: { cards: Array<{ id: string; title: string }> };
+    };
+    assert.equal(mutationBody.locallyCommitted, true);
+    assert.equal(mutationBody.ledger.cards.find((card) => card.id === 'beta-card')?.title, 'mutated by node-a');
     assert.doesNotMatch(readFileSync(join(homeB, 'beta', '.decision-os', 'tasks.json'), 'utf8'), /mutated by node-a/);
     assert.doesNotMatch(readFileSync(join(homeA, 'alpha', '.decision-os', 'tasks.json'), 'utf8'), /mutated by node-a/);
     assert.equal(readFileSync(registryAPath, 'utf8'), registryA);
     assert.equal(readFileSync(registryBPath, 'utf8'), registryB);
+    const convergedRemoteMutation = await waitFor(async () => {
+      const body = await fetch(`${baseB}/p/${encodeURIComponent(localBetaId)}/decision-os/tasks`).then((response) => response.json()) as {
+        cards?: Array<{ id: string; title: string }>;
+      };
+      return body.cards?.find((card) => card.id === 'beta-card' && card.title === 'mutated by node-a') ?? null;
+    });
+    assert.equal(convergedRemoteMutation.id, 'beta-card');
 
     const localLibraries = await waitFor(async () => {
       const [skills, pipelines] = await Promise.all([
@@ -951,6 +964,24 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       return body.title === 'mutated by node-a' && body.state?.status === 'offline' ? body : null;
     });
     assert.equal(offlineCard.title, 'mutated by node-a', 'card detail remains readable from the local replica after owner disconnect');
+    const offlineMutation = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', ...remoteHeaders },
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'mutated while owner offline' } }),
+    });
+    assert.equal(offlineMutation.status, 200);
+    const offlineMutationBody = await offlineMutation.json() as {
+      locallyCommitted: boolean;
+      ledger: { cards: Array<{ id: string; title: string }> };
+    };
+    assert.equal(offlineMutationBody.locallyCommitted, true);
+    assert.equal(offlineMutationBody.ledger.cards.find((card) => card.id === 'beta-card')?.title, 'mutated while owner offline');
+    const offlineLocalRead = await fetch(
+      `${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/tasks/cards/beta-card`,
+      { headers: remoteHeaders },
+    ).then((response) => response.json()) as { title?: string; state?: { status?: string } };
+    assert.equal(offlineLocalRead.title, 'mutated while owner offline');
+    assert.equal(offlineLocalRead.state?.status, 'offline');
     const offlineTerminalDetail = await fetch(
       `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/skills/runs/${cancellationSkillRunId}?ledgerId=tasks&cardId=alpha-card`,
     ).then((response) => response.json()) as Record<string, any>;

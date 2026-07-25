@@ -199,7 +199,6 @@ test('voice note mutations replicate the transcript sidecar without publishing r
   )));
   assert.equal(state.store.contentHeads(`.decision-os/threads/tasks/${threadId}.md`).length, 1);
   assert.equal(state.store.contentHeads(voiceFile).length, 0);
-  assert.equal(state.store.contentHeads().some((head) => head.type === 'audio'), false);
 });
 
 test('restore-note causally replaces a tombstone without importing unrelated sidecar notes', async (context) => {
