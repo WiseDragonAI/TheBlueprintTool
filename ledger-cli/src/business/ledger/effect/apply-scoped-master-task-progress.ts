@@ -11,6 +11,7 @@ import {
 import { hydrateLedgerCardContent } from '../helper/card-content-file.js';
 import { canonicalSubtaskRelationships, isMasterCard, labelsOf, record, stripLegacyTaskProjection } from '../helper/master-task-model.js';
 import { readLedgerJson } from '../helper/read-ledger-json.js';
+import { hydrateLedgerThreadNotesFor } from '../helper/thread-content-file.js';
 import { validateMasterTasks } from '../helper/validate-master-tasks.js';
 import { submitTaskMutation } from './submit-task-mutation.js';
 
@@ -75,6 +76,7 @@ export async function applyScopedMasterTaskProgress(input: { ledgerJsonFile: str
   const verified = await readLedgerJson(input.ledgerJsonFile);
   if (!verified.ok) return verified;
   const hydratedVerified = await hydrateLedgerCardContent(verified.value, input.ledgerJsonFile);
+  await hydrateLedgerThreadNotesFor(hydratedVerified, input.ledgerJsonFile, `thread-${parsed.value.masterCardId}`);
   const validation = validateMasterTasks(hydratedVerified, parsed.value.masterCardId);
   if (validation.errors.length > 0) {
     return { ok: false, error: JSON.stringify({ version: 1, code: 'invalid_master_task', validation }) };
