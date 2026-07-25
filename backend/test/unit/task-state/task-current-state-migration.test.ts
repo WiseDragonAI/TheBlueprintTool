@@ -220,7 +220,12 @@ test('epoch-3 metadata-only thread notes absent from Markdown become causal tomb
     backupRoot: rollbackRoot,
   });
   const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId });
-  assert.equal(store.entity('thread-note', entityId)?.fields.$entity?.candidates[0].operation, 'tombstone');
+  const presence = store.entity('thread-note', entityId)?.fields.$entity;
+  assert.equal(presence?.candidates[0].operation, 'tombstone');
+  assert.equal(
+    presence?.candidates[0].dot.replicaId,
+    `migration:workstation:${projectId}:thread-note:${entityId}:presence`,
+  );
   assert.deepEqual(
     ((store.projection().ledger.notes as Record<string, Array<{ id: string }>>)[threadId] ?? []).map((note) => note.id),
     ['note-retained'],
