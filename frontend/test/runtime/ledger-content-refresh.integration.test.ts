@@ -386,7 +386,10 @@ test('scoped thread refresh mutates only notes while preserving canvas, selectio
   const pointerIdentity = { intent: 'drag', selectionSnapshot: { cardIds: ['card-a'], zoneIds: [], groupIds: [], targetKind: 'card', targetId: 'card-a', ledgerStateId: 'specs' } };
   state.pointer = pointerIdentity;
   let fetchCount = 0;
-  globalThis.fetch = (async () => {
+  globalThis.fetch = (async (url) => {
+    if (String(url).includes('/execution-state')) {
+      return new Response(JSON.stringify({ taskId: 'card-a', activeExecutionIds: [], defaultExecutionId: null, sessions: [] }));
+    }
     fetchCount += 1;
     return revisionResponse({
       ...structuredClone(state.activeLedger),
@@ -417,7 +420,10 @@ test('inactive SSE scopes are no-ops and a lifecycle thread event updates notes 
   runtimeDom.threadHeading.append(actions);
   const ledgerIdentity = state.activeLedger;
   let fetchCount = 0;
-  globalThis.fetch = (async () => {
+  globalThis.fetch = (async (url) => {
+    if (String(url).includes('/execution-state')) {
+      return new Response(JSON.stringify({ taskId: 'card-a', activeExecutionIds: [], defaultExecutionId: null, sessions: [] }));
+    }
     fetchCount += 1;
     return revisionResponse({
       ...structuredClone(state.activeLedger),
@@ -482,6 +488,9 @@ test('events received during an in-flight ledger load drain the latest state and
   const firstGetStarted = new Promise<void>((resolve) => { markFirstGetStarted = resolve; });
   const patchBodies: Array<Record<string, any>> = [];
   globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (String(_url).includes('/execution-state')) {
+      return new Response(JSON.stringify({ taskId: 'card-a', activeExecutionIds: [], defaultExecutionId: null, sessions: [] }));
+    }
     if (init?.method === 'PATCH') {
       const body = JSON.parse(String(init.body ?? '{}'));
       patchBodies.push(body);

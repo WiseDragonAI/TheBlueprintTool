@@ -165,6 +165,12 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
     const text = textBlock(item.text ?? item.message ?? event.text);
     return normalizedJsonlEvent(line.line, { type, kind: 'agent_message', title: 'Codex message', text, status, itemId, tool: '', output: '', exitCode: '', severity: 'info', persist: Boolean(text) });
   }
+  // WHAT: Preserve producer comments as their own execution-log event.
+  // WHY: Comments are execution output, not thread notes and not agent messages.
+  if (itemType === 'comment') {
+    const text = textBlock(item.text ?? item.message ?? event.message ?? event.text);
+    return normalizedJsonlEvent(line.line, { type, kind: 'comment', title: 'Codex comment', text, status, itemId, tool: '', output: '', exitCode: '', severity: 'info', persist: Boolean(text) });
+  }
   // WHAT: Normalize reasoning-like producer item names into one thinking event kind.
   // WHY: Producer vocabulary has used multiple names for the same operator-facing content.
   if (/reason|thinking|thought/i.test(itemType)) {

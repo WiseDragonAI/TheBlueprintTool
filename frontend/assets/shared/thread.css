@@ -813,6 +813,41 @@
   min-width: 0;
 }
 
+/* WHAT: Pin the selected execution's latest todo snapshot above its scrolling log.
+ * WHY: Work state must remain visible while chronological messages move underneath it. */
+.codex-todo-overlay {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(126, 214, 165, 0.42);
+  border-left: 2px solid #7ed6a5;
+  background: rgba(8, 22, 16, 0.96);
+  box-shadow: 0 7px 18px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(8px);
+}
+
+.codex-todo-overlay-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: #bcebd0;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.codex-todo-overlay-heading span {
+  color: #7ed6a5;
+  font-size: 9px;
+}
+
 .codex-log-execution-boundary {
   margin: 5px 0 1px;
   padding: 6px 8px;

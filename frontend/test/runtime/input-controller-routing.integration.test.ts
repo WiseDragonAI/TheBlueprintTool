@@ -352,7 +352,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(ledgerContentEvents, /executionId: String\(payload\.executionId \?\? ''\), status: payload\.status/);
   assert.match(threadNotes, /!isCodexThreadArtifactNote\(note\)/);
   assert.doesNotMatch(threadNotes, /codexNoteClass\(note\)|is-codex-run-event/);
-  assert.match(threadCodexLog, /groupSequentialToolCalls\(input\.events\)/);
+  assert.match(threadCodexLog, /groupTaskExecutionPresentationEvents\(/);
   assert.match(threadCodexLog, /className = 'codex-tool-call'/);
   assert.doesNotMatch(controlOverlay, /selection\.cardIds/);
   assert.match(controlOverlay, /export function hideCanvasControlOverlay\(\): void \{[\s\S]*existingControlOverlay\(\)\?\.replaceChildren\(\);[\s\S]*\}/);

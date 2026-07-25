@@ -26,6 +26,7 @@ type FakeElement = {
   children: FakeElement[];
   classList: { toggle(name: string, force?: boolean): boolean; add(...names: string[]): void; remove(...names: string[]): void; contains(name: string): boolean };
   append(...nodes: FakeElement[]): void;
+  appendChild(node: FakeElement): FakeElement;
   replaceChildren(...nodes: FakeElement[]): void;
   querySelector(selector: string): FakeElement | null;
   querySelectorAll(selector: string): FakeElement[];
@@ -118,6 +119,10 @@ function fakeElement(tagName = 'div', className = ''): FakeElement {
         element.children.push(node);
       }
     },
+    appendChild(node: FakeElement) {
+      element.append(node);
+      return node;
+    },
     replaceChildren(...nodes: FakeElement[]) {
       for (const child of element.children) child.parentElement = null;
       element.children = [];
@@ -171,7 +176,12 @@ function installDom(): { root: FakeElement; heading: FakeElement; codexLog: Fake
     querySelector(selector: string) { return queryAll(root, selector)[0] ?? null; },
     querySelectorAll(selector: string) { return queryAll(root, selector); },
     createElement(tagName: string) { return fakeElement(tagName); },
-    createElementNS(_namespace: string, tagName: string) { return fakeElement(tagName); }
+    createElementNS(_namespace: string, tagName: string) { return fakeElement(tagName); },
+    createTextNode(text: string) {
+      const node = fakeElement('#text');
+      node.textContent = text;
+      return node;
+    }
   };
   (globalThis as unknown as { window: unknown }).window = {
     __coreTelemetry: [],
@@ -205,6 +215,82 @@ async function waitFor(predicate: () => boolean): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   assert.fail('Timed out waiting for condition.');
+}
+
+function executionState(input: {
+  executionId: string;
+  sessionId: string;
+  phase?: string;
+  kind?: string;
+  queuePosition?: number | null;
+  requestedAt?: string;
+}) {
+  return {
+    executionId: input.executionId,
+    sessionId: input.sessionId,
+    kind: input.kind ?? 'thread',
+    phase: input.phase ?? 'succeeded',
+    requestedAt: input.requestedAt ?? '2026-07-25T01:00:00.000Z',
+    startedAt: input.phase === 'queued' ? null : input.requestedAt ?? '2026-07-25T01:00:00.000Z',
+    finishedAt: ['queued', 'running'].includes(input.phase ?? '') ? null : '2026-07-25T01:00:30.000Z',
+    model: 'gpt-5.6-sol',
+    effort: 'medium',
+    executorNodeId: 'workstation',
+    revision: 1,
+    queuePosition: input.queuePosition ?? null,
+    error: null,
+    artifacts: { jsonl: true, stderr: true, telemetry: false, result: false },
+  };
+}
+
+function taskExecutionSummary(
+  taskId: string,
+  sessions: Array<{ sessionId: string; executions: ReturnType<typeof executionState>[] }>,
+  activeExecutionIds: string[] = [],
+) {
+  const executions = sessions.flatMap((session) => session.executions);
+  return {
+    taskId,
+    activeExecutionIds,
+    defaultExecutionId: activeExecutionIds.at(-1) ?? executions.at(-1)?.executionId ?? null,
+    sessions: sessions.map((session) => ({
+      ...session,
+      requestedAt: session.executions[0]?.requestedAt ?? '',
+    })),
+  };
+}
+
+function executionPresentation(
+  execution: ReturnType<typeof executionState>,
+  events: Array<Record<string, unknown>> = [],
+) {
+  return {
+    execution: {
+      executionId: execution.executionId,
+      sessionId: execution.sessionId,
+      taskId: 'task',
+      kind: execution.kind,
+      phase: execution.phase,
+      requestedAt: execution.requestedAt,
+      startedAt: execution.startedAt,
+      finishedAt: execution.finishedAt,
+      model: execution.model,
+      effort: execution.effort,
+      executorNodeId: execution.executorNodeId,
+      revision: execution.revision,
+      error: null,
+      counts: {
+        tools: events.filter((event) => event.kind === 'tool_call').length,
+        messages: events.filter((event) => event.kind === 'agent_message').length,
+        comments: events.filter((event) => event.kind === 'comment').length,
+        thinking: events.filter((event) => event.kind === 'thinking').length,
+        files: events.filter((event) => event.kind === 'file_change').length,
+        warnings: events.filter((event) => event.kind === 'warning').length,
+        errors: events.filter((event) => event.kind === 'error').length,
+      },
+    },
+    events,
+  };
 }
 
 test('thread selection persists the complete default pair and synchronizes a mounted widget', async () => {
@@ -242,7 +328,13 @@ test('thread selection persists the complete default pair and synchronizes a mou
   state.telemetry = [];
   state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
 
-  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (String(url).includes('/execution-state')) {
+      return new Response(JSON.stringify(taskExecutionSummary('card-a', [])), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     const mutation = JSON.parse(String(init?.body ?? '{}')) as { cardPatch: Record<string, unknown> };
     requests.push(mutation);
     return new Response(JSON.stringify({
@@ -398,45 +490,37 @@ test('rejected Codex preference mutation restores both surfaces to the durable p
 
 test('generated skill-result threads bind and render their retained provider session id', async () => {
   const previousFetch = globalThis.fetch;
-  const previousSetTimeout = globalThis.setTimeout;
-  const previousClearTimeout = globalThis.clearTimeout;
   const { codexLog } = installDom();
   const { state } = await import('../../../../src/runtime/state.js');
   const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
   const runId = 'codex-skill-1783682000000-generated';
+  const executionId = 'execution-generated';
   const cardId = `card-${runId}`;
   const threadId = `thread-${cardId}`;
   const requests: string[] = [];
-  let scheduledPoll: (() => void) | null = null;
+  const execution = executionState({ executionId, sessionId: runId, kind: 'pipeline-skill' });
+  const summary = taskExecutionSummary(cardId, [{ sessionId: runId, executions: [execution] }]);
+  const presentation = executionPresentation(execution);
 
   try {
-    globalThis.setTimeout = ((callback: () => void) => {
-      scheduledPoll = callback;
-      return 1 as unknown as ReturnType<typeof setTimeout>;
-    }) as typeof setTimeout;
-    globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
     globalThis.fetch = (async (url: string) => {
       requests.push(url);
-      return new Response(JSON.stringify({
-        ok: true,
-        runId,
-        runKind: 'card',
-        status: 'complete',
-        pipelineRunId: 'codex-pipeline-1783682000000-generated',
-        pipelineName: 'Research pipeline',
-        pipelineStepName: 'Synthesis',
-        skillName: 'research-synthesis',
-        pipelineStatus: 'complete',
-        lineCount: 1,
-        nextSince: 1,
-        events: [],
-        diagnostics: [],
-        metadata: {},
-      }), { status: 200, headers: { 'content-type': 'application/json' } });
+      const body = url.includes('/execution-state') ? summary : presentation;
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
     }) as typeof fetch;
     state.activeTab = 'ux';
     state.activeLedger = {
-      cards: [{ id: cardId, title: 'Generated skill result', cardType: 'codex-skill-run', codexThreadRunId: runId }],
+      cards: [{
+        id: cardId,
+        title: 'Generated skill result',
+        cardType: 'codex-skill-run',
+        codexThreadRunId: runId,
+        codexPipelineRunId: 'codex-pipeline-1783682000000-generated',
+        codexPipelineName: 'Research pipeline',
+        codexPipelineStatus: 'complete',
+        codexPipelineStepName: 'Synthesis',
+        codexSkillName: 'research-synthesis',
+      }],
       annotations: [],
       relationships: [],
       notes: { [threadId]: [] },
@@ -452,28 +536,29 @@ test('generated skill-result threads bind and render their retained provider ses
     state.threadRunSummaryByThreadId = {};
     state.threadRunEventsByThreadId = {};
     state.threadCoalescedToolsByThreadId = {};
+    state.threadTaskExecutionStateByThreadId = {};
+    state.threadExecutionPresentationByThreadId = {};
     state.telemetry = [];
     state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
 
     renderThreadPanel();
+    await waitFor(() => state.threadExecutionPresentationByThreadId[threadId]?.execution?.executionId === executionId);
+    renderThreadPanel();
 
-    assert.equal(state.threadRunIdByThreadId[threadId], runId);
+    assert.equal(state.threadSelectedExecutionIdByThreadId[threadId], executionId);
     assert.ok(codexLog.querySelector('.codex-log-status'));
     assert.equal(codexLog.querySelector('.codex-log-empty'), null);
-    assert.ok(scheduledPoll);
-    (scheduledPoll as () => void)();
     assert.deepEqual(requests, [
-      `/api/codex/skills/runs/${runId}?ledgerId=ux&cardId=${cardId}&since=0`,
+      `/api/tasks/${cardId}/execution-state`,
+      `/api/task-executions/${executionId}`,
     ]);
-    for (let index = 0; index < 12; index += 1) await Promise.resolve();
-    renderThreadPanel();
     const statusValues = codexLog.querySelectorAll('dd').map((element) => element.textContent);
     assert.ok(statusValues.includes('Research pipeline · complete'));
     assert.ok(statusValues.includes('research-synthesis · complete'));
   } finally {
+    state.threadPanelOpen = false;
+    renderThreadPanel();
     globalThis.fetch = previousFetch;
-    globalThis.setTimeout = previousSetTimeout;
-    globalThis.clearTimeout = previousClearTimeout;
     state.threadId = '';
     state.activeLedger = null;
     state.threadActiveTabByThreadId = {};
@@ -481,6 +566,8 @@ test('generated skill-result threads bind and render their retained provider ses
     state.threadRunSummaryByThreadId = {};
     state.threadRunEventsByThreadId = {};
     state.threadCoalescedToolsByThreadId = {};
+    state.threadTaskExecutionStateByThreadId = {};
+    state.threadExecutionPresentationByThreadId = {};
   }
 });
 
@@ -551,6 +638,8 @@ test('Codex Log run arrows default to the newest retained run and select the pre
   const oldRunId = 'codex-skill-1783681000000-oldrun';
   const newRunId = 'codex-skill-1783682000000-newrun';
   const threadId = 'thread-card-history';
+  const oldExecution = executionState({ executionId: 'execution-old', sessionId: oldRunId, requestedAt: '2026-07-25T01:00:00.000Z' });
+  const newExecution = executionState({ executionId: 'execution-new', sessionId: newRunId, requestedAt: '2026-07-25T02:00:00.000Z' });
   try {
     globalThis.setTimeout = (() => 1 as unknown as ReturnType<typeof setTimeout>) as unknown as typeof setTimeout;
     globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
@@ -568,6 +657,16 @@ test('Codex Log run arrows default to the newest retained run and select the pre
     state.threadLogScrollTopByThreadId = {};
     state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
     state.threadSelectedRunIdByThreadId = {};
+    state.threadSelectedExecutionIdByThreadId = {};
+    state.threadTaskExecutionStateByThreadId = {
+      [threadId]: taskExecutionSummary('card-history', [
+        { sessionId: oldRunId, executions: [oldExecution] },
+        { sessionId: newRunId, executions: [newExecution] },
+      ]),
+    };
+    state.threadExecutionPresentationByThreadId = {
+      [threadId]: executionPresentation(newExecution),
+    };
     state.threadRunIdByThreadId = {};
     state.threadRunSummaryByThreadId = {};
     state.threadRunEventsByThreadId = {};
@@ -578,17 +677,15 @@ test('Codex Log run arrows default to the newest retained run and select the pre
     renderThreadPanel();
 
     assert.equal(state.threadSelectedRunIdByThreadId[threadId], newRunId);
-    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Run 2 of 2');
+    assert.equal(state.threadSelectedExecutionIdByThreadId[threadId], 'execution-new');
+    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Execution 2 of 2');
     assert.equal(codexLog.querySelector('.codex-log-run-arrow--previous')?.disabled, false);
     assert.equal(codexLog.querySelector('.codex-log-run-arrow--next')?.disabled, true);
 
     codexLog.querySelector('.codex-log-run-arrow--previous')?.dispatchEvent(new Event('click'));
-    for (let index = 0; index < 20 && state.threadRunIdByThreadId[threadId] !== oldRunId; index += 1) {
-      await new Promise<void>((resolve) => previousSetTimeout(resolve, 5));
-    }
     assert.equal(state.threadSelectedRunIdByThreadId[threadId], oldRunId);
-    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Run 1 of 2');
-    assert.equal(state.threadRunIdByThreadId[threadId], oldRunId);
+    assert.equal(state.threadSelectedExecutionIdByThreadId[threadId], 'execution-old');
+    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Execution 1 of 2');
     assert.equal(codexLog.querySelector('.codex-log-run-arrow--previous')?.disabled, true);
     assert.equal(codexLog.querySelector('.codex-log-run-arrow--next')?.disabled, false);
   } finally {
@@ -599,6 +696,9 @@ test('Codex Log run arrows default to the newest retained run and select the pre
     state.activeLedger = null;
     state.threadActiveTabByThreadId = {};
     state.threadSelectedRunIdByThreadId = {};
+    state.threadSelectedExecutionIdByThreadId = {};
+    state.threadTaskExecutionStateByThreadId = {};
+    state.threadExecutionPresentationByThreadId = {};
     state.threadRunIdByThreadId = {};
     state.threadRunSummaryByThreadId = {};
     state.threadRunEventsByThreadId = {};
@@ -607,33 +707,27 @@ test('Codex Log run arrows default to the newest retained run and select the pre
 });
 
 test('Codex Log counts continuations as separate runs with execution-scoped metrics and events', async () => {
-  const previousFetch = globalThis.fetch;
-  const previousSetTimeout = globalThis.setTimeout;
-  const previousClearTimeout = globalThis.clearTimeout;
   const { codexLog } = installDom();
   const { state } = await import('../../../../src/runtime/state.js');
   const { renderThreadCodexLog } = await import('../../../../src/runtime/thread/effect/render-thread-codex-log.js');
   const runId = 'codex-skill-1784439000000-continuations';
   const threadId = 'thread-card-continuations';
-  const execution = (executionId: string, startLine: number, endLine: number | null, elapsedMs: number, toolCallCount: number, active = false) => ({
-    executionId, runId, segment: startLine === 0 ? 'start' as const : 'continue' as const,
-    startedAt: `2026-07-19T05:0${startLine}:00.000Z`, turnStartedAt: '', startLine, turnStartLine: startLine + 1, endLine,
-    status: active ? 'running' as const : 'complete' as const, active, finishedAt: active ? '' : `2026-07-19T05:0${startLine}:30.000Z`,
-    elapsedMs, toolCallCount, agentMessageCount: 0, fileChangeCount: 0, thinkingCount: 0, warningCount: 0, errorCount: 0, transportStatus: 'ok' as const,
+  const executions = ['a', 'b', 'c'].map((suffix, index) => executionState({
+    executionId: `execution-${suffix}`,
+    sessionId: runId,
+    phase: suffix === 'c' ? 'running' : 'succeeded',
+    requestedAt: `2026-07-25T0${index + 1}:00:00.000Z`,
+  }));
+  const tool = (id: string, command: string) => ({
+    id,
+    kind: 'tool_call',
+    title: command,
+    command,
+    status: 'completed',
+    exitCode: '0',
+    severity: 'info',
   });
-  const summary = {
-    ok: true, active: true, runId, runKind: 'thread' as const, pipelineRunId: '', pipelineName: '', pipelineStepName: '', skillName: '', pipelineStatus: '' as const,
-    status: 'running' as const, executionId: 'execution-c', queuePosition: null,
-    executions: [execution('execution-a', 0, 2, 12000, 1), execution('execution-b', 2, 4, 24000, 2), execution('execution-c', 4, null, 36000, 3, true)],
-    currentExecution: null, startedAt: '2026-07-19T05:04:00.000Z', elapsedMs: 36000, lineCount: 6, nextSince: 6,
-    toolCallCount: 3, agentMessageCount: 0, fileChangeCount: 0, thinkingCount: 0, warningCount: 0, errorCount: 0, transportStatus: 'ok' as const,
-    persistedEventCount: 0, metadata: { sourceCardTitle: '', sourceThreadId: threadId, codexModel: 'gpt-5.6-sol', codexEffort: 'medium' },
-    latestEvent: null, events: [], diagnostics: [], error: '',
-  };
   try {
-    globalThis.fetch = (() => new Promise<Response>(() => undefined)) as typeof fetch;
-    globalThis.setTimeout = (() => 1 as unknown as ReturnType<typeof setTimeout>) as unknown as typeof setTimeout;
-    globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
     state.activeTab = 'specs';
     state.activeLedger = { cards: [{ id: 'card-continuations', title: 'Continuations', codexThreadRunId: runId, codexThreadRunIds: [runId] }], annotations: [], relationships: [], notes: { [threadId]: [] } };
     state.threadId = threadId;
@@ -641,42 +735,55 @@ test('Codex Log counts continuations as separate runs with execution-scoped metr
     state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
     state.threadSelectedRunIdByThreadId = { [threadId]: runId };
     state.threadSelectedExecutionIdByThreadId = {};
-    state.threadRunIdByThreadId = { [threadId]: runId };
-    state.threadRunExecutionsByRunId = {};
-    state.threadRunSummaryByThreadId = { [threadId]: summary };
-    state.threadRunEventsByThreadId = { [threadId]: [
-      { runId, line: 2, source: 'jsonl', sourceLine: 2, type: 'item.completed', kind: 'tool_call', title: 'first', text: '', status: 'completed', itemId: 'a', tool: 'first', output: '', exitCode: '0', severity: 'info', persist: false, eventKey: 'a', toolKey: 'a' },
-      { runId, line: 4, source: 'jsonl', sourceLine: 4, type: 'item.completed', kind: 'tool_call', title: 'second', text: '', status: 'completed', itemId: 'b', tool: 'second', output: '', exitCode: '0', severity: 'info', persist: false, eventKey: 'b', toolKey: 'b' },
-      { runId, line: 6, source: 'jsonl', sourceLine: 6, type: 'item.completed', kind: 'tool_call', title: 'third', text: '', status: 'completed', itemId: 'c', tool: 'third', output: '', exitCode: '0', severity: 'info', persist: false, eventKey: 'c', toolKey: 'c' },
-    ] };
-    state.threadCoalescedToolsByThreadId = { [threadId]: {} };
+    state.threadTaskExecutionStateByThreadId = {
+      [threadId]: taskExecutionSummary(
+        'card-continuations',
+        [{ sessionId: runId, executions }],
+        ['execution-c'],
+      ),
+    };
+    state.threadExecutionPresentationByThreadId = {
+      [threadId]: executionPresentation(executions[2], [
+        tool('tool-c1', 'third-1'),
+        tool('tool-c2', 'third-2'),
+        tool('tool-c3', 'third-3'),
+        {
+          id: 'comment-c',
+          kind: 'comment',
+          title: 'Codex comment',
+          text: 'Keep this execution comment visible.',
+          status: '',
+          severity: 'info',
+        },
+      ]),
+    };
 
     renderThreadCodexLog();
 
-    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Run 3 of 3');
-    assert.equal(codexLog.querySelector('.codex-tool-call-command')?.textContent, 'third');
+    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Execution 3 of 3');
+    assert.equal(codexLog.querySelector('.codex-tool-call-command')?.textContent, 'third-1');
+    const comment = codexLog.querySelector('.codex-log-event.is-comment');
+    assert.ok(comment);
+    assert.ok(comment.querySelectorAll('*').some((element) => element.textContent === 'Keep this execution comment visible.'));
     assert.ok(codexLog.querySelectorAll('dd').map((element) => element.textContent).includes('3'));
 
     codexLog.querySelector('.codex-log-run-arrow--previous')?.dispatchEvent(new Event('click'));
-    for (let index = 0; index < 12; index += 1) await Promise.resolve();
-    await new Promise<void>((resolve) => previousSetTimeout(resolve, 0));
     assert.equal(state.threadSelectedExecutionIdByThreadId[threadId], 'execution-b');
-    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Run 2 of 3');
-    assert.equal(codexLog.querySelector('.codex-tool-call-command')?.textContent, 'second');
+    state.threadExecutionPresentationByThreadId[threadId] = executionPresentation(executions[1], [
+      tool('tool-b1', 'second-1'),
+      tool('tool-b2', 'second-2'),
+    ]);
+    renderThreadCodexLog();
+    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Execution 2 of 3');
+    assert.equal(codexLog.querySelector('.codex-tool-call-command')?.textContent, 'second-1');
     assert.ok(codexLog.querySelectorAll('dd').map((element) => element.textContent).includes('2'));
   } finally {
-    globalThis.fetch = previousFetch;
-    globalThis.setTimeout = previousSetTimeout;
-    globalThis.clearTimeout = previousClearTimeout;
     state.threadId = '';
     state.activeLedger = null;
     state.threadSelectedRunIdByThreadId = {};
     state.threadSelectedExecutionIdByThreadId = {};
-    state.threadRunIdByThreadId = {};
-    state.threadRunExecutionsByRunId = {};
-    state.threadRunSummaryByThreadId = {};
-    state.threadRunEventsByThreadId = {};
-    state.threadCoalescedToolsByThreadId = {};
+    state.threadTaskExecutionStateByThreadId = {};
+    state.threadExecutionPresentationByThreadId = {};
   }
 });
 
@@ -688,15 +795,19 @@ test('queued thread runs expose exact cancellation and render their queue positi
   const { syncThreadCodexRunControls } = await import('../../../../src/runtime/thread/effect/sync-thread-codex-run-controls.js');
   const runId = 'codex-skill-queued';
   const threadId = 'thread-card-a';
-  const summary = {
-    ok: true, active: false, runId, runKind: 'thread', pipelineRunId: '', pipelineName: '', pipelineStepName: '', skillName: '', pipelineStatus: '',
-    status: 'pending', executionId: 'execution-queued', currentExecution: null, executions: [], queuePosition: 3, startedAt: '', elapsedMs: 0, lineCount: 0, nextSince: 0, toolCallCount: 0, agentMessageCount: 0,
-    fileChangeCount: 0, thinkingCount: 0, warningCount: 0, errorCount: 0, transportStatus: 'ok', persistedEventCount: 0,
-    metadata: { sourceCardTitle: '', sourceThreadId: threadId, codexModel: 'gpt-5.6-sol', codexEffort: 'medium' },
-    latestEvent: null, events: [], diagnostics: [], error: '',
-  };
+  const execution = executionState({
+    executionId: 'execution-queued',
+    sessionId: runId,
+    phase: 'queued',
+    queuePosition: 3,
+  });
+  const summary = taskExecutionSummary('card-a', [{ sessionId: runId, executions: [execution] }], ['execution-queued']);
+  const presentation = executionPresentation(execution);
   try {
-    globalThis.fetch = (async () => new Response(JSON.stringify(summary), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
+    globalThis.fetch = (async (url) => new Response(
+      JSON.stringify(String(url).includes('/execution-state') ? summary : presentation),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )) as typeof fetch;
     state.activeTab = 'specs';
     state.activeLedger = { cards: [{ id: 'card-a', title: 'Card A', codexThreadRunId: runId }], annotations: [], relationships: [], notes: { [threadId]: [] } };
     state.threadId = threadId;
@@ -706,10 +817,9 @@ test('queued thread runs expose exact cancellation and render their queue positi
     state.threadScrollTopByThreadId = {};
     state.threadLogScrollTopByThreadId = {};
     state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
-    state.threadRunIdByThreadId = { [threadId]: runId };
-    state.threadRunSummaryByThreadId = { [threadId]: summary };
-    state.threadRunEventsByThreadId = { [threadId]: [] };
-    state.threadCoalescedToolsByThreadId = { [threadId]: {} };
+    state.threadSelectedExecutionIdByThreadId = { [threadId]: 'execution-queued' };
+    state.threadTaskExecutionStateByThreadId = { [threadId]: summary };
+    state.threadExecutionPresentationByThreadId = { [threadId]: presentation };
     state.telemetry = [];
     state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
 
@@ -740,10 +850,9 @@ test('queued thread runs expose exact cancellation and render their queue positi
     state.threadId = '';
     state.activeLedger = null;
     state.threadActiveTabByThreadId = {};
-    state.threadRunIdByThreadId = {};
-    state.threadRunSummaryByThreadId = {};
-    state.threadRunEventsByThreadId = {};
-    state.threadCoalescedToolsByThreadId = {};
+    state.threadSelectedExecutionIdByThreadId = {};
+    state.threadTaskExecutionStateByThreadId = {};
+    state.threadExecutionPresentationByThreadId = {};
     state.threadActiveRunIdByThreadId = {};
     state.threadActiveRunSummaryByThreadId = {};
   }

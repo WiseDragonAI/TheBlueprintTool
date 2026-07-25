@@ -4,9 +4,30 @@
  */
 import { codexRunDurationLabel } from '../../codex/helper/codex-run-duration-label.js';
 import { liveCodexRunElapsedMs } from '../../codex/helper/live-codex-run-elapsed-ms.js';
-import type { CardSkillRunSummary } from '../../codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunPreference } from '../../codex/helper/card-codex-run-preference.js';
 import { clearThreadCodexStopState, threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
+
+export type CodexLogStatusSummary = {
+  ok: boolean;
+  active: boolean;
+  status: string;
+  runId: string;
+  executionId: string;
+  runKind: string;
+  startedAt: string;
+  elapsedMs: number;
+  queuePosition: number | null;
+  metadata: { codexModel?: string; codexEffort?: string };
+  toolCallCount: number;
+  warningCount: number;
+  errorCount: number;
+  transportStatus: string;
+  pipelineRunId?: string | null;
+  pipelineName?: string;
+  pipelineStatus?: string | null;
+  skillName?: string;
+  pipelineStepName?: string;
+};
 
 function renderRunAction(input: { card: Record<string, unknown>; runId: string; executionId?: string; threadId: string; action: 'START' | 'RESUME' | 'CANCEL' | 'STOP' }): HTMLElement {
   const item = document.createElement('div');
@@ -59,7 +80,7 @@ function renderRunAction(input: { card: Record<string, unknown>; runId: string; 
   return item;
 }
 
-export function renderThreadCodexLogStatus(input: { summary: CardSkillRunSummary | null; sessionSummary?: CardSkillRunSummary | null; card: Record<string, unknown>; runId: string; threadId: string }): HTMLElement {
+export function renderThreadCodexLogStatus(input: { summary: CodexLogStatusSummary | null; sessionSummary?: CodexLogStatusSummary | null; card: Record<string, unknown>; runId: string; threadId: string }): HTMLElement {
   const summary = input.summary;
   const sessionSummary = input.sessionSummary ?? summary;
   const status = !input.runId ? 'idle' : summary?.ok === false ? 'unavailable' : summary?.status ?? 'running';

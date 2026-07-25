@@ -276,7 +276,7 @@ test('mobile Codex Log exposes execution-fenced cancel and stop actions', () => 
   assert.match(sharedThreadCss, /\.codex-log-queue-indicator i\s*{[^}]*animation:\s*codex-log-queue-dot/s);
   assert.match(sharedThreadCss, /\.codex-log-action-button\s*{[^}]*max-width:\s*64px;[^}]*height:\s*56px;/s);
   assert.doesNotMatch(sharedThreadCss, /\.codex-log-run-action\s*{[^}]*grid-column:\s*1 \/ -1/s);
-  assert.match(sharedCodexLog, /if \(!runId\) \{[\s\S]*renderThreadCodexLogStatus\(\{ summary: null, card, runId: '', threadId \}\)/);
+  assert.match(sharedCodexLog, /renderThreadCodexLogStatus\(\{[\s\S]*summary: selectedStatus,[\s\S]*runId: selectedExecution\?\.sessionId \?\? '',[\s\S]*threadId,/);
   assert.match(source, /import \{ stopThreadCodexRunController \} from '\/src\/runtime\/codex\/controller\/stop-thread-codex-run-controller\.js';/);
   assert.match(source, /action === 'stop-thread-codex'[\s\S]*stopThreadCodexRunController\(\{/);
   assert.match(source, /ledgerId: currentLedgerId/);

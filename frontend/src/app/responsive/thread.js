@@ -161,13 +161,15 @@ export function closeMobileThread({ fromHistory = false, discardHistory = false 
   saveThreadPanelScrollPositions();
   const runId = String(canvasState.threadRunIdByThreadId?.[canvasState.threadId] || (currentCard ? cardCodexThreadRunId(currentCard) : ''));
   const activeRunId = String(canvasState.threadActiveRunIdByThreadId?.[canvasState.threadId] || '');
-  if (currentLedgerId && currentCard && canvasState.threadId && runId) {
+  // WHAT: Unbind the task-scoped log reader even when no legacy session alias exists.
+  // WHY: Epoch 4 history can be present solely in synchronized execution entities.
+  if (currentLedgerId && currentCard && canvasState.threadId) {
     unbindThreadCodexRunLog({
       projectId: currentProjectId,
       ledgerId: currentLedgerId,
       cardId: String(currentCard.id),
       threadId: canvasState.threadId,
-      runId,
+      runId: runId || '',
     });
   }
   if (currentLedgerId && currentCard && canvasState.threadId && activeRunId) {
