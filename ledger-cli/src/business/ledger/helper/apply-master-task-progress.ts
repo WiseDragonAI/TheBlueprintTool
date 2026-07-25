@@ -11,19 +11,19 @@ import { validateMasterTasks } from './validate-master-tasks.js';
 import { parseThreadMarkdown } from './thread-content-file.js';
 
 type JsonObject = Record<string, unknown>;
-type Section = { title: string; markdown: string };
-type Update = { cardId: string; title?: string; markdown?: string; sections?: Section[]; labels?: string[] };
-type Plan = { masterCardId: string; updates: Update[]; verifiedSubtaskIds: string[]; reply: string };
+export type MasterTaskProgressSection = { title: string; markdown: string };
+export type MasterTaskProgressUpdate = { cardId: string; title?: string; markdown?: string; sections?: MasterTaskProgressSection[]; labels?: string[] };
+export type MasterTaskProgressPlan = { masterCardId: string; updates: MasterTaskProgressUpdate[]; verifiedSubtaskIds: string[]; reply: string };
 
-function sections(value: unknown): Section[] {
+function sections(value: unknown): MasterTaskProgressSection[] {
   return Array.isArray(value) ? value.filter(record).map((item) => ({ title: String(item.title ?? '').trim().replace(/^(?:[A-Z]\.\s+)+/i, ''), markdown: String(item.markdown ?? '').trim() })).filter((item) => item.title && item.markdown) : [];
 }
 
-function renderSections(value: Section[]): string {
+export function renderMasterTaskProgressSections(value: MasterTaskProgressSection[]): string {
   return value.map((section, index) => `## ${String.fromCharCode(65 + index)}. ${section.title}\n\n${section.markdown}`).join('\n\n---\n\n');
 }
 
-function parsePlan(value: string): Result<Plan> {
+export function parseMasterTaskProgressPlan(value: string): Result<MasterTaskProgressPlan> {
   try {
     const source = JSON.parse(value) as JsonObject;
     const updates = Array.isArray(source.updates) ? source.updates.filter(record).map((item) => ({
@@ -57,7 +57,7 @@ function contentPath(ledgerFile: string, card: JsonObject): string | null {
 }
 
 export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJson: string; ledger?: JsonObject }): Result<string> {
-  const parsed = parsePlan(input.planJson);
+  const parsed = parseMasterTaskProgressPlan(input.planJson);
   if (!parsed.ok) return parsed;
   const plan = parsed.value;
   const scopedRoot = process.env.DECISION_OS_LEDGER_ROOT?.trim();
@@ -92,7 +92,7 @@ export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJso
     if (!file) return { ok: false, error: `Card has no canonical content file: ${update.cardId}` };
     if (update.title) cards[index].title = update.title;
     if (update.labels) cards[index].labels = [...new Set(update.labels.filter((label) => label !== 'master-task' && label !== 'subtask').concat(update.cardId === plan.masterCardId ? ['master-task'] : []))];
-    files.set(file, `${stripLegacyTaskProjection(update.markdown ?? renderSections(update.sections ?? [])).trimEnd()}\n`);
+    files.set(file, `${stripLegacyTaskProjection(update.markdown ?? renderMasterTaskProgressSections(update.sections ?? [])).trimEnd()}\n`);
   }
   if (!masterFile) return { ok: false, error: `Card has no canonical content file: ${plan.masterCardId}` };
 

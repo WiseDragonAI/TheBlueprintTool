@@ -21,6 +21,8 @@ import { isWorkerOwnedTaskLedger } from '../../ledger/helper/is-worker-owned-tas
 import { readLedgerJson } from '../../ledger/helper/read-ledger-json.js';
 import { queryProjects } from '../../ledger/helper/query-projects.js';
 import { createMasterTask } from '../../ledger/helper/create-master-task.js';
+import { applyScopedMasterTaskPlan } from '../../ledger/effect/apply-scoped-master-task-plan.js';
+import { applyScopedMasterTaskProgress } from '../../ledger/effect/apply-scoped-master-task-progress.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -109,13 +111,13 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'master-task-apply') {
     if (!command.masterTaskOperation?.planStdin) return { ok: false, error: 'master-task-apply requires --plan-stdin.' };
-    if (isWorkerOwnedTaskLedger(command.ledgerJsonFile, ports.fs)) {
-      // WHAT: Reject the complete-plan task projection before consuming stdin.
-      // WHY: This legacy helper owns no scoped epoch-3 command contract.
-      return { ok: false, error: 'scoped_task_command_required:master-task-apply' };
-    }
     let planJson = '';
     for await (const chunk of process.stdin) planJson += String(chunk);
+    if (isWorkerOwnedTaskLedger(command.ledgerJsonFile, ports.fs)) {
+      const result = await applyScopedMasterTaskPlan({ ledgerJsonFile: command.ledgerJsonFile, planJson });
+      if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+      return result;
+    }
     const current = await readLedgerJson(command.ledgerJsonFile, ports.fs);
     if (!current.ok) return current;
     if (!current.value || typeof current.value !== 'object' || Array.isArray(current.value)) return { ok: false, error: 'Master-task apply requires an object ledger.' };
@@ -128,13 +130,13 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'master-task-progress') {
     if (!command.masterTaskOperation?.planStdin) return { ok: false, error: 'master-task-progress requires --plan-stdin.' };
-    if (isWorkerOwnedTaskLedger(command.ledgerJsonFile, ports.fs)) {
-      // WHAT: Reject the complete-progress task projection before consuming stdin.
-      // WHY: This legacy helper owns no scoped epoch-3 command contract.
-      return { ok: false, error: 'scoped_task_command_required:master-task-progress' };
-    }
     let planJson = '';
     for await (const chunk of process.stdin) planJson += String(chunk);
+    if (isWorkerOwnedTaskLedger(command.ledgerJsonFile, ports.fs)) {
+      const result = await applyScopedMasterTaskProgress({ ledgerJsonFile: command.ledgerJsonFile, planJson });
+      if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+      return result;
+    }
     const current = await readLedgerJson(command.ledgerJsonFile, ports.fs);
     if (!current.ok) return current;
     if (!current.value || typeof current.value !== 'object' || Array.isArray(current.value)) return { ok: false, error: 'Master-task progress requires an object ledger.' };

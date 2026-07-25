@@ -21,7 +21,7 @@ export type LedgerMutation = {
   lifecycleStatus?: 'todo' | 'backlog' | 'done';
   masterTaskId?: string;
   imageSrc?: string;
-  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; questionnaires?: CardQuestionnaires; gitReviewNotes?: GitReviewNote[]; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
+  cardPatch?: { id?: string; status?: string; title?: string; description?: string; labels?: string[]; imageSizes?: Record<string, { width?: number; height?: number }>; questionnaires?: CardQuestionnaires; gitReviewNotes?: GitReviewNote[]; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;
   relationships?: Array<Record<string, unknown>>;
@@ -260,6 +260,7 @@ export function applyLedgerMutation(input: {
     const includesCodexPreference = mutation.cardPatch.codexRunModel !== undefined || mutation.cardPatch.codexRunEffort !== undefined;
     const includesQuestionnaires = mutation.cardPatch.questionnaires !== undefined;
     const includesGitReviewNotes = mutation.cardPatch.gitReviewNotes !== undefined;
+    const includesLabels = mutation.cardPatch.labels !== undefined;
     const validCodexPreference = typeof mutation.cardPatch.codexRunModel === 'string'
       && (codexModelOptions as readonly string[]).includes(mutation.cardPatch.codexRunModel)
       && typeof mutation.cardPatch.codexRunEffort === 'string'
@@ -282,6 +283,12 @@ export function applyLedgerMutation(input: {
         body: { ok: false, error: 'Card Git review notes must use the supported review-note contract.' },
       };
     }
+    if (!mutationError && includesLabels && (!Array.isArray(mutation.cardPatch.labels) || mutation.cardPatch.labels.some((label) => typeof label !== 'string' || !label.trim()))) {
+      mutationError = {
+        statusCode: 400,
+        body: { ok: false, error: 'Card labels must be non-empty strings.' },
+      };
+    }
     if (!mutationError && includesQuestionnaires && revisedQuestionnairesCarryAnswers(card, mutation.cardPatch.questionnaires!)) {
       mutationError = {
         statusCode: 400,
@@ -300,6 +307,19 @@ export function applyLedgerMutation(input: {
       if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
       if (card && typeof mutation.cardPatch.description === 'string') {
         writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
+      }
+      if (card && includesLabels) {
+        const requested = [...new Set(mutation.cardPatch.labels!.map((label) => label.trim()))];
+        const existing = Array.isArray(card.labels) ? card.labels.map(String) : [];
+        const master = existing.includes('master-task') || (ledger.relationships ?? []).some((relationship) => (
+          relationship.label === 'subtask' && String(relationship.from ?? '') === String(card.id ?? '')
+        ));
+        const subtask = (ledger.relationships ?? []).some((relationship) => (
+          relationship.label === 'subtask' && String(relationship.to ?? '') === String(card.id ?? '')
+        ));
+        card.labels = requested
+          .filter((label) => label !== 'master-task' && label !== 'subtask')
+          .concat(master ? ['master-task'] : subtask ? ['subtask'] : []);
       }
       if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
       if (card && includesQuestionnaires) card.questionnaires = mutation.cardPatch.questionnaires;
