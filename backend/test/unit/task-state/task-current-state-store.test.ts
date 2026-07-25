@@ -95,12 +95,14 @@ test('local mutations keep migration-sized project clocks out of entity register
   await store.merge({ version: taskCurrentStateVersion, projectId: 'project-a', entities });
   await store.flush();
   assert.ok(Buffer.byteLength(JSON.stringify(store.clock())) > taskCurrentEntityByteLimit);
+  assert.deepEqual(store.clientClock(), {});
 
   const mutation = await store.mutate({
     replicaId: 'workstation',
     changes: [{ entityType: 'card', entityId: 'new-card', changes: [{ path: 'title', operation: 'set', value: 'New card' }] }],
   });
   assert.deepEqual(mutation.batch.context, {});
+  assert.deepEqual(store.clientClock(), { workstation: 1 });
   assert.ok(Buffer.byteLength(JSON.stringify(mutation.delta.entities[0])) < taskCurrentEntityByteLimit);
   await store.flush();
 

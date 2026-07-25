@@ -2129,16 +2129,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const committed = await state.executeMutation(mutation, before, after);
         if (committed.changed) controlRoomProjectionStore?.invalidate(localProjectId, committed.localChanges);
         const revision = federatedTaskRevisionForProject(localProjectId).advance('tasks');
+        const taskClock = state.store.clientClock();
         response.setHeader(ledgerRevisionHeader, String(revision));
-        response.setHeader('x-decision-os-task-clock', Buffer.from(JSON.stringify(state.store.clock())).toString('base64url'));
+        response.setHeader('x-decision-os-task-clock', Buffer.from(JSON.stringify(taskClock)).toString('base64url'));
         response.end(JSON.stringify({
           ok: true,
           ledgerId: 'tasks',
           revision,
-          taskClock: state.store.clock(),
+          taskClock,
           receipt: {
             mutationId: String(mutation.mutationId ?? ''),
-            clock: state.store.clock(),
+            clock: taskClock,
             entities: committed.localChanges,
           },
           locallyCommitted: true,
@@ -2689,6 +2690,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       else if (taskCommit.changed) controlRoomProjectionStore?.invalidate(activeProject?.id ?? '', taskCommit.localChanges);
       if (ledgerId !== 'tasks') federation?.publishContentChange();
       const revision = ledgerRevisions.advance(ledgerId);
+      const taskClock = taskCommit && localProject
+        ? taskStateForProject(localProject).store.clientClock()
+        : null;
       const cardId = String(mutation.cardPatch?.id ?? mutation.card?.id ?? mutation.cardId ?? mutation.masterTaskId ?? '');
       const threadId = String(mutation.note?.threadId ?? ((mutation.action === 'create-card' || mutation.action === 'create-task-intake') && cardId ? `thread-${cardId}` : ''));
       const changedCard = cardId
@@ -2709,11 +2713,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         ok: true,
         ledgerId,
         revision,
-        ...(taskCommit && localProject ? {
-          taskClock: taskStateForProject(localProject).store.clock(),
+        ...(taskCommit && localProject && taskClock ? {
+          taskClock,
           receipt: {
             mutationId: String(mutation.mutationId ?? ''),
-            clock: taskStateForProject(localProject).store.clock(),
+            clock: taskClock,
             entities: taskCommit.localChanges,
           },
         } : {}),
@@ -2771,7 +2775,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.setHeader('content-type', 'application/json');
       response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.current(ledgerId)));
       if (localProject && ledgerId === 'tasks') {
-        response.setHeader('x-decision-os-task-clock', Buffer.from(JSON.stringify(taskStateForProject(localProject).store.clock())).toString('base64url'));
+        const taskClock = taskStateForProject(localProject).store.clientClock();
+        response.setHeader('x-decision-os-task-clock', Buffer.from(JSON.stringify(taskClock)).toString('base64url'));
       }
       response.statusCode = projection ? 200 : 404;
       response.end(JSON.stringify(projection ?? { ok: false, error: 'Scoped ledger resource not found.' }));
