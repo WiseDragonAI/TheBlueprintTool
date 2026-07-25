@@ -384,8 +384,8 @@
 5. Convert active legacy execution evidence only while servers are stopped. Set non-terminal legacy attempts to `interrupted`; do not resurrect a process from file state.
 6. Convert pipeline history into immutable execution history. Preserve original IDs, timestamps, results, errors, and artifact hashes where available.
 7. Require each migration report to prove protocol, schema, and epoch `4`; zero missing objects; valid semantic inventories; complete assignment coverage; valid execution indexes; and a complete rollback backup.
-8. Deploy the epoch-4 relay against a new versioned Durable Object namespace. Retain the epoch-3 namespace unchanged for rollback.
-9. Start Workstation. Let it publish its migrated state to the empty epoch-4 relay namespace.
+8. Deploy the epoch-4 relay against the existing stable `FederationRelay` Durable Object namespace. Preserve node credential hashes, manifests, labels, and every `state:v3:*` key; epoch-4 state writes only to the empty `state:v4:*` keyspace.
+9. Start Workstation. Let it publish its migrated state into the empty `state:v4:*` keyspace with its existing credential.
 10. Require Workstation and relay roots to match.
 11. Start Mobile. Let automatic anti-entropy merge the independently migrated Mobile state through the relay.
 12. Require Workstation, Mobile, and relay roots to match for every project.
@@ -396,7 +396,7 @@
 17. Reassign an idle task to Mobile. Launch it from Workstation and require execution only on Mobile.
 18. Read a Mobile-owned terminal artifact from Workstation and a Workstation-owned terminal artifact from Mobile. Require exact-hash lazy retrieval without bulk log transfer.
 19. Restart each node once. Require identical roots, task counts, assignments, terminal histories, queued ownership, and automatic federation afterward.
-20. Retain both node backups and the epoch-3 relay namespace until every verification gate passes.
+20. Retain both node backups and every relay `state:v3:*` key until every verification gate passes.
 
 ---
 

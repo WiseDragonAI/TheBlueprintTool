@@ -47,7 +47,7 @@
    1. Required evidence: shared assignment and execution schemas, phase transition rules, CRDT merge behavior, relay protocol admission, and focused tests.
    2. Implemented atomic assignment, execution metadata, execution lifecycle, execution artifact, and `cancelling` contracts.
    3. Implemented explicit assignment and execution conflict classification.
-   4. Implemented relay epoch-4 admission, `state:v4` storage keys, and `FederationRelayV4` Durable Object namespace migration.
+   4. Implemented relay epoch-4 admission and `state:v4` storage keys. The live binding remains on the stable `FederationRelay` namespace so credentials and manifests survive state-epoch changes; `state:v3` keys remain isolated for rollback.
    5. Focused backend result: `30` tests passed.
    6. Relay result: `8` tests passed.
    7. Backend and relay typechecks passed.

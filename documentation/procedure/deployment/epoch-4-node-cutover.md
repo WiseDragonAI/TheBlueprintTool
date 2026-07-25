@@ -6,7 +6,7 @@
 4. Do not create a new transaction while one exists. Reuse the exact backup root only for deterministic recovery or independent verification.
 5. Do not start Mobile migration until the progress ledger records the exact reviewed commit installed on the stopped node.
 6. Do not admit the Mobile maintenance window until Mobile reports its exact registered stop and start commands, repository state, catalog root, and external backup path.
-7. Retained epoch-3 backups and relay namespace remain rollback authority until section `O` passes.
+7. Retained epoch-3 backups and relay `state:v3:*` keys remain rollback authority until section `O` passes.
 
 ---
 
@@ -118,8 +118,8 @@
 
 ## G. Relay Deployment
 
-1. Deploy epoch-4 relay code against the versioned epoch-4 Durable Object namespace.
-2. Preserve the epoch-3 namespace unchanged.
+1. Deploy epoch-4 relay code against the existing stable `FederationRelay` Durable Object namespace.
+2. Preserve node credential hashes, manifests, labels, and every `state:v3:*` key unchanged. Epoch-4 state uses only `state:v4:*`.
 3. Require `/health` to report protocol `decision-os-task-state/4`, schema `4`, and baseline epoch `4`.
 4. Keep both nodes offline during relay admission.
 
@@ -190,7 +190,7 @@
 ## M. Rollback
 
 1. Stop both nodes.
-2. Repoint the relay deployment to the retained epoch-3 namespace.
+2. Deploy the reviewed epoch-3 relay code against the same stable `FederationRelay` namespace; it reads the retained `state:v3:*` keys.
 3. Execute recorded node rollback independently on each node:
 
    ```bash
@@ -226,7 +226,7 @@
 ## O. Production Gate
 
 1. Do not close the cutover while any section `N` evidence is missing.
-2. Do not delete epoch-3 backups and namespace while the gate remains open.
+2. Do not delete epoch-3 backups or relay `state:v3:*` keys while the gate remains open.
 3. Do not mark the implementation goal complete before production evidence proves the complete plan.
 
 ---
