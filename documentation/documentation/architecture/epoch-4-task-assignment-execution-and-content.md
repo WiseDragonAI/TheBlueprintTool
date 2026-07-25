@@ -53,6 +53,14 @@
 4. **Terminal publication order:** Live run paths remain registered until terminal lifecycle and immutable artifact heads are durable. Terminal polling therefore retains a readable source throughout settlement.
 5. **Lazy terminal reads:** A node reads a terminal artifact by exact content hash and fetches missing remote bytes on demand.
 6. **Garbage collection:** Execution artifact deletion is an explicit offline operation gated by a retention cutoff and a recorded converged project root.
+7. **Task summary resource:** `GET /p/:projectId/api/tasks/:taskId/execution-state` returns the complete synchronized session and execution hierarchy for one task. The summary includes lifecycle, model, effort, executor, queue position, errors, and artifact availability without reading JSONL artifacts.
+8. **Execution presentation resource:** `GET /p/:projectId/api/task-executions/:executionId` returns one exact execution presentation. The frontend selects an execution from the task summary and never infers a log from the latest session or execution.
+9. **Executor-local parsing:** The executor node reads the selected JSONL and stderr segment, normalizes it, coalesces lifecycle updates, and returns presentation events. Physical line positions, artifact paths, content hashes, and parsing cursors remain private backend implementation details.
+10. **Lightweight payload:** Presentation events retain agent messages, comments, thinking, diagnostics, run status, tool identity and settlement metadata, file path-action summaries, and typed todo items. They exclude raw tool result bodies, `stdout`, `stderr`, aggregated output, file contents, telemetry, and result artifacts.
+11. **Todo and comment fidelity:** The latest selected-execution `todo_list` renders as the persistent Codex Log overlay. `comment` events remain chronological first-class log entries and are not folded into agent messages.
+12. **Remote active reads:** A non-executor node proxies an active presentation read to the authenticated executor endpoint `/api/internal/task-executions/:executionId/presentation`.
+13. **Remote terminal reads:** A non-executor node fetches only the selected execution's immutable JSONL and stderr objects by exact hash, then builds the same presentation locally. Telemetry and result objects are not fetched for log display.
+14. **Frontend replacement rule:** Each refresh installs one complete task summary and one complete selected-execution presentation. The browser does not merge line ranges, retain opaque cursors, parse JSONL, or reconstruct session ownership.
 
 ---
 
@@ -102,5 +110,10 @@
 7. `backend/src/business/task-state/controller/migrate-node-task-current-state.ts`
 8. `backend/src/business/task-state/helper/task-current-state-migration.ts`
 9. `backend/src/business/task-state/helper/task-current-state-migration-transaction.ts`
-10. `documentation/procedure/deployment/epoch-4-node-cutover.md`
-11. `documentation/postmortem/epoch-4-workstation-cutover-2026-07-24.md`
+10. `backend/src/business/codex/helper/project-task-execution-state.ts`
+11. `backend/src/business/codex/helper/task-execution-presentation.ts`
+12. `shared/schemas/task-execution-presentation-types.ts`
+13. `frontend/src/runtime/codex/effect/request-task-execution-state.ts`
+14. `frontend/src/runtime/codex/effect/bind-thread-codex-run-log.ts`
+15. `documentation/procedure/deployment/epoch-4-node-cutover.md`
+16. `documentation/postmortem/epoch-4-workstation-cutover-2026-07-24.md`

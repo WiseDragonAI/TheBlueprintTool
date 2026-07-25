@@ -8,25 +8,16 @@ import type {
 } from '../../../../../shared/schemas/task-execution-presentation-types.js';
 import { state } from '../../state.js';
 import { projectIdFromLocation, replicaNodeIdFromLocation } from '../../project/helper/project-request-scope.js';
-import type { CardSkillRunSummary } from './request-card-skill-run-status.js';
-import { bindCardSkillRunLogConsumer, unbindCardSkillRunLogConsumer } from './poll-card-skill-run.js';
+import { findTaskExecution } from '../helper/find-task-execution.js';
+import { taskExecutionDisplayStatus } from '../helper/task-execution-display-status.js';
 import { requestTaskExecutionPresentation, requestTaskExecutionState } from './request-task-execution-state.js';
 import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 import { stopThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
+import type { ThreadCodexRunLogIdentity } from './thread-codex-run-log-identity-types.js';
 
 export { syncThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
-
-type ThreadCodexRunLogIdentity = {
-  projectId?: string;
-  replicaNodeId?: string;
-  ledgerId: string;
-  cardId: string;
-  threadId: string;
-  runId: string;
-  expectedExecutionId?: string;
-  expectedStatus?: CardSkillRunSummary['status'];
-  forceRevalidate?: boolean;
-};
+export { bindThreadCodexActiveRunLog, unbindThreadCodexActiveRunLog } from './bind-thread-codex-active-run-log.js';
+export type { ThreadCodexRunLogIdentity } from './thread-codex-run-log-identity-types.js';
 
 type TaskLogPoller = {
   key: string;
@@ -47,35 +38,19 @@ function recordState(name: string): Record<string, any> {
   return state[name] as Record<string, any>;
 }
 
-function executionFor(summary: TaskExecutionStateSummary, executionId: string): TaskExecutionStateItem | null {
-  for (const session of summary.sessions) {
-    const execution = session.executions.find((candidate) => candidate.executionId === executionId);
-    if (execution) return execution;
-  }
-  return null;
-}
-
-function statusForPhase(phase: string): 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' {
-  if (phase === 'preparing' || phase === 'queued') return 'pending';
-  if (phase === 'starting' || phase === 'running' || phase === 'cancelling') return 'running';
-  if (phase === 'succeeded') return 'complete';
-  if (phase === 'cancelled') return 'cancelled';
-  return 'failed';
-}
-
 function syncControlsFromSummary(threadId: string, summary: TaskExecutionStateSummary): void {
   if (typeof document === 'undefined') return;
   const selectedExecutionId = String(recordState('threadSelectedExecutionIdByThreadId')[threadId]
     ?? summary.defaultExecutionId
     ?? '');
-  const selected = executionFor(summary, selectedExecutionId);
+  const selected = findTaskExecution(summary, selectedExecutionId);
   const active = summary.activeExecutionIds
-    .map((executionId) => executionFor(summary, executionId))
+    .map((executionId) => findTaskExecution(summary, executionId))
     .filter((execution): execution is TaskExecutionStateItem => Boolean(execution))
     .at(-1) ?? null;
   syncThreadCodexRunControls({
     threadId,
-    status: active ? statusForPhase(active.phase) : selected ? statusForPhase(selected.phase) : 'idle',
+    status: active ? taskExecutionDisplayStatus(active.phase) : selected ? taskExecutionDisplayStatus(selected.phase) : 'idle',
     active: Boolean(active),
     queuePosition: active?.queuePosition ?? null,
   });
@@ -129,7 +104,7 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
     delete recordState('threadExecutionStateErrorByThreadId')[threadId];
     const selectedIds = recordState('threadSelectedExecutionIdByThreadId');
     const requestedExecutionId = String(selectedIds[threadId] ?? '');
-    const selectedExecutionId = executionFor(summary, requestedExecutionId)
+    const selectedExecutionId = findTaskExecution(summary, requestedExecutionId)
       ? requestedExecutionId
       : String(summary.defaultExecutionId ?? '');
     selectedIds[threadId] = selectedExecutionId;
@@ -246,64 +221,4 @@ export function unbindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void 
   taskLogPollers.delete(input.threadId);
   closeExecutionInvalidationWhenIdle();
   stopThreadCodexRunClock(input.threadId);
-}
-
-function consumeActiveRunSummary(input: { threadId: string; runId: string; summary: CardSkillRunSummary }): void {
-  if (String(recordState('threadActiveRunIdByThreadId')[input.threadId] ?? '') !== input.runId) return;
-  recordState('threadActiveRunSummaryByThreadId')[input.threadId] = input.summary;
-  if (String(state.threadId ?? '') !== input.threadId || typeof document === 'undefined') return;
-  syncThreadCodexRunControls({
-    threadId: input.threadId,
-    status: input.summary.ok ? input.summary.status : 'unknown',
-    active: input.summary.ok ? input.summary.active : false,
-    queuePosition: input.summary.queuePosition,
-  });
-  paintThreadLog(input.threadId);
-}
-
-export function bindThreadCodexActiveRunLog(input: ThreadCodexRunLogIdentity): void {
-  if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
-  const projectId = input.projectId ?? projectIdFromLocation();
-  const replicaNodeId = input.replicaNodeId ?? replicaNodeIdFromLocation();
-  const activeRunIds = recordState('threadActiveRunIdByThreadId');
-  const previousRunId = String(activeRunIds[input.threadId] ?? '');
-  if (previousRunId && previousRunId !== input.runId) unbindCardSkillRunLogConsumer({
-    projectId,
-    replicaNodeId,
-    ledgerId: input.ledgerId,
-    cardId: input.cardId,
-    runId: previousRunId,
-    consumerId: `thread-active:${input.threadId}`,
-  });
-  activeRunIds[input.threadId] = input.runId;
-  // WHAT: Retain the legacy active-session consumer only for mutation controls during compatibility cutover.
-  // WHY: Continue, cancel, and delete commands still have genuine session semantics.
-  bindCardSkillRunLogConsumer({
-    projectId,
-    replicaNodeId,
-    ledgerId: input.ledgerId,
-    cardId: input.cardId,
-    runId: input.runId,
-    expectedExecutionId: input.expectedExecutionId,
-    expectedStatus: input.expectedStatus,
-    forceRevalidate: input.forceRevalidate,
-    consumerId: `thread-active:${input.threadId}`,
-    onSummary: (summary) => consumeActiveRunSummary({ threadId: input.threadId, runId: input.runId, summary }),
-  });
-}
-
-export function unbindThreadCodexActiveRunLog(input: ThreadCodexRunLogIdentity): void {
-  if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
-  unbindCardSkillRunLogConsumer({
-    projectId: input.projectId ?? projectIdFromLocation(),
-    replicaNodeId: input.replicaNodeId ?? replicaNodeIdFromLocation(),
-    ledgerId: input.ledgerId,
-    cardId: input.cardId,
-    runId: input.runId,
-    consumerId: `thread-active:${input.threadId}`,
-  });
-  if (String(recordState('threadActiveRunIdByThreadId')[input.threadId] ?? '') === input.runId) {
-    delete recordState('threadActiveRunIdByThreadId')[input.threadId];
-    delete recordState('threadActiveRunSummaryByThreadId')[input.threadId];
-  }
 }
