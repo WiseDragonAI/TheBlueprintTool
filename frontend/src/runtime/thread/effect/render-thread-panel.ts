@@ -225,7 +225,9 @@ function bindActiveThreadRun(threadId: string): void {
   const requestScope = { projectId: String(state.projectId ?? ''), replicaNodeId: String(state.replicaNodeId ?? '') };
   const runId = card ? selectedCardCodexRunId(card, selectedRunIds[threadId]) : '';
   if (runId) selectedRunIds[threadId] = runId;
-  if (ledgerId && cardId && runId) bindThreadCodexRunLog({
+  // WHAT: Bind the task execution hierarchy even when the card has no retained session alias.
+  // WHY: Epoch 4 execution entities, not card fields, are authoritative for Codex Log history.
+  if (ledgerId && cardId) bindThreadCodexRunLog({
     ...requestScope,
     ledgerId,
     cardId,
@@ -241,7 +243,7 @@ function unbindActiveThreadRuns(threadId: string): void {
   if (!ledgerId || !cardId || !threadId) return;
   const selectedRunId = String(recordState('threadRunIdByThreadId')[threadId] ?? '');
   const activeRunId = String(recordState('threadActiveRunIdByThreadId')[threadId] ?? '');
-  if (selectedRunId) unbindThreadCodexRunLog({ ...requestScope, ledgerId, cardId, threadId, runId: selectedRunId });
+  unbindThreadCodexRunLog({ ...requestScope, ledgerId, cardId, threadId, runId: selectedRunId });
   if (activeRunId) unbindThreadCodexActiveRunLog({ ...requestScope, ledgerId, cardId, threadId, runId: activeRunId });
 }
 
@@ -276,6 +278,12 @@ export function renderThreadPanel(): void {
   telemetry('render-thread-panel', { threadId: activeThreadId, tab: activeTab });
   renderThreadNotes();
   void restorePendingVoiceUploads(activeThreadId);
+  const previousRenderedThreadId = String(state.renderedThreadId ?? '');
+  // WHAT: Release the previous task-log subscription before binding the newly selected thread.
+  // WHY: A hidden thread must not retain its poll timer, EventSource ownership, or in-flight request.
+  if (previousRenderedThreadId && previousRenderedThreadId !== activeThreadId) {
+    unbindActiveThreadRuns(previousRenderedThreadId);
+  }
   if (shouldOpenThread) bindActiveThreadRun(activeThreadId);
   else unbindActiveThreadRuns(activeThreadId);
   renderThreadCodexLog();

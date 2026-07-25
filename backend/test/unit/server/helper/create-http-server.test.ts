@@ -275,8 +275,46 @@ test('server admits local assigned execution while its configured relay is unrea
     assert.equal(admitted.executorNodeId, 'workstation');
     const admittedEvents = await readExecutionRevision(2);
     assert.match(admittedEvents, /event: codex-execution-change/);
+    assert.match(admittedEvents, /"taskId":"master"/);
     assert.match(admittedEvents, /"phase":"preparing"/);
     assert.match(admittedEvents, /"phase":"queued"/);
+    const taskSummaryResponse = await fetch(`${baseUrl}/p/project-a/api/tasks/master/execution-state`);
+    assert.equal(taskSummaryResponse.status, 200);
+    const taskSummary = await taskSummaryResponse.json() as {
+      taskId: string;
+      activeExecutionIds: string[];
+      defaultExecutionId: string;
+      sessions: Array<{ sessionId: string; executions: Array<{ executionId: string; phase: string }> }>;
+    };
+    assert.equal(taskSummary.taskId, 'master');
+    assert.deepEqual(taskSummary.activeExecutionIds, ['execution-local']);
+    assert.equal(taskSummary.defaultExecutionId, 'execution-local');
+    assert.deepEqual(taskSummary.sessions, [{
+      sessionId: 'session-local',
+      requestedAt: '2026-07-23T01:01:00.000Z',
+      executions: [{
+        executionId: 'execution-local',
+        sessionId: 'session-local',
+        kind: 'thread',
+        phase: 'queued',
+        queuePosition: 1,
+        requestedAt: '2026-07-23T01:01:00.000Z',
+        startedAt: null,
+        finishedAt: null,
+        model: null,
+        effort: null,
+        executorNodeId: 'workstation',
+        revision: 2,
+        error: null,
+        artifacts: { jsonl: false, stderr: false, telemetry: false, result: false },
+      }],
+    }]);
+    const presentationResponse = await fetch(`${baseUrl}/p/project-a/api/task-executions/execution-local`);
+    assert.equal(presentationResponse.status, 200);
+    const presentationText = await presentationResponse.text();
+    assert.match(presentationText, /"executionId":"execution-local"/);
+    assert.match(presentationText, /"events":\[\]/);
+    assert.doesNotMatch(presentationText, /stdoutFile|stderrFile|startLine|endLine|sourceLine/);
     const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; activeIncidentCount: number };
     assert.equal(health.status, 'ready');
     assert.equal(health.activeIncidentCount, 0);

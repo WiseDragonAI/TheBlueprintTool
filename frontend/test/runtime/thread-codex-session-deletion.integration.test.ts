@@ -14,8 +14,8 @@ test('Codex Log renders the owned thread-session footer only after terminal sett
   assert.match(renderer, /function renderDeleteSession/);
   assert.match(renderer, /button\.dataset\.action = 'confirm-delete-thread-codex-session'/);
   assert.match(renderer, /root\.append\(stream\);/);
-  assert.match(renderer, /if \(selectedSummary\?\.runKind === 'thread' && selectedSummary\.status !== 'pending' && selectedSummary\.status !== 'running'\)/);
-  assert.match(renderer, /if \(!runId\)[\s\S]*return;/);
+  assert.match(renderer, /selectedExecution\.kind !== 'pipeline-skill'/);
+  assert.match(renderer, /!\['preparing', 'queued', 'starting', 'running', 'cancelling'\]\.includes\(selectedExecution\.phase\)/);
   assert.doesNotMatch(renderer, /renderDeleteSession[\s\S]{0,500}button\.disabled/);
   const css = source('frontend/assets/shared/thread.css');
   assert.match(css, /\.codex-log-session-footer\s*{[^}]*border-top:/s);

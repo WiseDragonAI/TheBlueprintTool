@@ -111,6 +111,12 @@ export const state: any = {
   threadViewportPinRequest: null as ThreadViewportPinRequest | null,
   threadSelectedRunIdByThreadId: {} as Record<string, string>,
   threadSelectedExecutionIdByThreadId: {} as Record<string, string>,
+  // WHAT: Cache one task hierarchy and one exact lightweight presentation per open thread.
+  // WHY: Codex Log rendering must not reconstruct execution ownership from card session aliases.
+  threadTaskExecutionStateByThreadId: {},
+  threadExecutionPresentationByThreadId: {},
+  threadExecutionStateErrorByThreadId: {},
+  threadExecutionPresentationErrorByThreadId: {},
   threadRunIdByThreadId: {} as Record<string, string>,
   threadRunExecutionsByRunId: {},
   threadRunSummaryByThreadId: {},

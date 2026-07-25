@@ -150,3 +150,29 @@ export function latestCodexRunSegmentLog(input: { log: string; runId: string }):
   }
   return latestMarkerIndex >= 0 ? lines.slice(latestMarkerIndex + 1).join('\n') : input.log;
 }
+
+export function codexRunExecutionLog(input: { log: string; runId: string; executionId: string }): string {
+  const lines = input.log.replace(/\r\n?/g, '\n').split('\n');
+  let startIndex = -1;
+  let endIndex = lines.length;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.startsWith(markerPrefix)) continue;
+    try {
+      const marker = JSON.parse(line.slice(markerPrefix.length)) as { runId?: unknown; executionId?: unknown };
+      if (String(marker.runId ?? '') !== input.runId) continue;
+      // WHAT: Close the selected diagnostic segment at the next execution marker in the same session.
+      // WHY: Stderr records from a later continuation must not appear in the selected execution snapshot.
+      if (startIndex >= 0) {
+        endIndex = index;
+        break;
+      }
+      if (String(marker.executionId ?? '') === input.executionId) startIndex = index + 1;
+    } catch {
+      // A malformed marker cannot invalidate later exact markers.
+    }
+  }
+  // WHAT: Preserve a markerless single-execution artifact for the caller's ambiguity gate.
+  // WHY: Epoch 4 migration retained some historical logs without physical segment markers.
+  return startIndex >= 0 ? lines.slice(startIndex, endIndex).join('\n') : input.log;
+}

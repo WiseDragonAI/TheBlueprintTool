@@ -1,123 +1,249 @@
 /**
- * WHAT: Renders the selected thread's chronological Codex run log.
- * WHY: Run diagnostics belong in an inspectable, independently scrolling surface instead of conversation notes.
+ * WHAT: Renders one task's synchronized execution history and the selected lightweight presentation.
+ * WHY: The Codex Log must address executions directly and keep the latest todo snapshot visible above the stream.
  */
-import { cardCodexRunIds, selectedCardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
-import { groupSequentialToolCalls, type ThreadRunLogEvent, type ThreadRunToolGroup } from '../../codex/helper/thread-run-log.js';
-import { threadRunToolGroupSummary } from '../../codex/helper/thread-run-tool-group-summary.js';
-import { threadRunToolPresentation } from '../../codex/helper/thread-run-tool-presentation.js';
-import type { CardSkillRunExecution, CardSkillRunSummary } from '../../codex/effect/request-card-skill-run-status.js';
+import type {
+  TaskExecutionPresentation,
+  TaskExecutionPresentationEvent,
+  TaskExecutionStateItem,
+  TaskExecutionStateSummary,
+  TaskExecutionTodoEvent,
+  TaskExecutionToolEvent,
+} from '../../../../../shared/schemas/task-execution-presentation-types.js';
+import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-card-markdown.js';
+import { bindThreadCodexRunLog } from '../../codex/effect/bind-thread-codex-run-log.js';
+import { groupTaskExecutionPresentationEvents } from '../../codex/helper/group-task-execution-presentation-events.js';
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
-import { state, type ThreadPanelTab } from '../../state.js';
-import { renderThreadCodexLogEvent } from '../component/render-thread-codex-log-event.js';
-import { renderThreadCodexLogStatus } from '../component/render-thread-codex-log-status.js';
+import { state } from '../../state.js';
+import { renderThreadCodexLogStatus, type CodexLogStatusSummary } from '../component/render-thread-codex-log-status.js';
+import { renderTaskExecutionTodoOverlay } from '../component/render-task-execution-todo-overlay.js';
 import { threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
 import { threadCodexSessionDeletionState } from '../../codex/controller/delete-thread-codex-session-controller.js';
-import { hydrateThreadCodexRunHistory } from '../../codex/effect/hydrate-thread-codex-run-history.js';
 
+type HistoryEntry = { sessionId: string; executionId: string };
 type DisclosureByThread = Record<string, Record<string, boolean>>;
 
 function recordState(name: string): Record<string, any> {
-  // WHAT: Repair absent session-only run state at its access boundary.
-  // WHY: Restored browser sessions may predate the Codex Log state maps.
+  // WHAT: Repair presentation state maps when restoring a pre-cutover browser session.
+  // WHY: Rendering must tolerate state captured before the task execution projection existed.
   if (!state[name] || typeof state[name] !== 'object' || Array.isArray(state[name])) state[name] = {};
   return state[name] as Record<string, any>;
 }
 
 function disclosureState(name: string, threadId: string): Record<string, boolean> {
   const byThread = recordState(name) as DisclosureByThread;
-  // WHAT: Allocate disclosure state only for the active thread on first access.
-  // WHY: Disclosure identity is thread-scoped and must not leak across selected cards.
   if (!byThread[threadId] || typeof byThread[threadId] !== 'object') byThread[threadId] = {};
   return byThread[threadId];
 }
 
-function renderTool(event: ThreadRunLogEvent, threadId: string): HTMLDetailsElement {
-  const presentation = threadRunToolPresentation(event);
-  const rows = disclosureState('threadToolRowDisclosureByThreadId', threadId);
-  const details = document.createElement('details');
-  details.className = 'codex-tool-call';
-  details.dataset.toolKey = event.toolKey;
-  details.dataset.runStatus = event.status || 'pending';
-  details.open = Boolean(rows[event.toolKey]);
-  details.addEventListener('toggle', () => { rows[event.toolKey] = details.open; });
-
-  const summary = document.createElement('summary');
-  summary.className = 'codex-tool-call-summary';
-  summary.title = presentation.command;
-  const actionLabel = document.createElement('span');
-  actionLabel.className = 'codex-tool-call-action';
-  actionLabel.textContent = presentation.action;
-  const commandLabel = document.createElement('span');
-  commandLabel.className = 'codex-tool-call-command';
-  commandLabel.textContent = presentation.compactCommand;
-  const status = document.createElement('span');
-  status.className = 'codex-tool-call-status';
-  status.textContent = presentation.status;
-  summary.append(actionLabel, commandLabel, status);
-
-  const body = document.createElement('div');
-  body.className = 'codex-tool-call-details';
-  const fullCommand = document.createElement('code');
-  fullCommand.className = 'codex-tool-call-full-command';
-  fullCommand.textContent = presentation.command;
-  body.append(fullCommand);
-  const outputText = event.output || event.text;
-  // WHAT: Append raw tool output only when the lifecycle exposes readable content.
-  // WHY: Empty command starts should retain a compact disclosure body.
-  if (outputText) {
-    const output = document.createElement('pre');
-    output.className = 'codex-tool-call-output';
-    output.textContent = outputText;
-    body.append(output);
-  }
-  details.append(summary, body);
-  return details;
-}
-
-function renderToolGroup(group: ThreadRunToolGroup, threadId: string): HTMLDetailsElement {
-  const groups = disclosureState('threadToolGroupDisclosureByThreadId', threadId);
-  const details = document.createElement('details');
-  details.className = 'codex-tool-group';
-  details.dataset.toolGroupKey = group.key;
-  details.open = Boolean(groups[group.key]);
-  details.addEventListener('toggle', () => { groups[group.key] = details.open; });
-  const summary = document.createElement('summary');
-  summary.className = 'codex-tool-group-summary';
-  summary.textContent = threadRunToolGroupSummary(group);
-  const list = document.createElement('div');
-  list.className = 'codex-tool-group-list';
-  list.append(...group.tools.map((tool) => renderTool(tool, threadId)));
-  details.append(summary, list);
-  return details;
-}
-
 function selectedThreadCard(threadId: string): Record<string, unknown> | null {
   const cardId = threadCodexCardId(state.activeLedger, threadId);
-  // WHAT: Stop card resolution when the thread has no owning card id.
-  // WHY: Searching every card cannot recover ownership without the thread-to-card mapping.
   if (!cardId) return null;
   return state.activeLedger?.cards?.find((card: Record<string, unknown>) => String(card.id ?? '') === cardId) ?? null;
 }
 
-function renderAnnouncement(threadId: string): HTMLElement {
-  const activeTab = (recordState('threadActiveTabByThreadId')[threadId] ?? 'thread') as ThreadPanelTab;
-  const threadPanel = document.querySelector('.thread-panel') as HTMLElement | null;
-  const logPanel = document.querySelector('.thread-log-panel') as HTMLElement | null;
-  const logIsActive = activeTab === 'codex-log' && !threadPanel?.hidden && !logPanel?.hidden;
-  const announcement = recordState('threadRunAnnouncementByThreadId')[threadId] as { sequence?: number; text?: string } | undefined;
-  const announced = recordState('threadRunAnnouncedSequenceByThreadId');
-  const sequence = Number(announcement?.sequence ?? 0);
-  const isNew = sequence > Number(announced[threadId] ?? 0);
-  const live = document.createElement('p');
-  live.className = 'codex-log-announcer';
-  live.setAttribute('aria-live', logIsActive ? 'polite' : 'off');
-  live.setAttribute('aria-atomic', 'true');
-  live.textContent = logIsActive && isNew ? String(announcement?.text ?? '') : '';
-  // WHAT: Advance the consumed sequence after constructing the active-panel announcement.
-  // WHY: Rerenders must not repeat the same assistive-technology message.
-  if (sequence > 0) announced[threadId] = sequence;
-  return live;
+function historyEntries(summary: TaskExecutionStateSummary | null): HistoryEntry[] {
+  return summary?.sessions.flatMap((session) => session.executions.map((execution) => ({
+    sessionId: session.sessionId,
+    executionId: execution.executionId,
+  }))) ?? [];
+}
+
+function executionFor(summary: TaskExecutionStateSummary | null, executionId: string): TaskExecutionStateItem | null {
+  if (!summary) return null;
+  for (const session of summary.sessions) {
+    const execution = session.executions.find((candidate) => candidate.executionId === executionId);
+    if (execution) return execution;
+  }
+  return null;
+}
+
+function statusForPhase(phase: string): 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' {
+  if (phase === 'preparing' || phase === 'queued') return 'pending';
+  if (phase === 'starting' || phase === 'running' || phase === 'cancelling') return 'running';
+  if (phase === 'succeeded') return 'complete';
+  if (phase === 'cancelled') return 'cancelled';
+  return 'failed';
+}
+
+function elapsedMs(execution: TaskExecutionStateItem): number {
+  const start = Date.parse(execution.startedAt ?? execution.requestedAt);
+  const end = execution.finishedAt ? Date.parse(execution.finishedAt) : Date.now();
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0;
+}
+
+function statusSummary(input: {
+  execution: TaskExecutionStateItem | null;
+  presentation: TaskExecutionPresentation | null;
+  card: Record<string, unknown>;
+}): CodexLogStatusSummary | null {
+  if (!input.execution) return null;
+  const counts = input.presentation?.execution.executionId === input.execution.executionId
+    ? input.presentation.execution.counts
+    : { tools: 0, warnings: 0, errors: 0 };
+  const status = statusForPhase(input.execution.phase);
+  return {
+    ok: true,
+    active: status === 'pending' || status === 'running',
+    status,
+    runId: input.execution.sessionId,
+    executionId: input.execution.executionId,
+    runKind: input.execution.kind === 'pipeline-skill' ? 'card' : 'thread',
+    startedAt: input.execution.startedAt ?? input.execution.requestedAt,
+    elapsedMs: elapsedMs(input.execution),
+    queuePosition: input.execution.queuePosition,
+    metadata: {
+      codexModel: input.execution.model ?? '',
+      codexEffort: input.execution.effort ?? '',
+    },
+    toolCallCount: counts.tools,
+    warningCount: counts.warnings,
+    errorCount: counts.errors,
+    transportStatus: input.presentation?.events.some((event) => event.kind === 'transport') ? 'degraded' : 'ok',
+    pipelineRunId: input.execution.kind === 'pipeline-skill'
+      ? String(input.card.codexPipelineRunId ?? '') || null
+      : null,
+    pipelineName: String(input.card.codexPipelineName ?? ''),
+    pipelineStatus: String(input.card.codexPipelineStatus ?? ''),
+    pipelineStepName: String(input.card.codexPipelineStepName ?? ''),
+    skillName: String(input.card.codexSkillName ?? ''),
+  };
+}
+
+function renderRunNavigator(input: {
+  entries: HistoryEntry[];
+  selectedExecutionId: string;
+  card: Record<string, unknown>;
+  threadId: string;
+}): HTMLElement | null {
+  if (input.entries.length < 2) return null;
+  const index = Math.max(0, input.entries.findIndex((entry) => entry.executionId === input.selectedExecutionId));
+  const navigator = document.createElement('nav');
+  navigator.className = 'codex-log-run-navigator';
+  navigator.setAttribute('aria-label', 'Codex execution history');
+  const select = (entry: HistoryEntry): void => {
+    recordState('threadSelectedExecutionIdByThreadId')[input.threadId] = entry.executionId;
+    recordState('threadSelectedRunIdByThreadId')[input.threadId] = entry.sessionId;
+    recordState('threadLogScrollTopByThreadId')[input.threadId] = 0;
+    // WHAT: Revalidate the exact selected execution without requesting the surrounding session log.
+    // WHY: History navigation must never fall back to latest-execution inference.
+    bindThreadCodexRunLog({
+      projectId: String(state.projectId ?? ''),
+      replicaNodeId: String(state.replicaNodeId ?? ''),
+      ledgerId: String(state.activeTab ?? ''),
+      cardId: String(input.card.id ?? ''),
+      threadId: input.threadId,
+      runId: entry.sessionId,
+      expectedExecutionId: entry.executionId,
+      forceRevalidate: true,
+    });
+    renderThreadCodexLog();
+  };
+  const previous = document.createElement('button');
+  previous.type = 'button';
+  previous.className = 'codex-log-run-arrow codex-log-run-arrow--previous';
+  previous.textContent = '←';
+  previous.title = 'Previous Codex execution';
+  previous.setAttribute('aria-label', previous.title);
+  previous.disabled = index === 0;
+  previous.addEventListener('click', () => select(input.entries[index - 1]));
+  const position = document.createElement('span');
+  position.className = 'codex-log-run-position';
+  position.setAttribute('aria-live', 'polite');
+  position.textContent = `Execution ${index + 1} of ${input.entries.length}`;
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'codex-log-run-arrow codex-log-run-arrow--next';
+  next.textContent = '→';
+  next.title = 'Next Codex execution';
+  next.setAttribute('aria-label', next.title);
+  next.disabled = index === input.entries.length - 1;
+  next.addEventListener('click', () => select(input.entries[index + 1]));
+  navigator.append(previous, position, next);
+  return navigator;
+}
+
+function renderTool(event: TaskExecutionToolEvent, threadId: string): HTMLElement {
+  const rows = disclosureState('threadToolRowDisclosureByThreadId', threadId);
+  const details = document.createElement('details');
+  details.className = 'codex-tool-call';
+  details.dataset.runStatus = event.status || 'pending';
+  details.open = Boolean(rows[event.id]);
+  details.addEventListener('toggle', () => { rows[event.id] = details.open; });
+  const summary = document.createElement('summary');
+  summary.className = 'codex-tool-call-summary';
+  const action = document.createElement('span');
+  action.className = 'codex-tool-call-action';
+  action.textContent = 'Tool';
+  const command = document.createElement('span');
+  command.className = 'codex-tool-call-command';
+  command.textContent = event.command;
+  const status = document.createElement('span');
+  status.className = 'codex-tool-call-status';
+  status.textContent = [event.status, event.exitCode ? `code ${event.exitCode}` : ''].filter(Boolean).join(' / ');
+  summary.append(action, command, status);
+  const body = document.createElement('div');
+  body.className = 'codex-tool-call-details';
+  const fullCommand = document.createElement('code');
+  fullCommand.className = 'codex-tool-call-full-command';
+  fullCommand.textContent = event.command;
+  // WHAT: Render command metadata without a result body.
+  // WHY: Tool stdout and stderr remain backend artifacts and must not inflate the presentation.
+  body.append(fullCommand);
+  details.append(summary, body);
+  return details;
+}
+
+function renderToolGroup(input: {
+  id: string;
+  tools: readonly TaskExecutionToolEvent[];
+  threadId: string;
+}): HTMLElement {
+  const groups = disclosureState('threadToolGroupDisclosureByThreadId', input.threadId);
+  const details = document.createElement('details');
+  details.className = 'codex-tool-group';
+  details.dataset.toolGroupKey = input.id;
+  details.open = Boolean(groups[input.id]);
+  details.addEventListener('toggle', () => { groups[input.id] = details.open; });
+  const summary = document.createElement('summary');
+  summary.className = 'codex-tool-group-summary';
+  const settled = input.tools.filter((tool) => /complete|failed|cancel/i.test(tool.status)).length;
+  summary.textContent = `${input.tools.length} tool call${input.tools.length === 1 ? '' : 's'} · ${settled}/${input.tools.length} settled`;
+  const list = document.createElement('div');
+  list.className = 'codex-tool-group-list';
+  list.append(...input.tools.map((tool) => renderTool(tool, input.threadId)));
+  details.append(summary, list);
+  return details;
+}
+
+function renderPresentationEvent(event: Exclude<TaskExecutionPresentationEvent, TaskExecutionToolEvent>): HTMLElement {
+  const article = document.createElement('article');
+  article.className = `codex-log-event is-${event.kind} is-${event.severity}`;
+  article.dataset.eventKey = event.id;
+  const heading = document.createElement('div');
+  heading.className = 'codex-log-event-heading';
+  const title = document.createElement('strong');
+  title.textContent = event.title || event.kind;
+  const status = document.createElement('span');
+  status.textContent = event.status;
+  status.hidden = !event.status;
+  heading.append(title, status);
+  article.append(heading);
+  if (event.kind === 'file_change') {
+    const list = document.createElement('ul');
+    list.className = 'codex-log-event-body';
+    for (const file of event.files) {
+      const item = document.createElement('li');
+      item.textContent = `${file.path}: ${file.action}`;
+      list.append(item);
+    }
+    article.append(list);
+  } else if (event.kind !== 'todo_list' && event.text) {
+    const body = renderLedgerCardMarkdown(event.text);
+    body.classList.add('codex-log-event-body');
+    article.append(body);
+  }
+  return article;
 }
 
 function renderDeleteSession(input: { cardId: string; runId: string; threadId: string }): HTMLElement {
@@ -137,11 +263,7 @@ function renderDeleteSession(input: { cardId: string; runId: string; threadId: s
   return footer;
 }
 
-function appendExecutionLog(input: { stream: HTMLElement; events: ThreadRunLogEvent[]; threadId: string }): void {
-  for (const block of groupSequentialToolCalls(input.events)) input.stream.append(block.kind === 'tool-group' ? renderToolGroup(block, input.threadId) : renderThreadCodexLogEvent(block.event));
-}
-
-function renderQueuedWaiting(queuePosition: number | null | undefined): HTMLElement {
+function renderQueuedWaiting(queuePosition: number | null): HTMLElement {
   const waiting = document.createElement('p');
   waiting.className = 'codex-log-waiting is-queued';
   waiting.setAttribute('role', 'status');
@@ -155,147 +277,12 @@ function renderQueuedWaiting(queuePosition: number | null | undefined): HTMLElem
   return waiting;
 }
 
-type ThreadRunHistoryEntry = { runId: string; executionId: string };
-
-function runHistoryEntries(card: Record<string, unknown>, threadId: string, summary?: CardSkillRunSummary): ThreadRunHistoryEntry[] {
-  const cache = recordState('threadRunExecutionsByRunId') as Record<string, CardSkillRunExecution[]>;
-  if (summary?.runId && Array.isArray(summary.executions) && summary.executions.length > 0) cache[summary.runId] = summary.executions;
-  const entries = cardCodexRunIds(card).flatMap((runId) => {
-    const executions = Array.isArray(cache[runId]) ? cache[runId] : [];
-    return executions.length > 0
-      ? executions.map((execution) => ({ runId, executionId: execution.executionId }))
-      : [{ runId, executionId: '' }];
-  });
-  const requestedRunId = String(recordState('threadSelectedRunIdByThreadId')[threadId] ?? '');
-  const requestedExecutionId = String(recordState('threadSelectedExecutionIdByThreadId')[threadId] ?? '');
-  if (requestedRunId && requestedExecutionId && !entries.some((entry) => entry.runId === requestedRunId && entry.executionId === requestedExecutionId)) {
-    let insertionIndex = 0;
-    entries.forEach((entry, index) => {
-      if (entry.runId === requestedRunId) insertionIndex = index + 1;
-    });
-    entries.splice(Math.max(0, insertionIndex), 0, { runId: requestedRunId, executionId: requestedExecutionId });
-  }
-  return entries;
-}
-
-function selectThreadCodexRun(threadId: string, entry: ThreadRunHistoryEntry): void {
-  recordState('threadSelectedRunIdByThreadId')[threadId] = entry.runId;
-  recordState('threadSelectedExecutionIdByThreadId')[threadId] = entry.executionId;
-  recordState('threadLogScrollTopByThreadId')[threadId] = 0;
-  // WHAT: Repaint the selected execution before the asynchronous panel bind completes.
-  // WHY: History navigation is local UI state and must respond in the same interaction turn.
-  renderThreadCodexLog();
-  void import('./render-thread-panel.js').then(({ renderThreadPanel }) => renderThreadPanel());
-}
-
-function renderRunNavigator(input: { entries: ThreadRunHistoryEntry[]; selected: ThreadRunHistoryEntry; threadId: string }): HTMLElement | null {
-  if (input.entries.length < 2) return null;
-  const index = Math.max(0, input.entries.findIndex((entry) => entry.runId === input.selected.runId && entry.executionId === input.selected.executionId));
-  const navigator = document.createElement('nav');
-  navigator.className = 'codex-log-run-navigator';
-  navigator.setAttribute('aria-label', 'Codex run history');
-
-  const previous = document.createElement('button');
-  previous.type = 'button';
-  previous.className = 'codex-log-run-arrow codex-log-run-arrow--previous';
-  previous.textContent = '←';
-  previous.title = 'Previous Codex run';
-  previous.setAttribute('aria-label', previous.title);
-  previous.dataset.codexRunHistory = 'previous';
-  previous.disabled = index === 0;
-  previous.addEventListener('click', () => selectThreadCodexRun(input.threadId, input.entries[index - 1]));
-
-  const position = document.createElement('span');
-  position.className = 'codex-log-run-position';
-  position.setAttribute('aria-live', 'polite');
-  position.textContent = `Run ${index + 1} of ${input.entries.length}`;
-
-  const next = document.createElement('button');
-  next.type = 'button';
-  next.className = 'codex-log-run-arrow codex-log-run-arrow--next';
-  next.textContent = '→';
-  next.title = 'Next Codex run';
-  next.setAttribute('aria-label', next.title);
-  next.dataset.codexRunHistory = 'next';
-  next.disabled = index === input.entries.length - 1;
-  next.addEventListener('click', () => selectThreadCodexRun(input.threadId, input.entries[index + 1]));
-
-  navigator.append(previous, position, next);
-  return navigator;
-}
-
-function selectedHistoryEntry(input: { entries: ThreadRunHistoryEntry[]; runId: string; threadId: string }): ThreadRunHistoryEntry {
-  const selectedExecutionIds = recordState('threadSelectedExecutionIdByThreadId');
-  const requestedExecutionId = String(selectedExecutionIds[input.threadId] ?? '');
-  const runEntries = input.entries.filter((entry) => entry.runId === input.runId);
-  const selected = runEntries.find((entry) => entry.executionId === requestedExecutionId) ?? runEntries.at(-1) ?? { runId: input.runId, executionId: '' };
-  selectedExecutionIds[input.threadId] = selected.executionId;
-  return selected;
-}
-
-function executionEvents(input: { events: ThreadRunLogEvent[]; summary?: CardSkillRunSummary; executionId: string }): ThreadRunLogEvent[] {
-  if (!input.executionId || !input.summary) return input.events;
-  const executions = Array.isArray(input.summary.executions) ? input.summary.executions : [];
-  const index = executions.findIndex((execution) => execution.executionId === input.executionId);
-  // A newly accepted continuation is selected before its first status response. Never hydrate it with the prior execution's log.
-  if (index < 0) return [];
-  const execution = executions[index];
-  const endLine = execution.endLine ?? executions[index + 1]?.startLine ?? Number.POSITIVE_INFINITY;
-  return input.events.filter((event) => event.source === 'jsonl'
-    ? event.line > execution.startLine && event.line <= endLine
-    : index === executions.length - 1);
-}
-
-function executionSummary(summary: CardSkillRunSummary | undefined, executionId: string, events: ThreadRunLogEvent[]): CardSkillRunSummary | undefined {
-  if (!summary || !executionId) return summary;
-  const execution = (Array.isArray(summary.executions) ? summary.executions : []).find((candidate) => candidate.executionId === executionId);
-  if (!execution) return {
-    ...summary,
-    executionId,
-    currentExecution: null,
-    startedAt: '',
-    elapsedMs: 0,
-    toolCallCount: 0,
-    agentMessageCount: 0,
-    fileChangeCount: 0,
-    thinkingCount: 0,
-    warningCount: 0,
-    errorCount: 0,
-    transportStatus: 'unknown',
-    latestEvent: null,
-  };
-  return {
-    ...summary,
-    active: execution.active,
-    status: execution.status,
-    executionId: execution.executionId,
-    currentExecution: execution,
-    startedAt: execution.startedAt,
-    elapsedMs: execution.elapsedMs,
-    toolCallCount: execution.toolCallCount,
-    agentMessageCount: execution.agentMessageCount,
-    fileChangeCount: execution.fileChangeCount,
-    thinkingCount: execution.thinkingCount,
-    warningCount: execution.warningCount,
-    errorCount: execution.errorCount,
-    transportStatus: execution.transportStatus,
-    latestEvent: events.at(-1) ?? null,
-  };
-}
-
 export function renderThreadCodexLog(): void {
   const root = document.querySelector('.thread-codex-log') as HTMLElement | null;
-  // WHAT: Skip the final DOM effect when the thread log surface is not mounted.
-  // WHY: Headless and partially rendered callers may invoke the shared thread renderer.
   if (!root) return;
   const threadId = String(state.threadId ?? '');
   const card = selectedThreadCard(threadId);
-  const selectedRunIds = recordState('threadSelectedRunIdByThreadId');
-  const runId = card ? selectedCardCodexRunId(card, selectedRunIds[threadId]) : '';
-  if (runId) selectedRunIds[threadId] = runId;
   root.replaceChildren();
-  // WHAT: Render the exact empty state when the selected thread owns no Codex run.
-  // WHY: Missing ownership is distinct from an unavailable run response.
   if (!card) {
     const empty = document.createElement('p');
     empty.className = 'codex-log-empty';
@@ -303,79 +290,91 @@ export function renderThreadCodexLog(): void {
     root.append(empty);
     return;
   }
-  if (!runId) {
-    const empty = document.createElement('p');
-    empty.className = 'codex-log-empty';
-    empty.textContent = 'No Codex run for this thread.';
-    root.append(renderThreadCodexLogStatus({ summary: null, card, runId: '', threadId }), empty);
-    return;
-  }
-
-  const summary = String(recordState('threadRunIdByThreadId')[threadId] ?? '') === runId
-    ? recordState('threadRunSummaryByThreadId')[threadId] as CardSkillRunSummary | undefined
-    : undefined;
-  const events = String(recordState('threadRunIdByThreadId')[threadId] ?? '') === runId
-    && Array.isArray(recordState('threadRunEventsByThreadId')[threadId])
-    ? recordState('threadRunEventsByThreadId')[threadId] as ThreadRunLogEvent[]
-    : [];
-  const retainedRunIds = cardCodexRunIds(card);
-  hydrateThreadCodexRunHistory({
-    projectId: String(state.projectId ?? ''),
-    ledgerId: String(state.activeLedger?.id ?? ''),
-    cardId: String(card.id ?? ''),
-    threadId,
-    runIds: retainedRunIds.filter((retainedRunId) => retainedRunId !== runId),
+  const taskSummary = (recordState('threadTaskExecutionStateByThreadId')[threadId] as TaskExecutionStateSummary | undefined) ?? null;
+  const entries = historyEntries(taskSummary);
+  const requestedExecutionId = String(recordState('threadSelectedExecutionIdByThreadId')[threadId] ?? '');
+  const selectedExecutionId = executionFor(taskSummary, requestedExecutionId)
+    ? requestedExecutionId
+    : String(taskSummary?.defaultExecutionId ?? '');
+  if (selectedExecutionId) recordState('threadSelectedExecutionIdByThreadId')[threadId] = selectedExecutionId;
+  const selectedExecution = executionFor(taskSummary, selectedExecutionId);
+  const presentation = (recordState('threadExecutionPresentationByThreadId')[threadId] as TaskExecutionPresentation | undefined) ?? null;
+  const selectedPresentation = presentation?.execution.executionId === selectedExecutionId ? presentation : null;
+  const activeExecution = taskSummary?.activeExecutionIds
+    .map((executionId) => executionFor(taskSummary, executionId))
+    .filter((execution): execution is TaskExecutionStateItem => Boolean(execution))
+    .at(-1) ?? null;
+  const selectedStatus = statusSummary({ execution: selectedExecution, presentation: selectedPresentation, card });
+  const activeStatus = statusSummary({
+    execution: activeExecution,
+    presentation: activeExecution?.executionId === selectedExecutionId ? selectedPresentation : null,
+    card,
   });
-  const historyEntries = runHistoryEntries(card, threadId, summary);
-  const selectedEntry = selectedHistoryEntry({ entries: historyEntries, runId, threadId });
-  const selectedEvents = executionEvents({ events, summary, executionId: selectedEntry.executionId });
-  const selectedSummary = executionSummary(summary, selectedEntry.executionId, selectedEvents);
-  const activeSummary = recordState('threadActiveRunSummaryByThreadId')[threadId] as CardSkillRunSummary | undefined;
-  const navigator = renderRunNavigator({ entries: historyEntries, selected: selectedEntry, threadId });
-  root.append(...[navigator, renderAnnouncement(threadId), renderThreadCodexLogStatus({ summary: selectedSummary ?? null, sessionSummary: activeSummary ?? summary ?? null, card, runId, threadId })].filter((element): element is HTMLElement => Boolean(element)));
-  const actionRunId = activeSummary?.status === 'pending' || activeSummary?.status === 'running' ? activeSummary.runId : runId;
+  const navigator = renderRunNavigator({ entries, selectedExecutionId, card, threadId });
+  root.append(...[
+    navigator,
+    renderThreadCodexLogStatus({
+      summary: selectedStatus,
+      sessionSummary: activeStatus,
+      card,
+      runId: selectedExecution?.sessionId ?? '',
+      threadId,
+    }),
+  ].filter((element): element is HTMLElement => Boolean(element)));
+  const actionRunId = activeExecution?.sessionId ?? selectedExecution?.sessionId ?? '';
   const stopError = threadCodexStopState(actionRunId).error;
-  if (stopError) {
+  const readError = String(recordState('threadExecutionStateErrorByThreadId')[threadId]
+    ?? recordState('threadExecutionPresentationErrorByThreadId')[threadId]
+    ?? '');
+  if (stopError || readError) {
     const error = document.createElement('p');
-    error.className = 'codex-log-stop-error';
-    error.dataset.codexLogStopError = '';
+    error.className = readError ? 'codex-log-unavailable' : 'codex-log-stop-error';
     error.setAttribute('role', 'alert');
-    error.textContent = stopError;
+    error.textContent = stopError || readError;
     root.append(error);
   }
-  const deleteError = threadCodexSessionDeletionState(runId).error;
+  const deleteError = threadCodexSessionDeletionState(selectedExecution?.sessionId ?? '').error;
   if (deleteError) {
     const error = document.createElement('p');
     error.className = 'codex-log-delete-error';
-    error.dataset.codexLogDeleteError = '';
     error.setAttribute('role', 'alert');
     error.textContent = deleteError;
     root.append(error);
   }
-  // WHAT: Surface an unavailable response separately from chronological run events.
-  // WHY: Transport and ownership failures are not producer log records.
-  if (summary?.ok === false) {
-    const unavailable = document.createElement('p');
-    unavailable.className = 'codex-log-unavailable';
-    unavailable.textContent = summary.error || 'Codex run unavailable.';
-    root.append(unavailable);
-  }
+  const todo = [...(selectedPresentation?.events ?? [])].reverse()
+    .find((event): event is TaskExecutionTodoEvent => event.kind === 'todo_list');
+  if (todo) root.append(renderTaskExecutionTodoOverlay(todo));
   const stream = document.createElement('div');
   stream.className = 'codex-log-stream';
-  appendExecutionLog({ stream, events: selectedEvents, threadId });
-  // WHAT: Render a waiting state only for an available run without received events.
-  // WHY: An unavailable response already provides its actionable failure message.
-  if (selectedEvents.length === 0 && selectedSummary?.ok !== false) {
-    const waiting = selectedSummary?.status === 'pending' ? renderQueuedWaiting(selectedSummary.queuePosition) : document.createElement('p');
-    if (selectedSummary?.status !== 'pending') {
-      waiting.className = 'codex-log-waiting';
-      waiting.textContent = 'Waiting for Codex output.';
-    }
+  for (const block of groupTaskExecutionPresentationEvents(
+    (selectedPresentation?.events ?? []).filter((event) => event.kind !== 'todo_list'),
+  )) {
+    stream.append(block.kind === 'tool-group'
+      ? renderToolGroup({ id: block.id, tools: block.tools, threadId })
+      : renderPresentationEvent(block.event as Exclude<TaskExecutionPresentationEvent, TaskExecutionToolEvent>));
+  }
+  if (selectedExecution?.phase === 'queued'
+    && (!selectedPresentation || selectedPresentation.events.length === 0)) {
+    stream.append(renderQueuedWaiting(selectedExecution.queuePosition));
+  } else if (!selectedPresentation && !readError) {
+    const waiting = document.createElement('p');
+    waiting.className = 'codex-log-waiting';
+    waiting.textContent = entries.length > 0 ? 'Loading Codex output.' : 'No Codex execution for this task.';
+    stream.append(waiting);
+  } else if (selectedPresentation && selectedPresentation.events.filter((event) => event.kind !== 'todo_list').length === 0) {
+    const waiting = document.createElement('p');
+    waiting.className = 'codex-log-waiting';
+    waiting.textContent = 'Waiting for Codex output.';
     stream.append(waiting);
   }
   root.append(stream);
-  if (selectedSummary?.runKind === 'thread' && selectedSummary.status !== 'pending' && selectedSummary.status !== 'running') {
-    root.append(renderDeleteSession({ cardId: String(card.id ?? ''), runId, threadId }));
+  if (selectedExecution
+    && selectedExecution.kind !== 'pipeline-skill'
+    && !['preparing', 'queued', 'starting', 'running', 'cancelling'].includes(selectedExecution.phase)) {
+    root.append(renderDeleteSession({
+      cardId: String(card.id ?? ''),
+      runId: selectedExecution.sessionId,
+      threadId,
+    }));
   }
-
 }
