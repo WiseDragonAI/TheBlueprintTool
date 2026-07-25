@@ -234,7 +234,7 @@ export async function handleResponsiveThreadShortcut(event) {
     event.target.blur();
     return true;
   }
-  if (key === 'escape' && desktop && currentCard?.labels?.includes('master-task')) {
+  if (key === 'escape' && desktop && document.querySelector('.back-to-zone-button')?.getAttribute('aria-keyshortcuts') === 'Escape') {
     event.preventDefault();
     document.querySelector('.back-to-zone-button')?.click();
     return true;

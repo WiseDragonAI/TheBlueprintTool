@@ -7,6 +7,18 @@ export function cardCodexRunId(card) {
     || String(card?.codexThreadRunId ?? '').trim();
 }
 
+export function parentMasterTask({ cardId, cards = [], relationships = [] }) {
+  const masterIds = new Set(cards
+    .filter((card) => Array.isArray(card?.labels) && card.labels.map(String).includes('master-task'))
+    .map((card) => String(card.id)));
+  const relationship = relationships.find((entry) => (
+    entry?.label === 'subtask'
+    && String(entry.to) === String(cardId)
+    && masterIds.has(String(entry.from))
+  ));
+  return relationship ? cards.find((card) => String(card.id) === String(relationship.from)) ?? null : null;
+}
+
 export function projectMasterTask({ card, cards = [], relationships = [], executions = [], ledgerTitle = '' }) {
   const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
   const masterTask = labels.includes('master-task');

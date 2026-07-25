@@ -106,7 +106,7 @@ test('responsive card threads own desktop split geometry and documented entry sh
   assert.match(source, /key === 'x'[\s\S]*startVoiceRecording\(\)/);
   assert.match(shortcut, /key === 'escape' && canvasState\.voice\.recording[\s\S]*cancelQuickVoiceComment\(\)/);
   assert.match(shortcut, /key === 'escape' && desktop && event\.target instanceof HTMLElement && event\.target\.closest\('\.thread-draft'\)[\s\S]*event\.target\.blur\(\)/);
-  assert.match(shortcut, /key === 'escape' && desktop && currentCard\?\.labels\?\.includes\('master-task'\)[\s\S]*querySelector\('\.back-to-zone-button'\)\?\.click\(\)/);
+  assert.match(shortcut, /key === 'escape' && desktop && document\.querySelector\('\.back-to-zone-button'\)\?\.getAttribute\('aria-keyshortcuts'\) === 'Escape'[\s\S]*querySelector\('\.back-to-zone-button'\)\?\.click\(\)/);
   assert.match(shortcut, /key === 'escape' && canvasState\.threadPanelOpen[\s\S]*closeMobileThread\(\)/);
   assert.match(keydown, /desktopThreadDraftEscape = event\.key === 'Escape'[\s\S]*target\?\.closest\('\.thread-draft'\)/);
   assert.match(keydown, /isCardEditingKeyboardTarget\(target\) && !desktopThreadDraftEscape/);
