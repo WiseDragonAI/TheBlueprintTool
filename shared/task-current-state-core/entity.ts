@@ -220,7 +220,15 @@ export function joinTaskEntities(left: TaskCurrentEntity | undefined, right: Tas
   for (const path of [...new Set([...Object.keys(left.fields), ...Object.keys(right.fields)])].sort()) {
     const leftField = left.fields[path];
     const rightField = right.fields[path];
-    fields[path] = leftField && rightField ? joinTaskRegisters(leftField, rightField) : structuredClone(leftField ?? rightField!);
+    try {
+      fields[path] = leftField && rightField ? joinTaskRegisters(leftField, rightField) : structuredClone(leftField ?? rightField!);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.startsWith('task_current_dot_collision:')) {
+        throw new Error(`task_current_dot_collision:${left.entityType}:${encodeURIComponent(left.entityId)}:${encodeURIComponent(path)}:${message.slice('task_current_dot_collision:'.length)}`, { cause: error });
+      }
+      throw error;
+    }
   }
   return finalizeTaskCurrentEntity({ version: taskCurrentStateVersion, projectId: left.projectId, entityType: left.entityType, entityId: left.entityId, fields });
 }

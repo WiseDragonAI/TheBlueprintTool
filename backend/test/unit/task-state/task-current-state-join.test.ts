@@ -76,5 +76,8 @@ test('rejects different values that reuse one causal dot', () => {
     entityId: 'card-a',
     fields: { title: { clock: { workstation: 1 }, candidates: [{ dot: { replicaId: 'workstation', counter: 1 }, operation: 'set' as const, value }] } },
   });
-  assert.throws(() => joinTaskEntities(entity('Left'), entity('Right')), /task_current_dot_collision/);
+  assert.throws(
+    () => joinTaskEntities(entity('Left'), entity('Right')),
+    /task_current_dot_collision:card:card-a:title:workstation:1/,
+  );
 });
