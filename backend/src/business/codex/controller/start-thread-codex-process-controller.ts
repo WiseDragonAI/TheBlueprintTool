@@ -7,7 +7,7 @@ import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:
 import { randomUUID } from 'node:crypto';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { externalizeCardContent, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
-import { formatThreadMarkdown, hydrateLedgerThreadNotesFor, resolveThreadContentFile, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
+import { formatThreadMarkdown, hydrateLedgerThreadNotesFor, parseThreadMarkdown, resolveThreadContentFile, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildThreadCodexPrompt } from '../helper/build-thread-codex-prompt.js';
@@ -91,7 +91,17 @@ function cardContentFile(input: { decisionOsRoot: string; card: AnyRecord; ledge
 }
 
 function threadContentFile(input: { decisionOsRoot: string; ledger: AnyRecord; ledgerPath: string; threadId: string }): string {
+  const declared = input.ledger.threadFiles && typeof input.ledger.threadFiles === 'object' && !Array.isArray(input.ledger.threadFiles)
+    ? String((input.ledger.threadFiles as Record<string, unknown>)[input.threadId] ?? '')
+    : '';
+  const declaredFile = resolveThreadContentFile(input.decisionOsRoot, declared);
+  // WHAT: Require declared thread bytes before hydration or serialization.
+  // WHY: Serializing an absent sidecar would publish the historical one-byte replacement head.
+  if (declared && (!declaredFile || !existsSync(declaredFile))) throw new Error('task_content_not_materialized');
   hydrateLedgerThreadNotesFor(input.ledger, input.decisionOsRoot, input.threadId);
+  // WHAT: Reuse an already materialized thread without rewriting it during execution admission.
+  // WHY: Starting a process is not a thread-content mutation and must not produce a watcher event.
+  if (declaredFile) return declaredFile;
   const notes = normalizeLedgerNotes(input.ledger)[input.threadId] ?? [];
   writeThreadNotesFile({ decisionOsRoot: input.decisionOsRoot, ledger: input.ledger, ledgerPath: input.ledgerPath, threadId: input.threadId, notes });
   const threadFiles = input.ledger.threadFiles && typeof input.ledger.threadFiles === 'object' ? input.ledger.threadFiles as Record<string, unknown> : {};
@@ -166,10 +176,47 @@ export async function startThreadCodexProcessController(input: { action_payload?
       runtime_state: runtime,
     });
   }
-  const sourceCardFile = cardContentFile({ decisionOsRoot, card: source, ledgerPath });
-  const sourceThreadFile = threadContentFile({ decisionOsRoot, ledger, ledgerPath, threadId });
-  if (!sourceCardFile || !sourceThreadFile) return { ok: false, statusCode: 500, error: 'Could not resolve card or thread markdown file.', cardId, threadId };
-  const threadPrompt = threadMarkdownForPrompt({ decisionOsRoot, ledger, threadId });
+  const sourceComment = source.comment && typeof source.comment === 'object' && !Array.isArray(source.comment)
+    ? source.comment as AnyRecord
+    : {};
+  const threadFiles = ledger.threadFiles && typeof ledger.threadFiles === 'object' && !Array.isArray(ledger.threadFiles)
+    ? ledger.threadFiles as Record<string, unknown>
+    : {};
+  const threadResource = typeof threadFiles[threadId] === 'string' ? String(threadFiles[threadId]) : '';
+  const requiredResources = [sourceComment.contentFile, threadResource].filter((value): value is string => typeof value === 'string' && Boolean(value));
+  let threadPrompt: ReturnType<typeof threadMarkdownForPrompt> = null;
+  if (requiredResources.length > 0 && typeof runtime.materializeTaskResources === 'function') {
+    try {
+      // WHAT: Materialize authoritative execution inputs before any helper can create watcher-visible bytes.
+      // WHY: Starting Codex must fail without mutation when an Epoch 4 card or thread object is unavailable.
+      await runtime.materializeTaskResources(requiredResources, (key: string, body: string) => {
+        if (key !== threadResource) return;
+        const validationLedger = structuredClone(ledger);
+        normalizeLedgerNotes(validationLedger as { notes?: unknown })[threadId] = parseThreadMarkdown(body);
+        threadPrompt = threadMarkdownForPrompt({ decisionOsRoot, ledger: validationLedger, threadId });
+        if (!threadPrompt) {
+          throw Object.assign(new Error('The latest operator note must have an exact ISO timestamp before Codex can start.'), { statusCode: 400 });
+        }
+      });
+    } catch (error) {
+      // WHAT: Preserve the materializer's conflict and unavailability classifications at execution admission.
+      // WHY: A concurrent head requires operator resolution while an unavailable unique head remains retryable.
+      const reportedStatus = Number((error as { statusCode?: unknown } | null)?.statusCode);
+      const statusCode = reportedStatus === 400 || reportedStatus === 409 ? reportedStatus : 503;
+      return { ok: false, statusCode, error: error instanceof Error ? error.message : String(error), cardId, threadId };
+    }
+  }
+  const declaredCardFile = resolveCardContentFile(decisionOsRoot, sourceComment.contentFile);
+  const declaredThreadFile = resolveThreadContentFile(decisionOsRoot, threadFiles[threadId]);
+  if (
+    (typeof sourceComment.contentFile === 'string' && (!declaredCardFile || !existsSync(declaredCardFile)))
+    || (typeof threadFiles[threadId] === 'string' && (!declaredThreadFile || !existsSync(declaredThreadFile)))
+  ) {
+    return { ok: false, statusCode: 503, error: 'task_content_not_materialized', cardId, threadId };
+  }
+  // WHAT: Validate the read-only thread prompt before any content helper can serialize mutable files.
+  // WHY: A rejected launch must publish no watcher-visible mutation even when its source bytes are available.
+  threadPrompt ??= threadMarkdownForPrompt({ decisionOsRoot, ledger, threadId });
   if (!threadPrompt) return {
     ok: false,
     statusCode: 400,
@@ -177,6 +224,17 @@ export async function startThreadCodexProcessController(input: { action_payload?
     cardId,
     threadId,
   };
+  let sourceCardFile = '';
+  let sourceThreadFile = '';
+  try {
+    sourceCardFile = cardContentFile({ decisionOsRoot, card: source, ledgerPath });
+    sourceThreadFile = threadContentFile({ decisionOsRoot, ledger, ledgerPath, threadId });
+  } catch (error) {
+    // WHAT: Convert a missing execution input into a scoped retryable admission failure.
+    // WHY: Codex validation must not create replacement Markdown when the authoritative object is unavailable.
+    return { ok: false, statusCode: 503, error: error instanceof Error ? error.message : String(error), cardId, threadId };
+  }
+  if (!sourceCardFile || !sourceThreadFile) return { ok: false, statusCode: 500, error: 'Could not resolve card or thread markdown file.', cardId, threadId };
   const runId = reservedRunId || `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const executionId = reservedExecutionId || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const runDirectoryRef = `.decision-os/runs/codex-skills/${safeSegment(ledgerStem(ledgerPath))}`;
@@ -392,12 +450,18 @@ export async function startThreadCodexProcessController(input: { action_payload?
         }
       },
       onSettled: async (settlement) => {
+        let retainProcessForArtifactFailure = false;
         try {
           if (settlement.kind === 'error') {
             const ownsExecution = updateRuntimeExecution(runtime, runId, executionId, { status: 'failed', error: settlement.error.message, finishedAt: settlement.finishedAt });
             if (!ownsExecution) return;
-            appendRunStatus(runSummaryFile, 'failed', settlement.error.message);
             appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status: 'failed' }), 'utf8');
+            try {
+              await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
+            } catch (error) {
+              retainProcessForArtifactFailure = true;
+              throw error;
+            }
             const current = taskExecutionState(runtime)?.executions.find(executionId);
             if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
               await taskExecutionState(runtime)!.executions.transition(executionId, {
@@ -405,7 +469,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
                 error: { code: 'codex_process_start_failed', message: settlement.error.message },
               });
             }
-            await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
+            appendRunStatus(runSummaryFile, 'failed', settlement.error.message);
             updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
             scheduleCodexRuntime(runtime, 'schedule-after-thread-start-failure', { runId, executionId });
             notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status: 'failed' });
@@ -428,9 +492,14 @@ export async function startThreadCodexProcessController(input: { action_payload?
           }
           const status: ProcessStatus = cancelled ? 'cancelled' : settlement.terminalStatus ?? (settlement.exitCode === 0 ? 'complete' : 'failed');
           const detail = status === 'cancelled' ? 'terminated by operator' : `exit code ${settlement.exitCode ?? 'unknown'}`;
-          appendRunStatus(runSummaryFile, status, detail);
           if (!updateRuntimeExecution(runtime, runId, executionId, { status, exitCode: settlement.exitCode, finishedAt: settlement.finishedAt })) return;
           appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
+          try {
+            await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
+          } catch (error) {
+            retainProcessForArtifactFailure = true;
+            throw error;
+          }
           const current = taskExecutionState(runtime)?.executions.find(executionId);
           if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
             await taskExecutionState(runtime)!.executions.transition(executionId, {
@@ -439,7 +508,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
               error: status === 'failed' ? { code: 'codex_process_failed', message: detail } : null,
             });
           }
-          await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
+          appendRunStatus(runSummaryFile, status, detail);
           updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
           scheduleCodexRuntime(runtime, 'schedule-after-thread-settlement', { runId, executionId, status });
           if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
@@ -452,7 +521,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         } finally {
           // WHAT: Retain live process paths through immutable artifact publication.
           // WHY: A terminal read must never lack both a process file and an artifact head.
-          removeTaskExecutionProcess(runtime, executionId);
+          if (!retainProcessForArtifactFailure) removeTaskExecutionProcess(runtime, executionId);
         }
       },
     });

@@ -381,7 +381,7 @@ function commitRouteView() {
   return false;
 }
 
-function navigate(path, replace = false) {
+function navigate(path, replace = false, returnPathOverride = '') {
   const destination = new URL(path, location.origin);
   const currentLocation = `${location.pathname}${location.search}${location.hash}`;
   const nextLocation = `${destination.pathname}${destination.search}${destination.hash}`;
@@ -396,7 +396,7 @@ function navigate(path, replace = false) {
     location.assign(destination.href);
     return;
   }
-  const returnPath = `${location.pathname}${location.search}${location.hash}`;
+  const returnPath = returnPathOverride || `${location.pathname}${location.search}${location.hash}`;
   history[replace ? 'replaceState' : 'pushState']({ returnPath }, '', path);
   closeMenu();
   const retained = commitRouteView();
@@ -3003,7 +3003,15 @@ document.querySelector('.back-to-zone-button').addEventListener('click', (event)
   if (parentMasterDestination) {
     const parentCardId = event.currentTarget.dataset.parentCardId;
     const zone = ledgerZones().find((entry) => entry.cards.some((card) => String(card.id) === parentCardId));
-    navigate(cardPath(state.activeLedgerId, zone?.id ?? 'ungrouped', parentCardId));
+    const parentPath = cardPath(state.activeLedgerId, zone?.id ?? 'ungrouped', parentCardId);
+    const recordedReturnPath = asText(history.state?.returnPath);
+    const recordedReturn = recordedReturnPath ? new URL(recordedReturnPath, location.origin) : null;
+    const parentDestination = new URL(parentPath, location.origin);
+    if (recordedReturn && `${recordedReturn.pathname}${recordedReturn.search}${recordedReturn.hash}` === `${parentDestination.pathname}${parentDestination.search}${parentDestination.hash}`) {
+      history.back();
+      return;
+    }
+    navigate(parentPath, true, controlRoomPath('queue'));
     return;
   }
   const destination = controlRoomDestination ? completionReturnPath() : zonePath(state.activeLedgerId, state.activeZoneId);

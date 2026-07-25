@@ -314,8 +314,15 @@ function resetRuntimeState(): void {
   state.pendingThreadContentRefresh = false;
 }
 
-function revisionResponse(ledger: Record<string, unknown>, revision: number): Response {
-  return new Response(JSON.stringify(ledger), { status: 200, headers: { 'content-type': 'application/json', 'x-decision-os-ledger-revision': String(revision) } });
+function revisionResponse(ledger: Record<string, unknown>, revision: number, taskClock?: Record<string, number>): Response {
+  return new Response(JSON.stringify(ledger), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json',
+      'x-decision-os-ledger-revision': String(revision),
+      ...(taskClock ? { 'x-decision-os-task-clock': Buffer.from(JSON.stringify(taskClock)).toString('base64url') } : {}),
+    },
+  });
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
@@ -407,6 +414,45 @@ test('scoped thread refresh mutates only notes while preserving canvas, selectio
   assert.equal(runtimeDom.content.querySelector('[data-card-id="sentinel"]'), canvasSentinel);
   assert.equal(runtimeDom.threadHeading.querySelector('.thread-actions'), actions);
   assert.deepEqual(state.activeLedger.notes['thread-card-a'], [{ id: 'note-2', role: 'agent', message: 'Lifecycle result' }]);
+});
+
+test('event-triggered thread refresh rejects a causally stale task slice and accepts its acknowledgement', async () => {
+  installRuntimeDom();
+  resetRuntimeState();
+  state.activeTab = 'tasks';
+  state.activeLedgerId = 'tasks';
+  state.ledgerTabs = [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }];
+  state.ledgerReconciliation.routeLedgerStateId = 'tasks';
+  state.ledgerReconciliation.lastAppliedTaskClock = { workstation: 7, phone: 20 };
+  const scope = {
+    projectId: '',
+    replicaNodeId: '',
+    ledgerId: 'tasks',
+    threadId: 'thread-card-a',
+    contentFile: '.decision-os/threads/specs/thread-card-a.md',
+  };
+  const stale = {
+    ...structuredClone(state.activeLedger),
+    notes: { 'thread-card-a': [{ id: 'note-1', role: 'operator', message: 'Delayed relay message' }] },
+  };
+  const acknowledged = {
+    ...structuredClone(state.activeLedger),
+    notes: { 'thread-card-a': [{ id: 'note-1', role: 'operator', message: 'Acknowledged message' }] },
+  };
+  const responses = [
+    revisionResponse(stale, 9, { workstation: 6, phone: 21 }),
+    revisionResponse(acknowledged, 10, { workstation: 7, phone: 21 }),
+  ];
+  globalThis.fetch = (async () => responses.shift()!) as typeof fetch;
+  const { loadActiveThreadSlice } = await import('../../src/runtime/thread/effect/load-active-thread-slice.js');
+
+  // WHAT: Exercise the actual scoped event-read installation boundary with two relay clocks.
+  // WHY: Full-ledger reconciliation coverage cannot prove that the notes-only fast path uses the same causal gate.
+  assert.equal(await loadActiveThreadSlice(scope), false);
+  assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Initial');
+  assert.equal(await loadActiveThreadSlice(scope), true);
+  assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Acknowledged message');
+  assert.deepEqual(state.ledgerReconciliation.lastAppliedTaskClock, { workstation: 7, phone: 21 });
 });
 
 test('inactive SSE scopes are no-ops and a lifecycle thread event updates notes only', async () => {

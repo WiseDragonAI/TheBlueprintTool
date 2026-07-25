@@ -112,7 +112,7 @@ export async function applyNotePatch(input: {
   note: NonNullable<LedgerMutation['note']>;
   onCardContentChange?: unknown;
   reason: string;
-}): Promise<{ ok: boolean; error?: string; stale?: boolean }> {
+}): Promise<{ ok: boolean; error?: string; stale?: boolean; statusCode?: number }> {
   const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
   if (!context.ok) return { ok: false, error: context.error };
   hydrateLedgerThreadNotesFor(context.ledger, context.decisionOsRoot, input.threadId);
@@ -126,7 +126,12 @@ export async function applyNotePatch(input: {
     try {
       await persistTaskMutation(mutation);
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      const statusCode = Number((error as { statusCode?: unknown } | null)?.statusCode ?? 0);
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        ...(statusCode === 409 || statusCode === 503 ? { statusCode } : {}),
+      };
     }
   } else {
     const mutationResult = applyLedgerMutation({
@@ -483,7 +488,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     onCardContentChange: payload.onCardContentChange,
     reason: 'voice-uploaded'
   });
-  if (!patch.ok) return { ok: false, statusCode: 500, uploaded: true, configured: true, noteId: id, voiceFileRef, error: patch.error ?? 'Voice note commit failed.' };
+  if (!patch.ok) return { ok: false, statusCode: patch.statusCode ?? 500, uploaded: true, configured: true, noteId: id, voiceFileRef, error: patch.error ?? 'Voice note commit failed.' };
   if (queueCodex && cardId) {
     const context = resolveLedgerContext({ runtime, ledgerId });
     if (!context.ok) return { ok: false, statusCode: 404, uploaded: true, configured: true, noteId: id, voiceFileRef, error: context.error ?? 'Thread target card not found.' };
@@ -587,7 +592,7 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
     onCardContentChange: payload.onCardContentChange,
     reason: 'voice-retry-queued'
   });
-  if (!patch.ok) return { ok: false, statusCode: patch.stale ? 409 : 500, error: patch.error };
+  if (!patch.ok) return { ok: false, statusCode: patch.statusCode ?? (patch.stale ? 409 : 500), error: patch.error };
   if (queueCodex && cardId) {
     const context = resolveLedgerContext({ runtime, ledgerId });
     if (!context.ok) return { ok: false, statusCode: 404, error: context.error ?? 'Thread target card not found.' };

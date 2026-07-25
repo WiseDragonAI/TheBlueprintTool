@@ -7,6 +7,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { projectReplicaRequestPath, replicaRequestInit } from '../../project/helper/project-request-scope.js';
 import { createOptimisticLedgerTransactionCoordinator } from '../helper/optimistic-ledger-transaction.js';
 import type { ActiveLedgerMutation } from './commit-active-ledger-mutation.js';
+import { acceptTaskClockForInstall, taskClockFromResponse, taskMutationReceiptMatches } from '../../refresh/helper/task-causal-clock.js';
 
 type Ledger = Record<string, any>;
 type Scope = { projectId: string; replicaNodeId: string; ledgerId: string };
@@ -42,6 +43,14 @@ async function requestConfirmedLedger(scopeValue: string, mutation: ActiveLedger
   }, scope.replicaNodeId)).catch(() => undefined);
   const payload = await response?.json().catch(() => null) as Ledger | null | undefined;
   if (!response?.ok || payload?.ok === false) return { ok: false as const, error: payload?.error ?? `http-${response?.status ?? 0}` };
+  if (payload?.ok === true && payload.taskClock && typeof payload.taskClock === 'object' && !Array.isArray(payload.taskClock)) {
+    // WHAT: Bind causal acknowledgement to the exact optimistic transaction identity.
+    // WHY: A successful but mismatched response cannot settle or expose another mutation's task clock.
+    if (!taskMutationReceiptMatches(payload, String(mutation.mutationId ?? ''))) {
+      return { ok: false as const, error: 'task-mutation-receipt-mismatch' };
+    }
+    acceptTaskClockForInstall(payload.taskClock as Record<string, number>, 'optimistic-mutation-response');
+  }
   if (payload && payload.ok !== true) return { ok: true as const, confirmed: payload };
 
   const snapshotPath = projectReplicaRequestPath(`/api/ledgers/${encodeURIComponent(scope.ledgerId)}/canvas`, scope.projectId, scope.replicaNodeId);
@@ -54,6 +63,11 @@ async function requestConfirmedLedger(scopeValue: string, mutation: ActiveLedger
       replicaNodeId: scope.replicaNodeId,
       status: snapshot?.status ?? 0,
     });
+    return { ok: true as const };
+  }
+  // WHAT: Pass optimistic confirmation through the same Epoch 4 causal installation gate as ordinary refreshes.
+  // WHY: The coordinator's direct write boundary must not let a delayed relay snapshot bypass receipt acknowledgement.
+  if (!acceptTaskClockForInstall(taskClockFromResponse(snapshot), 'optimistic-mutation-confirmation')) {
     return { ok: true as const };
   }
   return { ok: true as const, confirmed };
@@ -82,9 +96,12 @@ export function runOptimisticActiveLedgerMutation(input: {
   onRejected?: (error: unknown) => void;
 }): Promise<boolean> {
   telemetry('commit-ledger-edit', { activeTab: state.activeTab, action: input.mutation.action, authority: 'optimistic-client' });
+  const mutation = input.mutation.mutationId
+    ? input.mutation
+    : { ...input.mutation, mutationId: crypto.randomUUID() };
   return coordinator.run({
     scope: activeLedgerOptimisticScope(),
-    mutation: input.mutation,
+    mutation,
     apply: input.apply,
     render: input.render,
     onRejected: (error) => {

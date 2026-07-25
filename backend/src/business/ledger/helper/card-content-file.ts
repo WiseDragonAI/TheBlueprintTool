@@ -2,7 +2,8 @@
  * WHAT: Reads and writes card markdown content files referenced from ledger JSON.
  * WHY: card bodies should be patchable as individual Markdown files while the browser keeps its hydrated runtime contract.
  */
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, extname, isAbsolute, relative, resolve, basename } from 'node:path';
 
 type AnyRecord = Record<string, unknown>;
@@ -60,7 +61,16 @@ export function writeCardDescriptionFile(input: { decisionOsRoot: string; card: 
   const file = resolveCardContentFile(input.decisionOsRoot, contentFile);
   if (!file) throw new Error(`Invalid card content file for ${String(input.card.id ?? '')}`);
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, input.description, 'utf8');
+  const temporary = `${file}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    // WHAT: Replace watched card Markdown through one atomic rename.
+    // WHY: A crash during a direct write must not expose truncated bytes to the content watcher.
+    writeFileSync(temporary, input.description, { encoding: 'utf8', flag: 'wx' });
+    renameSync(temporary, file);
+  } catch (error) {
+    rmSync(temporary, { force: true });
+    throw error;
+  }
   const nextComment: AnyRecord = { ...comment, contentFile };
   delete nextComment.what;
   input.card.comment = nextComment;
@@ -163,8 +173,10 @@ export function externalizeCardContent(input: { decisionOsRoot: string; card: An
   const contentFile = typeof comment.contentFile === 'string' ? comment.contentFile : cardContentFileRef(input.ledgerPath, input.card);
   const file = resolveCardContentFile(input.decisionOsRoot, contentFile);
   if (!file) throw new Error(`Invalid card content file for ${String(input.card.id ?? '')}`);
-  mkdirSync(dirname(file), { recursive: true });
-  if (!existsSync(file)) writeFileSync(file, '', 'utf8');
+  // WHAT: Refuse to synthesize empty bytes for an already referenced card resource.
+  // WHY: An explicit missing content file can still have an authoritative Epoch 4 object head.
+  if (typeof comment.contentFile === 'string' && !existsSync(file)) throw new Error('task_content_not_materialized');
+  if (!existsSync(file)) writeCardDescriptionFile({ decisionOsRoot: input.decisionOsRoot, card: input.card, description: '', ledgerPath: input.ledgerPath });
   input.card.comment = { ...comment, contentFile };
 }
 

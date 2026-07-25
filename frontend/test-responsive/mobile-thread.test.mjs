@@ -192,7 +192,7 @@ test('closing a mobile thread unregisters its project-scoped Codex run consumer'
 test('every card route exit closes through the shared navigation lifecycle', () => {
   const backHandler = applicationSource.match(/document\.querySelector\('\.back-to-zone-button'\)\.addEventListener\('click',[\s\S]*?\n\}\);/)?.[0] ?? '';
   const closeMobileThread = source.match(/export function closeMobileThread\([^\n]*\) \{[\s\S]*?\n\}/)?.[0] ?? '';
-  const navigate = applicationSource.match(/function navigate\(path, replace = false\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const navigate = applicationSource.match(/function navigate\(path, replace = false, returnPathOverride = ''\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   const navigateTaskBack = applicationSource.match(/async function navigateTaskBack\(destination\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(applicationSource, /import \{ closeMobileThread,/);
