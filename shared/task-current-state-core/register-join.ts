@@ -24,7 +24,9 @@ export function joinTaskRegisters(left: TaskCurrentRegister, right: TaskCurrentR
   const rightCandidates = new Map(right.candidates.map((candidate) => [dotKey(candidate.dot), candidate]));
   for (const [key, candidate] of leftCandidates) {
     const matching = rightCandidates.get(key);
-    if (matching && canonicalJson(candidate) !== canonicalJson(matching)) throw new Error('task_current_dot_collision');
+    if (matching && canonicalJson(candidate) !== canonicalJson(matching)) {
+      throw new Error(`task_current_dot_collision:${encodeURIComponent(candidate.dot.replicaId)}:${candidate.dot.counter}`);
+    }
   }
   const retained = new Map<string, TaskRegisterCandidate>();
   for (const [key, candidate] of leftCandidates) {
