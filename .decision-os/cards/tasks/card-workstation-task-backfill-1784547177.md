@@ -1,5 +1,3 @@
-Completed at: 2026-07-20T17:55:11.430Z
-
 ## A. Authenticated checkpoint convergence
 
 1. **Deployment and restart:** Fast-forwarded `main` to `57901b93`, confirmed the checkpoint repair is present, restarted port `50151`, and verified HTTP `200` under server PID `1026498`. Workstation and `phone` both report `connected`; each reports the other peer `online` with project counts `5` and `7`, respectively.
@@ -11,6 +9,3 @@ Completed at: 2026-07-20T17:55:11.430Z
 7. **Task state:** Checkpoint convergence and workstation cross-owner visibility are verified. The master task remains `todo` as instructed.
 
 ---
-
-## B. Subtasks
-

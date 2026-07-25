@@ -1,5 +1,3 @@
-Completed at: 2026-07-20T17:44:36.332Z
-
 ## A. Corrected outcome
 
 1. The **Done** destination now renders one vertical task column at every viewport width.
@@ -44,9 +42,3 @@ Completed at: 2026-07-20T17:44:36.332Z
 3. Its frontend therefore shows `Completion date unavailable`; restarting onto v14 is the remaining operator-surface gate for populated dates and live date-order verification.
 
 ---
-
-## F. Subtasks
-
-1. [Expose completed-task labels in the Control Room projection](card:card-244f3416-9e9d-4a01-b9b2-8393a0a8ceeb)
-2. [Build the Done navigation view and filters](card:card-f0873532-ed9b-4a2f-bb40-206ea044ba6a)
-3. [Verify completed-task navigation and filtering](card:card-bc10fcbe-fa8b-41a7-8fd8-0206e440e159)
