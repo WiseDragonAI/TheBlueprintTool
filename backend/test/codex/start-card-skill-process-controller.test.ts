@@ -203,6 +203,39 @@ test('task run-event persistence resolves thread ownership from epoch-4 instead 
   }
 });
 
+test('legacy run-event persistence does not create a missing declared thread sidecar', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-task-run-missing-thread-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const ledgerPath = join(decisionOsRoot, 'tasks.json');
+  const cardId = 'card-task';
+  const threadId = `thread-${cardId}`;
+  const threadPath = join(decisionOsRoot, 'threads', 'tasks', `${threadId}.md`);
+  mkdirSync(decisionOsRoot, { recursive: true });
+  const ledger = {
+    cards: [{ id: cardId, title: 'Task' }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+    threadFiles: { [threadId]: `.decision-os/threads/tasks/${threadId}.md` },
+  };
+  writeFileSync(ledgerPath, JSON.stringify(ledger));
+
+  try {
+    assert.throws(() => persistCardSkillRunEvents({
+      decisionOsRoot,
+      ledgerId: 'tasks',
+      ledgerPath,
+      cardId,
+      runId: 'legacy-unowned-run',
+      events: [normalizeCardSkillRunEvent({ line: 1, event: { type: 'thread.started' } })],
+      runtime: { readTaskLedgerProjection: () => structuredClone(ledger) },
+    }), /task_content_not_materialized/);
+    assert.equal(existsSync(threadPath), false);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < 3000) {
@@ -966,11 +999,19 @@ test('card skill run cancel route terminates the active codex process', async ()
     assert.equal(cancelled.cancellationRequested, true);
 
     await waitForText(started.run.outputFile, 'Codex run cancelled: terminated by operator');
-    const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${started.run.id}?ledgerId=specs&cardId=${started.run.outputCardId}&since=0`);
-    assert.equal(statusResponse.status, 200);
-    const status = await statusResponse.json() as { ok: boolean; status: string };
-    assert.equal(status.ok, true);
-    assert.equal(status.status, 'cancelled');
+    // WHAT: Observe the replicated terminal lifecycle instead of using the mutable summary file as its completion barrier.
+    // WHY: Artifact capture intentionally precedes terminal publication, so the two durable writes settle independently.
+    let terminalStatus = '';
+    const statusDeadline = Date.now() + 3000;
+    while (Date.now() < statusDeadline && terminalStatus !== 'cancelled') {
+      const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${started.run.id}?ledgerId=specs&cardId=${started.run.outputCardId}&since=0`);
+      assert.equal(statusResponse.status, 200);
+      const status = await statusResponse.json() as { ok: boolean; status: string };
+      assert.equal(status.ok, true);
+      terminalStatus = status.status;
+      if (terminalStatus !== 'cancelled') await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.equal(terminalStatus, 'cancelled');
   } finally {
     server.close();
     process.chdir(originalCwd);

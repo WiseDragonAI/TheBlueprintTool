@@ -454,6 +454,15 @@ export async function spawnPipelineSkillProcess(input: {
       if (status === 'cancelled') appendFileSync(input.skill.stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       if (status === 'failed') appendFileSync(input.skill.stderrFile, `Codex run failed: ${detail}\n`, 'utf8');
       appendFileSync(input.skill.stderrFile, codexRunExecutionFinishedMarker({ runId: input.skill.runId, executionId: input.skill.executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
+      // WHAT: Capture the completed process evidence before publishing its terminal lifecycle.
+      // WHY: Relay consumers must never observe a terminal execution whose immutable log heads are still absent.
+      await finalizeTaskExecutionArtifacts({
+        runtime: input.runtime,
+        executionId: input.skill.executionId,
+        jsonl: input.skill.stdoutFile,
+        stderr: input.skill.stderrFile,
+        telemetry: `${input.skill.stdoutFile}.telemetry.jsonl`,
+      });
       const current = replicatedState.executions.find(input.skill.executionId);
       if (current && (current.lifecycle.phase === 'starting' || current.lifecycle.phase === 'running' || current.lifecycle.phase === 'cancelling')) {
         await replicatedState.executions.transition(input.skill.executionId, {
@@ -469,13 +478,6 @@ export async function spawnPipelineSkillProcess(input: {
           executionId: input.skill.executionId,
         });
       }
-      await finalizeTaskExecutionArtifacts({
-        runtime: input.runtime,
-        executionId: input.skill.executionId,
-        jsonl: input.skill.stdoutFile,
-        stderr: input.skill.stderrFile,
-        telemetry: `${input.skill.stdoutFile}.telemetry.jsonl`,
-      });
       // Keep the settled process paths readable until immutable artifact heads exist.
       // Removing them earlier creates a terminal-status window with no live log source.
       removeTaskExecutionProcess(input.runtime, input.skill.executionId);
@@ -548,18 +550,21 @@ export async function runPipelineExecution(input: {
       await state.executions.transition(input.executionId, { phase: 'running' });
       const result = await registered.execute(located.skill);
       writeFileSync(located.skill.stdoutFile, `${JSON.stringify(result)}\n`, 'utf8');
+      // WHAT: Materialize the required stderr evidence even when the federated executor emitted no diagnostics.
+      // WHY: Terminal publication requires a complete primary artifact pair, including an exact empty diagnostic stream.
+      if (!existsSync(located.skill.stderrFile)) writeFileSync(located.skill.stderrFile, '', 'utf8');
+      await finalizeTaskExecutionArtifacts({
+        runtime: input.runtime,
+        executionId: input.executionId,
+        jsonl: located.skill.stdoutFile,
+        stderr: located.skill.stderrFile,
+      });
       await state.executions.transition(input.executionId, {
         phase: 'succeeded',
         result: {
           status: 'succeeded',
           summary: `federated executor ${planned.nodeId}`,
         },
-      });
-      await finalizeTaskExecutionArtifacts({
-        runtime: input.runtime,
-        executionId: input.executionId,
-        jsonl: located.skill.stdoutFile,
-        stderr: located.skill.stderrFile,
       });
       return { ok: true, statusCode: 200, run: reassessPipelineAfterSkill({
         decisionOsRoot: input.decisionOsRoot,
@@ -570,6 +575,14 @@ export async function runPipelineExecution(input: {
       const message = error instanceof Error ? error.message : String(error);
       writeFileSync(located.skill.stderrFile, `${message}\n`, 'utf8');
       const latest = state.executions.find(input.executionId);
+      if (latest && (latest.lifecycle.phase === 'starting' || latest.lifecycle.phase === 'running' || latest.lifecycle.phase === 'cancelling')) {
+        await finalizeTaskExecutionArtifacts({
+          runtime: input.runtime,
+          executionId: input.executionId,
+          jsonl: located.skill.stdoutFile,
+          stderr: located.skill.stderrFile,
+        });
+      }
       if (latest?.lifecycle.phase === 'cancelling') {
         // WHAT: Treat the child rejection after an accepted cancellation as cancellation.
         // WHY: The process error text describes signal termination, while the durable
@@ -583,14 +596,6 @@ export async function runPipelineExecution(input: {
           phase: 'failed',
           error: { code: 'federated_pipeline_skill_failed', message },
           result: { status: 'failed', summary: message },
-        });
-      }
-      if (state.executions.find(input.executionId)?.lifecycle.finishedAt) {
-        await finalizeTaskExecutionArtifacts({
-          runtime: input.runtime,
-          executionId: input.executionId,
-          jsonl: located.skill.stdoutFile,
-          stderr: located.skill.stderrFile,
         });
       }
       await cancelPipelineDependents({

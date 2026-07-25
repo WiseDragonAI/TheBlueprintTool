@@ -140,6 +140,81 @@ test('thread launch context excludes tombstoned notes that remain in the Markdow
   }
 });
 
+test('rejected Codex launch publishes no replacement head when declared inputs are not materialized', async () => {
+  const context = fixture();
+  const cardFile = join(context.decisionOsRoot, 'cards', 'specs', `${context.cardId}.md`);
+  const threadFile = join(context.decisionOsRoot, 'threads', 'specs', `${context.threadId}.md`);
+  const cardRef = `.decision-os/cards/specs/${context.cardId}.md`;
+  const threadRef = `.decision-os/threads/specs/${context.threadId}.md`;
+  try {
+    const headsBefore = {
+      card: context.state.store.contentHeads(cardRef),
+      thread: context.state.store.contentHeads(threadRef),
+    };
+    rmSync(cardFile);
+    rmSync(threadFile);
+
+    const result = await startThreadCodexProcessController({
+      action_payload: { ...context.request, epoch4Dispatch: true },
+      runtime_state: context.runtime,
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.statusCode, 503);
+    assert.equal(existsSync(cardFile), false);
+    assert.equal(existsSync(threadFile), false);
+    assert.deepEqual(context.state.store.contentHeads(cardRef), headsBefore.card);
+    assert.deepEqual(context.state.store.contentHeads(threadRef), headsBefore.thread);
+  } finally {
+    await cleanup(context);
+  }
+});
+
+test('Codex launch preserves a materialization conflict as 409 without touching either input', async () => {
+  const context = fixture();
+  const cardFile = join(context.decisionOsRoot, 'cards', 'specs', `${context.cardId}.md`);
+  const threadFile = join(context.decisionOsRoot, 'threads', 'specs', `${context.threadId}.md`);
+  const before = { card: readFileSync(cardFile), thread: readFileSync(threadFile) };
+  context.runtime.materializeTaskResources = async () => {
+    throw Object.assign(new Error('task_content_conflict'), { statusCode: 409 });
+  };
+  try {
+    const result = await startThreadCodexProcessController({
+      action_payload: { ...context.request, epoch4Dispatch: true },
+      runtime_state: context.runtime,
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.statusCode, 409);
+    assert.deepEqual(readFileSync(cardFile), before.card);
+    assert.deepEqual(readFileSync(threadFile), before.thread);
+  } finally {
+    await cleanup(context);
+  }
+});
+
+test('timestamp validation failure leaves materialized card and thread bytes unchanged', async () => {
+  const context = fixture();
+  const cardFile = join(context.decisionOsRoot, 'cards', 'specs', `${context.cardId}.md`);
+  const threadFile = join(context.decisionOsRoot, 'threads', 'specs', `${context.threadId}.md`);
+  try {
+    writeFileSync(threadFile, '# OPERATOR\n\nMissing timestamp.\n');
+    const before = { card: readFileSync(cardFile), thread: readFileSync(threadFile) };
+
+    const result = await startThreadCodexProcessController({
+      action_payload: { ...context.request, epoch4Dispatch: true },
+      runtime_state: context.runtime,
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.statusCode, 400);
+    assert.deepEqual(readFileSync(cardFile), before.card);
+    assert.deepEqual(readFileSync(threadFile), before.thread);
+  } finally {
+    await cleanup(context);
+  }
+});
+
 async function cleanup(context: ReturnType<typeof fixture>): Promise<void> {
   for (const process of taskExecutionProcesses(context.runtime)) {
     try {
@@ -270,7 +345,7 @@ test('turn lifecycle registers the exact execution child for cancellation', asyn
   }
 });
 
-test('terminal execution remains readable while immutable artifacts are finalizing', async () => {
+test('execution remains non-terminal until immutable artifacts are finalized', async () => {
   const context = fixture();
   const fakeCodex = join(context.workspace, 'fake-codex-complete.mjs');
   const previousCodexBin = process.env.CODEX_BIN;
@@ -311,7 +386,7 @@ test('terminal execution remains readable while immutable artifacts are finalizi
     });
     assert.equal(result.ok, true);
     await finalizationStarted;
-    assert.equal(context.state.executions.find(context.executionId)?.lifecycle.phase, 'succeeded');
+    assert.equal(context.state.executions.find(context.executionId)?.lifecycle.phase, 'running');
     assert.equal(taskExecutionProcess(context.runtime, context.executionId)?.sessionId, context.runId);
 
     const settling = await readCardSkillRunController({
@@ -324,7 +399,7 @@ test('terminal execution remains readable while immutable artifacts are finalizi
       runtime_state: context.runtime,
     });
     assert.equal(settling.ok, true);
-    assert.equal(settling.phase, 'succeeded');
+    assert.equal(settling.phase, 'running');
     assert.equal(settling.lineCount, 1);
     assert.equal((settling.events as Array<Record<string, unknown>>).length, 1);
 
@@ -333,6 +408,7 @@ test('terminal execution remains readable while immutable artifacts are finalizi
       () => taskExecutionProcess(context.runtime, context.executionId) === null,
       'the settled process registration to be removed',
     );
+    assert.equal(context.state.executions.find(context.executionId)?.lifecycle.phase, 'succeeded');
     assert.ok(context.state.executions.find(context.executionId)?.artifacts.jsonl);
   } finally {
     releaseFinalization();

@@ -3,7 +3,7 @@
  * WHY: Durable lifecycle ingestion must update only the thread file and its ownership metadata.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { hydrateLedgerThreadNotesFor, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
+import { hydrateLedgerThreadNotesFor, resolveThreadContentFile, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
@@ -49,6 +49,12 @@ export function persistCardSkillRunEvents(input: {
     ? ledger.threadFiles as Record<string, unknown>
     : {};
   const previousThreadFile = String(existingThreadFiles[threadId] ?? '');
+  const resolvedThreadFile = resolveThreadContentFile(input.decisionOsRoot, previousThreadFile);
+  // WHAT: Refuse legacy event persistence when its declared thread bytes were not materialized at admission.
+  // WHY: A timer callback cannot safely fetch relay content and must never replace the thread with synthetic run events.
+  if (previousThreadFile && (!resolvedThreadFile || !existsSync(resolvedThreadFile))) {
+    throw new Error(`task_content_not_materialized:${previousThreadFile}`);
+  }
   hydrateLedgerThreadNotesFor(ledger, input.decisionOsRoot, threadId);
   const notesByThread = normalizeLedgerNotes(ledger);
   const notes = notesByThread[threadId] ?? [];

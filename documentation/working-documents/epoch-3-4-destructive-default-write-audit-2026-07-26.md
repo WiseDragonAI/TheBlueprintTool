@@ -99,4 +99,32 @@
 1. **The one-byte Codex incident is one manifestation of a shared missing-materialization defect.**
 2. **The highest-yield correction is the shared pre-mutation materialization boundary.** Fixing only Codex launch leaves messages, voice lifecycle persistence, card Markdown, and legacy run events exposed.
 3. Asset synchronization optimization remains a separate master task because asset availability policy and payload replication differ from text-content safety.
-4. **The demanded ignore gate is only partially implemented.** Event revision deduplication exists; status-aware, receipt-aware projection installation does not.
+4. **The demanded ignore gate required completion beyond event revision deduplication.** Section G records the implemented status-aware, receipt-aware, and causal projection boundary.
+
+---
+
+## G. Implemented Correction
+
+1. `materializeTaskMutationInputs()` now resolves every declared task card and thread resource before mutation, demands absent immutable objects, verifies SHA-256 and byte count, rejects concurrent heads with `409`, rejects unavailable objects with `503`, and installs exact bytes atomically without publishing a contribution.
+2. Existing mutable sidecars are verified against the unique projected head. A stale existing sidecar returns `409` and remains byte-identical.
+3. Local note mutations, voice lifecycle updates, operator-facing card mutations, Codex admission, and the legacy run-event fallback now fail closed through the shared boundary.
+4. Codex validates the materialized thread body before any absent card or thread sidecar becomes watcher-visible. Rejected admission publishes no content head.
+5. Card Markdown replacement now uses temporary-file-plus-rename.
+6. Required execution artifacts are finalized before terminal lifecycle publication for thread runs, continued runs, local pipelines, and federated pipelines. Artifact failure retains the process evidence path.
+7. Mutation responses now expose an exact `mutationId` receipt and Epoch 4 task clock. The frontend accepts that clock only when the receipt matches the submitted mutation.
+8. Complete ledger reads and event-triggered thread-slice reads pass through the same causal task-clock gate. A numerically newer projection that omits the installed local clock cannot replace local messages, images, execution state, pipeline state, or content heads.
+9. Voice and execution lifecycle gates reject terminal-to-intermediate regression. Explicit retry remains a new lifecycle intent.
+
+---
+
+## H. Verification Evidence
+
+1. Backend complete suite: `430` passed, `0` failed.
+2. Frontend complete suite: `562` passed, `0` failed.
+3. Backend typecheck: passed.
+4. Frontend typecheck: passed.
+5. Materialization regressions prove exact local and demanded installation, stale-sidecar rejection, unavailable and conflicting no-write behavior, corrupt-object rejection, and validation-before-install.
+6. Mutation regressions prove append, update, delete, and restore fail closed on a missing declared thread while an accepted append preserves unrelated notes.
+7. Codex regressions prove missing input and conflict rejection preserve both files and heads, timestamp rejection preserves exact bytes, and execution remains non-terminal until artifact capture.
+8. Projection regressions prove delayed causally stale complete-ledger and event-triggered thread projections are ignored, exact receipt acknowledgement is required, terminal lifecycle cannot regress, and explicit retry advances lifecycle.
+9. Image synchronization optimization is tracked separately by master task `card-a7aec888-a4a8-4333-a2e3-98d57cfcf9b8`; it is activated, committed in `77664916`, and relay-converged with no pending deliveries.

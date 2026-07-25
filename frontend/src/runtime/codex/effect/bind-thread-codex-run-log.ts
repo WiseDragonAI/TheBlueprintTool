@@ -11,6 +11,7 @@ import { projectIdFromLocation, replicaNodeIdFromLocation } from '../../project/
 import { findTaskExecution } from '../helper/find-task-execution.js';
 import { taskExecutionDisplayStatus } from '../helper/task-execution-display-status.js';
 import { requestTaskExecutionPresentation, requestTaskExecutionState } from './request-task-execution-state.js';
+import { shouldAcceptReplicatedTaskState } from '../../refresh/helper/task-projection-acceptance.js';
 import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 import { stopThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
 import type { ThreadCodexRunLogIdentity } from './thread-codex-run-log-identity-types.js';
@@ -158,10 +159,27 @@ function installExecutionInvalidation(): void {
     try { payload = JSON.parse(String((event as MessageEvent).data ?? '{}')) as Record<string, unknown>; } catch { return; }
     const projectId = String(payload.projectId ?? '');
     const taskId = String(payload.taskId ?? '');
+    const executionId = String(payload.executionId ?? '');
+    const incomingRevision = Number(payload.revision ?? 0);
+    const incomingPhase = String(payload.phase ?? '');
     // WHAT: Revalidate only pollers whose task identity matches the changed execution.
     // WHY: One execution transition must not trigger log reads for every open project.
     for (const poller of taskLogPollers.values()) {
       if (poller.identity.projectId !== projectId || poller.identity.cardId !== taskId) continue;
+      const summary = recordState('threadTaskExecutionStateByThreadId')[poller.identity.threadId] as TaskExecutionStateSummary | undefined;
+      const installed = executionId ? findTaskExecution(summary ?? null, executionId) : null;
+      // WHAT: Suppress invalidations already represented by the installed execution snapshot.
+      // WHY: Event revisions are invalidation hints and cannot regress a terminal lifecycle or force redundant reads.
+      if (installed && (
+        (Number.isSafeInteger(incomingRevision) && incomingRevision > 0 && incomingRevision <= installed.revision)
+        || !shouldAcceptReplicatedTaskState({
+          domain: 'queued-execution',
+          local: { phase: installed.phase, revision: installed.revision },
+          incoming: { phase: incomingPhase, revision: incomingRevision },
+          pendingReceipt: null,
+          source: 'relay-refresh',
+        })
+      )) continue;
       poller.abortController?.abort();
       poller.generation += 1;
       poller.inFlight = false;
