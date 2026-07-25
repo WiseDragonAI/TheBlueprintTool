@@ -1503,11 +1503,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       controlRoomProjectionStore?.invalidate(projectId, delta.entities);
       for (const executionId of new Set(delta.entities.filter((entity) => entity.entityType === 'execution').map((entity) => entity.entityId))) {
+        const executions = executionStateForProject(projectId, from)?.executions;
+        // WHAT: Publish only complete, conflict-free execution projections after a replicated merge.
+        // WHY: A valid causal conflict is durable task state, not a reason to pause the entire project while emitting a best-effort notification.
         publishExecutionChange({
           projectId,
           nodeId: from,
           executionId,
-          record: executionStateForProject(projectId, from)?.executions.find(executionId) ?? null,
+          record: executions?.all().find((record) => record.metadata.executionId === executionId) ?? null,
           remote: true,
         });
       }
