@@ -62,7 +62,8 @@ function registeredProjects(catalogRoot: string, registry: NonNullable<ReturnTyp
     if (!/^[a-zA-Z0-9_-]+$/.test(entry.id)) throw new Error(`invalid_task_migration_project_id:${entry.id}`);
     const registeredRoot = resolve(catalogRoot, entry.relativePath);
     const registeredRelative = relative(catalogRoot, registeredRoot);
-    if (!registeredRelative || registeredRelative === '..' || registeredRelative.startsWith('../') || isAbsolute(registeredRelative)) {
+    const catalogProject = entry.relativePath === '.';
+    if ((!registeredRelative && !catalogProject) || registeredRelative === '..' || registeredRelative.startsWith('../') || isAbsolute(registeredRelative)) {
       throw new Error(`node_task_migration_project_registration_outside_catalog:${entry.id}`);
     }
     // WHAT: Admit a registered symlink after validating its lexical catalog entry and project identity.

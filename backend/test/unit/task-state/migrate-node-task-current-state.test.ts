@@ -109,6 +109,35 @@ test('node migrator rejects a node identity that differs from federation setting
   }), /node_task_migration_node_identity_mismatch/);
 });
 
+test('node migrator admits the catalog root when it is explicitly registered as dot', async (context) => {
+  const catalogRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-node-root-project-'));
+  const backupRoot = `${catalogRoot}-backup`;
+  context.after(() => [catalogRoot, backupRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const decisionOsRoot = resolve(catalogRoot, '.decision-os');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(resolve(decisionOsRoot, '.settings.json'), JSON.stringify({ federationNodeId: 'phone' }));
+  writeFileSync(resolve(decisionOsRoot, 'projects.json'), JSON.stringify({ version: 2, projects: {
+    phone: { id: 'phone', relativePath: '.', name: 'Phone', description: '', color: '#38d9e8', registeredAt: '2026-07-22T00:00:00.000Z', cardId: 'project-card:phone' },
+  } }));
+  writeFileSync(resolve(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'phone' }));
+  writeFileSync(resolve(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(resolve(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+
+  const plan = await planNodeTaskCurrentStateMigration({ catalogRoot, nodeId: 'phone', targetEpoch: 4, defaultAssignedNodeId: 'workstation' });
+  assert.equal(plan.projects[0].relativePath, '.');
+
+  const result = await migrateNodeTaskCurrentState({
+    catalogRoot,
+    nodeId: 'phone',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+    backupRoot,
+  });
+
+  assert.equal(result.projects[0].relativePath, '.');
+  assert.equal(JSON.parse(readFileSync(resolve(decisionOsRoot, 'task-state', 'phone', 'format.json'), 'utf8')).stateSchema, 4);
+});
+
 test('node preflight validates every project before creating backup or changing the first project', async (context) => {
   const catalogRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-node-preflight-'));
   const backupRoot = `${catalogRoot}-backup`;
