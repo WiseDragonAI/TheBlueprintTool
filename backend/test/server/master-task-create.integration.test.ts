@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import sharp from 'sharp';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 
 test('master-task creation persists the complete graph and returns absolute Markdown paths', async (context) => {
@@ -108,6 +109,68 @@ test('master-task creation persists the complete graph and returns absolute Mark
   assert.deepEqual(restoredProjection.ledger.deletedNoteIds['thread-card-master'], []);
   assert.deepEqual(restoredProjection.ledger.notes['thread-card-master'].map((note) => note.id).sort(), ['note-first', 'note-second']);
   assert.match(readFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-card-master.md'), 'utf8'), /First operator note\./);
+  const originalImage = await sharp({
+    create: {
+      width: 1200,
+      height: 600,
+      channels: 4,
+      background: { r: 18, g: 52, b: 86, alpha: 1 },
+    },
+  }).png().toBuffer();
+  const imageUploadResponse = await fetch(`${baseUrl}/p/${projectId}/api/thread-image-upload`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'image/png',
+      'x-ledger-id': 'tasks',
+      'x-thread-id': 'thread-card-master',
+    },
+    body: originalImage,
+  });
+  assert.equal(imageUploadResponse.status, 201, await imageUploadResponse.clone().text());
+  const imageUpload = await imageUploadResponse.json() as {
+    imageFileRef: string;
+    previewFileRef: string;
+    previewProfile: string;
+  };
+  assert.equal(imageUpload.previewProfile, 'canvas-preview-v1');
+  assert.match(imageUpload.previewFileRef, /\.canvas-preview-v1\.webp$/);
+  const originalFile = join(workspace, imageUpload.imageFileRef.slice(1));
+  const previewFile = join(workspace, imageUpload.previewFileRef.slice(1));
+  assert.deepEqual(readFileSync(originalFile), originalImage);
+  const previewMetadata = await sharp(previewFile).metadata();
+  assert.equal(previewMetadata.width, 768);
+  assert.equal(previewMetadata.height, 384);
+  const repeatedImageUpload = await fetch(`${baseUrl}/p/${projectId}/api/thread-image-upload`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'image/png',
+      'x-ledger-id': 'tasks',
+      'x-thread-id': 'thread-card-master',
+    },
+    body: originalImage,
+  }).then((result) => result.json()) as { previewFileRef: string };
+  assert.deepEqual(
+    readFileSync(join(workspace, repeatedImageUpload.previewFileRef.slice(1))),
+    readFileSync(previewFile),
+  );
+  const imageDirectory = join(decisionOsRoot, 'thread-images', 'thread-card-master');
+  const installedImageFiles = readdirSync(imageDirectory).sort();
+  const invalidImageUpload = await fetch(`${baseUrl}/p/${projectId}/api/thread-image-upload`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'image/png',
+      'x-ledger-id': 'tasks',
+      'x-thread-id': 'thread-card-master',
+    },
+    body: Buffer.from('not an image'),
+  });
+  assert.equal(invalidImageUpload.status, 422);
+  assert.deepEqual(readdirSync(imageDirectory).sort(), installedImageFiles);
+  const contentManifest = await fetch(
+    `${baseUrl}/api/federation/content-manifest?projectId=${encodeURIComponent(projectId)}`,
+  ).then((result) => result.json()) as { resources: Array<{ key: string; hash: string }> };
+  assert.ok(contentManifest.resources.some((resource) => resource.key === imageUpload.imageFileRef.replace(/^\//, '')));
+  assert.ok(contentManifest.resources.some((resource) => resource.key === imageUpload.previewFileRef.replace(/^\//, '')));
   const inheritedReassignment = await fetch(`${baseUrl}/p/${projectId}/decision-os/tasks`, {
     method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
       action: 'reassign-task', cardId: 'card-subtask', assignedNodeId: 'phone',

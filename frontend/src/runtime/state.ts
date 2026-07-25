@@ -43,6 +43,8 @@ export type LedgerContentRefreshState = {
   changedCardIds?: string[];
   threadReasons: string[];
   threadScope: ThreadContentRefreshScope | null;
+  lastInvalidationRevision?: number;
+  invalidationLedgerStateId?: string;
 };
 
 export type ThreadPanelTab = 'thread' | 'codex-log';

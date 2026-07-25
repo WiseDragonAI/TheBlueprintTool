@@ -20,6 +20,7 @@ export type ContentChangeEvent = {
   threadId?: string;
   noteId?: string;
   revision?: number;
+  invalidationRevision?: number;
 };
 
 export function contentEventPayload(event: Event): ContentChangeEvent {
@@ -43,7 +44,10 @@ export function contentEventPayload(event: Event): ContentChangeEvent {
       status: typeof parsed.status === 'string' ? parsed.status : '',
       threadId: typeof parsed.threadId === 'string' ? parsed.threadId : '',
       noteId: typeof parsed.noteId === 'string' ? parsed.noteId : '',
-      revision: Number.isFinite(Number(parsed.revision)) ? Number(parsed.revision) : 0
+      revision: Number.isFinite(Number(parsed.revision)) ? Number(parsed.revision) : 0,
+      invalidationRevision: Number.isSafeInteger(Number(parsed.invalidationRevision)) && Number(parsed.invalidationRevision) > 0
+        ? Number(parsed.invalidationRevision)
+        : 0
     };
   } catch {
     // WHAT: Normalize malformed SSE data to an unscoped empty payload.

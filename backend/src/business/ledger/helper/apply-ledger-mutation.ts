@@ -3,9 +3,10 @@
  * WHY: Real ledgers and the hidden ledgers canvas must share the same card, zone, group, note, and geometry behavior.
  */
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
+import { existsSync } from 'node:fs';
 import { relationshipReferencesCard } from './relationship-references-card.js';
 import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, sameMarkdownImageSource, writeCardDescriptionFile } from './card-content-file.js';
-import { hydrateLedgerThreadNotesFor, writeThreadNotesFile } from './thread-content-file.js';
+import { hydrateLedgerThreadNotesFor, resolveThreadContentFile, threadContentFileRef, writeThreadNotesFile } from './thread-content-file.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { CardQuestionnaires } from '../../../../../shared/schemas/questionnaire-types.js';
 import { normalizeGitReviewNotes, type GitReviewNote } from '../../../../../shared/schemas/git-review-types.js';
@@ -113,6 +114,16 @@ export function applyLedgerMutation(input: {
 }): { ok: boolean; ledger: Record<string, unknown>; error?: MutationError } {
   const { decisionOsRoot, ledgerPath, ledger, mutation } = input;
   if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(String(mutation.action)) && mutation.note?.threadId) {
+    if (mutation.action === 'restore-note') {
+      const threadFiles = ledger.threadFiles && typeof ledger.threadFiles === 'object' && !Array.isArray(ledger.threadFiles)
+        ? ledger.threadFiles
+        : (ledger.threadFiles = {});
+      if (!threadFiles[mutation.note.threadId]) {
+        const canonicalRef = threadContentFileRef(ledgerPath, mutation.note.threadId);
+        const canonicalFile = resolveThreadContentFile(decisionOsRoot, canonicalRef);
+        if (canonicalFile && existsSync(canonicalFile)) threadFiles[mutation.note.threadId] = canonicalRef;
+      }
+    }
     hydrateLedgerThreadNotesFor(ledger, decisionOsRoot, mutation.note.threadId);
   }
   let mutationError: MutationError | undefined;

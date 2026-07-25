@@ -247,7 +247,7 @@ export function createProjectTaskState(input: {
       const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
       const resourceIds = command.kind === 'delete-card-image'
         ? [String(comment.contentFile ?? '')]
-        : [String(mutation.note?.voiceFileRef ?? ''), ...taskContentReferences(body)];
+        : taskContentReferences(body);
       deltas.push(await recordContentContribution(command.activationTaskId, resourceIds));
     }
     return { changed, deltas, localChanges: projectionEntityChanges(command.changes), ledger: store.projection().ledger };

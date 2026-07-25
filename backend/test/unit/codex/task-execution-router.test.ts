@@ -324,6 +324,77 @@ test('admits a complete pipeline topology before publishing schedulable callback
   assert.deepEqual(callbackSnapshots.at(-1), ['queued', 'queued', 'queued']);
 });
 
+test('a failed queued-state commit publishes no direct Run scheduler callback', async (context) => {
+  const workstation = fixture('workstation');
+  context.after(() => dispose(workstation));
+  const transition = workstation.state.executions.transition;
+  workstation.state.executions.transition = async (...args: Parameters<typeof transition>) => {
+    if (args[1].phase === 'queued') throw new Error('injected_queued_state_persistence_failure');
+    return transition(...args);
+  };
+  let schedulerWakeCount = 0;
+  const router = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => workstation.state,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+    onCommitted: () => {
+      schedulerWakeCount += 1;
+    },
+  });
+
+  await assert.rejects(router.route(request()), (error: unknown) => (
+    error instanceof TaskExecutionAdmissionError
+    && error.message === 'injected_queued_state_persistence_failure'
+  ));
+  assert.equal(schedulerWakeCount, 0);
+  assert.equal(workstation.state.executions.find('execution-a')?.lifecycle.phase, 'failed');
+});
+
+test('a partial Pipeline queue failure publishes no scheduler callback and leaves no queued execution', async (context) => {
+  const workstation = fixture('workstation');
+  context.after(() => dispose(workstation));
+  const transition = workstation.state.executions.transition;
+  workstation.state.executions.transition = async (...args: Parameters<typeof transition>) => {
+    if (args[0] === 'execution-b' && args[1].phase === 'queued') {
+      throw new Error('injected_pipeline_queue_persistence_failure');
+    }
+    return transition(...args);
+  };
+  let schedulerWakeCount = 0;
+  const router = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => workstation.state,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+    onCommitted: () => {
+      schedulerWakeCount += 1;
+    },
+  });
+  const topology = ['a', 'b'].map((suffix, index) => request({
+    requestId: `queue-failure-request-${suffix}`,
+    executionId: `execution-${suffix}`,
+    sessionId: `queue-failure-session-${suffix}`,
+    kind: 'pipeline-skill',
+    pipelineRunId: 'pipeline-queue-failure',
+    pipelineStepId: `step-${suffix}`,
+    pipelineSkillRunId: `skill-${suffix}`,
+    predecessorExecutionId: index === 0 ? null : 'execution-a',
+  }));
+
+  await assert.rejects(router.routeBatch(topology), (error: unknown) => (
+    error instanceof TaskExecutionAdmissionError
+    && error.message === 'injected_pipeline_queue_persistence_failure'
+  ));
+  assert.equal(schedulerWakeCount, 0);
+  assert.deepEqual(
+    workstation.state.executions.byPipelineRunId('pipeline-queue-failure').map((record) => record.lifecycle.phase),
+    ['cancelled', 'failed'],
+  );
+});
+
 test('rejects an invalid pipeline topology before admission and settles a post-admission policy rejection', async (context) => {
   const workstation = fixture('workstation');
   context.after(() => dispose(workstation));
