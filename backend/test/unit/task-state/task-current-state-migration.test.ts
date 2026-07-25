@@ -136,6 +136,98 @@ test('epoch-3 removed ledger fields become causal tombstones when their presence
   assert.equal(JSON.parse(readFileSync(result.report, 'utf8')).semanticInventory.entityDeletions, 1);
 });
 
+test('epoch-3 metadata-only thread notes absent from Markdown become causal tombstones', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-missing-thread-note-migration-'));
+  const rollbackRoot = `${root}-rollback`;
+  context.after(() => [root, rollbackRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'project-a';
+  const stateRoot = resolve(root, 'task-state', projectId);
+  const tasksFile = resolve(root, 'tasks.json');
+  const threadId = 'thread-card-a';
+  const missingNoteId = 'note-metadata-only';
+  const entityId = `${threadId}/${missingNoteId}`;
+  const threadFile = resolve(root, 'threads', 'tasks', `${threadId}.md`);
+  mkdirSync(resolve(stateRoot, 'current', 'thread-note'), { recursive: true });
+  mkdirSync(resolve(stateRoot, 'current', 'ledger'), { recursive: true });
+  mkdirSync(resolve(root, 'threads', 'tasks'), { recursive: true });
+  writeFileSync(threadFile, '# OPERATOR\n<!-- decision-os:note {"id":"note-retained","timestamp":"2026-07-21T00:00:00.000Z"} -->\n\nRetained note.\n');
+  writeFileSync(tasksFile, JSON.stringify({
+    cards: [],
+    annotations: [],
+    relationships: [],
+    threadFiles: { [threadId]: `.decision-os/threads/tasks/${threadId}.md` },
+  }));
+  writeFileSync(resolve(stateRoot, 'format.json'), JSON.stringify({
+    stateProtocol: 'decision-os-task-state/3',
+    stateSchema: 3,
+    baselineEpoch: 3,
+    projectId,
+    baselineRoot: 'epoch-3-root',
+  }));
+  const threadFileEntityId = `tasks:threadFiles/${threadId}`;
+  writeFileSync(resolve(stateRoot, 'current', 'ledger', `${encodeURIComponent(threadFileEntityId)}.json`), JSON.stringify({
+    version: 3,
+    projectId,
+    entityType: 'ledger',
+    entityId: threadFileEntityId,
+    fields: {
+      $entity: {
+        clock: { workstation: 6 },
+        candidates: [{ dot: { replicaId: 'workstation', counter: 6 }, operation: 'set', value: true }],
+      },
+      [`threadFiles/${threadId}`]: {
+        clock: { workstation: 6 },
+        candidates: [{
+          dot: { replicaId: 'workstation', counter: 6 },
+          operation: 'set',
+          value: `.decision-os/threads/tasks/${threadId}.md`,
+        }],
+      },
+    },
+    stateHash: 'legacy',
+  }));
+  writeFileSync(resolve(stateRoot, 'current', 'thread-note', `${encodeURIComponent(entityId)}.json`), JSON.stringify({
+    version: 3,
+    projectId,
+    entityType: 'thread-note',
+    entityId,
+    fields: {
+      $entity: {
+        clock: { workstation: 7 },
+        candidates: [{ dot: { replicaId: 'workstation', counter: 7 }, operation: 'set', value: true }],
+      },
+      role: {
+        clock: { workstation: 7 },
+        candidates: [{ dot: { replicaId: 'workstation', counter: 7 }, operation: 'set', value: 'operator' }],
+      },
+      status: {
+        clock: { workstation: 7 },
+        candidates: [{ dot: { replicaId: 'workstation', counter: 7 }, operation: 'set', value: 'transcribed' }],
+      },
+      timestamp: {
+        clock: { workstation: 7 },
+        candidates: [{ dot: { replicaId: 'workstation', counter: 7 }, operation: 'set', value: '2026-07-21T00:01:00.000Z' }],
+      },
+    },
+    stateHash: 'legacy',
+  }));
+
+  const result = await migrateTaskCurrentState({
+    decisionOsRoot: root,
+    projectId,
+    nodeId: 'workstation',
+    tasksLedgerFile: tasksFile,
+    backupRoot: rollbackRoot,
+  });
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId });
+  assert.equal(store.entity('thread-note', entityId)?.fields.$entity?.candidates[0].operation, 'tombstone');
+  assert.deepEqual(
+    ((store.projection().ledger.notes as Record<string, Array<{ id: string }>>)[threadId] ?? []).map((note) => note.id),
+    ['note-retained'],
+  );
+  assert.equal(JSON.parse(readFileSync(result.report, 'utf8')).semanticInventory.entityDeletions, 1);
+});
+
 test('epoch-3 migration assigns master tasks and collapses every legacy execution authority into epoch-4 entities', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-epoch4-execution-migration-'));
   const rollbackRoot = `${root}-rollback`;

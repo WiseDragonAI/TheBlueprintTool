@@ -130,11 +130,15 @@ function recoveredPresenceEntities(projectId: string, entities: LegacyEntity[], 
     const removedValue = valueRegisters.length > 0 && valueRegisters.every((register) => (
       register.candidates.length > 0 && register.candidates.every((candidate) => candidate.operation === 'remove')
     ));
+    const missingCanonicalThreadNote = entity.entityType === 'thread-note' && !current;
     // WHAT: Convert a stale set-presence plus fully removed value lane into one causal tombstone.
     // WHY: Epoch 3 left ledger-field presence live after removing the field value; rejecting it blocks valid migration,
     // while omitting it would allow an older peer value to resurrect after epoch-4 convergence.
     const operation = currentPresence?.candidates[0]?.operation
-      ?? (operations.has('tombstone') || removedValue ? 'tombstone' : 'set');
+      ?? (operations.has('tombstone') || removedValue || missingCanonicalThreadNote ? 'tombstone' : 'set');
+    // WHAT: Tombstone metadata-only epoch-3 thread notes absent from the canonical Markdown sidecar.
+    // WHY: The sidecar owns narrative note identity; preserving stale set-presence would resurrect a ghost note,
+    // while synthesizing missing narrative bytes would invent operator content.
     if (!current && operation !== 'tombstone') throw new Error(`migration_missing_live_entity:${entity.entityType}:${entity.entityId}`);
     const replicaId = `migration:${projectId}:${entity.entityType}:${entity.entityId}:presence`;
     const clock = joinTaskClocks(joinTaskClocks(legacyPresence.clock, currentPresence?.clock ?? {}), { [replicaId]: 1 });
