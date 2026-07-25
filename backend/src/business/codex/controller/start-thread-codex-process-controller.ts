@@ -443,7 +443,12 @@ export async function startThreadCodexProcessController(input: { action_payload?
           updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
           scheduleCodexRuntime(runtime, 'schedule-after-thread-settlement', { runId, executionId, status });
           if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
-          notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status, exitCode: settlement.exitCode });
+          if (typeof runtime.onCodexRunSettled === 'function') {
+            await runtime.onCodexRunSettled({
+              ledgerId, cardId, threadId, runId, executionId, status,
+              exitCode: settlement.exitCode, finishedAt: settlement.finishedAt,
+            });
+          }
         } finally {
           // WHAT: Retain live process paths through immutable artifact publication.
           // WHY: A terminal read must never lack both a process file and an artifact head.

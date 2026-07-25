@@ -1005,6 +1005,9 @@ test('card skill run continue route resumes the captured session after its card 
       id: outputCardId,
       title: 'Skill Result',
       cardType: 'codex-skill-run',
+      createdAt: '2026-07-07T17:00:00.000Z',
+      status: 'todo',
+      labels: ['master-task'],
       codexThreadRunId: runId,
       codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`,
       comment: { contentFile: `.decision-os/cards/tasks/${outputCardId}.md` },
@@ -1158,6 +1161,12 @@ test('card skill run continue route resumes the captured session after its card 
       const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
       return runs?.[runId]?.status === 'complete' && Boolean(runs[runId]?.settledAt);
     }, 'the resumed card-skill run to complete');
+    await waitForCondition(() => {
+      const run = (runtime.codexSkillRuns as Record<string, { finishedAt?: string }>)[runId];
+      const projection = (runtime.readTaskLedgerProjection as () => { cards: Array<Record<string, unknown>> })();
+      const lifecycle = projection.cards.find((card) => card.id === outputCardId)?.lifecycle as Record<string, unknown> | undefined;
+      return Boolean(run.finishedAt && lifecycle?.waitingAt === run.finishedAt && lifecycle.changedAt === run.finishedAt);
+    }, 'the successful run finish time to become the task waiting time');
     const resumedStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=tasks&cardId=${outputCardId}&since=0`);
     assert.equal(resumedStatusResponse.status, 200);
     const resumedStatus = await resumedStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };

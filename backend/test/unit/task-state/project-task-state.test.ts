@@ -505,6 +505,56 @@ test('lifecycle command changes one atomic card lane without note tombstones', a
   assert.match(String(lifecycle.changedAt), /^\d{4}-\d{2}-\d{2}T/);
 });
 
+test('successful execution settlement refreshes the waiting timestamp without reopening a closed task', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-settlement-waiting-'));
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const ledgerPath = resolve(root, 'tasks.json');
+  writeFileSync(ledgerPath, JSON.stringify({
+    cards: [
+      {
+        id: 'open',
+        title: 'Open',
+        status: 'todo',
+        lifecycle: {
+          status: 'todo',
+          changedAt: '2026-07-20T00:00:00.000Z',
+          waitingAt: '2026-07-20T00:00:00.000Z',
+          closedAt: null,
+        },
+      },
+      {
+        id: 'closed',
+        title: 'Closed',
+        status: 'done',
+        lifecycle: {
+          status: 'done',
+          changedAt: '2026-07-25T00:00:00.000Z',
+          waitingAt: null,
+          closedAt: '2026-07-25T00:00:00.000Z',
+        },
+      },
+    ],
+    annotations: [],
+    relationships: [],
+  }));
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  const finishedAt = '2026-07-25T06:37:53.459Z';
+
+  const refreshed = await state.transitionCardLifecycle('open', 'todo', finishedAt);
+  const ignored = await state.transitionCardLifecycle('closed', 'todo', finishedAt);
+  const cards = state.projection().ledger.cards as AnyRecord[];
+
+  assert.equal(refreshed.changed, true);
+  assert.equal(ignored.changed, false);
+  assert.deepEqual(cards.find((card) => card.id === 'open')?.lifecycle, {
+    status: 'todo',
+    changedAt: finishedAt,
+    waitingAt: finishedAt,
+    closedAt: null,
+  });
+  assert.equal((cards.find((card) => card.id === 'closed')?.lifecycle as AnyRecord).status, 'done');
+});
+
 test('lifecycle conflicts block completion until a scoped lifecycle resolution', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-conflict-'));
   const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-project-conflict-remote-'));

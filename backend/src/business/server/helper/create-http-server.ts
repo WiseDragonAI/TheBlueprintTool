@@ -905,6 +905,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId })}\n\n`);
       federation?.publishContentChange();
     };
+    let activeTaskState: ProjectTaskState | null = null;
     if (projectId) {
       const project = projectCatalogStore.projects().find((entry) => entry.id === projectId);
       if (!project) throw new Error(`Canonical Codex execution runtime has no project ${projectId}.`);
@@ -947,7 +948,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         configurable: true,
         enumerable: false,
       });
-      const activeTaskState = pausedTaskProjects.has(projectId) ? null : tryTaskStateForProject(project);
+      activeTaskState = pausedTaskProjects.has(projectId) ? null : tryTaskStateForProject(project);
       if (activeTaskState) {
         Object.defineProperty(projectRuntime, 'taskExecutionRouter', {
           value: taskExecutionRouterForProject(project),
@@ -986,13 +987,25 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         threadId: String(event.threadId ?? ''), startedAt: String(event.startedAt ?? '')
       });
     };
-    projectRuntime.onCodexRunSettled = (event: AnyRecord): void => {
-      if (!event.pipelineRunId) {
-        publishLedger({
-          reason: 'codex-thread-settled', ledgerId: String(event.ledgerId ?? ''), status: String(event.status ?? ''),
-          runId: String(event.runId ?? ''), executionId: String(event.executionId ?? ''), cardId: String(event.cardId ?? event.outputCardId ?? ''),
-          outputCardId: String(event.outputCardId ?? event.cardId ?? ''), threadId: String(event.threadId ?? '')
+    projectRuntime.onCodexRunSettled = (event: AnyRecord): Promise<void> | void => {
+      const ledgerId = String(event.ledgerId ?? '');
+      const cardId = String(event.cardId ?? event.outputCardId ?? '');
+      const status = String(event.status ?? '');
+      const directSettlementEvent = {
+        reason: 'codex-thread-settled', ledgerId, status,
+        runId: String(event.runId ?? ''), executionId: String(event.executionId ?? ''), cardId,
+        outputCardId: String(event.outputCardId ?? event.cardId ?? ''), threadId: String(event.threadId ?? '')
+      };
+      if (!event.pipelineRunId && ledgerId === 'tasks' && status === 'complete') {
+        const finishedAt = String(event.finishedAt ?? '');
+        if (!activeTaskState) throw new Error(`task_execution_state_unavailable:${projectId}`);
+        return activeTaskState.transitionCardLifecycle(cardId, 'todo', finishedAt).then((committed) => {
+          if (committed.changed) controlRoomProjectionStore?.invalidate(projectId, committed.localChanges);
+          publishLedger(directSettlementEvent);
         });
+      }
+      if (!event.pipelineRunId) {
+        publishLedger(directSettlementEvent);
       }
       if (event.pipelineRunId && event.pipelineTerminal === true) {
         const pipelineStatus = String(event.pipelineStatus ?? event.status ?? 'complete');
