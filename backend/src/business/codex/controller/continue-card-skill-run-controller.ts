@@ -389,7 +389,12 @@ export async function continueCardSkillRunController(input: { action_payload?: A
         await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
         updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
         scheduleCodexRuntime(runtime, 'schedule-after-continuation-settlement', { runId, executionId, status });
-        notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status, exitCode: settlement.exitCode });
+        if (typeof runtime.onCodexRunSettled === 'function') {
+          await runtime.onCodexRunSettled({
+            ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status,
+            exitCode: settlement.exitCode, finishedAt: settlement.finishedAt,
+          });
+        }
       } finally {
         // WHAT: Retain live process paths through immutable artifact publication.
         // WHY: A terminal read must never lack both a process file and an artifact head.

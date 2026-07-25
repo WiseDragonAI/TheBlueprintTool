@@ -260,8 +260,11 @@ export function createProjectTaskState(input: {
     return operation;
   };
 
-  const transitionCardLifecycle = (taskId: string, status: 'todo' | 'backlog' | 'done'): Promise<ProjectTaskMutationResult> => {
+  const transitionCardLifecycle = (taskId: string, status: 'todo' | 'backlog' | 'done', waitingAt?: string): Promise<ProjectTaskMutationResult> => {
     assertWritable();
+    if (waitingAt !== undefined && (status !== 'todo' || !Number.isFinite(Date.parse(waitingAt)))) {
+      throw new Error('invalid_task_waiting_timestamp');
+    }
     // WHAT: Serialize one lifecycle transition against the latest authoritative projection.
     // WHY: CLI callers do not carry a trusted whole-ledger before/after document.
     const operation = commandQueue.then(async () => {
@@ -271,7 +274,16 @@ export function createProjectTaskState(input: {
         ? (after.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === taskId)
         : null;
       if (!card) throw new Error(`task_card_not_found:${taskId}`);
+      const lifecycle = card.lifecycle && typeof card.lifecycle === 'object' && !Array.isArray(card.lifecycle) ? card.lifecycle as AnyRecord : {};
+      const currentStatus = String(lifecycle.status ?? card.status ?? '');
+      if (waitingAt !== undefined && currentStatus !== 'todo') {
+        return { changed: false, deltas: [], localChanges: [], ledger: before };
+      }
       card.status = status;
+      if (waitingAt !== undefined) {
+        const changedAt = new Date(waitingAt).toISOString();
+        card.lifecycle = { status: 'todo', changedAt, waitingAt: changedAt, closedAt: null };
+      }
       return executeMutationNow({ action: 'transition-card-lifecycle', cardId: taskId, lifecycleStatus: status }, before, after);
     });
     commandQueue = operation.then(() => undefined, () => undefined);
