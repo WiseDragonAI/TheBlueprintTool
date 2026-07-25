@@ -41,3 +41,13 @@
 2. **Runtime activation:** the registered Decision OS server must load the merged code before the existing `50150` route can emit the bounded header.
 3. **Restart ownership:** no server restart is performed without an explicit operator request.
 4. **Durable-state action:** no task-state rewrite, clock deletion, runtime resume, project pause, or server-wide degraded mode is required.
+
+---
+
+## F. Subsequent Execution-Conflict Pause
+
+1. **Incident:** `incident-d2f00c56-93ca-4350-a000-75c591193df6` paused the same project after a federated frame installed explicit phone and workstation candidates for execution `codex-execution-1784538682976-fe26fa2d`.
+2. **Durable validity:** the execution retains both terminal lifecycle and artifact candidates as `task_execution_conflict`; no bytes are corrupt.
+3. **Incorrect containment:** federation projection invalidation called `executions.find()`, which deliberately throws for a conflicted execution. The exception escaped the frame handler and paused the entire project.
+4. **Fix:** projection invalidation reads the conflict-free `executions.all()` view and publishes `null` for the conflicted record. Repository diagnostics and Control Room invalidation remain authoritative for the affected execution.
+5. **Recovery evidence:** a byte-identical backup at `/tmp/decision-os-execution-conflict-resume-wrjTez` retained `5,526` files and `434,155,632` bytes. Scoped resume returned `200` and resolved the incident.

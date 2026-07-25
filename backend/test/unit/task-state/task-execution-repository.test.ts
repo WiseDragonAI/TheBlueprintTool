@@ -192,6 +192,7 @@ test('rebuild exposes concurrent lifecycle candidates as an explicit execution c
   }]);
   assert.throws(() => repository.find('execution-a'), /task_execution_conflict:execution-a:lifecycle/);
   assert.deepEqual(repository.all(), []);
+  assert.doesNotThrow(() => repository.all().find((record) => record.metadata.executionId === 'execution-a') ?? null);
   await assert.rejects(repository.transition('execution-a', { phase: 'queued' }), /task_execution_conflict:execution-a:lifecycle/);
 });
 
