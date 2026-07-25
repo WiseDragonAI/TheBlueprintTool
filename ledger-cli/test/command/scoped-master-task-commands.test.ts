@@ -168,6 +168,29 @@ test('master-task-apply expands one plan into scoped publication and positioned 
     const relationships = fixture.mutations.filter((mutation) => mutation.action === 'create-relationship');
     assert.deepEqual(relationships.map((mutation) => mutation.relationship.position), [0, 1]);
     assert.equal(fixture.mutations.filter((mutation) => mutation.action === 'append-note').every((mutation) => mutation.note.role === 'agent'), true);
+    if (result.ok) {
+      const output = JSON.parse(result.value);
+      assert.equal(output.operation, 'master-task-apply');
+      assert.equal(output.outcome, 'verified');
+      assert.deepEqual(output.subtasks.map((subtask: AnyRecord) => ({
+        status: subtask.status,
+        published: subtask.published,
+        position: subtask.position,
+      })), [
+        { status: 'todo', published: true, position: 0 },
+        { status: 'todo', published: true, position: 1 },
+      ]);
+      assert.deepEqual(output.verification, {
+        authoritativeProjectionRead: true,
+        masterContent: true,
+        zoneTitle: true,
+        zoneIsolation: true,
+        relationshipOrder: true,
+        subtaskContent: true,
+        subtaskPublication: true,
+        followUpRequired: false,
+      });
+    }
     const graphIds = new Set(['master', ...created.map((mutation) => mutation.card.id)]);
     const graphCards = fixture.ledger.cards.filter((card: AnyRecord) => graphIds.has(card.id));
     const zone = fixture.ledger.annotations.find((annotation: AnyRecord) => annotation.id === 'zone-a');
@@ -204,7 +227,30 @@ test('master-task-progress uses scoped card patches and one agent reply after li
     assert.deepEqual(fixture.mutations[1].cardPatch.labels, ['proof', 'subtask']);
     assert.match(fixture.mutations[0].cardPatch.description, /^## A\. Result/);
     assert.equal(fixture.mutations[2].note.role, 'agent');
-    if (result.ok) assert.deepEqual(JSON.parse(result.value).gate, { ready: true, discrepancies: [] });
+    if (result.ok) {
+      const output = JSON.parse(result.value);
+      assert.equal(output.operation, 'master-task-progress');
+      assert.equal(output.outcome, 'verified');
+      assert.deepEqual(output.updatedCards, [
+        { cardId: 'master', title: 'Intake', status: 'todo', contentVerified: true, labels: ['analysis', 'master-task'] },
+        { cardId: 'child', title: 'Child', status: 'done', contentVerified: true, labels: ['proof', 'subtask'] },
+      ]);
+      assert.deepEqual(output.subtasks, [{ cardId: 'child', status: 'done', position: 0, verified: true }]);
+      assert.deepEqual(output.reply, {
+        noteId: output.replyNoteId,
+        threadId: 'thread-master',
+        verified: true,
+      });
+      assert.deepEqual(output.gate, { ready: true, discrepancies: [] });
+      assert.deepEqual(output.verification, {
+        authoritativeProjectionRead: true,
+        updatedContent: true,
+        updatedLabels: true,
+        reply: true,
+        lifecycleGate: true,
+        followUpRequired: false,
+      });
+    }
   } finally {
     restore();
   }

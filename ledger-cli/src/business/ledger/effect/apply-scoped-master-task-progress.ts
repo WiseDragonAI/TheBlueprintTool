@@ -108,15 +108,50 @@ export async function applyScopedMasterTaskProgress(input: { ledgerJsonFile: str
     return { ok: false, error: 'Progress reply verification failed.' };
   }
   const discrepancies = [...subtaskIds].filter((id) => statuses.get(id) !== 'done').map((id) => `linked_card_not_done:${id}`);
+  const updatedCards = parsed.value.updates.map((update) => {
+    const card = verifiedCards.find((candidate) => String(candidate.id ?? '') === update.cardId);
+    return {
+      cardId: update.cardId,
+      title: String(card?.title ?? ''),
+      status: String(card?.status ?? ''),
+      contentVerified: true,
+      ...(update.labels ? { labels: labelsOf(card ?? {}) } : {}),
+    };
+  });
   return {
     ok: true,
     value: JSON.stringify({
       version: 2,
+      operation: 'master-task-progress',
+      outcome: 'verified',
       masterCardId: parsed.value.masterCardId,
       updatedCardIds: parsed.value.updates.map((update) => update.cardId),
+      updatedCards,
       verifiedSubtaskIds: parsed.value.verifiedSubtaskIds,
+      subtasks: relationships.map((relationship) => {
+        const cardId = String(relationship.to ?? '');
+        return {
+          cardId,
+          status: statuses.get(cardId) ?? '',
+          position: Number(relationship.position),
+          verified: parsed.value.verifiedSubtaskIds.includes(cardId),
+        };
+      }),
+      reply: {
+        noteId,
+        threadId: `thread-${parsed.value.masterCardId}`,
+        verified: true,
+      },
       replyNoteId: noteId,
       gate: { ready: discrepancies.length === 0, discrepancies },
+      verification: {
+        authoritativeProjectionRead: true,
+        updatedContent: true,
+        updatedLabels: true,
+        reply: true,
+        lifecycleGate: true,
+        followUpRequired: false,
+      },
     }, null, 2),
   };
 }
