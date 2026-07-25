@@ -19,6 +19,7 @@
 5. **Execution identity:** Admission is idempotent by project, task, and request identity. Conflicting assignment, lifecycle, request, and entity candidates remain explicit diagnostics and are excluded from scheduling.
 6. **Derived indexes:** The execution repository rebuilds indexes for task, provider session, pipeline run, phase, executor node, and request identity from current entities.
 7. **Legacy authority removal:** Direct queue state, card `executionIntent`, mutable pipeline lifecycle, card execution leases, and log-derived settlement are migration inputs only. They are not runtime authorities.
+8. **Client causal clock:** HTTP task projections and mutation receipts exclude only immutable `migration:*` coordinates. Configured node IDs cannot contain `:`, so every runtime-writer coordinate remains visible while deterministic migration coordinates stay in durable state without entering response headers.
 
 ---
 
@@ -118,3 +119,4 @@
 14. `frontend/src/runtime/codex/effect/bind-thread-codex-run-log.ts`
 15. `documentation/procedure/deployment/epoch-4-node-cutover.md`
 16. `documentation/postmortem/epoch-4-workstation-cutover-2026-07-24.md`
+17. `backend/src/business/task-state/helper/task-current-state-store.ts`
