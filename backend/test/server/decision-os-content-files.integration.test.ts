@@ -18,6 +18,7 @@ type ContentChangeEvent = {
   kind: 'card-content' | 'thread-content';
   ledgerId: string;
   threadId?: string;
+  invalidationRevision: number;
 };
 
 async function readNextContentChange(response: Response): Promise<ContentChangeEvent> {
@@ -305,6 +306,7 @@ test('decision-os server emits card content change events for direct markdown ed
     assert.equal(event.ledgerId, 'specs');
     assert.equal(event.threadId, undefined);
     assert.equal(event.contentFile, '.decision-os/cards/specs/card-a.md');
+    assert.ok(event.invalidationRevision > 0);
   } finally {
     controller.abort();
     await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -336,10 +338,11 @@ test('decision-os server scopes inactive-ledger thread events and advances only 
     assert.equal(event.ledgerId, 'archive');
     assert.equal(event.threadId, 'thread-card-z');
     assert.equal(event.contentFile, '.decision-os/threads/archive/thread-card-z.md');
+    assert.ok(event.invalidationRevision > initialArchiveRevision);
 
     const laterArchiveResponse = await fetch(archiveEndpoint);
     assert.equal(laterArchiveResponse.ok, true);
-    assert.ok(ledgerRevision(laterArchiveResponse) > initialArchiveRevision);
+    assert.equal(ledgerRevision(laterArchiveResponse), event.invalidationRevision);
     await laterArchiveResponse.json();
     const laterActiveResponse = await fetch(endpoint);
     assert.equal(laterActiveResponse.ok, true);

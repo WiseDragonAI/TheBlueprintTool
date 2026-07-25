@@ -941,8 +941,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             if (!serverClosing) recordProjectBackgroundFailure(project, error, 'capture-watched-task-content');
           });
       }
-      revisions.advance(String(scopedEvent.ledgerId));
-      broadcast(`event: card-content-change\ndata: ${JSON.stringify({ ...scopedEvent, projectId })}\n\n`);
+      const invalidationRevision = revisions.advance(String(scopedEvent.ledgerId));
+      broadcast(`event: card-content-change\ndata: ${JSON.stringify({ ...scopedEvent, projectId, invalidationRevision })}\n\n`);
       federation?.publishContentChange();
     };
     const publishLedger = (event: AnyRecord): void => {
@@ -950,8 +950,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       controlRoomProjectionStore?.invalidate(projectId);
       watcher?.refreshOwnership();
       const ledgerId = String(event.ledgerId ?? '');
-      if (ledgerId) revisions.advance(ledgerId);
-      broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId })}\n\n`);
+      const invalidationRevision = ledgerId ? revisions.advance(ledgerId) : 0;
+      broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId, invalidationRevision })}\n\n`);
       federation?.publishContentChange();
     };
     let activeTaskState: ProjectTaskState | null = null;

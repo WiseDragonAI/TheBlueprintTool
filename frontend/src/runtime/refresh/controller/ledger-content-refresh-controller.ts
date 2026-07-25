@@ -6,6 +6,7 @@ import { renderCanvasSurface } from '../../surface/effect/canvas-surface-effects
 import { resizeChangedCardToContent as measureChangedCardToContent } from '../../card/effect/resize-selected-cards-to-content.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
+import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import {
   state,
@@ -50,6 +51,26 @@ function contentRefreshState(): LedgerContentRefreshState {
     threadScope: null
   } satisfies LedgerContentRefreshState;
   return state.ledgerContentRefresh as LedgerContentRefreshState;
+}
+
+export function acceptLedgerInvalidationRevision(revision: number): boolean {
+  if (!Number.isSafeInteger(revision) || revision < 1) return true;
+  const refresh = contentRefreshState();
+  const ledgerStateId = currentLedgerStateId();
+  const applied = Number(state.ledgerReconciliation?.lastAppliedServerRevision ?? -1);
+  if (refresh.invalidationLedgerStateId !== ledgerStateId) {
+    refresh.invalidationLedgerStateId = ledgerStateId;
+    refresh.lastInvalidationRevision = applied;
+  }
+  const current = Math.max(applied, Number(refresh.lastInvalidationRevision ?? -1));
+  if (revision <= current) return false;
+  refresh.lastInvalidationRevision = revision;
+  return true;
+}
+
+function releaseFailedInvalidationRevision(): void {
+  const refresh = contentRefreshState();
+  refresh.lastInvalidationRevision = Number(state.ledgerReconciliation?.lastAppliedServerRevision ?? -1);
 }
 
 function addUnique(values: string[], value: string): void {
@@ -188,6 +209,7 @@ async function drainPendingLedgerContentRefresh(): Promise<void> {
           // WHAT: Record a failed ledger refresh and continue draining newer queued work.
           // WHY: One transient request failure must not strand later SSE events.
           telemetry('ledger-content-refresh-failed', { reasons: batch.ledgerReasons, error: errorMessage(error) });
+          releaseFailedInvalidationRevision();
         }
       }
       // WHAT: Apply a thread refresh only when the batch has an exact active-thread scope.
@@ -206,6 +228,7 @@ async function drainPendingLedgerContentRefresh(): Promise<void> {
             // WHAT: Record a failed thread refresh and leave the drain available for newer work.
             // WHY: A transient slice request must not deadlock the shared queue.
             telemetry('thread-content-refresh-failed', { reasons: batch.threadReasons, error: errorMessage(error) });
+            releaseFailedInvalidationRevision();
           }
         }
       }

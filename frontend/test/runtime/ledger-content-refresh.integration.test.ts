@@ -556,3 +556,23 @@ test('changedCardIdForContentFile resolves only the hydrated card owner', async 
   assert.equal(changedCardIdForContentFile('/.decision-os/cards/specs/card-b.md'), 'card-b');
   assert.equal(changedCardIdForContentFile('.decision-os/cards/specs/missing.md'), '');
 });
+
+test('revision-aware invalidation ignores installed and duplicate events while admitting newer revisions', async () => {
+  installRuntimeDom();
+  resetRuntimeState();
+  state.ledgerReconciliation.lastAppliedServerRevision = 5;
+  const { acceptLedgerInvalidationRevision } = await import('../../src/runtime/refresh/controller/ledger-content-refresh-controller.js');
+  const { contentEventPayload } = await import('../../src/runtime/refresh/effect/subscribe-ledger-content-events.js');
+
+  assert.equal(acceptLedgerInvalidationRevision(5), false);
+  assert.equal(acceptLedgerInvalidationRevision(6), true);
+  assert.equal(acceptLedgerInvalidationRevision(6), false);
+  assert.equal(acceptLedgerInvalidationRevision(7), true);
+  assert.equal(contentEventPayload({ data: JSON.stringify({ ledgerId: 'specs', invalidationRevision: 8 }) } as MessageEvent).invalidationRevision, 8);
+
+  state.activeLedgerId = 'data';
+  state.activeTab = 'data';
+  state.ledgerReconciliation.routeLedgerStateId = 'data';
+  state.ledgerReconciliation.lastAppliedServerRevision = 2;
+  assert.equal(acceptLedgerInvalidationRevision(3), true);
+});

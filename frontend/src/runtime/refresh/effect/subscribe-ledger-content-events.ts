@@ -14,6 +14,7 @@ import {
   normalizeContentFileReference
 } from '../../thread/effect/load-active-thread-slice.js';
 import {
+  acceptLedgerInvalidationRevision,
   flushPendingLedgerContentRefresh,
   requestLedgerContentRefresh,
   requestThreadContentRefresh
@@ -112,6 +113,10 @@ export function subscribeLedgerContentEvents(): void {
         telemetry('thread-content-event-ignored', { reason: 'inactive-scope', ...threadScope });
         return;
       }
+      if (!acceptLedgerInvalidationRevision(Number(payload.invalidationRevision ?? 0))) {
+        telemetry('content-invalidation-ignored', { reason: 'stale-revision', revision: payload.invalidationRevision ?? 0 });
+        return;
+      }
       if (payload.noteId && String(payload.reason ?? '').startsWith('voice-')) {
         void reconcileVoiceTranscription({ projectId: threadScope.projectId, replicaNodeId: threadScope.replicaNodeId, ledgerId: threadScope.ledgerId, threadId: threadScope.threadId, noteId: payload.noteId });
         return;
@@ -125,6 +130,10 @@ export function subscribeLedgerContentEvents(): void {
       telemetry('card-content-event-ignored', { reason: 'inactive-ledger', ledgerId: payload.ledgerId ?? '' });
       return;
     }
+    if (!acceptLedgerInvalidationRevision(Number(payload.invalidationRevision ?? 0))) {
+      telemetry('content-invalidation-ignored', { reason: 'stale-revision', revision: payload.invalidationRevision ?? 0 });
+      return;
+    }
     requestLedgerContentRefresh('card-content-change', { contentFile: payload.contentFile });
   });
   events.addEventListener('ledger-content-change', (event) => {
@@ -133,6 +142,10 @@ export function subscribeLedgerContentEvents(): void {
     // WHY: Background ledger activity must not alter the visible route or polling widgets.
     if (!eventBelongsToActiveLedger(payload, scope)) {
       telemetry('ledger-content-event-ignored', { reason: 'inactive-ledger', ledgerId: payload.ledgerId ?? '' });
+      return;
+    }
+    if (!acceptLedgerInvalidationRevision(Number(payload.invalidationRevision ?? 0))) {
+      telemetry('content-invalidation-ignored', { reason: 'stale-revision', revision: payload.invalidationRevision ?? 0 });
       return;
     }
     maybeResumeCodexRunWidget(payload, scope);
