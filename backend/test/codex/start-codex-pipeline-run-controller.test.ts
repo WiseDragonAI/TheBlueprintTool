@@ -987,6 +987,91 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
   }
 });
 
+test('completed Tasks skill run refreshes the master task waiting timestamp from terminal execution time', async () => {
+  const originalCwd = process.cwd();
+  const previousCodexBin = process.env.CODEX_BIN;
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-task-pipeline-waiting-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const fakeCodex = join(workspace, 'fake-codex.mjs');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  createSkill(workspace, 'analysis');
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }, null, 2));
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'task-pipeline-waiting-project' }));
+  writeFileSync(join(decisionOsRoot, '.settings.json'), JSON.stringify({ federationNodeId: 'workstation' }));
+  const staleWaitingAt = '2026-07-25T17:59:10.163Z';
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{
+      id: 'master', title: 'Master task', status: 'todo', labels: ['master-task'],
+      lifecycle: { status: 'todo', changedAt: staleWaitingAt, waitingAt: staleWaitingAt, closedAt: null },
+      x: 20, y: 40, w: 320, h: 180, comment: { what: 'Original source body' }, facts: [], fields: [],
+    }],
+    annotations: [], relationships: [], notes: {},
+  }, null, 2));
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { writeFileSync } from "node:fs";',
+    'let prompt = "";',
+    'process.stdin.on("data", (chunk) => { prompt += chunk; });',
+    'process.stdin.on("end", () => {',
+    '  const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    '  writeFileSync(output.trim(), "# pipeline result\\n");',
+    '  console.log(JSON.stringify({ type: "turn.completed" }));',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  writeCodexPipelineStore({
+    decisionOsRoot,
+    availableSkillNames: ['analysis'],
+    store: {
+      pipelines: [],
+      steps: [],
+      runs: [], skillLibrary: [], activeWorkspaceRun: null,
+    },
+  });
+  await migrateTaskCurrentState({
+    decisionOsRoot,
+    projectId: 'task-pipeline-waiting-project',
+    nodeId: 'workstation',
+    tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
+  });
+  process.chdir(workspace);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = { decisionOsSettings: { federationNodeId: 'workstation' } };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const response = await fetch(`${baseUrl}/api/codex/skills/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'tasks', cardId: 'master', skillName: 'analysis' }),
+    });
+    const started = await response.json() as Record<string, any>;
+    assert.equal(response.status, 202, JSON.stringify(started));
+    const completed = await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(started.pipelineRun.id)}`)
+        .then((entry) => entry.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? detail.run : null;
+    }, 'Tasks skill-run completion');
+    const execution = taskExecutionState(runtime)?.executions.find(completed.steps[0].skills[0].executionId);
+    assert.equal(execution?.lifecycle.phase, 'succeeded');
+    assert.ok(execution?.lifecycle.finishedAt);
+    const projection = (runtime.readTaskLedgerProjection as () => Record<string, any>)();
+    const lifecycle = projection.cards.find((card: Record<string, unknown>) => card.id === 'master')?.lifecycle;
+    assert.equal(lifecycle.waitingAt, execution.lifecycle.finishedAt);
+    assert.equal(lifecycle.changedAt, execution.lifecycle.finishedAt);
+  } finally {
+    await closeServer(server);
+    process.chdir(originalCwd);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('saved pipeline failure cancels every dependent execution without launching it', async () => {
   const previousCodexBin = process.env.CODEX_BIN;
   const { workspace, decisionOsRoot } = createWorkspace('decision-os-pipeline-failure-');
