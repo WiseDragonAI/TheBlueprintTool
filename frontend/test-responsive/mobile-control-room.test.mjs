@@ -386,9 +386,10 @@ test('shows the settled image title for one second and then fades it out', () =>
   assert.match(styles, /\.ledger-card-media-title\.is-visible \{ opacity: 1; \}/);
 });
 
-test('routes master-task cards back to their task list and regular cards back to their zone', () => {
+test('routes master tasks to their task list, subtasks to their parent master, and regular cards to their zone', () => {
   assert.match(mobile, /backButton\.replaceChildren\(backIcon, backLabel\)/);
-  assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
+  assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : parentMaster \? 'parent-master-task' : 'zone'/);
+  assert.match(mobile, /parentMasterDestination[\s\S]*ledgerZones\(\)\.find[\s\S]*navigate\(cardPath\(state\.activeLedgerId, zone\?\.id \?\? 'ungrouped', parentCardId\)\)/);
   assert.match(mobile, /const controlRoomDestination = event\.currentTarget\.dataset\.destination === 'control-room';[\s\S]*const destination = controlRoomDestination \? completionReturnPath\(\) : zonePath/);
 });
 

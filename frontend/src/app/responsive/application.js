@@ -8,7 +8,7 @@ import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/per
 import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
-import { compareControlRoomQueueTasks, executionPresentation, projectMasterTask, waitingAge } from './control-room.js';
+import { compareControlRoomQueueTasks, executionPresentation, parentMasterTask, projectMasterTask, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
@@ -2356,6 +2356,11 @@ function renderCard(card) {
     cards: state.ledger?.cards ?? [],
     relationships: state.ledger?.relationships ?? []
   });
+  const parentMaster = parentMasterTask({
+    cardId: card.id,
+    cards: state.ledger?.cards ?? [],
+    relationships: state.ledger?.relationships ?? []
+  });
   elements['card-view'].dataset.masterTask = String(parsedTask.masterTask);
   const backButton = document.querySelector('.back-to-zone-button');
   const backIcon = document.createElement('span');
@@ -2365,8 +2370,9 @@ function renderCard(card) {
   const backLabel = document.createElement('span');
   backLabel.textContent = 'Back';
   backButton.replaceChildren(backIcon, backLabel);
-  backButton.dataset.destination = parsedTask.masterTask ? 'control-room' : 'zone';
-  if (parsedTask.masterTask) {
+  backButton.dataset.destination = parsedTask.masterTask ? 'control-room' : parentMaster ? 'parent-master-task' : 'zone';
+  backButton.dataset.parentCardId = parentMaster ? String(parentMaster.id) : '';
+  if (parsedTask.masterTask || parentMaster) {
     const key = shortcutKey('Esc');
     key.setAttribute('aria-hidden', 'true');
     backButton.append(key);
@@ -2993,6 +2999,13 @@ document.querySelector('.federation-settings-disconnect').addEventListener('clic
 document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
 document.querySelector('.back-to-zone-button').addEventListener('click', (event) => {
   const controlRoomDestination = event.currentTarget.dataset.destination === 'control-room';
+  const parentMasterDestination = event.currentTarget.dataset.destination === 'parent-master-task';
+  if (parentMasterDestination) {
+    const parentCardId = event.currentTarget.dataset.parentCardId;
+    const zone = ledgerZones().find((entry) => entry.cards.some((card) => String(card.id) === parentCardId));
+    navigate(cardPath(state.activeLedgerId, zone?.id ?? 'ungrouped', parentCardId));
+    return;
+  }
   const destination = controlRoomDestination ? completionReturnPath() : zonePath(state.activeLedgerId, state.activeZoneId);
   if (controlRoomDestination) {
     void navigateTaskBack(destination);
