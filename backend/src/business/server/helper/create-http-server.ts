@@ -3,11 +3,12 @@
  * WHY: Ledger IO, SSE publication, and Codex process callbacks share one server lifecycle for the active workspace.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile as readFileAsync } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
+import sharp from 'sharp';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
 import { readVoiceTranscriptionStatusController, startVoiceRetryOrchestrationController, startVoiceUploadOrchestrationController } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
@@ -3905,15 +3906,55 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         return;
       }
       const threadId = safeAssetSegment(request.headers['x-thread-id'] ?? 'conversation-ledger');
+      const ledgerId = String(request.headers['x-ledger-id'] ?? '');
+      const cardId = threadId.startsWith('thread-') ? threadId.slice('thread-'.length) : '';
       const extension = imageExtensionForMimeType(mimeType);
       const directory = resolve(decisionOsRoot, 'thread-images', threadId);
       mkdirSync(directory, { recursive: true });
       const fileName = `paste-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`;
       const filePath = resolve(directory, fileName);
-      writeFileSync(filePath, imageBuffer);
       const imageFileRef = `/.decision-os/thread-images/${threadId}/${fileName}`;
+      const originalTemporary = `${filePath}.upload-${process.pid}`;
+      let previewFile = '';
+      let previewFileRef = '';
+      try {
+        writeFileSync(originalTemporary, imageBuffer);
+        renameSync(originalTemporary, filePath);
+        if (ledgerId === 'tasks' && localProject && cardId) {
+          const previewName = `${fileName.slice(0, -extension.length)}.canvas-preview-v1.webp`;
+          previewFile = resolve(directory, previewName);
+          previewFileRef = `/.decision-os/thread-images/${threadId}/${previewName}`;
+          const preview = await sharp(imageBuffer, { failOn: 'error' })
+            .rotate()
+            .resize({ width: 768, height: 768, fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 78, alphaQuality: 90, effort: 6, smartSubsample: true })
+            .toBuffer();
+          const previewTemporary = `${previewFile}.upload-${process.pid}`;
+          writeFileSync(previewTemporary, preview);
+          renameSync(previewTemporary, previewFile);
+          const delta = await taskStateForProject(localProject).recordContentContribution(cardId, [imageFileRef, previewFileRef]);
+          controlRoomProjectionStore?.invalidate(localProject.id, delta.entities);
+        }
+      } catch (error) {
+        rmSync(originalTemporary, { force: true });
+        rmSync(filePath, { force: true });
+        if (previewFile) rmSync(previewFile, { force: true });
+        response.statusCode = 422;
+        response.end(JSON.stringify({
+          ok: false,
+          error: 'Image upload could not be installed transactionally.',
+          detail: error instanceof Error ? error.message : String(error),
+        }));
+        return;
+      }
       response.statusCode = 201;
-      response.end(JSON.stringify({ ok: true, imageFileRef, markdown: `![Pasted image](${imageFileRef})` }));
+      response.end(JSON.stringify({
+        ok: true,
+        imageFileRef,
+        previewFileRef,
+        previewProfile: previewFileRef ? 'canvas-preview-v1' : '',
+        markdown: `![Pasted image](${imageFileRef})`,
+      }));
       return;
     }
     if (url === '/api/thread-file-upload' && request.method === 'POST') {

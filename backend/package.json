@@ -16,11 +16,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "sharp": "0.35.3",
     "ws": "8.21.1"
   },
   "devDependencies": {
-    "@types/ws": "8.18.1",
     "@types/node": "^24.0.0",
+    "@types/ws": "8.18.1",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0"
   }

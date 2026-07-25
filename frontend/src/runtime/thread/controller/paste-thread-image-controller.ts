@@ -3,6 +3,7 @@
  * WHY: Visual context should live in the same patchable thread markdown as text and voice notes.
  */
 import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
+import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { appendOptimisticThreadNote } from '../effect/append-optimistic-thread-note.js';
@@ -27,7 +28,8 @@ async function uploadThreadImage(threadId: string, file: File): Promise<ThreadIm
     method: 'POST',
     headers: {
       'content-type': file.type || 'image/png',
-      'x-thread-id': threadId
+      'x-thread-id': threadId,
+      'x-ledger-id': currentLedgerStateId()
     },
     body: file
   }).catch(() => undefined);
