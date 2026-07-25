@@ -120,6 +120,10 @@ test('canvas and thread read models exclude each other while preserving card bod
     const canvasResponse = await fetch(`${baseUrl}/api/ledgers/tasks/canvas`);
     const canvasText = await canvasResponse.text();
     assert.equal(canvasResponse.ok, true, canvasText);
+    const taskClockHeader = canvasResponse.headers.get('x-decision-os-task-clock') ?? '';
+    const taskClock = JSON.parse(Buffer.from(taskClockHeader, 'base64url').toString('utf8')) as Record<string, number>;
+    assert.ok(Buffer.byteLength(taskClockHeader) < 16 * 1024);
+    assert.deepEqual(Object.keys(taskClock), ['workstation']);
     const canvas = JSON.parse(canvasText) as Record<string, any>;
     assert.equal(canvas.cards[0].comment.what, 'Canvas body.');
     assert.deepEqual(canvas.notes, {});

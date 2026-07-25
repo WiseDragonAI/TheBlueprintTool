@@ -300,6 +300,11 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     formatFile,
     projection: (): TaskCurrentProjection => projection,
     clock: (): TaskCausalClock => ({ ...clock }),
+    clientClock: (): TaskCausalClock => Object.fromEntries(
+      // WHAT: Keep immutable migration coordinates in durable state while bounding browser response metadata.
+      // WHY: Configured node IDs cannot contain ':', so only synthetic migration writers match this prefix.
+      Object.entries(clock).filter(([replicaId]) => !replicaId.startsWith('migration:')),
+    ),
     rootHash,
     bucketManifest,
     entitiesForBuckets(buckets: string[]): TaskCurrentEntity[] {
