@@ -1503,11 +1503,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       controlRoomProjectionStore?.invalidate(projectId, delta.entities);
       for (const executionId of new Set(delta.entities.filter((entity) => entity.entityType === 'execution').map((entity) => entity.entityId))) {
+        const executionState = executionStateForProject(projectId, from);
         publishExecutionChange({
           projectId,
           nodeId: from,
           executionId,
-          record: executionStateForProject(projectId, from)?.executions.find(executionId) ?? null,
+          // WHAT: Publish only conflict-free execution records while retaining repository diagnostics.
+          // WHY: An expected causal execution conflict must not escape federation invalidation and pause the project.
+          record: executionState?.executions.all().find((record) => record.metadata.executionId === executionId) ?? null,
           remote: true,
         });
       }
