@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { applyScopedMasterTaskPlan } from '../../src/business/ledger/effect/apply-scoped-master-task-plan.js';
 import { applyScopedMasterTaskProgress } from '../../src/business/ledger/effect/apply-scoped-master-task-progress.js';
@@ -7,10 +9,18 @@ import { applyScopedMasterTaskProgress } from '../../src/business/ledger/effect/
 type AnyRecord = Record<string, any>;
 
 function taskWorkerFixture(): {
+  ledgerJsonFile: string;
   ledger: AnyRecord;
   mutations: AnyRecord[];
+  addCard: (card: AnyRecord, markdown: string) => void;
   install(): () => void;
 } {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-scoped-master-task-'));
+  const cardsDirectory = join(workspace, '.decision-os', 'cards', 'tasks');
+  mkdirSync(cardsDirectory, { recursive: true });
+  const ledgerJsonFile = join(workspace, '.decision-os', 'tasks.json');
+  const masterContentFile = '.decision-os/cards/tasks/master.md';
+  writeFileSync(join(workspace, masterContentFile), 'Intake\n', 'utf8');
   const ledger: AnyRecord = {
     cards: [
       {
@@ -23,7 +33,7 @@ function taskWorkerFixture(): {
         y: 60,
         w: 360,
         h: 240,
-        comment: { contentFile: '.decision-os/cards/tasks/master.md' },
+        comment: { contentFile: masterContentFile },
       },
       { id: 'outside', title: 'Outside', status: 'todo', labels: [], x: 1400, y: 0, w: 300, h: 200 },
     ],
@@ -39,11 +49,16 @@ function taskWorkerFixture(): {
   const previousFetch = globalThis.fetch;
   const previousServerUrl = process.env.DECISION_OS_SERVER_URL;
   const previousProjectId = process.env.DECISION_OS_PROJECT_ID;
+  const persistCardContent = (card: AnyRecord, markdown: string): void => {
+    const contentFile = String(card.comment?.contentFile ?? `.decision-os/cards/tasks/${card.id}.md`);
+    writeFileSync(join(workspace, contentFile), markdown, 'utf8');
+    card.comment = { contentFile };
+  };
   const applyMutation = (mutation: AnyRecord): void => {
     if (mutation.action === 'patch-card') {
       const card = ledger.cards.find((entry: AnyRecord) => entry.id === mutation.cardPatch.id);
       Object.assign(card, mutation.cardPatch.title ? { title: mutation.cardPatch.title } : {});
-      if (mutation.cardPatch.description !== undefined) card.comment = { ...(card.comment ?? {}), what: mutation.cardPatch.description };
+      if (mutation.cardPatch.description !== undefined) persistCardContent(card, mutation.cardPatch.description);
       if (mutation.cardPatch.labels !== undefined) card.labels = mutation.cardPatch.labels;
     }
     if (mutation.action === 'patch-region') {
@@ -51,8 +66,10 @@ function taskWorkerFixture(): {
       zone.label = mutation.region.label;
     }
     if (mutation.action === 'create-card') {
-      ledger.cards.push(structuredClone(mutation.card));
-      ledger.threadFiles[`thread-${mutation.card.id}`] = `.decision-os/threads/tasks/thread-${mutation.card.id}.md`;
+      const card = structuredClone(mutation.card);
+      persistCardContent(card, String(card.comment?.what ?? ''));
+      ledger.cards.push(card);
+      ledger.threadFiles[`thread-${card.id}`] = `.decision-os/threads/tasks/thread-${card.id}.md`;
       ledger.notes[`thread-${mutation.card.id}`] = [];
     }
     if (mutation.action === 'append-note') {
@@ -73,8 +90,13 @@ function taskWorkerFixture(): {
     }
   };
   return {
+    ledgerJsonFile,
     ledger,
     mutations,
+    addCard(card, markdown) {
+      persistCardContent(card, markdown);
+      ledger.cards.push(card);
+    },
     install() {
       process.env.DECISION_OS_SERVER_URL = 'http://127.0.0.1:50150';
       process.env.DECISION_OS_PROJECT_ID = 'project-a';
@@ -91,6 +113,7 @@ function taskWorkerFixture(): {
         else process.env.DECISION_OS_SERVER_URL = previousServerUrl;
         if (previousProjectId === undefined) delete process.env.DECISION_OS_PROJECT_ID;
         else process.env.DECISION_OS_PROJECT_ID = previousProjectId;
+        rmSync(workspace, { recursive: true, force: true });
       };
     },
   };
@@ -101,7 +124,7 @@ test('master-task-apply expands one plan into scoped publication and positioned 
   const restore = fixture.install();
   try {
     const result = await applyScopedMasterTaskPlan({
-      ledgerJsonFile: join('/workspace', '.decision-os', 'tasks.json'),
+      ledgerJsonFile: fixture.ledgerJsonFile,
       planJson: JSON.stringify({
         masterCardId: 'master',
         title: 'Waiting timestamp RCA',
@@ -145,14 +168,14 @@ test('master-task-apply expands one plan into scoped publication and positioned 
 
 test('master-task-progress uses scoped card patches and one agent reply after lifecycle preflight', async () => {
   const fixture = taskWorkerFixture();
-  fixture.ledger.cards.push({ id: 'child', title: 'Child', status: 'done', labels: ['subtask'], x: 500, y: 60, w: 340, h: 380 });
+  fixture.addCard({ id: 'child', title: 'Child', status: 'done', labels: ['subtask'], x: 500, y: 60, w: 340, h: 380 }, 'Child\n');
   fixture.ledger.relationships.push({ id: 'rel-child', from: 'master', to: 'child', label: 'subtask', position: 0 });
   fixture.ledger.threadFiles['thread-child'] = '.decision-os/threads/tasks/thread-child.md';
   fixture.ledger.notes['thread-child'] = [];
   const restore = fixture.install();
   try {
     const result = await applyScopedMasterTaskProgress({
-      ledgerJsonFile: join('/workspace', '.decision-os', 'tasks.json'),
+      ledgerJsonFile: fixture.ledgerJsonFile,
       planJson: JSON.stringify({
         masterCardId: 'master',
         updates: [
