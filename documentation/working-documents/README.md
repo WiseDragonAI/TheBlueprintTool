@@ -17,6 +17,7 @@
 5. [Epoch-4 artifact garbage-collection analysis](./epoch-4-artifact-garbage-collection-analysis.md) records the missing post-tombstone byte-collection boundary and its selected remediation.
 6. [Epoch-4 migration process assessment](./epoch-4-migration-process-assessment.md) records the interrupted Workstation proof, the unsafe transaction boundary, and the selected resumable shadow-cutover architecture.
 7. [Epoch-4 live execution-intent conflict RCA](./epoch-4-live-execution-intent-conflict-rca.md) traces the stale epoch-3 card owner that blocks a newly durable execution and records the required node-wide cutover.
+8. [Epoch-4 migration documentation audit](./epoch-4-migration-documentation-audit-2026-07-25.md) reconciles the complete implementation and incident chain with canonical architecture, procedure, status, and postmortem documents.
 
 ---
 

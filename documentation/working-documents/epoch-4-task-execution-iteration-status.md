@@ -4,9 +4,9 @@
 2. **Implementation branch:** `feature/epoch4-task-execution`.
 3. **Base commit:** `0c72b4ed95c12bcfb0a27ddcbf56f4ecfdba5df7`.
 4. **Production branch:** `main`.
-5. **Current phase:** `J.13 served verification and J.14 Workstation cutover admission`.
+5. **Current phase:** `J.14 Mobile and relay production admission after verified Workstation cutover`.
 6. **Overall state:** `in-progress`.
-7. **Production state:** epoch `3` remains active. Epoch `4` is not admitted for production use.
+7. **Production state:** Workstation runs epoch `4`; Mobile migration, relay epoch-4 deployment, and three-party convergence remain unverified.
 
 ---
 
@@ -177,34 +177,36 @@
     9. Full backend result: `371/371`.
     10. Full frontend result: `533/533`.
     11. Backend and frontend typechecks passed.
-13. **J.13 — Run failure and convergence verification:** `implemented`.
+13. **J.13 — Run failure and convergence verification:** `implemented; Workstation served path verified`.
     1. Automated verification rows `1` through `36` have focused passing evidence.
     2. Five first-boundary defects were corrected: voice launch-failure state, deterministic projection clock ordering, mixed direct-child capacity accounting, server-close capacity-wait cancellation, and journal persistence-failure reporting.
     3. Backend typecheck passed.
     4. Frontend typecheck passed.
     5. Backend suite reported `377/378`; its only failure was the new capacity test's fixed child-start delay. The corrected failing scope passed `2/2`.
     6. Frontend suite passed `534/534`.
-    7. Served row `37` remains pending because the registered server is running `main` at `369d4158`, not this refactor branch.
+    7. The registered Workstation server now runs the merged epoch-4 implementation and returned HTTP `200`. Mobile served interaction evidence remains pending.
     8. The missing post-tombstone artifact collector is implemented as an explicit offline command gated by an operator cutoff and recorded converged root. Focused project-state and collector coverage passed `17/17`.
     9. The complete backend suite after artifact collection passed `381/381`.
-14. **J.14 — Execute the epoch-4 production cutover:** `preflight`.
-    1. The feature branch includes current `main` at merge commit `742d23c3` and is pushed to `origin/feature/epoch4-task-execution`.
-    2. Before the Mobile disconnect, Workstation preflight verified the registered MultiTerm process, epoch-3 health, zero active incidents, seven valid registered projects, zero staged project changes, configured federation credentials, matching relay roots, and no live Decision OS-owned child.
-    3. Relay credential admission and the epoch-4 Wrangler dry-run passed without deployment.
-    4. The replacement migrator requires an explicit backup root outside the catalog and calculates capacity from the exact mutable archive plus a `25%` margin.
-    5. The Workstation read-only planner completed against the real seven-project catalog, including the external `Ardaria_57` symlink. It calculated `11,576,346` archive bytes and `993,873,984` referenced workspace bytes.
-    6. The planner retained the Lys terminal execution history for deleted task `card-project-sync-8112b626-7a0c-4573-9031-f253eeb029d7` and reported that deleted-task reference instead of rejecting the catalog.
-    7. The Mobile read-only preflight ended with `federation_outcome_unknown` when Mobile disconnected. Its exact repository state, registered service commands, catalog root, and external backup path remain unverified. Workstation stayed online with no paused scope; three background federated-library incidents now retain the failed Mobile manifest and skill-snapshot requests.
-    8. No migration, backup, node process change, relay deployment, repository installation, migration marker, or durable project-state change occurred during the Workstation planner proof.
+14. **J.14 — Execute the epoch-4 production cutover:** `Workstation verified; Mobile and relay pending`.
+    1. The recoverable transaction implementation was merged through `d144d144` and the subsequent migration object corrections were merged through `df270455`.
+    2. Workstation transaction `ab0ab732-64d8-464b-b0e7-d2f1266681c4` returned `verified` from the migration command and the independent verifier.
+    3. All seven Workstation projects report `decision-os-task-state/4`, schema `4`, baseline epoch `4`, `missingObjects: 0`, and `journalCount: 0`.
+    4. The Workstation planner measured `11,576,346` mutable archive bytes and `993,873,984` referenced workspace bytes. Workstation-owned audio and images remained at their existing paths.
+    5. The registered Workstation server restarted through MultiTerm, returned HTTP `200`, and reported health `ready` with zero active incidents and no paused scopes.
+    6. Commit `d51a9395` records the Workstation cutover. Commits `e9f1e61a` and `0d4a0338`, merged through `3fc1b01f`, repair the post-cutover thread-note, artifact-settlement, lifecycle-projection, and Markdown consistency defects.
+    7. The Mobile read-only preflight ended with `federation_outcome_unknown` when Mobile disconnected. Its exact repository state, registered service commands, catalog root, and external backup path remain unverified.
+    8. The relay epoch-4 deployment, Mobile migration, three-party convergence, bidirectional assigned-node execution, and cross-node artifact retrieval remain pending.
 
 ---
 
 ## D. Current Verified Gaps
 
-1. Served Workstation and Mobile interaction verification remains for `J.13`.
-2. The authorized Workstation migration, relay namespace deployment, node restart, and three-party convergence proof remain for `J.14`.
-3. Mobile must reconnect, complete the read-only cutover preflight, and clear the three retained federated-library incidents before the production maintenance window is admitted.
-4. Operator authorization is required before either registered server process changes.
+1. Mobile served interaction verification remains for `J.13`.
+2. Mobile must reconnect, complete the read-only cutover preflight, and clear the three retained federated-library incidents before its migration window is admitted.
+3. Relay epoch-4 deployment and three-party root convergence remain for `J.14`.
+4. Bidirectional assigned-node execution, assigned-node-unreachable behavior, exact-hash artifact retrieval, and restart durability remain unverified in production.
+5. The Workstation cutover installed `199` verified phone-owned cached assets totaling `389,746,672` bytes into project epoch-4 storage. Removing this duplicate remote-cache materialization remains technical debt.
+6. Operator authorization is required before the Mobile server, relay deployment, or Workstation registered process changes.
 
 ---
 
@@ -310,6 +312,23 @@
     5. Production authority grep found no `executionIntent`, card lease, direct queue API, old canonical coordinator, mutable pipeline scheduler, note-backed voice lifecycle, or legacy execution schema import outside migration-only readers and the epoch-4 lane rejection contract.
     6. Migration corruption and byte-preservation result: `9/9`.
     7. Federated role and project synchronization result: `9/9`.
+32. **Recoverable migration and Workstation planner:** passed.
+    1. Focused migration regression result: `11/11`.
+    2. Complete backend suite result: `394/394`.
+    3. Backend typecheck passed.
+    4. The read-only planner found seven projects, `11,576,346` mutable archive bytes, and `993,873,984` referenced workspace bytes without creating a backup, shadow, marker, or project mutation.
+33. **Workstation production migration:** passed.
+    1. Transaction `ab0ab732-64d8-464b-b0e7-d2f1266681c4` and its independent verifier returned phase `verified`.
+    2. Seven project reports contain `missingObjects: 0` and `journalCount: 0`.
+    3. The registered server returned HTTP `200` and health `ready`.
+34. **Thread and settlement repair:** passed.
+    1. Affected tests passed `30/30`.
+    2. Backend typecheck passed.
+    3. The complete backend suite passed `402/402`.
+35. **Live note consistency audit:** passed.
+    1. The repaired thread contains exactly the restored operator note and the legitimate direct agent reply.
+    2. The Markdown content-manifest head matches the current file.
+    3. All seven Workstation projects contain zero note tombstones.
 
 ---
 

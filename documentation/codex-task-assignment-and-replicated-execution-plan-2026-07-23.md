@@ -1,13 +1,14 @@
-## A. Architecture Decision
+## A. Status and Architecture Decision
 
-1. **The existing task-creation modal is the task-assignment control.** Its selected node must be persisted as task domain state. No second assignment modal is required.
-2. **A task has one durable assigned node.** That node owns admission, scheduling, process execution, cancellation, recovery, and live diagnostics for every execution attached to the task.
-3. **Task assignment and execution lifecycle belong in the replicated task-state algebra.** They must converge through the relay with the task, card, relationship, annotation, thread-note, and content-head state.
-4. **Local execution must not depend on relay availability.** When the task is assigned to the current node, launch admission, durable queueing, scheduling, process spawn, status, cancellation, and recovery complete from local state. Federation publishes the resulting state when connectivity is available.
-5. **A non-owner node must dispatch to the assigned node.** It must never substitute itself as executor. When the assigned node is unavailable, the request fails with `assigned_node_unreachable` and creates no execution.
-6. **One replicated execution entity is the lifecycle authority.** The direct queue, mutable pipeline run status, task `executionIntent`, card execution leases, runtime maps, and log inference must stop competing as business-state authorities.
-7. **Process state remains node-local.** PID, process start identity, child handles, local paths, timers, stream handles, and cancellation handles must never enter replicated state.
-8. **The change requires task-state protocol, schema, and baseline epoch `4`.** Epoch `3` lacks task assignment and execution entities. The relay and both nodes must move to epoch `4` through an offline migration with rollback artifacts.
+1. **Implementation status:** This plan is historical implementation intent. Current behavior is owned by [Epoch-4 task assignment, execution, and content](./documentation/architecture/epoch-4-task-assignment-execution-and-content.md); current production progress is owned by [the Epoch-4 iteration status](./working-documents/epoch-4-task-execution-iteration-status.md).
+2. **The existing task-creation modal is the task-assignment control.** Its selected node must be persisted as task domain state. No second assignment modal is required.
+3. **A task has one durable assigned node.** That node owns admission, scheduling, process execution, cancellation, recovery, and live diagnostics for every execution attached to the task.
+4. **Task assignment and execution lifecycle belong in the replicated task-state algebra.** They must converge through the relay with the task, card, relationship, annotation, thread-note, and content-head state.
+5. **Local execution must not depend on relay availability.** When the task is assigned to the current node, launch admission, durable queueing, scheduling, process spawn, status, cancellation, and recovery complete from local state. Federation publishes the resulting state when connectivity is available.
+6. **A non-owner node must dispatch to the assigned node.** It must never substitute itself as executor. When the assigned node is unavailable, the request fails with `assigned_node_unreachable` and creates no execution.
+7. **One replicated execution entity is the lifecycle authority.** The direct queue, mutable pipeline run status, task `executionIntent`, card execution leases, runtime maps, and log inference must stop competing as business-state authorities.
+8. **Process state remains node-local.** PID, process start identity, child handles, local paths, timers, stream handles, and cancellation handles must never enter replicated state.
+9. **The change requires task-state protocol, schema, and baseline epoch `4`.** Epoch `3` lacks task assignment and execution entities. The relay and both nodes must move to epoch `4` through an offline migration with rollback artifacts.
 
 ---
 
