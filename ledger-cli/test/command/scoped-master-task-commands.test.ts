@@ -1,0 +1,176 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { join } from 'node:path';
+import { applyScopedMasterTaskPlan } from '../../src/business/ledger/effect/apply-scoped-master-task-plan.js';
+import { applyScopedMasterTaskProgress } from '../../src/business/ledger/effect/apply-scoped-master-task-progress.js';
+
+type AnyRecord = Record<string, any>;
+
+function taskWorkerFixture(): {
+  ledger: AnyRecord;
+  mutations: AnyRecord[];
+  install(): () => void;
+} {
+  const ledger: AnyRecord = {
+    cards: [
+      {
+        id: 'master',
+        title: 'Intake',
+        status: 'todo',
+        labels: ['master-task'],
+        domainId: 'tasks',
+        x: 60,
+        y: 60,
+        w: 360,
+        h: 240,
+        comment: { contentFile: '.decision-os/cards/tasks/master.md' },
+      },
+      { id: 'outside', title: 'Outside', status: 'todo', labels: [], x: 1400, y: 0, w: 300, h: 200 },
+    ],
+    annotations: [
+      { id: 'group-a', variant: 'group', label: 'Group', x: 40, y: 40, width: 420, height: 300 },
+      { id: 'zone-a', variant: 'zone', label: 'Intake', x: 0, y: 0, width: 1200, height: 900 },
+    ],
+    relationships: [],
+    notes: { 'thread-master': [{ id: 'operator-note', role: 'operator', message: 'Create the graph.' }] },
+    threadFiles: { 'thread-master': '.decision-os/threads/tasks/thread-master.md' },
+  };
+  const mutations: AnyRecord[] = [];
+  const previousFetch = globalThis.fetch;
+  const previousServerUrl = process.env.DECISION_OS_SERVER_URL;
+  const previousProjectId = process.env.DECISION_OS_PROJECT_ID;
+  const applyMutation = (mutation: AnyRecord): void => {
+    if (mutation.action === 'patch-card') {
+      const card = ledger.cards.find((entry: AnyRecord) => entry.id === mutation.cardPatch.id);
+      Object.assign(card, mutation.cardPatch.title ? { title: mutation.cardPatch.title } : {});
+      if (mutation.cardPatch.description !== undefined) card.comment = { ...(card.comment ?? {}), what: mutation.cardPatch.description };
+      if (mutation.cardPatch.labels !== undefined) card.labels = mutation.cardPatch.labels;
+    }
+    if (mutation.action === 'patch-region') {
+      const zone = ledger.annotations.find((entry: AnyRecord) => entry.id === mutation.region.id);
+      zone.label = mutation.region.label;
+    }
+    if (mutation.action === 'create-card') {
+      ledger.cards.push(structuredClone(mutation.card));
+      ledger.threadFiles[`thread-${mutation.card.id}`] = `.decision-os/threads/tasks/thread-${mutation.card.id}.md`;
+      ledger.notes[`thread-${mutation.card.id}`] = [];
+    }
+    if (mutation.action === 'append-note') {
+      const notes = ledger.notes[mutation.note.threadId] ?? [];
+      notes.push({ ...mutation.note, message: mutation.note.body, timestamp: '2026-07-25T20:30:00.000Z' });
+      ledger.notes[mutation.note.threadId] = notes;
+    }
+    if (mutation.action === 'create-relationship') ledger.relationships.push(structuredClone(mutation.relationship));
+    if (mutation.action === 'patch-geometry') {
+      for (const [id, geometry] of Object.entries(mutation.geometry.cards ?? {}) as Array<[string, AnyRecord]>) {
+        const card = ledger.cards.find((entry: AnyRecord) => entry.id === id);
+        Object.assign(card, { x: geometry.x, y: geometry.y, w: geometry.width, h: geometry.height });
+      }
+      for (const [id, geometry] of Object.entries(mutation.geometry.zones ?? {}) as Array<[string, AnyRecord]>) {
+        const zone = ledger.annotations.find((entry: AnyRecord) => entry.id === id);
+        Object.assign(zone, geometry);
+      }
+    }
+  };
+  return {
+    ledger,
+    mutations,
+    install() {
+      process.env.DECISION_OS_SERVER_URL = 'http://127.0.0.1:50150';
+      process.env.DECISION_OS_PROJECT_ID = 'project-a';
+      globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+        if (!init) return new Response(JSON.stringify({ ok: true, ledger }), { status: 200 });
+        const mutation = JSON.parse(String(init.body)) as AnyRecord;
+        mutations.push(structuredClone(mutation));
+        applyMutation(mutation);
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }) as typeof fetch;
+      return () => {
+        globalThis.fetch = previousFetch;
+        if (previousServerUrl === undefined) delete process.env.DECISION_OS_SERVER_URL;
+        else process.env.DECISION_OS_SERVER_URL = previousServerUrl;
+        if (previousProjectId === undefined) delete process.env.DECISION_OS_PROJECT_ID;
+        else process.env.DECISION_OS_PROJECT_ID = previousProjectId;
+      };
+    },
+  };
+}
+
+test('master-task-apply expands one plan into scoped publication and positioned graph mutations', async () => {
+  const fixture = taskWorkerFixture();
+  const restore = fixture.install();
+  try {
+    const result = await applyScopedMasterTaskPlan({
+      ledgerJsonFile: join('/workspace', '.decision-os', 'tasks.json'),
+      planJson: JSON.stringify({
+        masterCardId: 'master',
+        title: 'Waiting timestamp RCA',
+        zoneTitle: 'Waiting timestamp RCA',
+        sections: [{ title: 'A. Decision', markdown: '1. **State:** Root cause proven.' }],
+        subtasks: [
+          { title: 'Trace', sections: [{ title: 'A. Scope', markdown: '1. **Objective:** Trace it.' }] },
+          { title: 'Reproduce', sections: [{ title: 'A. Scope', markdown: '1. **Objective:** Reproduce it.' }] },
+        ],
+      }),
+    });
+    assert.equal(result.ok, true, result.ok ? undefined : result.error);
+    assert.deepEqual(fixture.mutations.map((mutation) => mutation.action), [
+      'patch-card',
+      'patch-region',
+      'create-card',
+      'append-note',
+      'create-relationship',
+      'create-card',
+      'append-note',
+      'create-relationship',
+      'patch-geometry',
+    ]);
+    const created = fixture.mutations.filter((mutation) => mutation.action === 'create-card');
+    assert.equal(created.every((mutation) => mutation.card.status === 'todo'), true);
+    assert.equal(created.every((mutation) => mutation.card.lifecycle.status === 'todo'), true);
+    assert.equal(created.every((mutation) => mutation.card.labels.includes('subtask')), true);
+    assert.equal(created.every((mutation) => /^## A\. Scope/.test(mutation.card.comment.what)), true);
+    const relationships = fixture.mutations.filter((mutation) => mutation.action === 'create-relationship');
+    assert.deepEqual(relationships.map((mutation) => mutation.relationship.position), [0, 1]);
+    assert.equal(fixture.mutations.filter((mutation) => mutation.action === 'append-note').every((mutation) => mutation.note.role === 'agent'), true);
+    const graphIds = new Set(['master', ...created.map((mutation) => mutation.card.id)]);
+    const graphCards = fixture.ledger.cards.filter((card: AnyRecord) => graphIds.has(card.id));
+    const zone = fixture.ledger.annotations.find((annotation: AnyRecord) => annotation.id === 'zone-a');
+    assert.equal(graphCards.every((card: AnyRecord) => card.x >= zone.x && card.y >= zone.y && card.x + card.w <= zone.x + zone.width && card.y + card.h <= zone.y + zone.height), true);
+    assert.equal(fixture.ledger.cards.find((card: AnyRecord) => card.id === 'outside').x < zone.x, true);
+  } finally {
+    restore();
+  }
+});
+
+test('master-task-progress uses scoped card patches and one agent reply after lifecycle preflight', async () => {
+  const fixture = taskWorkerFixture();
+  fixture.ledger.cards.push({ id: 'child', title: 'Child', status: 'done', labels: ['subtask'], x: 500, y: 60, w: 340, h: 380 });
+  fixture.ledger.relationships.push({ id: 'rel-child', from: 'master', to: 'child', label: 'subtask', position: 0 });
+  fixture.ledger.threadFiles['thread-child'] = '.decision-os/threads/tasks/thread-child.md';
+  fixture.ledger.notes['thread-child'] = [];
+  const restore = fixture.install();
+  try {
+    const result = await applyScopedMasterTaskProgress({
+      ledgerJsonFile: join('/workspace', '.decision-os', 'tasks.json'),
+      planJson: JSON.stringify({
+        masterCardId: 'master',
+        updates: [
+          { cardId: 'master', sections: [{ title: 'A. Result', markdown: '1. **State:** Reconciled.' }], labels: ['analysis'] },
+          { cardId: 'child', sections: [{ title: 'A. Result', markdown: '1. **State:** Verified.' }], labels: ['proof'] },
+        ],
+        verifiedSubtaskIds: ['child'],
+        reply: 'Scoped progress persisted.',
+      }),
+    });
+    assert.equal(result.ok, true, result.ok ? undefined : result.error);
+    assert.deepEqual(fixture.mutations.map((mutation) => mutation.action), ['patch-card', 'patch-card', 'append-note']);
+    assert.deepEqual(fixture.mutations[0].cardPatch.labels, ['analysis', 'master-task']);
+    assert.deepEqual(fixture.mutations[1].cardPatch.labels, ['proof', 'subtask']);
+    assert.match(fixture.mutations[0].cardPatch.description, /^## A\. Result/);
+    assert.equal(fixture.mutations[2].note.role, 'agent');
+    if (result.ok) assert.deepEqual(JSON.parse(result.value).gate, { ready: true, discrepancies: [] });
+  } finally {
+    restore();
+  }
+});

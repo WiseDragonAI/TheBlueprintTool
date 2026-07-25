@@ -11,22 +11,22 @@ import { withCanonicalTaskLabel } from './master-task-model.js';
 import { validateMasterTasks } from './validate-master-tasks.js';
 
 type JsonObject = Record<string, unknown>;
-type Section = { title: string; markdown: string };
-type Subtask = { title: string; markdown?: string; sections?: Section[] };
-type Plan = { masterCardId: string; title: string; zoneTitle?: string; masterMarkdown?: string; sections?: Section[]; subtasks: Subtask[] };
+export type MasterTaskSection = { title: string; markdown: string };
+export type MasterTaskSubtask = { title: string; markdown?: string; sections?: MasterTaskSection[] };
+export type MasterTaskPlan = { masterCardId: string; title: string; zoneTitle?: string; masterMarkdown?: string; sections?: MasterTaskSection[]; subtasks: MasterTaskSubtask[] };
 function record(value: unknown): value is JsonObject { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
 function id(prefix: 'card' | 'rel'): string { return `${prefix}-${randomUUID()}`; }
 function safe(value: string): string { return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled'; }
 
-function sections(value: unknown): Section[] {
+function sections(value: unknown): MasterTaskSection[] {
   return Array.isArray(value) ? value.filter(record).map((item) => ({ title: String(item.title ?? '').trim().replace(/^(?:[A-Z]\.\s+)+/i, ''), markdown: String(item.markdown ?? '').trim() })).filter((item) => item.title && item.markdown) : [];
 }
 
-function renderSections(value: Section[]): string {
+export function renderMasterTaskSections(value: MasterTaskSection[]): string {
   return value.map((section, index) => `## ${String.fromCharCode(65 + index)}. ${section.title}\n\n${section.markdown.trim()}`).join('\n\n---\n\n');
 }
 
-function parsePlan(value: string): Result<Plan> {
+export function parseMasterTaskPlan(value: string): Result<MasterTaskPlan> {
   try {
     const plan = JSON.parse(value) as JsonObject;
     const masterSections = sections(plan.sections);
@@ -45,7 +45,7 @@ export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: s
     const inner = relative(resolve(scopedRoot), resolve(input.ledgerJsonFile));
     if (!inner || inner.startsWith('..') || isAbsolute(inner)) return { ok: false, error: JSON.stringify({ version: 1, code: 'scope_mismatch' }) };
   }
-  const parsed = parsePlan(input.planJson);
+  const parsed = parseMasterTaskPlan(input.planJson);
   if (!parsed.ok) return parsed;
   const plan = parsed.value;
   const ledgerText = input.ledger ? JSON.stringify(input.ledger) : readFileSync(input.ledgerJsonFile, 'utf8');
@@ -71,14 +71,14 @@ export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: s
   const masterComment = record(master.comment) ? master.comment : {};
   const masterRef = String(masterComment.contentFile ?? `.decision-os/cards/${safe(domainId)}/${safe(plan.masterCardId)}.md`);
   const masterFile = resolve(input.ledgerJsonFile, '../..', masterRef);
-  const body = plan.masterMarkdown ?? renderSections(plan.sections ?? []);
+  const body = plan.masterMarkdown ?? renderMasterTaskSections(plan.sections ?? []);
   files.set(masterFile, `${body.trimEnd()}\n`);
   master.comment = { ...masterComment, contentFile: masterRef };
   for (const item of created) {
     const contentFile = `.decision-os/cards/${safe(domainId)}/${item.id}.md`;
     cards.push({ id: item.id, title: item.title, cardType: 'note', domainId, status: 'todo', createdAt: new Date().toISOString(), labels: [], x: baseX + (item.index % 2) * 380, y: baseY + Math.floor(item.index / 2) * 410, w: 340, h: 380, comment: { contentFile }, facts: [], fields: [] });
     relationships.push({ id: item.relationshipId, from: plan.masterCardId, to: item.id, label: 'subtask', position: item.index });
-    const subtaskMarkdown = item.markdown ?? renderSections(item.sections ?? []);
+    const subtaskMarkdown = item.markdown ?? renderMasterTaskSections(item.sections ?? []);
     files.set(resolve(input.ledgerJsonFile, '../..', contentFile), subtaskMarkdown.trimEnd() + '\n');
   }
   const nextLedger = { ...ledger, cards, relationships, annotations };
