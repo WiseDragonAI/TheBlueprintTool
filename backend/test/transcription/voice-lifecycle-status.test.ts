@@ -129,7 +129,7 @@ test('voice lifecycle rejects an older server phase write after terminal persist
       },
       runtime_state: fixture.runtime
     });
-    const stale = applyNotePatch({
+    const stale = await applyNotePatch({
       runtime: fixture.runtime,
       ledgerId: 'specs',
       threadId: 'thread-card-a',

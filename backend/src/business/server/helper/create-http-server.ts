@@ -866,6 +866,29 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (!project) throw new Error(`Task-state authority has no project ${projectId}.`);
       return taskStateForProject(project).projection().ledger;
     };
+    projectRuntime.persistTaskLedgerMutation = async (mutation: LedgerMutation): Promise<{ ledger: AnyRecord }> => {
+      const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
+      if (!project) throw new Error(`Task-state authority has no available project ${projectId}.`);
+      const state = taskStateForProject(project);
+      const before = structuredClone(state.projection().ledger);
+      const after = structuredClone(before);
+      const ledgerPath = resolve(
+        project.decisionOsRoot,
+        tasksLedgerForProject(project).ledgerFile.replace(/^\.decision-os\//, ''),
+      );
+      const mutationResult = applyLedgerMutation({
+        decisionOsRoot: project.decisionOsRoot,
+        ledgerPath,
+        ledger: after,
+        mutation,
+      });
+      if (mutationResult.error) {
+        throw new Error(String(mutationResult.error.body.error ?? 'Task ledger mutation failed.'));
+      }
+      const committed = await state.executeMutation(mutation, before, after);
+      if (committed.changed) controlRoomProjectionStore?.invalidate(projectId, committed.localChanges);
+      return { ledger: committed.ledger };
+    };
     let watcher: ReturnType<typeof watchProjectFiles> | null = null;
     const broadcast = (message: string): void => {
       for (const client of clients) client.write(message);
@@ -3722,7 +3745,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (result.ok !== false && result.uploaded && ledgerId === 'tasks' && localProject && cardId) {
         const projection = taskStateForProject(localProject).projection().ledger;
         const refs = projection.threadFiles && typeof projection.threadFiles === 'object' ? projection.threadFiles as AnyRecord : {};
-        const delta = await taskStateForProject(localProject).recordContentContribution(cardId, [String(refs[threadId] ?? ''), String(result.voiceFileRef ?? '')]);
+        const delta = await taskStateForProject(localProject).recordContentContribution(cardId, String(refs[threadId] ?? ''));
         controlRoomProjectionStore?.invalidate(localProject.id, delta.entities);
       }
       response.setHeader('content-type', 'application/json');

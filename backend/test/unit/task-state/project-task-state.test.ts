@@ -151,6 +151,57 @@ test('task intake publishes no state until its first durable content contributio
   assert.equal(state.store.entity('card', 'card-a')?.fields.replicationState, undefined);
 });
 
+test('voice note mutations replicate the transcript sidecar without publishing raw audio heads', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-voice-content-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const threadId = 'thread-card-a';
+  const threadFile = resolve(root, 'threads', 'tasks', `${threadId}.md`);
+  const voiceFile = resolve(root, 'voice-uploads', 'voice-a.webm');
+  mkdirSync(dirname(threadFile), { recursive: true });
+  mkdirSync(dirname(voiceFile), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify({
+    modelName: 'tasks',
+    cards: [{ id: 'card-a', title: 'Task', status: 'todo' }],
+    annotations: [],
+    relationships: [],
+    threadFiles: { [threadId]: `.decision-os/threads/tasks/${threadId}.md` },
+  }));
+  writeFileSync(threadFile, '');
+  writeFileSync(voiceFile, 'raw voice bytes');
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+  });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const before = structuredClone(state.projection().ledger);
+  const after = structuredClone(before);
+  const mutation: LedgerMutation = {
+    action: 'append-note',
+    note: {
+      id: 'note-voice',
+      threadId,
+      body: 'Persisted transcript.',
+      role: 'operator',
+      status: 'transcribed',
+      voiceFileRef: voiceFile,
+      revision: 4,
+    },
+  };
+
+  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
+  const committed = await state.executeMutation(mutation, before, after);
+
+  assert.ok(committed.deltas.flatMap((delta) => delta.entities).some((entity) => (
+    entity.entityType === 'thread-note' && entity.entityId === `${threadId}/note-voice`
+  )));
+  assert.equal(state.store.contentHeads(`.decision-os/threads/tasks/${threadId}.md`).length, 1);
+  assert.equal(state.store.contentHeads(voiceFile).length, 0);
+  assert.equal(state.store.contentHeads().some((head) => head.type === 'audio'), false);
+});
+
 test('restore-note causally replaces a tombstone without importing unrelated sidecar notes', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-note-restore-'));
   const ledgerPath = resolve(root, 'tasks.json');

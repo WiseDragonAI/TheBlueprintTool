@@ -105,14 +105,14 @@ function notifyThreadChange(context: LedgerContext, threadId: string, callback: 
   });
 }
 
-export function applyNotePatch(input: {
+export async function applyNotePatch(input: {
   runtime: AnyRecord;
   ledgerId: string;
   threadId: string;
   note: NonNullable<LedgerMutation['note']>;
   onCardContentChange?: unknown;
   reason: string;
-}): { ok: boolean; error?: string; stale?: boolean } {
+}): Promise<{ ok: boolean; error?: string; stale?: boolean }> {
   const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
   if (!context.ok) return { ok: false, error: context.error };
   hydrateLedgerThreadNotesFor(context.ledger, context.decisionOsRoot, input.threadId);
@@ -120,14 +120,24 @@ export function applyNotePatch(input: {
   const currentNote = (normalizeLedgerNotes(context.ledger)[input.threadId] ?? []).find((note) => String(note.id ?? '') === String(input.note.id ?? ''));
   const currentRevision = Number(currentNote?.revision ?? 0);
   if (incomingRevision > 0 && currentRevision > incomingRevision) return { ok: false, stale: true, error: 'Stale voice note revision.' };
-  const mutationResult = applyLedgerMutation({
-    decisionOsRoot: context.decisionOsRoot,
-    ledgerPath: context.ledgerPath,
-    ledger: context.ledger,
-    mutation: { action: 'update-note', note: { ...input.note, threadId: input.threadId } }
-  });
-  if (mutationResult.error) return { ok: false, error: String(mutationResult.error.body.error ?? 'Ledger mutation failed.') };
-  writeLedger(context);
+  const mutation = { action: 'update-note', note: { ...input.note, threadId: input.threadId } } satisfies LedgerMutation;
+  const persistTaskMutation = input.runtime.persistTaskLedgerMutation;
+  if (context.ledgerId === 'tasks' && typeof persistTaskMutation === 'function') {
+    try {
+      await persistTaskMutation(mutation);
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  } else {
+    const mutationResult = applyLedgerMutation({
+      decisionOsRoot: context.decisionOsRoot,
+      ledgerPath: context.ledgerPath,
+      ledger: context.ledger,
+      mutation
+    });
+    if (mutationResult.error) return { ok: false, error: String(mutationResult.error.body.error ?? 'Ledger mutation failed.') };
+    writeLedger(context);
+  }
   notifyThreadChange(context, input.threadId, input.onCardContentChange, input.reason, input.note as AnyRecord);
   return { ok: true };
 }
@@ -294,7 +304,7 @@ async function finishVoiceUploadOrchestration(input: {
   if (config.ok !== false) {
     providerStartedAt = new Date().toISOString();
     lifecycleTelemetry({ noteId: input.noteId, phase: 'provider-started', at: providerStartedAt, previousAt: input.acceptedAt });
-    const transcriptionPatch = applyNotePatch({
+    const transcriptionPatch = await applyNotePatch({
       runtime: input.runtime,
       ledgerId: input.ledgerId,
       threadId: input.threadId,
@@ -327,7 +337,7 @@ async function finishVoiceUploadOrchestration(input: {
     providerSettledAt = new Date().toISOString();
     lifecycleTelemetry({ noteId: input.noteId, phase: 'provider-settled', at: providerSettledAt, previousAt: providerStartedAt });
     if (transcription.ok !== false) {
-      applyNotePatch({
+      await applyNotePatch({
         runtime: input.runtime,
         ledgerId: input.ledgerId,
         threadId: input.threadId,
@@ -341,7 +351,7 @@ async function finishVoiceUploadOrchestration(input: {
   const text = optionalText(input.runtime.transcriptionText);
   const completedAt = new Date().toISOString();
   if (config.ok !== false && transcription.ok !== false && text) {
-    const transcriptPatch = applyNotePatch({
+    const transcriptPatch = await applyNotePatch({
       runtime: input.runtime,
       ledgerId: input.ledgerId,
       threadId: input.threadId,
@@ -369,7 +379,7 @@ async function finishVoiceUploadOrchestration(input: {
       if (result.ok === false) {
         // WHAT: Persist the post-transcription launch failure without discarding retry inputs.
         // WHY: A transcript is complete evidence even when its assigned execution owner is unavailable.
-        applyNotePatch({
+        await applyNotePatch({
           runtime: input.runtime,
           ledgerId: input.ledgerId,
           threadId: input.threadId,
@@ -397,7 +407,7 @@ async function finishVoiceUploadOrchestration(input: {
   }
   const status = 'transcription failed';
   const error = String(transcription.error ?? status);
-  applyNotePatch({
+  await applyNotePatch({
     runtime: input.runtime,
     ledgerId: input.ledgerId,
     threadId: input.threadId,
@@ -450,7 +460,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
       return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, string> : undefined;
     } catch { return undefined; }
   })();
-  const patch = applyNotePatch({
+  const patch = await applyNotePatch({
     runtime,
     ledgerId,
     threadId,
@@ -503,8 +513,8 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     revisionBase: 1,
     onCardContentChange: payload.onCardContentChange,
     onLedgerChange: payload.onLedgerChange
-  }).catch((error) => {
-    applyNotePatch({
+  }).catch(async (error) => {
+    await applyNotePatch({
       runtime,
       ledgerId,
       threadId,
@@ -553,7 +563,7 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
   const queueCodex = launchMode !== 'send';
   const executionId = queueCodex ? optionalText(payload.executionId) || `voice-execution-${id}` : '';
   let executionSessionId = '';
-  const patch = applyNotePatch({
+  const patch = await applyNotePatch({
     runtime,
     ledgerId,
     threadId,
