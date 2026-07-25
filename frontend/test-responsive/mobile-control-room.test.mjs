@@ -389,12 +389,13 @@ test('shows the settled image title for one second and then fades it out', () =>
 test('routes master tasks to their task list, subtasks to their parent master, and regular cards to their zone', () => {
   assert.match(mobile, /backButton\.replaceChildren\(backIcon, backLabel\)/);
   assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : parentMaster \? 'parent-master-task' : 'zone'/);
-  assert.match(mobile, /parentMasterDestination[\s\S]*ledgerZones\(\)\.find[\s\S]*navigate\(cardPath\(state\.activeLedgerId, zone\?\.id \?\? 'ungrouped', parentCardId\)\)/);
+  assert.match(mobile, /parentMasterDestination[\s\S]*recordedReturn[\s\S]*parentDestination[\s\S]*history\.back\(\)/);
+  assert.match(mobile, /navigate\(parentPath, true, controlRoomPath\('queue'\)\)/);
   assert.match(mobile, /const controlRoomDestination = event\.currentTarget\.dataset\.destination === 'control-room';[\s\S]*const destination = controlRoomDestination \? completionReturnPath\(\) : zonePath/);
 });
 
 test('commits retained Control Room and task-shell views before background route reads', () => {
-  const navigate = mobile.match(/function navigate\(path, replace = false\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const navigate = mobile.match(/function navigate\(path, replace = false, returnPathOverride = ''\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   const commitRouteView = mobile.match(/function commitRouteView\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   const loadRoute = mobile.match(/async function loadRoute\(\{ retainView = false \} = \{\}\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   assert.match(navigate, /history\[replace[\s\S]*commitRouteView\(\)[\s\S]*void loadRoute\(\{ retainView: retained \}\)/);

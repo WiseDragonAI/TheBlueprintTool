@@ -785,3 +785,65 @@ test('a geometry acknowledgement cannot overwrite a later edit to the same recor
   assert.equal(state.ledgerReconciliation.localGeometryRevisions['card:card-a'], laterRevision);
   assert.equal(state.ledgerReconciliation.lastAppliedServerRevision, 20);
 });
+
+test('a direct task mutation receipt cannot lend its clock to a causally stale confirmation snapshot', async () => {
+  (globalThis as any).window = {
+    location: { pathname: '/tasks' },
+    dispatchEvent() {},
+    __coreTelemetry: [],
+  };
+  const { state } = await import('../../src/runtime/state.js');
+  const { commitActiveLedgerMutation } = await import('../../src/runtime/ledger/effect/commit-active-ledger-mutation.js');
+  state.canvasMode = 'ledger';
+  state.activeTab = 'tasks';
+  state.activeLedgerId = 'tasks';
+  state.ledgerTabs = [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }];
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Locally committed task', status: 'todo' }],
+    annotations: [],
+    relationships: [],
+    notes: { 'thread-card-a': [{ id: 'note-a', message: 'Local message' }] },
+  };
+  resetLedgerReconciliation(state, 'tasks');
+  state.ledgerReconciliation.lastAppliedTaskClock = { workstation: 7, phone: 20 };
+  let requestCount = 0;
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      const mutation = JSON.parse(String(init?.body ?? '{}')) as { mutationId: string };
+      return new Response(JSON.stringify({
+        ok: true,
+        ledgerId: 'tasks',
+        taskClock: { workstation: 8, phone: 20 },
+        receipt: { mutationId: mutation.mutationId, clock: { workstation: 8, phone: 20 }, entities: [] },
+      }), { status: 200, headers: { 'content-type': 'application/json', 'x-decision-os-ledger-revision': '8' } });
+    }
+    return new Response(JSON.stringify({
+      cards: [{ id: 'card-a', title: 'Delayed relay task', status: 'todo' }],
+      annotations: [],
+      relationships: [],
+      notes: { 'thread-card-a': [{ id: 'note-a', message: 'Delayed relay message' }] },
+    }), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        'x-decision-os-ledger-revision': '9',
+        'x-decision-os-task-clock': Buffer.from(JSON.stringify({ workstation: 7, phone: 21 })).toString('base64url'),
+      },
+    });
+  }) as typeof fetch;
+
+  // WHAT: Give the mutation acknowledgement and its confirmation snapshot different causal clocks.
+  // WHY: Reconciliation must judge the installed bytes by the snapshot clock, not borrow authority from the receipt response.
+  const committed = await commitActiveLedgerMutation({
+    action: 'transition-card-lifecycle',
+    cardId: 'card-a',
+    lifecycleStatus: 'todo',
+  });
+
+  assert.equal(committed, false);
+  assert.equal(requestCount, 2);
+  assert.equal(state.activeLedger.cards[0].title, 'Locally committed task');
+  assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Local message');
+  assert.deepEqual(state.ledgerReconciliation.lastAppliedTaskClock, { workstation: 8, phone: 20 });
+});

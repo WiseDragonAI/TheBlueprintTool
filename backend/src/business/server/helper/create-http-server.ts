@@ -82,6 +82,7 @@ import { resolveVerifiedManifestResourceFile, type FederationContentManifest } f
 import { createFederationContentReplicaStore } from '../../federation/helper/federation-content-replica-store.js';
 import { createFederationContentScheduler } from '../../federation/helper/federation-content-scheduler.js';
 import { readTaskContentOnDemand } from '../../federation/helper/read-task-content-on-demand.js';
+import { materializeTaskMutationInputs, materializeTaskResources, TaskContentMaterializationError } from '../../federation/helper/materialize-task-mutation-inputs.js';
 import { createProjectTaskState, type ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import type { TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
@@ -889,16 +890,43 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (!project) throw new Error(`Task-state authority has no project ${projectId}.`);
       return taskStateForProject(project).projection().ledger;
     };
+    projectRuntime.materializeTaskResources = async (
+      keys: string[],
+      validate?: (key: string, body: string) => void | Promise<void>,
+    ): Promise<void> => {
+      const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
+      if (!project) throw new Error(`Task-state authority has no available project ${projectId}.`);
+      await materializeTaskResources({
+        projectId,
+        decisionOsRoot: project.decisionOsRoot,
+        keys,
+        store: taskStateForProject(project).store,
+        contentStore: federationContentStore,
+        drain: federationContentScheduler?.drain ?? null,
+        validate,
+      });
+    };
     projectRuntime.persistTaskLedgerMutation = async (mutation: LedgerMutation): Promise<{ ledger: AnyRecord }> => {
       const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
       if (!project) throw new Error(`Task-state authority has no available project ${projectId}.`);
       const state = taskStateForProject(project);
       const before = structuredClone(state.projection().ledger);
-      const after = structuredClone(before);
       const ledgerPath = resolve(
         project.decisionOsRoot,
         tasksLedgerForProject(project).ledgerFile.replace(/^\.decision-os\//, ''),
       );
+      // WHAT: Resolve every projected task resource before entering the synchronous mutation layer.
+      // WHY: Local messages and voice updates must persist immediately without converting missing replica bytes into empty content.
+      await materializeTaskMutationInputs({
+        projectId,
+        decisionOsRoot: project.decisionOsRoot,
+        ledger: before,
+        mutation,
+        store: state.store,
+        contentStore: federationContentStore,
+        drain: federationContentScheduler?.drain ?? null,
+      });
+      const after = structuredClone(before);
       const mutationResult = applyLedgerMutation({
         decisionOsRoot: project.decisionOsRoot,
         ledgerPath,
@@ -2102,10 +2130,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (committed.changed) controlRoomProjectionStore?.invalidate(localProjectId, committed.localChanges);
         const revision = federatedTaskRevisionForProject(localProjectId).advance('tasks');
         response.setHeader(ledgerRevisionHeader, String(revision));
+        response.setHeader('x-decision-os-task-clock', Buffer.from(JSON.stringify(state.store.clock())).toString('base64url'));
         response.end(JSON.stringify({
           ok: true,
           ledgerId: 'tasks',
           revision,
+          taskClock: state.store.clock(),
+          receipt: {
+            mutationId: String(mutation.mutationId ?? ''),
+            clock: state.store.clock(),
+            entities: committed.localChanges,
+          },
           locallyCommitted: true,
           publicationPending: federationTaskStateReplicator?.diagnostics().pendingDeliveryIds.length > 0,
           ledger: committed.ledger,
@@ -2674,6 +2709,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         ok: true,
         ledgerId,
         revision,
+        ...(taskCommit && localProject ? {
+          taskClock: taskStateForProject(localProject).store.clock(),
+          receipt: {
+            mutationId: String(mutation.mutationId ?? ''),
+            clock: taskStateForProject(localProject).store.clock(),
+            entities: taskCommit.localChanges,
+          },
+        } : {}),
         changedCard,
         changedThread,
         changedAnnotation: annotationId && Array.isArray(persistedLedger.annotations) ? persistedLedger.annotations.find((entry) => String((entry as AnyRecord).id ?? '') === annotationId) ?? null : null,
@@ -2727,6 +2770,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
       response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.current(ledgerId)));
+      if (localProject && ledgerId === 'tasks') {
+        response.setHeader('x-decision-os-task-clock', Buffer.from(JSON.stringify(taskStateForProject(localProject).store.clock())).toString('base64url'));
+      }
       response.statusCode = projection ? 200 : 404;
       response.end(JSON.stringify(projection ?? { ok: false, error: 'Scoped ledger resource not found.' }));
       return;
@@ -4100,6 +4146,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (activeExecution) {
             response.statusCode = 409;
             response.end(JSON.stringify({ ok: false, error: 'A queued or running task cannot move to backlog.', phase: activeExecution.lifecycle.phase }));
+            return;
+          }
+        }
+        if (tabId === 'tasks' && localProject) {
+          // WHAT: Apply the same verified materialization gate to operator-facing task mutations.
+          // WHY: Browser messages, card edits, image removal, and voice-driven updates must share one no-empty-default boundary.
+          try {
+            await materializeTaskMutationInputs({
+              projectId: localProject.id,
+              decisionOsRoot,
+              ledger: beforeLedger,
+              mutation,
+              store: taskStateForProject(localProject).store,
+              contentStore: federationContentStore,
+              drain: federationContentScheduler?.drain ?? null,
+            });
+          } catch (error) {
+            if (!(error instanceof TaskContentMaterializationError)) throw error;
+            response.statusCode = error.statusCode;
+            response.end(JSON.stringify({ ok: false, error: error.code, contentFile: error.key }));
             return;
           }
         }

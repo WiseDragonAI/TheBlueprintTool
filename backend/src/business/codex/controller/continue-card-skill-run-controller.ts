@@ -348,6 +348,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     onStdoutChunk: (chunk) => logCodexContinueDebug('child-stdout-chunk', { traceId, runId, bytes: chunk.length, preview: chunk.toString('utf8').slice(0, 500) }),
     onStderrChunk: (chunk) => logCodexContinueDebug('child-stderr-chunk', { traceId, runId, bytes: chunk.length, preview: chunk.toString('utf8').slice(0, 500) }),
     onSettled: async (settlement) => {
+      let retainProcessForArtifactFailure = false;
       try {
         if (settlement.kind === 'error') {
           logCodexContinueDebug('child-error', { traceId, ledgerId, cardId, runId, message: settlement.error.message, finishedAt: settlement.finishedAt });
@@ -355,6 +356,12 @@ export async function continueCardSkillRunController(input: { action_payload?: A
           if (!ownsExecution) return;
           appendRunStatus(outputFile, 'failed', `${newSession ? 'new session' : 'resume'} failed: ${settlement.error.message}`);
           appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status: 'failed' }), 'utf8');
+          try {
+            await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
+          } catch (error) {
+            retainProcessForArtifactFailure = true;
+            throw error;
+          }
           const current = taskExecutionState(runtime)?.executions.find(executionId);
           if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
             await taskExecutionState(runtime)!.executions.transition(executionId, {
@@ -362,7 +369,6 @@ export async function continueCardSkillRunController(input: { action_payload?: A
               error: { code: 'codex_continuation_start_failed', message: settlement.error.message },
             });
           }
-          await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
           updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
           scheduleCodexRuntime(runtime, 'schedule-after-continuation-failure', { runId, executionId });
           notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status: 'failed' });
@@ -378,6 +384,12 @@ export async function continueCardSkillRunController(input: { action_payload?: A
         appendRunStatus(outputFile, status, detail);
         if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
         appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
+        try {
+          await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
+        } catch (error) {
+          retainProcessForArtifactFailure = true;
+          throw error;
+        }
         const current = taskExecutionState(runtime)?.executions.find(executionId);
         if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
           await taskExecutionState(runtime)!.executions.transition(executionId, {
@@ -386,7 +398,6 @@ export async function continueCardSkillRunController(input: { action_payload?: A
             error: status === 'failed' ? { code: 'codex_continuation_failed', message: detail } : null,
           });
         }
-        await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
         updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
         scheduleCodexRuntime(runtime, 'schedule-after-continuation-settlement', { runId, executionId, status });
         if (typeof runtime.onCodexRunSettled === 'function') {
@@ -398,7 +409,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       } finally {
         // WHAT: Retain live process paths through immutable artifact publication.
         // WHY: A terminal read must never lack both a process file and an artifact head.
-        removeTaskExecutionProcess(runtime, executionId);
+        if (!retainProcessForArtifactFailure) removeTaskExecutionProcess(runtime, executionId);
       }
     },
   });

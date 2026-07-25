@@ -13,12 +13,14 @@ import {
   reconcileActiveLedgerState,
   recordActiveLedgerLoadFailure
 } from './reconcile-active-ledger-state.js';
+import { acceptTaskClockForInstall, taskClockFromResponse, taskMutationReceiptMatches } from '../../refresh/helper/task-causal-clock.js';
 import type { CodexEffort, CodexModel } from '../../codex/helper/codex-run-options.js';
 import type { CardQuestionnaires } from '../../../../../shared/schemas/questionnaire-types.js';
 import type { GitReviewNote } from '../../../../../shared/schemas/git-review-types.js';
 
 export type ActiveLedgerMutation = {
   action: 'create-card' | 'create-task-intake' | 'reassign-task' | 'transition-card-lifecycle' | 'patch-card' | 'delete-card' | 'delete-card-image' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-viewport' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
+  mutationId?: string;
   card?: Record<string, unknown>;
   cardId?: string;
   assignedNodeId?: string;
@@ -76,6 +78,9 @@ export type CommitActiveLedgerMutationOptions = {
 };
 
 export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation, options: CommitActiveLedgerMutationOptions = {}): Promise<boolean> {
+  // WHAT: Give every mutation response one exact optimistic-intent identity.
+  // WHY: Only the response for this request may acknowledge or reject its local update.
+  mutation = mutation.mutationId ? mutation : { ...mutation, mutationId: crypto.randomUUID() };
   const endpoint = ledgerEndpointForTab(state.activeTab);
   const ledgerStateId = state.canvasMode === 'projects' ? 'projects-canvas' : state.canvasMode === 'ledgers' ? 'ledgers-canvas' : state.activeTab;
   const request = beginActiveLedgerRequest(ledgerStateId);
@@ -98,6 +103,17 @@ export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation,
     return false;
   }
   const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+  let projectionTaskClock = taskClockFromResponse(response);
+  let projectionServerRevision = ledgerRevisionFromResponse(response);
+  if (payload?.taskClock && typeof payload.taskClock === 'object' && !Array.isArray(payload.taskClock)) {
+    // WHAT: Admit a task clock only when the server echoes the exact mutation receipt.
+    // WHY: Direct responses must not acknowledge an unrelated optimistic intent.
+    if (!taskMutationReceiptMatches(payload, String(mutation.mutationId ?? ''))) {
+      recordActiveLedgerLoadFailure({ request, source: `server-ledger-mutation:${mutation.action}`, reason: 'task-mutation-receipt-mismatch' });
+      return false;
+    }
+    acceptTaskClockForInstall(payload.taskClock as Record<string, number>, `server-ledger-mutation-response:${mutation.action}`);
+  }
   let ledger: unknown = payload;
   if (payload?.ok === true && typeof payload.ledgerId === 'string') {
     if ((mutation.action === 'patch-geometry' || mutation.action === 'patch-viewport') && state.activeLedger) {
@@ -105,6 +121,10 @@ export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation,
     } else {
       const snapshot = await fetch(`/api/ledgers/${encodeURIComponent(payload.ledgerId)}/canvas`, { cache: 'no-store' }).catch(() => undefined);
       ledger = snapshot?.ok ? await snapshot.json().catch(() => null) : null;
+      // WHAT: Associate the fetched projection with its own task clock.
+      // WHY: A mutation receipt clock cannot lend causal authority to a delayed relay snapshot.
+      projectionTaskClock = taskClockFromResponse(snapshot);
+      projectionServerRevision = ledgerRevisionFromResponse(snapshot);
     }
   }
   if (!ledger || typeof ledger !== 'object' || Array.isArray(ledger)) {
@@ -114,7 +134,8 @@ export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation,
   const applied = reconcileActiveLedgerState({
     ledger,
     request,
-    serverRevision: ledgerRevisionFromResponse(response),
+    serverRevision: projectionServerRevision,
+    taskClock: projectionTaskClock,
     source: `server-ledger-mutation:${mutation.action}`,
     submittedGeometryRevisions
   });

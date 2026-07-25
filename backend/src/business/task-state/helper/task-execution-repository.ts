@@ -343,7 +343,11 @@ export function createTaskExecutionRepository(input: {
     input.assertWritable?.();
     const current = find(executionId);
     if (!current) throw new Error(`task_execution_not_found:${executionId}`);
-    if (!terminalPhases.has(current.lifecycle.phase)) throw new Error(`task_execution_artifacts_not_terminal:${executionId}`);
+    // WHAT: Permit immutable artifact capture before the terminal lifecycle contribution.
+    // WHY: Requiring terminal state here structurally created a replicated terminal window with no durable evidence.
+    if (!['running', 'cancelling', ...terminalPhases].includes(current.lifecycle.phase)) {
+      throw new Error(`task_execution_artifacts_phase_invalid:${executionId}:${current.lifecycle.phase}`);
+    }
     const changedAt = artifacts.changedAt ?? now().toISOString();
     if (!Number.isFinite(Date.parse(changedAt))) throw new Error('invalid_task_execution_artifact_timestamp');
     if (Date.parse(changedAt) < Date.parse(current.artifacts.changedAt)) throw new Error(`task_execution_artifact_timestamp_regression:${executionId}`);

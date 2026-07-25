@@ -12,6 +12,8 @@ import { createProjectTaskState } from '../../../src/business/task-state/helper/
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { taskCommandForMutation } from '../../../src/business/task-state/helper/task-mutation-command.js';
 import type { TaskStateDelta } from '../../../src/business/task-state/helper/task-current-state-types.js';
+import { materializeTaskMutationInputs } from '../../../src/business/federation/helper/materialize-task-mutation-inputs.js';
+import { createFederationContentReplicaStore } from '../../../src/business/federation/helper/federation-content-replica-store.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -581,6 +583,83 @@ test('unchanged content bytes do not create a second resource mutation when file
   assert.equal(state.store.contentHeads('.decision-os/cards/tasks/card-a.md').length, 1);
   assert.equal(publishedContent.length, 1);
   assert.equal(published.flatMap((delta) => delta.entities).filter((entity) => entity.entityType === 'resource').length, 1);
+});
+
+test('watcher observation ignores materialization and publishes only the post-mutation thread head', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-materialized-mutation-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const threadId = 'thread-card-a';
+  const key = `.decision-os/threads/tasks/${threadId}.md`;
+  const threadFile = resolve(root, 'threads', 'tasks', `${threadId}.md`);
+  const original = [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-existing","timestamp":"2026-07-26T00:00:00.000Z"} -->',
+    '',
+    'Existing question.',
+    '',
+  ].join('\n');
+  mkdirSync(dirname(threadFile), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Task', status: 'todo' }],
+    annotations: [],
+    relationships: [],
+    threadFiles: { [threadId]: key },
+  }));
+  writeFileSync(threadFile, original);
+  const published: TaskStateDelta[] = [];
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+    publish: (delta) => { published.push(delta); },
+  });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  await state.recordContentContribution('card-a', key);
+  const initialHead = state.store.contentHeads(key)[0];
+  const initialResourcePublications = published.flatMap((delta) => delta.entities)
+    .filter((entity) => entity.entityType === 'resource' && entity.entityId === key).length;
+  rmSync(threadFile);
+  const mutation: LedgerMutation = {
+    action: 'append-note',
+    note: { id: 'note-new', threadId, role: 'agent', body: 'New answer.' },
+  };
+
+  await materializeTaskMutationInputs({
+    projectId: 'project-a',
+    decisionOsRoot: root,
+    ledger: state.projection().ledger,
+    mutation,
+    store: state.store,
+    contentStore: createFederationContentReplicaStore({ decisionOsRoot: resolve(root, 'federation-cache') }),
+    drain: null,
+  });
+  // WHAT: Simulate the watcher observing exact materialized bytes before the intended mutation.
+  // WHY: Reinstalling the active head must be a no-op; only the subsequent user edit may advance content.
+  await state.recordContentContribution('card-a', key);
+  assert.deepEqual(state.store.contentHeads(key), [initialHead]);
+  assert.equal(
+    published.flatMap((delta) => delta.entities)
+      .filter((entity) => entity.entityType === 'resource' && entity.entityId === key).length,
+    initialResourcePublications,
+  );
+
+  const before = structuredClone(state.projection().ledger);
+  const after = structuredClone(before);
+  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
+  await state.executeMutation(mutation, before, after);
+  const finalMarkdown = readFileSync(threadFile, 'utf8');
+  const finalHeads = state.store.contentHeads(key);
+  assert.match(finalMarkdown, /Existing question\./);
+  assert.match(finalMarkdown, /New answer\./);
+  assert.equal(finalHeads.length, 1);
+  assert.notEqual(finalHeads[0].hash, initialHead.hash);
+  assert.equal(
+    published.flatMap((delta) => delta.entities)
+      .filter((entity) => entity.entityType === 'resource' && entity.entityId === key).length,
+    initialResourcePublications + 1,
+  );
 });
 
 test('projection commands modify only declared entity lanes', async (context) => {

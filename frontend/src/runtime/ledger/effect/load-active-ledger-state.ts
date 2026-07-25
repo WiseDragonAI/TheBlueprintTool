@@ -10,6 +10,7 @@ import {
   reconcileActiveLedgerState,
   recordActiveLedgerLoadFailure
 } from './reconcile-active-ledger-state.js';
+import { taskClockFromResponse } from '../../refresh/helper/task-causal-clock.js';
 import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
 
 type LoadActiveLedgerStateOptions = {
@@ -48,6 +49,7 @@ export async function loadActiveLedgerState(options?: LoadActiveLedgerStateOptio
     ledger,
     request,
     serverRevision: ledgerRevisionFromResponse(response),
+    taskClock: taskClockFromResponse(response),
     source: 'load-active-ledger-state'
   });
   if (!applied) return false;

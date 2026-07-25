@@ -11,6 +11,7 @@ import { mergeLocalCanvasStateIntoLedger } from '../helper/merge-local-canvas-st
 import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
 import { refreshZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 import { overlayPendingActiveLedger } from './run-optimistic-active-ledger-mutation.js';
+import { acceptTaskClockForInstall } from '../../refresh/helper/task-causal-clock.js';
 
 type AnyRecord = Record<string, any>;
 
@@ -22,12 +23,13 @@ export type LedgerReconciliationRequest = {
 };
 
 export type LedgerRouteReconciliationSnapshot = Pick<LedgerReconciliationState,
-  'routeLedgerStateId' | 'lastAppliedServerRevision' | 'lastAppliedSequence' | 'localGeometryRevisions'>;
+  'routeLedgerStateId' | 'lastAppliedServerRevision' | 'lastAppliedSequence' | 'lastAppliedTaskClock' | 'localGeometryRevisions'>;
 
 export type ReconcileActiveLedgerInput = {
   ledger: unknown;
   request: LedgerReconciliationRequest;
   serverRevision: number | null;
+  taskClock?: Record<string, number> | null;
   source: string;
   submittedGeometryRevisions?: Record<string, number>;
 };
@@ -150,6 +152,7 @@ export function snapshotLedgerReconciliationRoute(): LedgerRouteReconciliationSn
     routeLedgerStateId: reconciliation.routeLedgerStateId,
     lastAppliedServerRevision: reconciliation.lastAppliedServerRevision,
     lastAppliedSequence: reconciliation.lastAppliedSequence,
+    lastAppliedTaskClock: { ...(reconciliation.lastAppliedTaskClock ?? {}) },
     localGeometryRevisions: { ...reconciliation.localGeometryRevisions }
   };
 }
@@ -160,6 +163,7 @@ export function advanceLedgerRouteEpoch(ledgerStateId: string): number {
   reconciliation.routeLedgerStateId = ledgerStateId;
   reconciliation.lastAppliedServerRevision = -1;
   reconciliation.lastAppliedSequence = 0;
+  reconciliation.lastAppliedTaskClock = {};
   reconciliation.localGeometryRevisions = {};
   return reconciliation.routeEpoch;
 }
@@ -170,6 +174,7 @@ export function restoreLedgerReconciliationRoute(snapshot: LedgerRouteReconcilia
   reconciliation.routeLedgerStateId = snapshot.routeLedgerStateId;
   reconciliation.lastAppliedServerRevision = snapshot.lastAppliedServerRevision;
   reconciliation.lastAppliedSequence = snapshot.lastAppliedSequence;
+  reconciliation.lastAppliedTaskClock = { ...(snapshot.lastAppliedTaskClock ?? {}) };
   reconciliation.localGeometryRevisions = { ...snapshot.localGeometryRevisions };
 }
 
@@ -251,6 +256,9 @@ export function reconcileActiveLedgerState(input: ReconcileActiveLedgerInput): b
     telemetry('active-ledger-reconciliation-rejected', { source: input.source, reason: 'request-sequence', sequence: input.request.sequence, lastAppliedSequence: reconciliation.lastAppliedSequence });
     return false;
   }
+  // WHAT: Reject a task projection whose causal clock does not include the currently installed state.
+  // WHY: A larger relay invalidation revision can still describe data created before the local durable mutation.
+  if (!acceptTaskClockForInstall(input.taskClock ?? null, input.source)) return false;
 
   const sameLedger = Boolean(state.activeLedger && state.activeLedgerId === input.request.ledgerStateId);
   const localLedger = sameLedger ? state.activeLedger : null;

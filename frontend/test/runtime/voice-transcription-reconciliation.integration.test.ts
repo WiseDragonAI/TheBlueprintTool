@@ -122,6 +122,38 @@ test('older intermediate revisions cannot replace a terminal voice note', () => 
   }
 });
 
+test('a numerically newer intermediate revision cannot replace a terminal voice note', () => {
+  const restore = installRuntime();
+  state.activeLedger.notes['thread-card-a'] = [{ id: 'note-a', message: 'Final transcript.', voiceFileRef: '/tmp/voice.wav', status: 'transcribed', revision: 4 }];
+  try {
+    const applied = applyVoiceServerNote({
+      ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-a',
+      note: { id: 'note-a', message: 'Delayed relay state.', status: 'transcribing', revision: 5 }
+    });
+    assert.equal(applied, false);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Final transcript.');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'transcribed');
+  } finally {
+    restore();
+  }
+});
+
+test('a numerically newer relay revision cannot move an active voice lifecycle backward', () => {
+  const restore = installRuntime();
+  state.activeLedger.notes['thread-card-a'] = [{ id: 'note-a', message: 'Finalizing.', voiceFileRef: '/tmp/voice.wav', status: 'finalizing', revision: 4 }];
+  try {
+    const applied = applyVoiceServerNote({
+      ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-a',
+      note: { id: 'note-a', message: 'Delayed queued state.', status: 'queued', revision: 5 }
+    });
+    assert.equal(applied, false);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Finalizing.');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'finalizing');
+  } finally {
+    restore();
+  }
+});
+
 test('terminal reconciliation stops the pending note watcher', async () => {
   const restore = installRuntime();
   const previousFetch = globalThis.fetch;

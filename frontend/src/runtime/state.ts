@@ -16,6 +16,7 @@ export type LedgerReconciliationState = {
   nextRequestSequence: number;
   lastAppliedServerRevision: number;
   lastAppliedSequence: number;
+  lastAppliedTaskClock?: Record<string, number>;
   localGeometryRevisions: Record<string, number>;
   failedLoadCount: number;
   lastFailedLoad: null | {
@@ -84,6 +85,7 @@ export const state: any = {
     nextRequestSequence: 1,
     lastAppliedServerRevision: -1,
     lastAppliedSequence: 0,
+    lastAppliedTaskClock: {},
     localGeometryRevisions: {},
     failedLoadCount: 0,
     lastFailedLoad: null
