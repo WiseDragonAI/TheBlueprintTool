@@ -22,7 +22,22 @@ async function projectHome(name: string): Promise<string> {
   const decisionOsRoot = join(home, name, '.decision-os');
   mkdirSync(decisionOsRoot, { recursive: true });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: `${name} Tasks`, ledgerFile: '.decision-os/tasks.json' }] }));
-  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [{ id: `${name}-card`, title: `${name} card`, labels: ['master-task'], status: 'todo' }], annotations: [], relationships: [] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{
+      id: `${name}-card`,
+      title: `${name} card`,
+      labels: ['master-task'],
+      status: 'todo',
+    }, {
+      id: `${name}-headless-card`,
+      title: `${name} headless card`,
+      labels: ['note'],
+      status: 'todo',
+      comment: { contentFile: `.decision-os/cards/tasks/${name}-headless-card.md` },
+    }],
+    annotations: [],
+    relationships: [],
+  }));
   writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: `${name}-project` }));
   await migrateTaskCurrentState({ decisionOsRoot, projectId: `${name}-project`, nodeId: name, tasksLedgerFile: join(decisionOsRoot, 'tasks.json') });
   return home;
@@ -895,6 +910,19 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const registryB = readFileSync(registryBPath, 'utf8');
 
     const remoteHeaders = { 'x-decision-os-replica-node': 'node-b' };
+    const headlessCardResponse = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/tasks/cards/beta-headless-card`, { headers: remoteHeaders });
+    const headlessCard = await headlessCardResponse.json() as {
+      id?: string;
+      comment?: { contentFile?: string; what?: string };
+      state?: { status?: string; content?: { status?: string; candidates?: unknown[] } };
+    };
+    assert.equal(headlessCardResponse.status, 200, 'a converged card without published Markdown bytes must not synchronize forever');
+    assert.equal(headlessCard.id, 'beta-headless-card');
+    assert.equal(headlessCard.comment?.contentFile, '.decision-os/cards/tasks/beta-headless-card.md');
+    assert.equal(headlessCard.comment?.what, undefined);
+    assert.equal(headlessCard.state?.status, 'synchronized');
+    assert.equal(headlessCard.state?.content?.status, 'missing');
+    assert.deepEqual(headlessCard.state?.content?.candidates, []);
     const remoteLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, { headers: remoteHeaders }).then((response) => response.json()) as { cards: Array<{ title: string }> };
     assert.equal(remoteLedger.cards[0].title, 'changed on owner');
     const queryRoutedLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks?replica=node-b`).then((response) => response.json()) as { cards: Array<{ title: string }> };

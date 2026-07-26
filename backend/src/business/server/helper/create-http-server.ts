@@ -2016,9 +2016,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             for (const head of heads) federationContentStore.applyManifest(head.sourceReplicaId, { version: 1, projectId: localProjectId, generatedAt: new Date().toISOString(), complete: false, resources: [{ type: head.type, key: head.key, hash: head.hash, bytes: head.bytes, changedAt: head.changedAt }] });
             const contentOwner = heads.find((head) => head.sourceReplicaId === ownerNodeId)?.sourceReplicaId ?? heads[0]?.sourceReplicaId ?? ownerNodeId;
             const content = federationContentStore.resource(contentOwner, localProjectId, key);
-            resourceReady = !key || Boolean(content.file);
+            // WHAT: Treat a converged absence of a card-content head as an authoritative empty body.
+            // WHY: Cards created without Markdown bytes otherwise return 202 forever even though their task state is fully synchronized.
+            resourceReady = !key || Boolean(content.file) || (heads.length === 0 && relayRootCurrent);
             contentStatus = { status: content.state, resource: key, error: content.error, conflict: content.conflict, candidates: content.candidates };
-            if (!resourceReady) {
+            if (!resourceReady && heads.length > 0) {
               federationContentStore.prioritize(contentOwner, localProjectId, key);
               if (!pausedBackgroundComponents.has('federation-content-scheduler')) void federationContentScheduler?.drain()
                 .catch((error: unknown) => recordBackgroundFailure('federation-content-scheduler', 'drain-card-content-demand', error, { projectId: localProjectId, key }));

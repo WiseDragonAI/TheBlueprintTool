@@ -114,7 +114,7 @@ function migrationCounter(entities: LegacyEntity[], nodeId: string): number {
   return maximum + 1;
 }
 
-function recoveredPresenceEntities(projectId: string, entities: LegacyEntity[], store: ReturnType<typeof createTaskCurrentStateStore>): TaskCurrentEntity[] {
+function recoveredPresenceEntities(projectId: string, nodeId: string, entities: LegacyEntity[], store: ReturnType<typeof createTaskCurrentStateStore>): TaskCurrentEntity[] {
   return entities.flatMap((entity): TaskCurrentEntity[] => {
     if (entity.entityType === 'resource') return [];
     const legacyPresence = entity.fields.$entity;
@@ -140,7 +140,9 @@ function recoveredPresenceEntities(projectId: string, entities: LegacyEntity[], 
     // WHY: The sidecar owns narrative note identity; preserving stale set-presence would resurrect a ghost note,
     // while synthesizing missing narrative bytes would invent operator content.
     if (!current && operation !== 'tombstone') throw new Error(`migration_missing_live_entity:${entity.entityType}:${entity.entityId}`);
-    const replicaId = `migration:${projectId}:${entity.entityType}:${entity.entityId}:presence`;
+    // WHAT: Namespace recovered presence decisions by the node that interpreted its local legacy sources.
+    // WHY: Different canonical sidecars may legitimately yield set versus tombstone; sharing one dot would turn that explicit conflict into a fatal collision.
+    const replicaId = `migration:${nodeId}:${projectId}:${entity.entityType}:${entity.entityId}:presence`;
     const clock = joinTaskClocks(joinTaskClocks(legacyPresence.clock, currentPresence?.clock ?? {}), { [replicaId]: 1 });
     return [finalizeTaskCurrentEntity({
       version: taskCurrentStateVersion,
@@ -490,7 +492,7 @@ export async function buildTaskCurrentStateMigrationShadow(plan: TaskCurrentStat
     await installObject(file, object.bytes);
   }
   await mergeEntityBatches(store, plan.projectId, plan.projectionSources.flatMap((source) => source.entities));
-  await mergeEntityBatches(store, plan.projectId, recoveredPresenceEntities(plan.projectId, plan.source.legacyEntities, store));
+  await mergeEntityBatches(store, plan.projectId, recoveredPresenceEntities(plan.projectId, plan.nodeId, plan.source.legacyEntities, store));
   const conflicts = conflictEntities(plan.projectId, (plan.source.conflicts ?? []).filter((conflict) => !isLegacyExecutionCardField(conflict.path)));
   await mergeEntityBatches(store, plan.projectId, conflicts);
   await mergeEntityBatches(store, plan.projectId, plan.executions.entities);
