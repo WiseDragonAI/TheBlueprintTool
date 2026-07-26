@@ -279,6 +279,66 @@ test('An interrupted responsive thread hydration recovers without an operator re
   }
 });
 
+test('A hydrated responsive thread remains visible while navigation refresh is pending.', { timeout: 30_000 }, async () => {
+  const server = await startDecisionOsServer();
+  let browser: Browser | undefined;
+  let releaseRefresh: (() => void) | undefined;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    const route = localResponsiveCardRoute();
+    const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const refreshGate = new Promise<void>((resolveRefresh) => { releaseRefresh = resolveRefresh; });
+    let threadRequestCount = 0;
+    let retainedPayload: Record<string, unknown> | null = null;
+    await desktop.route('**/api/ledgers/*/threads/*', async (request) => {
+      threadRequestCount += 1;
+      if (!retainedPayload) {
+        const response = await request.fetch();
+        const payload = await response.json() as { notes?: Record<string, unknown[]> };
+        const threadId = decodeURIComponent(new URL(request.request().url()).pathname.split('/').at(-1) ?? '');
+        payload.notes = {
+          ...(payload.notes ?? {}),
+          [threadId]: [{
+            id: 'note-browser-thread-navigation',
+            role: 'operator',
+            message: 'Retained across navigation.',
+            timestamp: '2026-07-27T00:00:00.000Z',
+          }],
+        };
+        retainedPayload = payload;
+        await request.fulfill({ response, contentType: 'application/json', body: JSON.stringify(payload) });
+        return;
+      }
+      await refreshGate;
+      await request.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(retainedPayload) });
+    });
+
+    await desktop.goto(`${server.url}${route}`, { waitUntil: 'domcontentloaded' });
+    await desktop.locator('#card-view:not([hidden])').waitFor({ state: 'visible', timeout: 10_000 });
+    await desktop.getByRole('button', { name: 'Thread', exact: true }).click();
+    const retainedNote = desktop.locator('.thread-note').filter({ hasText: 'Retained across navigation.' });
+    await retainedNote.waitFor({ state: 'visible', timeout: 10_000 });
+    await desktop.getByRole('button', { name: 'Close thread' }).click();
+    await desktop.locator('.mobile-thread-inspector').waitFor({ state: 'hidden' });
+    await desktop.locator('.back-to-zone-button').click();
+    await desktop.locator('#zone-view:not([hidden])').waitFor({ state: 'visible' });
+    await desktop.goBack();
+    await desktop.locator('#card-view:not([hidden])').waitFor({ state: 'visible' });
+    await desktop.getByRole('button', { name: 'Thread', exact: true }).click();
+    await retainedNote.waitFor({ state: 'visible', timeout: 1_000 });
+    assert.ok(threadRequestCount >= 2, `Expected a pending scoped refresh, received ${threadRequestCount} request.`);
+    releaseRefresh?.();
+  } finally {
+    releaseRefresh?.();
+    await browser?.close();
+    await stopDecisionOsServer(server.process);
+  }
+});
+
 test('A new desktop task remains in its task view while its optimistic creation is pending.', { timeout: 60_000 }, async () => {
   const server = await startDecisionOsServer();
   let browser: Browser | undefined;

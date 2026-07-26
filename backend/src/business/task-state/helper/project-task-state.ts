@@ -11,7 +11,6 @@ import { taskCurrentStateVersion, type TaskEntityChange, type TaskStateDelta } f
 import { createTaskContentObjectStore, type TaskContentHead } from './task-content-object-store.js';
 import { taskContentReferences } from './task-content-resources.js';
 import { taskCommandForMutation, taskCommandForProjection, type TaskProjectionCommand } from './task-mutation-command.js';
-import { taskMutationContentResources } from './task-mutation-content-resources.js';
 import { createTaskExecutionRepository } from './task-execution-repository.js';
 import { mergeableTaskConflictChanges } from './resolve-mergeable-task-conflicts.js';
 
@@ -23,6 +22,11 @@ export type ProjectTaskMutationResult = {
   deltas: TaskStateDelta[];
   localChanges: TaskProjectionEntityChange[];
   ledger: AnyRecord;
+};
+
+export type TaskContentHeadRepairResult = {
+  repaired: TaskContentHead[];
+  missing: string[];
 };
 
 function readableLedger(file: string): AnyRecord {
@@ -213,7 +217,55 @@ export function createProjectTaskState(input: {
     return operation;
   };
 
-  const executeMutationNow = async (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<ProjectTaskMutationResult> => {
+  const repairMissingContentHeadsNow = async (): Promise<TaskContentHeadRepairResult> => {
+    const ledger = store.projection().ledger;
+    const cards = Array.isArray(ledger.cards) ? ledger.cards as AnyRecord[] : [];
+    const threadFiles = ledger.threadFiles && typeof ledger.threadFiles === 'object' && !Array.isArray(ledger.threadFiles)
+      ? ledger.threadFiles as AnyRecord
+      : {};
+    const referencedFiles = new Set<string>();
+    for (const card of cards) {
+      const comment = card.comment && typeof card.comment === 'object' && !Array.isArray(card.comment)
+        ? card.comment as AnyRecord
+        : {};
+      const contentFile = String(comment.contentFile ?? '');
+      if (contentFile) referencedFiles.add(contentFile);
+    }
+    for (const contentFile of Object.values(threadFiles)) {
+      if (typeof contentFile === 'string' && contentFile) referencedFiles.add(contentFile);
+    }
+    const repaired: TaskContentHead[] = [];
+    const missing: string[] = [];
+    for (const resourceId of referencedFiles) {
+      if (store.contentHeads(resourceId).length > 0) continue;
+      const head = await contentObjects.capture(resourceId);
+      if (head) repaired.push(head);
+      else missing.push(resourceId);
+    }
+    if (repaired.length > 0) {
+      await persistChanges(repaired.map((head) => ({
+        entityType: 'resource',
+        entityId: head.key,
+        changes: [{ path: 'head', operation: 'set', value: head }],
+      })));
+      for (const head of repaired) await input.publishContent?.(head.key);
+    }
+    return { repaired, missing };
+  };
+
+  const repairMissingContentHeads = (): Promise<TaskContentHeadRepairResult> => {
+    assertWritable();
+    const operation = commandQueue.then(repairMissingContentHeadsNow);
+    commandQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+  };
+
+  const executeMutationNow = async (
+    mutation: LedgerMutation,
+    before: AnyRecord,
+    after: AnyRecord,
+    changedContentFiles: readonly string[] = [],
+  ): Promise<ProjectTaskMutationResult> => {
     if (mutation.action === 'complete-master-task' && mutation.masterTaskId) {
       const masterTaskId = String(mutation.masterTaskId);
       const subtaskIds = Array.isArray(before.relationships) ? (before.relationships as AnyRecord[])
@@ -238,14 +290,9 @@ export function createProjectTaskState(input: {
       }
     }
     const command = taskCommandForMutation({ mutation, before, after });
-    const mutationResources = new Set(taskMutationContentResources(mutation, before, after));
-    if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(command.kind) && mutation.note?.threadId) {
-      const threadFiles = after.threadFiles && typeof after.threadFiles === 'object' && !Array.isArray(after.threadFiles)
-        ? after.threadFiles as Record<string, unknown>
-        : {};
-      const resourceId = String(threadFiles[mutation.note.threadId] ?? '');
-      mutationResources.add(resourceId);
-    }
+    // WHAT: Capture the exact files reported by the synchronous mutation writer.
+    // WHY: A second mutation-action table can omit a newly written document and publish incomplete task state.
+    const mutationResources = new Set(changedContentFiles.filter(Boolean));
     const changedContentResources: string[] = [];
     for (const resourceId of mutationResources) {
       const head = await contentObjects.capture(resourceId);
@@ -269,9 +316,14 @@ export function createProjectTaskState(input: {
     return { changed, deltas, localChanges: projectionEntityChanges(command.changes), ledger: store.projection().ledger };
   };
 
-  const executeMutation = (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<ProjectTaskMutationResult> => {
+  const executeMutation = (
+    mutation: LedgerMutation,
+    before: AnyRecord,
+    after: AnyRecord,
+    changedContentFiles: readonly string[] = [],
+  ): Promise<ProjectTaskMutationResult> => {
     assertWritable();
-    const operation = commandQueue.then(() => executeMutationNow(mutation, before, after));
+    const operation = commandQueue.then(() => executeMutationNow(mutation, before, after, changedContentFiles));
     commandQueue = operation.then(() => undefined, () => undefined);
     return operation;
   };
@@ -358,6 +410,7 @@ export function createProjectTaskState(input: {
     executeProjectionCommand,
     executeProjectionCommandNow,
     reconcileMergeableConflicts,
+    repairMissingContentHeads,
     activateTask: queueTaskActivation,
     recordContentContribution: queueContentContribution,
     finalizeExecutionArtifacts,

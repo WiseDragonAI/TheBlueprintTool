@@ -32,6 +32,7 @@ export type ReconcileActiveLedgerInput = {
   taskClock?: Record<string, number> | null;
   source: string;
   submittedGeometryRevisions?: Record<string, number>;
+  preserveLocalState?: boolean;
 };
 
 export const ledgerRevisionHeader = 'x-decision-os-ledger-revision';
@@ -260,7 +261,8 @@ export function reconcileActiveLedgerState(input: ReconcileActiveLedgerInput): b
   // WHY: A larger relay invalidation revision can still describe data created before the local durable mutation.
   if (!acceptTaskClockForInstall(input.taskClock ?? null, input.source)) return false;
 
-  const sameLedger = Boolean(state.activeLedger && state.activeLedgerId === input.request.ledgerStateId);
+  const sameLedger = input.preserveLocalState !== false
+    && Boolean(state.activeLedger && state.activeLedgerId === input.request.ledgerStateId);
   const localLedger = sameLedger ? state.activeLedger : null;
   const preserve = sameLedger && isRecord(localLedger)
     ? geometryIdsToPreserve(input, localLedger)

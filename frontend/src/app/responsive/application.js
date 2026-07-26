@@ -2734,16 +2734,7 @@ async function loadLedger(ledgerId, owner) {
     ledger: state.ledger,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
-    onQuickVoiceSubmitted: navigateVoiceSubmission,
-    onLedgerRefresh: async (activeLedgerId, replicaNodeId) => {
-      const projectId = state.resourceProjectId;
-      const refreshed = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }, projectId, replicaNodeId).then((result) => result.ok ? result.json() : null);
-      const reconciled = refreshed
-        ? responsiveLedgerTransactions.reconcile(responsiveLedgerScopeKey({ projectId, replicaNodeId, ledgerId: activeLedgerId }), refreshed)
-        : null;
-      if (reconciled && projectId === state.resourceProjectId && activeLedgerId === state.activeLedgerId) state.ledger = reconciled;
-      return reconciled;
-    }
+    onQuickVoiceSubmitted: navigateVoiceSubmission
   });
 }
 

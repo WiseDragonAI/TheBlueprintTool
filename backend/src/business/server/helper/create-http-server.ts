@@ -321,6 +321,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const pausedProjectWatchers = new Set<string>();
   const pausedProjectRuntimes = new Set<string>();
   const taskProjectsPendingFrameIncidentRevalidation = new Map<string, RuntimeIncident>();
+  const scheduledTaskContentHeadRepairs = new Set<string>();
   let serverClosing = false;
   const serverCloseAbort = new AbortController();
   let globalRuntimeIncident: RuntimeIncident | null = null;
@@ -459,6 +460,41 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
   };
 
+  const scheduleTaskContentHeadRepair = (projectId: string, state: ProjectTaskState): void => {
+    if (scheduledTaskContentHeadRepairs.has(projectId)) return;
+    scheduledTaskContentHeadRepairs.add(projectId);
+    // WHAT: Repair only referenced local task documents whose causal head was historically omitted.
+    // WHY: Structural convergence cannot discover a document that never entered resource state.
+    void state.repairMissingContentHeads().then(({ repaired, missing }) => {
+      if (repaired.length > 0) {
+        controlRoomProjectionStore?.invalidate(projectId, repaired.map((head) => ({ entityType: 'resource', entityId: head.key })));
+      }
+      const scope = `task-content-coverage:${projectId}`;
+      if (missing.length === 0) {
+        incidentLedger.resolveScope(scope, 'Every referenced local task document has a causal content head.');
+        return;
+      }
+      recordIncident({
+        severity: 'warning',
+        scope,
+        component: 'task-content-object-store',
+        operation: 'repair-missing-task-content-heads',
+        code: 'task_content_reference_missing',
+        error: new Error(`Referenced task documents are missing locally: ${missing.join(',')}`),
+        context: { projectId, missingCount: missing.length, files: missing.slice(0, 50) },
+      });
+    }).catch((error: unknown) => {
+      scheduledTaskContentHeadRepairs.delete(projectId);
+      recordStoppedOperation({
+        scope: `task-content-coverage:${projectId}`,
+        component: 'task-content-object-store',
+        operation: 'repair-missing-task-content-heads',
+        error,
+        context: { projectId },
+      });
+    });
+  };
+
   const taskStateForProject = (project: DecisionOsProject): ProjectTaskState => {
     const paused = pausedTaskProjects.get(project.id);
     if (paused) throw new RuntimeScopePausedError(paused.scope, paused.id);
@@ -466,7 +502,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       throw pauseTaskProject(project, new Error(`task_migration_transaction_incomplete:${String(migrationAdmission?.phase ?? 'unknown')}`), 'admit-migrated-task-state');
     }
     const current = projectTaskStates.get(project.id);
-    if (current) return current;
+    if (current) {
+      if (federationTaskStateReplicator) scheduleTaskContentHeadRepair(project.id, current);
+      return current;
+    }
     try {
       const ledger = tasksLedgerForProject(project);
       const tasksLedgerFile = resolve(project.decisionOsRoot, ledger.ledgerFile.replace(/^\.decision-os\//, ''));
@@ -482,6 +521,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         decisionOsRoot: project.decisionOsRoot,
         tasksLedgerFile,
         publish: (delta) => federationTaskStateReplicator?.publishDelta(delta),
+        publishContent: () => federation?.publishContentChange(),
         onExecutionChange: ({ executionId, record }) => publishExecutionChange({
           projectId: project.id,
           nodeId: federation?.localOwner().ownerNodeId ?? 'local',
@@ -492,6 +532,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         initialize,
       });
       projectTaskStates.set(project.id, value);
+      if (federationTaskStateReplicator) scheduleTaskContentHeadRepair(project.id, value);
       if (taskProjectsPendingFrameIncidentRevalidation.delete(project.id)) {
         incidentLedger.resolveScope(
           `project-task-state:${project.id}`,
@@ -957,7 +998,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (mutationResult.error) {
         throw new Error(String(mutationResult.error.body.error ?? 'Task ledger mutation failed.'));
       }
-      const committed = await state.executeMutation(mutation, before, after);
+      const committed = await state.executeMutation(mutation, before, after, mutationResult.changedContentFiles);
       if (committed.changed) controlRoomProjectionStore?.invalidate(projectId, committed.localChanges);
       return { ledger: committed.ledger };
     };
@@ -1579,6 +1620,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
     },
   });
+  for (const [projectId, state] of projectTaskStates) scheduleTaskContentHeadRepair(projectId, state);
   for (const projectId of new Set([...projectTaskStates.keys(), ...federatedProjectTaskStates.keys()])) {
     reconcileMergeableTaskConflicts(projectId);
   }
@@ -2036,6 +2078,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const threadRead = projectScope.scopedPath.match(/^\/api\/ledgers\/([^/]+)\/threads\/([^/]+)$/);
       let replicaBody: unknown = null;
       let resourceReady = true;
+      let contentDegraded = false;
       let contentStatus: AnyRecord = { status: 'not-required', resource: '', error: '' };
       if (request.method === 'GET' && projection && taskRootReady) {
         const ledger = projection.ledger;
@@ -2054,10 +2097,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             for (const head of heads) federationContentStore.applyManifest(head.sourceReplicaId, { version: 1, projectId: localProjectId, generatedAt: new Date().toISOString(), complete: false, resources: [{ type: head.type, key: head.key, hash: head.hash, bytes: head.bytes, changedAt: head.changedAt }] });
             const contentOwner = heads.find((head) => head.sourceReplicaId === ownerNodeId)?.sourceReplicaId ?? heads[0]?.sourceReplicaId ?? ownerNodeId;
             const content = federationContentStore.resource(contentOwner, localProjectId, key);
-            // WHAT: Treat a converged absence of a card-content head as an authoritative empty body.
-            // WHY: Cards created without Markdown bytes otherwise return 202 forever even though their task state is fully synchronized.
-            resourceReady = !key || Boolean(content.file) || (heads.length === 0 && relayRootCurrent);
-            contentStatus = { status: content.state, resource: key, error: content.error, conflict: content.conflict, candidates: content.candidates };
+            // WHAT: Keep structurally synchronized cards readable while exposing a referenced missing head as degraded.
+            // WHY: A content-file reference without causal authority is not an intentionally empty document.
+            const missingReferencedHead = Boolean(key) && heads.length === 0 && relayRootCurrent;
+            contentDegraded = missingReferencedHead;
+            resourceReady = !key || Boolean(content.file) || missingReferencedHead;
+            contentStatus = {
+              status: missingReferencedHead ? 'missing-head' : content.state,
+              resource: key,
+              error: missingReferencedHead ? 'task_content_head_missing' : content.error,
+              conflict: content.conflict,
+              candidates: content.candidates,
+            };
             if (!resourceReady && heads.length > 0) {
               federationContentStore.prioritize(contentOwner, localProjectId, key);
               if (!pausedBackgroundComponents.has('federation-content-scheduler')) void federationContentScheduler?.drain()
@@ -2094,7 +2145,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
       }
       const stateStatus = {
-        status: !taskRootReady || !resourceReady
+        status: contentDegraded
+          ? 'degraded'
+          : !taskRootReady || !resourceReady
           ? 'synchronizing'
           : !remoteProject.online
             ? 'offline'
@@ -2196,7 +2249,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           response.end(JSON.stringify(mutationResult.error.body));
           return;
         }
-        const committed = await state.executeMutation(mutation, before, after);
+        const committed = await state.executeMutation(mutation, before, after, mutationResult.changedContentFiles);
         if (committed.changed) controlRoomProjectionStore?.invalidate(localProjectId, committed.localChanges);
         const revision = federatedTaskRevisionForProject(localProjectId).advance('tasks');
         const taskClock = state.store.clientClock();
@@ -2721,7 +2774,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       activeResponse.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(ledgerId)));
       activeResponse.end(JSON.stringify(hydrateLedgerCardContent(persistedLedger, activeDecisionOsRoot)));
     };
-    const persistLedgerMutationAndRespond = async (ledgerId: string, ledgerPath: string, beforeLedger: AnyRecord, ledger: AnyRecord, mutation: LedgerMutation, activeResponse: ServerResponse): Promise<void> => {
+    const persistLedgerMutationAndRespond = async (
+      ledgerId: string,
+      ledgerPath: string,
+      beforeLedger: AnyRecord,
+      ledger: AnyRecord,
+      mutation: LedgerMutation,
+      changedContentFiles: readonly string[],
+      activeResponse: ServerResponse,
+    ): Promise<void> => {
       // WHAT: Preserve hydrated task notes until the scoped command derives entity changes.
       // WHY: Removing them here turns absent aggregate fields into thread-note tombstones.
       if (ledgerId !== 'tasks') stripHydratedThreadNotes(ledger);
@@ -2729,7 +2790,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       let taskCommit: Awaited<ReturnType<ProjectTaskState['executeMutation']>> | null = null;
       try {
         taskCommit = ledgerId === 'tasks' && localProject
-          ? await taskStateForProject(localProject).executeMutation(mutation, beforeLedger, ledger)
+          ? await taskStateForProject(localProject).executeMutation(mutation, beforeLedger, ledger, changedContentFiles)
           : null;
       } catch (error) {
         if (error instanceof Error && error.message === 'task_state_bootstrap_incomplete') {
@@ -4250,7 +4311,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           response.end(JSON.stringify(mutationResult.error.body));
           return;
         }
-        await persistLedgerMutationAndRespond(tabId, ledgerPath, beforeLedger, ledger, mutation, response);
+        await persistLedgerMutationAndRespond(tabId, ledgerPath, beforeLedger, ledger, mutation, mutationResult.changedContentFiles, response);
         return;
       }
       if (existsSync(ledgerPath)) {

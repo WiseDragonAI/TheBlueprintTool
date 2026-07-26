@@ -175,9 +175,12 @@ test('mobile thread launch resumes the card session whenever it owns a run id', 
   assert.match(source, /hydrateThreadRun\(runId, startedAt, status, result\.queuePosition\);[\s\S]*await refreshThreadLedger\(runId\)/);
 });
 
-test('mobile thread reconciles the refreshed ledger before rerendering an accepted run', () => {
-  assert.match(source, /const reconciled = reconcileResponsiveThreadLedger\(\{/);
-  assert.match(source, /canvasState\.activeLedger = reconciled\.ledger;\n  currentCard = reconciled\.card;\n  renderThreadPanel\(\);/);
+test('mobile thread refreshes only the accepted run thread document', () => {
+  const refresh = source.match(/async function refreshThreadLedger\(optimisticRunId = ''\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  assert.match(refresh, /const scope = activeThreadIdentityScope\(\)/);
+  assert.match(refresh, /if \(!scope \|\| !canvasState\.threadPanelOpen\) return;/);
+  assert.match(refresh, /await loadActiveThreadSlice\(scope, \{ allowMissingContentFile: true \}\)/);
+  assert.doesNotMatch(refresh, /canvasState\.activeLedger =/);
   assert.match(source, /await refreshThreadLedger\(runId\);/);
 });
 
@@ -252,8 +255,10 @@ test('mobile thread history and async refreshes are owned by the active presenta
   assert.match(source, /responsiveThreadLayer: \{[\s\S]*projectId: currentProjectId,[\s\S]*replicaNodeId: currentReplicaNodeId,/);
   assert.match(source, /closeMobileThread\(\{ fromHistory = false, discardHistory = false \} = \{\}\)/);
   assert.match(source, /if \(!fromHistory[\s\S]*history\.back\(\)/);
-  assert.match(refresh, /generation: \+\+threadRefreshGeneration/);
-  assert.match(refresh, /if \(!ownsRefresh\(\)\) return;/);
+  assert.match(refresh, /const scope = activeThreadIdentityScope\(\)/);
+  assert.match(refresh, /if \(!scope \|\| !canvasState\.threadPanelOpen\) return;/);
+  assert.match(refresh, /loadActiveThreadSlice\(scope, \{ allowMissingContentFile: true \}\)/);
+  assert.match(source, /bumpThreadPresentationGeneration\(\)/);
   assert.match(source, /if \(!payload\.threadId[\s\S]*return;/);
   assert.doesNotMatch(source, /eventSource\.addEventListener\('card-content-change', refresh\)/);
 });

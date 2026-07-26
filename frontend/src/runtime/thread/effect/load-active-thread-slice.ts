@@ -13,6 +13,7 @@ import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
 import { pinThreadFeedToLastMessage } from './pin-thread-feed-to-last-message.js';
 import { projectScopedRequestPath, replicaRequestInit } from '../../project/helper/project-request-scope.js';
 import { acceptTaskClockForInstall, taskClockFromResponse } from '../../refresh/helper/task-causal-clock.js';
+import { installThreadDocumentState, threadDocumentState } from '../helper/thread-document-state.js';
 
 type AnyRecord = Record<string, any>;
 
@@ -36,7 +37,13 @@ function threadContentFile(ledger: AnyRecord | null | undefined, threadId: strin
 export function activeThreadContentScope(): ThreadContentRefreshScope | null {
   const ledgerId = currentLedgerStateId();
   const threadId = String(state.threadId ?? '').trim();
-  const contentFile = threadContentFile(state.activeLedger, threadId);
+  const identity = {
+    projectId: String(state.projectId ?? ''),
+    replicaNodeId: String(state.replicaNodeId ?? ''),
+    ledgerId,
+    threadId,
+  };
+  const contentFile = threadContentFile(state.activeLedger, threadId) || threadDocumentState(identity)?.contentFile || '';
   // WHAT: Construct a scope only from a complete active ledger, thread, and file identity.
   // WHY: Partial UI state cannot safely own a thread slice response.
   if (!isRecord(state.activeLedger) || !ledgerId || !threadId || !contentFile) return null;
@@ -158,12 +165,19 @@ export async function loadActiveThreadSlice(
   // WHY: An event-triggered thread read must not bypass acknowledgement of a locally persisted message.
   if (!acceptTaskClockForInstall(taskClockFromResponse(response), 'event-thread-content-refresh')) return false;
 
+  const installedNotes = normalizeLedgerNotes(incomingSlice)[threadId] ?? [];
+  const installedDeletedNoteIds = normalizeDeletedNoteIds(incomingSlice)[threadId] ?? [];
+  installThreadDocumentState({ ...scope, contentFile: responseContentFile }, {
+    contentFile: responseContentFile,
+    notes: installedNotes,
+    deletedNoteIds: installedDeletedNoteIds,
+  });
   activeLedgerAtRequest.threadFiles = {
     ...(isRecord(activeLedgerAtRequest.threadFiles) ? activeLedgerAtRequest.threadFiles : {}),
     [threadId]: responseContentFile
   };
-  normalizeLedgerNotes(activeLedgerAtRequest)[threadId] = normalizeLedgerNotes(incomingSlice)[threadId] ?? [];
-  normalizeDeletedNoteIds(activeLedgerAtRequest)[threadId] = normalizeDeletedNoteIds(incomingSlice)[threadId] ?? [];
+  normalizeLedgerNotes(activeLedgerAtRequest)[threadId] = structuredClone(installedNotes);
+  normalizeDeletedNoteIds(activeLedgerAtRequest)[threadId] = [...installedDeletedNoteIds];
   renderThreadNotes();
   if (isThreadFollowingBottom(threadId, 'thread')) pinThreadFeedToLastMessage();
   telemetry('thread-content-refresh-applied', {

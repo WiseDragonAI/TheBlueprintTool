@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { state } from '../../../../src/runtime/state.js';
 import {
+  advanceLedgerRouteEpoch,
   beginActiveLedgerRequest,
   reconcileActiveLedgerState,
 } from '../../../../src/runtime/ledger/effect/reconcile-active-ledger-state.js';
@@ -76,6 +77,27 @@ test('causally dominating projection installs after acknowledging local durable 
   assert.equal(applied, true);
   assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Converged message.');
   assert.deepEqual(state.ledgerReconciliation.lastAppliedTaskClock, { workstation: 7, phone: 21 });
+});
+
+test('a new project context does not merge the previous project thread document', () => {
+  reset();
+  advanceLedgerRouteEpoch('tasks');
+  const request = beginActiveLedgerRequest('tasks');
+  const applied = reconcileActiveLedgerState({
+    ledger: {
+      cards: [{ id: 'card-b', title: 'Other project task' }],
+      annotations: [],
+      relationships: [],
+    },
+    request,
+    serverRevision: 5,
+    source: 'responsive-thread-context',
+    preserveLocalState: false,
+  });
+
+  assert.equal(applied, true);
+  assert.deepEqual(state.activeLedger.cards, [{ id: 'card-b', title: 'Other project task' }]);
+  assert.equal(state.activeLedger.notes, undefined);
 });
 
 test('task clock header parser accepts exact base64url JSON and rejects malformed clocks', () => {
