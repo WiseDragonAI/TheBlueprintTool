@@ -8,6 +8,8 @@ import { ensureCoordinatorOwnedActiveLedger } from '../../ledger/effect/reconcil
 import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 
 export type OptimisticThreadNoteInput = {
+  noteId?: string;
+  createdAt?: string;
   threadId: string;
   body: string;
   source?: string;
@@ -15,22 +17,25 @@ export type OptimisticThreadNoteInput = {
   status?: string;
   error?: string;
   transcriptionStartedAt?: string;
+  pendingMessageId?: string;
 };
 
 export function appendOptimisticThreadNote(input: OptimisticThreadNoteInput): string {
   const ledger = ensureCoordinatorOwnedActiveLedger(currentLedgerStateId());
   const notesByThread = normalizeLedgerNotes(ledger);
   const notes = notesByThread[input.threadId] ?? [];
-  const noteId = `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const noteId = input.noteId ?? `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  if (notes.some((note) => String(note.id ?? '') === noteId)) return noteId;
   notes.push({
     id: noteId,
     role: 'operator',
     message: input.body,
-    timestamp: new Date().toISOString(),
+    timestamp: input.createdAt ?? new Date().toISOString(),
     voiceFileRef: input.voiceFileRef ?? '',
     status: input.status ?? '',
     error: input.error ?? '',
     transcriptionStartedAt: input.transcriptionStartedAt ?? '',
+    pendingMessageId: input.pendingMessageId ?? '',
     optimistic: true
   });
   notesByThread[input.threadId] = notes;

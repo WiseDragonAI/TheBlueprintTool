@@ -20,6 +20,7 @@ export type OptimisticThreadNotePatch = {
   revision?: number;
   optimistic?: boolean;
   localVoiceUploadId?: string;
+  pendingMessageId?: string;
 };
 
 export function patchOptimisticThreadNote(input: OptimisticThreadNotePatch): boolean {
@@ -39,6 +40,7 @@ export function patchOptimisticThreadNote(input: OptimisticThreadNotePatch): boo
   if (typeof input.revision === 'number') note.revision = input.revision;
   if (typeof input.optimistic === 'boolean') note.optimistic = input.optimistic;
   if (typeof input.localVoiceUploadId === 'string') note.localVoiceUploadId = input.localVoiceUploadId;
+  if (typeof input.pendingMessageId === 'string') note.pendingMessageId = input.pendingMessageId;
   note.updatedAt = new Date().toISOString();
   void import('./render-thread-panel.js').then(({ renderThreadPanel }) => {
     if (globalThis.document) renderThreadPanel();

@@ -20,6 +20,7 @@ import {
   readPendingVoiceUpload
 } from '../../src/runtime/voice/effect/persist-pending-voice-upload.js';
 import { clearPendingVoiceUploadRestoreStateForTest, restorePendingVoiceUploads } from '../../src/runtime/voice/effect/restore-pending-voice-uploads.js';
+import { resetPendingThreadMessageStoreForTest } from '../../src/runtime/thread/effect/persist-pending-thread-message.js';
 
 test('fill-thread-draft appends transcribed text to the active draft', () => {
   const previousDocument = globalThis.document;
@@ -737,6 +738,7 @@ test('create-note-controller renders a text note before backend reconciliation',
     });
     return { ok: false };
   };
+  resetPendingThreadMessageStoreForTest();
 
   try {
     const result = createNoteController({ threadId: 'thread-card-a', body: 'Keep this local note.' });
@@ -750,6 +752,7 @@ test('create-note-controller renders a text note before backend reconciliation',
     assert.equal(await result.committed, false);
     assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'commit failed');
   } finally {
+    resetPendingThreadMessageStoreForTest();
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
@@ -778,6 +781,7 @@ test('thread submission clears the composer before backend reconciliation settle
     await new Promise<void>((resolve) => { settleFetch = resolve; });
     return { ok: true };
   };
+  resetPendingThreadMessageStoreForTest();
 
   try {
     await submitThreadDraft();
@@ -788,6 +792,7 @@ test('thread submission clears the composer before backend reconciliation settle
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(state.activeLedger.notes['thread-card-a'][0].optimistic, false);
   } finally {
+    resetPendingThreadMessageStoreForTest();
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     (globalThis as unknown as { window: unknown }).window = previousWindow;
