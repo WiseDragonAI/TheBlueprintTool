@@ -37,7 +37,7 @@ function resolvedContentFile(decisionOsRoot: string, contentFile: unknown): stri
   return isInside(decisionOsRoot, file) ? file : null;
 }
 
-function ledgerDocuments(decisionOsRoot: string): Array<{ ledgerId: string; ledger: AnyRecord }> {
+function ledgerDocuments(decisionOsRoot: string, taskProjection?: () => AnyRecord | null): Array<{ ledgerId: string; ledger: AnyRecord }> {
   const state = readCanonicalDecisionOsState({
     action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json') }
   });
@@ -47,6 +47,11 @@ function ledgerDocuments(decisionOsRoot: string): Array<{ ledgerId: string; ledg
   ];
   const documents: Array<{ ledgerId: string; ledger: AnyRecord }> = [];
   for (const entry of entries) {
+    if (entry.ledgerId === 'tasks' && taskProjection) {
+      const ledger = taskProjection();
+      if (ledger && isRecord(ledger)) documents.push({ ledgerId: entry.ledgerId, ledger });
+      continue;
+    }
     const ledgerPath = resolve(decisionOsRoot, String(entry.ledgerFile).replace(/^\/?\.decision-os\//, ''));
     // WHAT: Ignore missing ledger files and state entries that escape the active workspace.
     // WHY: Neither source can establish safe ownership for a content event.
@@ -67,10 +72,11 @@ function ledgerDocuments(decisionOsRoot: string): Array<{ ledgerId: string; ledg
 export function resolveCardContentChange(input: {
   decisionOsRoot: string;
   change: ContentChangeCandidate;
+  taskProjection?: () => AnyRecord | null;
 }): CardContentChange | null {
   const targetFile = resolve(input.change.file);
   const owners: CardContentChange[] = [];
-  for (const { ledgerId, ledger } of ledgerDocuments(input.decisionOsRoot)) {
+  for (const { ledgerId, ledger } of ledgerDocuments(input.decisionOsRoot, input.taskProjection)) {
     // WHAT: Resolve card ownership through the card's declared content file.
     // WHY: Card and thread ownership use different ledger structures.
     if (input.change.kind === 'card-content') {
@@ -91,13 +97,13 @@ export function resolveCardContentChange(input: {
   return owners.length === 1 ? owners[0] : null;
 }
 
-export function buildContentOwnershipIndex(decisionOsRoot: string): Map<string, CardContentChange> {
+export function buildContentOwnershipIndex(decisionOsRoot: string, taskProjection?: () => AnyRecord | null): Map<string, CardContentChange> {
   const candidates = new Map<string, CardContentChange[]>();
   const add = (file: string | null, event: CardContentChange): void => {
     if (!file) return;
     candidates.set(file, [...(candidates.get(file) ?? []), event]);
   };
-  for (const { ledgerId, ledger } of ledgerDocuments(decisionOsRoot)) {
+  for (const { ledgerId, ledger } of ledgerDocuments(decisionOsRoot, taskProjection)) {
     for (const card of Array.isArray(ledger.cards) ? ledger.cards : []) {
       if (!isRecord(card) || !isRecord(card.comment) || typeof card.comment.contentFile !== 'string') continue;
       const file = resolvedContentFile(decisionOsRoot, card.comment.contentFile);

@@ -149,8 +149,14 @@ test('task intake publishes no state until its first durable content contributio
     && entity.entityId === 'thread-card-a/note-a'
     && entity.fields.status?.candidates.some((candidate) => candidate.value === 'pending')
   )));
-  assert.ok(noteDelta.entities.some((entity) => entity.entityType === 'resource' && entity.entityId === '.decision-os/threads/tasks/thread-card-a.md'));
-  assert.deepEqual(content, ['.decision-os/threads/tasks/thread-card-a.md']);
+  assert.ok(published.flatMap((delta) => delta.entities).some((entity) => (
+    entity.entityType === 'resource' && entity.entityId === '.decision-os/threads/tasks/thread-card-a.md'
+  )));
+  assert.deepEqual(content, [
+    '.decision-os/cards/tasks/card-a.md',
+    '.decision-os/threads/tasks/thread-card-a.md',
+    '.decision-os/threads/tasks/thread-card-a.md',
+  ]);
   assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).message, undefined);
   assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).role, 'operator');
   assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).status, 'pending');
@@ -453,6 +459,60 @@ test('master-task creation persists one master assignment and leaves subtasks in
   assert.equal(cards.find((card) => card.id === 'child')?.assignment, undefined);
   assert.equal(state.store.entity('card', 'master')?.fields.assignment?.candidates.length, 1);
   assert.equal(state.store.entity('card', 'child')?.fields.assignment, undefined);
+  for (const resource of [
+    '.decision-os/cards/tasks/master.md',
+    '.decision-os/cards/tasks/child.md',
+    '.decision-os/threads/tasks/thread-master.md',
+    '.decision-os/threads/tasks/thread-child.md',
+  ]) {
+    const [head] = state.store.contentHeads(resource);
+    assert.ok(head, `missing content head for ${resource}`);
+    assert.equal(existsSync(resolve(root, 'task-state', 'project-a', 'objects', head.hash.slice(0, 2), head.hash)), true);
+  }
+});
+
+test('card description patch commits its Markdown head with the structural mutation', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-card-head-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const cardFile = resolve(root, 'cards', 'tasks', 'card-a.md');
+  mkdirSync(dirname(cardFile), { recursive: true });
+  writeFileSync(cardFile, '# Before\n');
+  writeFileSync(ledgerPath, JSON.stringify({
+    modelName: 'tasks',
+    cards: [{
+      id: 'card-a',
+      title: 'Task',
+      status: 'todo',
+      comment: { contentFile: '.decision-os/cards/tasks/card-a.md', what: 'Before' },
+    }],
+    annotations: [],
+    relationships: [],
+    threadFiles: {},
+  }));
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+  });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const before = structuredClone(state.projection().ledger);
+  const after = structuredClone(before);
+  const mutation: LedgerMutation = {
+    action: 'patch-card',
+    cardPatch: { id: 'card-a', description: 'Persist this body.' },
+  };
+
+  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
+  const committed = await state.executeMutation(mutation, before, after);
+  const resource = '.decision-os/cards/tasks/card-a.md';
+  const [head] = state.store.contentHeads(resource);
+
+  assert.ok(committed.deltas[0].entities.some((entity) => entity.entityType === 'resource' && entity.entityId === resource));
+  assert.equal(readFileSync(cardFile, 'utf8'), 'Persist this body.');
+  assert.equal(head.bytes, Buffer.byteLength('Persist this body.'));
+  assert.equal(existsSync(resolve(root, 'task-state', 'project-a', 'objects', head.hash.slice(0, 2), head.hash)), true);
 });
 
 test('reassignment resolves concurrent assignment candidates and advances their maximum revision', async (context) => {

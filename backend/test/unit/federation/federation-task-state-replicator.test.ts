@@ -529,6 +529,45 @@ test('duplicate entity delivery performs no second projection callback', async (
   assert.equal(projectionChanges, 1);
 });
 
+test('projection observer failure leaves the accepted causal state readable', async (context) => {
+  const source = fixture('decision-os-observer-source-');
+  const target = fixture('decision-os-observer-target-');
+  context.after(async () => {
+    await Promise.all([source.store.flush(), target.store.flush()]);
+    [source, target].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  const mutation = await source.store.mutate({
+    replicaId: 'desktop',
+    changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Preserved task' }] }],
+  });
+  const errors: unknown[] = [];
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', target.store]]),
+    storeFor: () => target.store,
+    publish: () => true,
+    onProjectionChange: () => { throw new Error('projection-observer-failed'); },
+    onProjectionError: ({ error }) => { errors.push(error); },
+  });
+
+  await replicator.handleFrame({
+    type: 'state-entity-batch',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: {
+      stateVersion: taskCurrentStateVersion,
+      deliveryId: 'delivery-observer',
+      entries: mutation.delta.entities.map((entity) => ({
+        key: taskCurrentEntityKey(entity),
+        stateHash: entity.stateHash,
+        entity,
+      })),
+    },
+  });
+
+  assert.match(String(errors[0]), /projection-observer-failed/);
+  assert.equal((target.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].title, 'Preserved task');
+});
+
 test('large current-state publication is split by encoded bytes as well as entity count', async (context) => {
   const node = fixture('decision-os-byte-bounded-');
   context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });

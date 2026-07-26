@@ -60,6 +60,7 @@ export function createFederationTaskStateReplicator(input: {
   storeFor?: (projectId: string, ownerNodeId: string) => TaskCurrentStateStore | null;
   publish: Publisher;
   onProjectionChange?: (input: { projectId: string; from: string; delta: TaskStateDelta }) => void;
+  onProjectionError?: (input: { projectId: string; from: string; error: unknown }) => void;
 }) {
   const convergence = new Map<string, { projectId: string; converged: boolean; lastRepairAt: string; missingBuckets: string[]; root: string }>();
   const runtimeDirty = new Map<string, Map<string, TaskCurrentEntity>>();
@@ -124,7 +125,17 @@ export function createFederationTaskStateReplicator(input: {
       const result = await store.merge({ version: taskCurrentStateVersion, projectId: frame.projectId, entities: entries.map((entry) => entry.entity) });
       const accepted = entries.map((entry) => ({ key: entry.key, stateHash: store.entity(entry.entity.entityType, entry.entity.entityId)?.stateHash ?? '' }));
       input.publish(frame.from, { type: frame.from === 'relay' ? 'state-relay-ack' : 'state-ack', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: payload.deliveryId, accepted, root: store.rootHash() } });
-      if (result.changed) input.onProjectionChange?.({ projectId: frame.projectId, from: frame.from, delta: result.delta });
+      if (result.changed) {
+        try {
+          input.onProjectionChange?.({ projectId: frame.projectId, from: frame.from, delta: result.delta });
+        } catch (error) {
+          // WHAT: Contain a presentation observer failure after the causal merge is durable.
+          // WHY: Projection invalidation cannot turn an accepted federation frame into a project-wide outage.
+          try { input.onProjectionError?.({ projectId: frame.projectId, from: frame.from, error }); } catch {
+            // Diagnostics must not escape the contained observer failure.
+          }
+        }
+      }
       advertise(frame.from, frame.projectId, store);
       return;
     }

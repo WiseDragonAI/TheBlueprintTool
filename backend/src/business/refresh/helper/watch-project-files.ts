@@ -52,6 +52,7 @@ export function watchProjectFiles(input: {
   onContentChange: (event: CardContentChange) => unknown;
   onProjectChange: (event: ProjectFileChange) => unknown;
   onError?: (error: unknown, context: { operation: string; file: string }) => void;
+  taskProjection?: () => Record<string, unknown> | null;
   auditIntervalMs?: number;
 }) {
   const stateFile = resolve(input.decisionOsRoot, 'state.json');
@@ -66,7 +67,12 @@ export function watchProjectFiles(input: {
       reportError(error, 'publish-project-change', change.file);
     }
   };
-  const contentWatcher = watchCardContentFiles({ decisionOsRoot: input.decisionOsRoot, onChange: input.onContentChange, onError: input.onError });
+  const contentWatcher = watchCardContentFiles({
+    decisionOsRoot: input.decisionOsRoot,
+    onChange: input.onContentChange,
+    onError: input.onError,
+    taskProjection: input.taskProjection,
+  });
   const pending = new Map<string, NodeJS.Timeout>();
   const ignoredWrites = new Set<string>();
   let ledgers = ledgerFiles(input.decisionOsRoot);
