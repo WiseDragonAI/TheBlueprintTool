@@ -16,6 +16,7 @@ export function watchCardContentFiles(input: {
   decisionOsRoot: string;
   onChange: (event: CardContentChange) => unknown;
   onError?: (error: unknown, context: { operation: string; file: string }) => void;
+  taskProjection?: () => Record<string, unknown> | null;
 }): { close(): void; refreshOwnership(): void; watchedDirectories: number } {
   const roots = [
     { directory: resolve(input.decisionOsRoot, 'cards'), kind: 'card-content' as const },
@@ -23,7 +24,7 @@ export function watchCardContentFiles(input: {
   ];
   const watchers = new Map<string, FSWatcher>();
   const pendingEvents = new Map<string, NodeJS.Timeout>();
-  let ownership = buildContentOwnershipIndex(input.decisionOsRoot);
+  let ownership = buildContentOwnershipIndex(input.decisionOsRoot, input.taskProjection);
 
   const reportError = (error: unknown, operation: string, file: string): void => {
     try { input.onError?.(error, { operation, file }); } catch { /* Error reporting must not escape a watcher callback. */ }
@@ -47,7 +48,13 @@ export function watchCardContentFiles(input: {
     if (existingTimer) clearTimeout(existingTimer);
     pendingEvents.set(file, setTimeout(() => {
       pendingEvents.delete(file);
-      const change = ownership.get(resolve(file));
+      let change = ownership.get(resolve(file));
+      if (!change) {
+        // WHAT: Admit the first event for a task created after watcher startup.
+        // WHY: Epoch 4 task mutations do not rewrite the retired aggregate tasks ledger.
+        ownership = buildContentOwnershipIndex(input.decisionOsRoot, input.taskProjection);
+        change = ownership.get(resolve(file));
+      }
       // WHAT: Publish only an exactly owned content-file change.
       // WHY: Missing or ambiguous ownership must not refresh a guessed ledger.
       if (change) publish(change, file);
@@ -97,7 +104,7 @@ export function watchCardContentFiles(input: {
       watchers.clear();
     },
     refreshOwnership() {
-      ownership = buildContentOwnershipIndex(input.decisionOsRoot);
+      ownership = buildContentOwnershipIndex(input.decisionOsRoot, input.taskProjection);
     },
     get watchedDirectories() {
       return watchers.size;

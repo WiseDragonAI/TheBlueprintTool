@@ -182,6 +182,126 @@ test('create-http-server resolves retained transient task bootstrap incidents at
   }
 });
 
+test('startup revalidates durable task state before clearing a retired federation-frame pause', async () => {
+  const originalCwd = process.cwd();
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-frame-pause-recovery-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'project-a', name: 'Project A' }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Preserved task', status: 'todo' }],
+    annotations: [],
+    relationships: [],
+    threadFiles: {},
+  }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const durableState = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot,
+    tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
+    initialize: true,
+  });
+  await durableState.flush();
+  const incidents = createRuntimeIncidentLedger({ decisionOsRoot });
+  incidents.record({
+    severity: 'error',
+    scope: 'project-task-state:project-a',
+    component: 'task-current-state',
+    operation: 'handle-federated-state-frame',
+    error: new Error('task_execution_conflict:execution-a:artifacts'),
+  });
+  process.chdir(projectRoot);
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({
+    action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    const navigation = await fetch(`${baseUrl}/p/project-a/api/ledgers/tasks/navigation`);
+    assert.equal(navigation.status, 200);
+    assert.deepEqual(incidents.active('project-task-state:project-a'), []);
+    assert.equal(
+      incidents.snapshot().incidents.find((incident) => incident.operation === 'handle-federated-state-frame')?.status,
+      'resolved',
+    );
+  } finally {
+    server.close();
+    await once(server, 'close');
+    process.chdir(originalCwd);
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('failed frame-pause revalidation preserves invalid durable bytes and keeps Tasks paused', async () => {
+  const originalCwd = process.cwd();
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-frame-pause-invalid-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'project-a', name: 'Project A' }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Preserved task', status: 'todo' }],
+    annotations: [],
+    relationships: [],
+    threadFiles: {},
+  }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const durableState = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot,
+    tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
+    initialize: true,
+  });
+  await durableState.flush();
+  const invalidEntityFile = join(decisionOsRoot, 'task-state', 'project-a', 'current', 'card', 'card-a.json');
+  const invalidBytes = '{"invalid":';
+  writeFileSync(invalidEntityFile, invalidBytes);
+  const incidents = createRuntimeIncidentLedger({ decisionOsRoot });
+  incidents.record({
+    severity: 'error',
+    scope: 'project-task-state:project-a',
+    component: 'task-current-state',
+    operation: 'handle-federated-state-frame',
+    error: new Error('task_execution_conflict:execution-a:artifacts'),
+  });
+  process.chdir(projectRoot);
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({
+    action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    const navigation = await fetch(`${baseUrl}/p/project-a/api/ledgers/tasks/navigation`);
+    assert.equal(navigation.status, 503);
+    assert.equal(readFileSync(invalidEntityFile, 'utf8'), invalidBytes);
+    assert.equal(incidents.active('project-task-state:project-a').length > 0, true);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    process.chdir(originalCwd);
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test('server admits local assigned execution while its configured relay is unreachable', async () => {
   const originalCwd = process.cwd();
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-local-execution-relay-outage-'));

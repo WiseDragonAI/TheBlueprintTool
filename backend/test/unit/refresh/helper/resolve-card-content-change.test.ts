@@ -27,3 +27,29 @@ test('content ownership retains the exact card id needed for resource-head captu
     ledgerId: 'tasks',
   });
 });
+
+test('task content ownership comes from the Epoch 4 projection instead of stale tasks JSON', (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-epoch4-content-owner-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(resolve(root, 'cards', 'tasks'), { recursive: true });
+  const contentFile = '.decision-os/cards/tasks/card-epoch4.md';
+  const file = resolve(root, 'cards', 'tasks', 'card-epoch4.md');
+  writeFileSync(file, '# Epoch 4 task\n');
+  writeFileSync(resolve(root, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(resolve(root, 'tasks.json'), JSON.stringify({ cards: [] }));
+
+  const ownership = buildContentOwnershipIndex(root, () => ({
+    cards: [{ id: 'card-epoch4', comment: { contentFile } }],
+    threadFiles: {},
+  }));
+
+  assert.deepEqual(ownership.get(file), {
+    cardId: 'card-epoch4',
+    contentFile,
+    file,
+    kind: 'card-content',
+    ledgerId: 'tasks',
+  });
+});

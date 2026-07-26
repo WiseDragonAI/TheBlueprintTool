@@ -320,6 +320,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const pausedBackgroundComponents = new Set<string>();
   const pausedProjectWatchers = new Set<string>();
   const pausedProjectRuntimes = new Set<string>();
+  const taskProjectsPendingFrameIncidentRevalidation = new Map<string, RuntimeIncident>();
   let serverClosing = false;
   const serverCloseAbort = new AbortController();
   let globalRuntimeIncident: RuntimeIncident | null = null;
@@ -348,7 +349,16 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (incident.scope.startsWith('background:codex-runtime:') && isExecutionScopedCodexFailure(incident.operation)) continue;
     if (incident.scope === 'background:federated-library-sync'
       && (incident.code === 'federation_request_timeout' || /HTTP 504|request.+timeout/i.test(incident.message))) continue;
-    if (incident.scope.startsWith('project-task-state:')) pausedTaskProjects.set(incident.scope.slice('project-task-state:'.length), incident);
+    if (incident.scope.startsWith('project-task-state:')) {
+      const projectId = incident.scope.slice('project-task-state:'.length);
+      if (incident.operation === 'handle-federated-state-frame') {
+        // WHAT: Reopen the durable store before restoring a pause created by the retired broad frame catch.
+        // WHY: A contained remote-frame failure must not keep valid local task state unavailable after restart.
+        taskProjectsPendingFrameIncidentRevalidation.set(projectId, incident);
+      } else {
+        pausedTaskProjects.set(projectId, incident);
+      }
+    }
     if (incident.scope.startsWith('federated-task-state:')) pausedFederatedTaskProjects.set(incident.scope.slice('federated-task-state:'.length), incident);
     if (incident.scope.startsWith('background:')) pausedBackgroundComponents.add(incident.scope.slice('background:'.length));
     if (incident.scope.startsWith('project-watcher:')) pausedProjectWatchers.add(incident.scope.slice('project-watcher:'.length));
@@ -482,9 +492,20 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         initialize,
       });
       projectTaskStates.set(project.id, value);
+      if (taskProjectsPendingFrameIncidentRevalidation.delete(project.id)) {
+        incidentLedger.resolveScope(
+          `project-task-state:${project.id}`,
+          'Durable task state revalidated after the retired federation-frame pause.',
+        );
+      }
       return value;
     } catch (error) {
       if (error instanceof RuntimeScopePausedError) throw error;
+      const retained = taskProjectsPendingFrameIncidentRevalidation.get(project.id);
+      if (retained) {
+        taskProjectsPendingFrameIncidentRevalidation.delete(project.id);
+        pausedTaskProjects.set(project.id, retained);
+      }
       throw pauseTaskProject(project, error, 'open-local-task-state');
     }
   };
@@ -950,6 +971,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const hasCompleteScope = Boolean(ledgerId && (event.kind !== 'thread-content' || String(event.threadId ?? '')));
       const resolvedEvent = hasCompleteScope ? null : resolveCardContentChange({
         decisionOsRoot: activeDecisionOsRoot,
+        taskProjection: () => activeTaskState?.projection().ledger ?? null,
         change: {
           contentFile: String(event.contentFile ?? ''),
           file: String(event.file ?? resolve(activeDecisionOsRoot, String(event.contentFile ?? '').replace(/^\/?\.decision-os\//, ''))),
@@ -1099,6 +1121,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     };
     watcher = watchProjectFiles({
       decisionOsRoot: activeDecisionOsRoot,
+      taskProjection: () => activeTaskState?.projection().ledger ?? null,
       onContentChange: publishCard,
       onProjectChange: publishLedger,
       onError: (error, context) => {
@@ -1419,18 +1442,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (!pausedBackgroundComponents.has('federation-content-scheduler')) void federationContentScheduler?.drain()
           .catch((error: unknown) => recordBackgroundFailure('federation-content-scheduler', 'drain-after-state-frame', error, { projectId: frame.projectId, frameType: frame.type }));
       } catch (error) {
-        const localProject = projectCatalogStore.projects().find((project) => project.id === frame.projectId && project.available);
-        if (localProject) pauseTaskProject(localProject, error, 'handle-federated-state-frame');
-        else {
-          const incident = recordIncident({
-            scope: `federation-task-state:${frame.projectId}`,
-            component: 'federation-task-state-replicator',
-            operation: 'handle-state-frame',
-            error,
-            context: { projectId: frame.projectId, frameType: frame.type },
-          });
-          pausedFederatedTaskProjects.set(frame.projectId, incident);
-        }
+        recordStoppedOperation({
+          scope: `federation-state-frame:${frame.projectId}:${frame.from}`,
+          component: 'federation-task-state-replicator',
+          operation: 'handle-state-frame',
+          error,
+          context: { projectId: frame.projectId, frameType: frame.type, from: frame.from },
+        });
       }
     },
     onExecutionObservation: (frame) => {
@@ -1515,6 +1533,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         });
       }
       for (const client of globalContentEventClients) client.write(`event: ledger-content-change\ndata: ${JSON.stringify({ remote: true, projectId, nodeId: from })}\n\n`);
+    },
+    onProjectionError: ({ projectId, from, error }) => {
+      recordStoppedOperation({
+        scope: `federation-projection:${projectId}:${from}`,
+        component: 'federation-task-state-replicator',
+        operation: 'publish-projection-change',
+        error,
+        context: { projectId, from },
+      });
     },
   });
   federationContentScheduler = createFederationContentScheduler({
