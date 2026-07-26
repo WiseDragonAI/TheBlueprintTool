@@ -132,7 +132,9 @@ export function renderThreadNotes(): void {
     const failed = normalizedStatus.endsWith('failed');
     const busy = /committing|uploading|queued|transcribing|finalizing|retrying/.test(normalizedStatus);
     const localVoiceUploadId = String(note.localVoiceUploadId ?? '');
-    const retryable = (Boolean(note.voiceFileRef) && ['transcription failed', 'execution launch failed'].includes(normalizedStatus))
+    const retryableMessage = Boolean(note.pendingMessageId) && normalizedStatus === 'commit failed';
+    const retryable = retryableMessage
+      || (Boolean(note.voiceFileRef) && ['transcription failed', 'execution launch failed'].includes(normalizedStatus))
       || (Boolean(localVoiceUploadId) && normalizedStatus === 'upload failed');
     const voiceOwned = Boolean(note.voiceFileRef);
     const phaseLabel = voiceOwned ? voicePhaseLabel(status) : status;
@@ -192,12 +194,14 @@ export function renderThreadNotes(): void {
       const retry = document.createElement('button');
       retry.className = 'thread-note-retry terminal-button terminal-button--compact';
       retry.type = 'button';
-      retry.dataset.action = 'voice-retry';
-      retry.dataset.spec = 'c73a0e4d';
+      retry.dataset.action = retryableMessage ? 'message-retry' : 'voice-retry';
+      if (!retryableMessage) retry.dataset.spec = 'c73a0e4d';
       retry.dataset.threadId = state.threadId;
       retry.dataset.noteId = String(note.id ?? '');
-      retry.dataset.voiceFileRef = String(note.voiceFileRef ?? '');
-      retry.dataset.localVoiceUploadId = localVoiceUploadId;
+      if (!retryableMessage) {
+        retry.dataset.voiceFileRef = String(note.voiceFileRef ?? '');
+        retry.dataset.localVoiceUploadId = localVoiceUploadId;
+      }
       retry.textContent = 'Retry';
       item.append(retry);
     }

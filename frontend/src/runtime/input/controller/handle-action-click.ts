@@ -18,6 +18,7 @@ import { confirmCardImageDeletionController } from '../../card/controller/confir
 import { deleteCardImageController } from '../../card/controller/delete-card-image-controller.js';
 import { createNoteController } from '../../thread/controller/create-note-controller.js';
 import { submitThreadDraft } from '../../thread/effect/submit-thread-draft.js';
+import { retryPendingThreadMessageController } from '../../thread/controller/retry-pending-thread-message-controller.js';
 import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
 import { confirmNoteDeletionController } from '../../thread/controller/confirm-note-deletion-controller.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
@@ -140,6 +141,13 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (action === 'voice-cancel') cancelVoiceRecording();
   if (action === 'voice-retry') {
     await retryVoiceTranscription({ threadId: actionTarget.dataset.threadId ?? state.threadId, noteId: actionTarget.dataset.noteId ?? '', voiceFileRef: actionTarget.dataset.voiceFileRef ?? '', localVoiceUploadId: actionTarget.dataset.localVoiceUploadId ?? '' });
+    return;
+  }
+  if (action === 'message-retry') {
+    await retryPendingThreadMessageController({
+      threadId: actionTarget.dataset.threadId ?? state.threadId,
+      noteId: actionTarget.dataset.noteId ?? '',
+    });
     return;
   }
   if (action === 'confirm-delete-card') {

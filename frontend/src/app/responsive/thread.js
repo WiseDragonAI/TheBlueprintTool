@@ -37,6 +37,7 @@ import { hydrateThreadViewportState, saveThreadPanelScrollPositions } from '/src
 import { readPersistedState } from '/src/runtime/persistence/helper/read-persisted-state.js';
 import { deleteNoteController } from '/src/runtime/thread/controller/delete-note-controller.js';
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
+import { retryPendingThreadMessageController } from '/src/runtime/thread/controller/retry-pending-thread-message-controller.js';
 
 let currentCard = null;
 let currentProjectId = '';
@@ -479,6 +480,12 @@ export function initializeMobileThread() {
       if (collapseMobileThreadComposer(button)) syncThreadJumpButtonVisibility();
     }
     else if (action === 'submit-thread-draft') await appendTextNote();
+    else if (action === 'message-retry') {
+      await retryPendingThreadMessageController({
+        threadId: button.dataset.threadId || canvasState.threadId,
+        noteId: button.dataset.noteId || '',
+      });
+    }
     else if (action === 'jump-thread-bottom') {
       const surface = canvasState.threadActiveTabByThreadId?.[String(canvasState.threadId || '')] === 'codex-log' ? 'codex-log' : 'thread';
       pinThreadSurfaceToBottom(surface, { follow: true });
