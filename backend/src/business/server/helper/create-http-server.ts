@@ -66,7 +66,7 @@ import { buildTaskExecutionPresentation } from '../../codex/helper/task-executio
 import { taskExecutionPresentationHttpResult } from '../../codex/helper/task-execution-presentation-http-result.js';
 import { executeFederatedPipelineSkill } from '../../codex/helper/codex-pipeline-runner.js';
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
-import type { TaskExecutionMetadata } from '../../task-state/helper/task-current-state-types.js';
+import type { TaskEntityChange, TaskExecutionMetadata } from '../../task-state/helper/task-current-state-types.js';
 import { resolveCatalogProject, tasksLedgerForProject, type DecisionOsProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
@@ -1506,6 +1506,40 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     },
   });
   for (const project of projectCatalog().filter((entry) => entry.available)) tryTaskStateForProject(project);
+  const reconcileMergeableTaskConflicts = (
+    projectId: string,
+    targets?: Array<{ entityType: TaskEntityChange['entityType']; entityId: string }>,
+  ): void => {
+    const state = projectTaskStates.get(projectId) ?? federatedProjectTaskStates.get(projectId);
+    if (!state) return;
+    void state.reconcileMergeableConflicts(targets).then((result) => {
+      if (!result.changed) return;
+      controlRoomProjectionStore?.invalidate(projectId, result.localChanges);
+      for (const executionId of new Set(result.localChanges
+        .filter((change) => change.entityType === 'execution')
+        .map((change) => change.entityId))) {
+        publishExecutionChange({
+          projectId,
+          nodeId: federation?.localOwner().ownerNodeId ?? 'local',
+          executionId,
+          record: state.executions.all().find((candidate) => candidate.metadata.executionId === executionId) ?? null,
+        });
+      }
+      for (const client of globalContentEventClients) {
+        try { client.write(`event: ledger-content-change\ndata: ${JSON.stringify({ remote: false, projectId, nodeId: federation?.localOwner().ownerNodeId ?? 'local' })}\n\n`); } catch {
+          // A disconnected event client cannot fail the durable conflict resolution.
+        }
+      }
+    }).catch((error: unknown) => {
+      recordStoppedOperation({
+        scope: `task-conflict-reconciliation:${projectId}`,
+        component: 'task-current-state',
+        operation: 'reconcile-mergeable-conflicts',
+        error,
+        context: { projectId },
+      });
+    });
+  };
   federationTaskStateReplicator = createFederationTaskStateReplicator({
     stores: () => new Map([...projectTaskStates]
       .filter(([projectId]) => !pausedTaskProjects.has(projectId))
@@ -1533,6 +1567,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         });
       }
       for (const client of globalContentEventClients) client.write(`event: ledger-content-change\ndata: ${JSON.stringify({ remote: true, projectId, nodeId: from })}\n\n`);
+      reconcileMergeableTaskConflicts(projectId, delta.entities);
     },
     onProjectionError: ({ projectId, from, error }) => {
       recordStoppedOperation({
@@ -1544,6 +1579,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
     },
   });
+  for (const projectId of new Set([...projectTaskStates.keys(), ...federatedProjectTaskStates.keys()])) {
+    reconcileMergeableTaskConflicts(projectId);
+  }
   federationContentScheduler = createFederationContentScheduler({
     store: federationContentStore,
     hasPriorityStateWork: () => {

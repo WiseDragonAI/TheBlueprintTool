@@ -13,6 +13,7 @@ import { taskContentReferences } from './task-content-resources.js';
 import { taskCommandForMutation, taskCommandForProjection, type TaskProjectionCommand } from './task-mutation-command.js';
 import { taskMutationContentResources } from './task-mutation-content-resources.js';
 import { createTaskExecutionRepository } from './task-execution-repository.js';
+import { mergeableTaskConflictChanges } from './resolve-mergeable-task-conflicts.js';
 
 type AnyRecord = Record<string, unknown>;
 type TaskProjectionEntityChange = { entityType: TaskEntityChange['entityType']; entityId: string };
@@ -324,6 +325,30 @@ export function createProjectTaskState(input: {
     return operation;
   };
 
+  const reconcileMergeableConflicts = (targets?: TaskProjectionEntityChange[]): Promise<ProjectTaskMutationResult> => {
+    const operation = commandQueue.then(async () => {
+      const entities = targets
+        ? [...new Map(targets.map((target) => [`${target.entityType}\u0000${target.entityId}`, target])).values()]
+          .flatMap((target) => store.entity(target.entityType, target.entityId) ?? [])
+        : store.activeDelta().entities;
+      const changes = mergeableTaskConflictChanges(entities);
+      if (changes.length === 0) {
+        return { changed: false, deltas: [], localChanges: [], ledger: store.projection().ledger };
+      }
+      // WHAT: Write one local successor after observing every candidate in each mergeable register.
+      // WHY: A selected display value does not remove the concurrent dots that keep the task conflicted.
+      const delta = await persistChanges(changes);
+      return {
+        changed: delta.entities.length > 0,
+        deltas: delta.entities.length > 0 ? [delta] : [],
+        localChanges: projectionEntityChanges(changes),
+        ledger: store.projection().ledger,
+      };
+    });
+    commandQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+  };
+
   return {
     store,
     executions,
@@ -332,6 +357,7 @@ export function createProjectTaskState(input: {
     transitionCardLifecycle,
     executeProjectionCommand,
     executeProjectionCommandNow,
+    reconcileMergeableConflicts,
     activateTask: queueTaskActivation,
     recordContentContribution: queueContentContribution,
     finalizeExecutionArtifacts,

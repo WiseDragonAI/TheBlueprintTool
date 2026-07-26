@@ -902,8 +902,274 @@ test('lifecycle conflicts block completion until a scoped lifecycle resolution',
   assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation: { action: 'complete-master-task', masterTaskId: 'master' } }).ok, true);
   await assert.rejects(state.executeMutation({ action: 'complete-master-task', masterTaskId: 'master' }, before, after), /task_lifecycle_conflict:master/);
 
+  const unresolved = await state.reconcileMergeableConflicts();
+  assert.equal(unresolved.changed, false);
+  assert.equal(state.projection().conflicts[0]?.kind, 'task-conflict');
+
   await state.transitionCardLifecycle('master', 'todo');
   assert.equal(state.projection().conflicts.length, 0);
+});
+
+test('same-status lifecycle refreshes converge causally without changing thread state', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-lifecycle-reconcile-'));
+  const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-project-lifecycle-reconcile-remote-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const threadFile = resolve(root, 'threads', 'tasks', 'thread-card-a.md');
+  const threadBody = [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-a","timestamp":"2026-07-22T12:36:30.895Z"} -->',
+    '',
+    'Keep this note byte-identical.',
+    '',
+  ].join('\n');
+  mkdirSync(dirname(threadFile), { recursive: true });
+  writeFileSync(threadFile, threadBody);
+  writeFileSync(ledgerPath, JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Task', status: 'todo' }],
+    annotations: [],
+    relationships: [],
+    threadFiles: { 'thread-card-a': '.decision-os/threads/tasks/thread-card-a.md' },
+    notes: {
+      'thread-card-a': [{
+        id: 'note-a',
+        role: 'operator',
+        status: 'pending',
+        timestamp: '2026-07-22T12:36:30.895Z',
+      }],
+    },
+  }));
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+  });
+  const remote = createTaskCurrentStateStore({
+    decisionOsRoot: remoteRoot,
+    projectId: 'project-a',
+    initializeLedger: { cards: [], annotations: [], relationships: [] },
+  });
+  context.after(async () => {
+    await Promise.all([state.flush(), remote.flush()]);
+    rmSync(root, { recursive: true, force: true });
+    rmSync(remoteRoot, { recursive: true, force: true });
+  });
+  await state.store.mutate({
+    replicaId: 'workstation',
+    changes: [{
+      entityType: 'card',
+      entityId: 'card-a',
+      changes: [{
+        path: 'lifecycle',
+        operation: 'set',
+        value: {
+          status: 'todo',
+          changedAt: '2026-07-25T17:59:10.163Z',
+          waitingAt: '2026-07-25T17:59:10.163Z',
+          closedAt: null,
+        },
+      }],
+    }],
+  });
+  const phone = await remote.mutate({
+    replicaId: 'phone',
+    changes: [{
+      entityType: 'card',
+      entityId: 'card-a',
+      changes: [{
+        path: 'lifecycle',
+        operation: 'set',
+        value: {
+          status: 'todo',
+          changedAt: '2026-07-22T12:36:30.895Z',
+          waitingAt: '2026-07-22T12:36:30.895Z',
+          closedAt: null,
+        },
+      }],
+    }],
+  });
+  await state.store.merge(phone.delta);
+  assert.equal(state.projection().conflicts.some((conflict) => conflict.entityId === 'card-a' && conflict.path === 'lifecycle'), true);
+  const notesBefore = structuredClone((state.projection().ledger.notes as AnyRecord)['thread-card-a']);
+
+  const resolved = await state.reconcileMergeableConflicts();
+
+  assert.equal(resolved.changed, true);
+  assert.equal(state.projection().conflicts.some((conflict) => conflict.entityId === 'card-a' && conflict.path === 'lifecycle'), false);
+  assert.deepEqual(
+    (state.projection().ledger.cards as AnyRecord[]).find((card) => card.id === 'card-a')?.lifecycle,
+    {
+      status: 'todo',
+      changedAt: '2026-07-25T17:59:10.163Z',
+      waitingAt: '2026-07-25T17:59:10.163Z',
+      closedAt: null,
+    },
+  );
+  assert.deepEqual((state.projection().ledger.notes as AnyRecord)['thread-card-a'], notesBefore);
+  assert.equal(readFileSync(threadFile, 'utf8'), threadBody);
+  assert.equal(state.store.entity('card', 'card-a')?.fields.lifecycle?.candidates.length, 1);
+  assert.equal((await state.reconcileMergeableConflicts()).changed, false);
+});
+
+test('missing execution artifacts converge to the retained immutable evidence head', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-artifact-reconcile-'));
+  const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-project-artifact-reconcile-remote-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  writeFileSync(ledgerPath, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+  });
+  const remote = createTaskCurrentStateStore({
+    decisionOsRoot: remoteRoot,
+    projectId: 'project-a',
+    initializeLedger: { cards: [], annotations: [], relationships: [] },
+  });
+  context.after(async () => {
+    await Promise.all([state.flush(), remote.flush()]);
+    rmSync(root, { recursive: true, force: true });
+    rmSync(remoteRoot, { recursive: true, force: true });
+  });
+  const metadata = {
+    executionId: 'execution-a',
+    requestId: 'request-a',
+    sessionId: 'session-a',
+    projectId: 'project-a',
+    ledgerId: 'tasks',
+    taskId: 'card-a',
+    sourceCardId: 'card-a',
+    ownerCardId: 'card-a',
+    kind: 'thread',
+    requestedAt: '2026-07-22T12:36:30.895Z',
+    model: null,
+    effort: null,
+    pipelineRunId: null,
+    pipelineStepId: null,
+    pipelineSkillRunId: null,
+    predecessorExecutionId: null,
+    restartOfExecutionId: null,
+  };
+  const lifecycle = {
+    phase: 'interrupted',
+    phaseSince: '2026-07-22T12:36:31.000Z',
+    startedAt: null,
+    finishedAt: '2026-07-22T12:36:31.000Z',
+    executorNodeId: 'workstation',
+    providerSessionId: null,
+    result: { status: 'interrupted', summary: '' },
+    error: null,
+    revision: 1,
+  };
+  const jsonl = {
+    hash: 'fa93b6e3c9a865c735d43d0569fa3ea89f294e99f7ac81104ec14d4af3b022cc',
+    bytes: 227,
+    mediaType: 'application/x-ndjson',
+  };
+  const local = await state.store.mutate({
+    replicaId: 'workstation',
+    changes: [{
+      entityType: 'execution',
+      entityId: 'execution-a',
+      changes: [
+        { path: 'metadata', operation: 'set', value: metadata },
+        { path: 'lifecycle', operation: 'set', value: lifecycle },
+        {
+          path: 'artifacts',
+          operation: 'set',
+          value: {
+            jsonl: null,
+            stderr: null,
+            telemetry: null,
+            result: null,
+            changedAt: '2026-07-22T12:36:31.000Z',
+            revision: 1,
+          },
+        },
+      ],
+    }],
+  });
+  assert.equal(local.delta.entities.length, 1);
+  const phone = await remote.mutate({
+    replicaId: 'phone',
+    changes: [{
+      entityType: 'execution',
+      entityId: 'execution-a',
+      changes: [
+        { path: 'metadata', operation: 'set', value: metadata },
+        { path: 'lifecycle', operation: 'set', value: lifecycle },
+        {
+          path: 'artifacts',
+          operation: 'set',
+          value: {
+            jsonl,
+            stderr: null,
+            telemetry: null,
+            result: null,
+            changedAt: '2026-07-22T12:36:32.000Z',
+            revision: 2,
+          },
+        },
+      ],
+    }],
+  });
+  await state.store.merge(phone.delta);
+  assert.deepEqual(state.executions.diagnostics(), [{
+    executionId: 'execution-a',
+    code: 'task_execution_conflict',
+    lanes: ['artifacts'],
+    taskId: 'card-a',
+  }]);
+
+  const resolved = await state.reconcileMergeableConflicts();
+
+  assert.equal(resolved.changed, true);
+  assert.deepEqual(state.executions.diagnostics(), []);
+  assert.deepEqual(state.executions.find('execution-a')?.artifacts, {
+    jsonl,
+    stderr: null,
+    telemetry: null,
+    result: null,
+    changedAt: '2026-07-22T12:36:32.000Z',
+    revision: 2,
+  });
+  assert.equal(state.store.entity('execution', 'execution-a')?.fields.artifacts?.candidates.length, 1);
+  assert.equal((await state.reconcileMergeableConflicts()).changed, false);
+
+  const competing = await remote.mutate({
+    replicaId: 'phone',
+    changes: [{
+      entityType: 'execution',
+      entityId: 'execution-a',
+      changes: [{
+        path: 'artifacts',
+        operation: 'set',
+        value: {
+          jsonl: {
+            hash: '0a93b6e3c9a865c735d43d0569fa3ea89f294e99f7ac81104ec14d4af3b022cc',
+            bytes: 228,
+            mediaType: 'application/x-ndjson',
+          },
+          stderr: null,
+          telemetry: null,
+          result: null,
+          changedAt: '2026-07-22T12:36:33.000Z',
+          revision: 3,
+        },
+      }],
+    }],
+  });
+  await state.store.merge(competing.delta);
+  assert.equal((await state.reconcileMergeableConflicts()).changed, false);
+  assert.deepEqual(state.executions.diagnostics(), [{
+    executionId: 'execution-a',
+    code: 'task_execution_conflict',
+    lanes: ['artifacts'],
+    taskId: 'card-a',
+  }]);
 });
 
 test('master completion emits one lifecycle lane per positioned graph member', () => {
