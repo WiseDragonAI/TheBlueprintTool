@@ -43,6 +43,32 @@ export function activeThreadContentScope(): ThreadContentRefreshScope | null {
   return { projectId: String(state.projectId ?? ''), replicaNodeId: String(state.replicaNodeId ?? ''), ledgerId, threadId, contentFile };
 }
 
+export function activeThreadIdentityScope(): ThreadContentRefreshScope | null {
+  const ledgerId = currentLedgerStateId();
+  const threadId = String(state.threadId ?? '').trim();
+  if (!isRecord(state.activeLedger) || !ledgerId || !threadId) return null;
+  return {
+    projectId: String(state.projectId ?? ''),
+    replicaNodeId: String(state.replicaNodeId ?? ''),
+    ledgerId,
+    threadId,
+    contentFile: threadContentFile(state.activeLedger, threadId)
+  };
+}
+
+function isActiveThreadIdentityScope(scope: ThreadContentRefreshScope | null | undefined): boolean {
+  if (!scope) return false;
+  const activeScope = activeThreadIdentityScope();
+  return Boolean(
+    activeScope
+    && String(scope.projectId ?? '').trim() === activeScope.projectId
+    && String(scope.replicaNodeId ?? '').trim() === activeScope.replicaNodeId
+    && String(scope.ledgerId ?? '').trim() === activeScope.ledgerId
+    && String(scope.threadId ?? '').trim() === activeScope.threadId
+    && (!normalizeContentFileReference(scope.contentFile) || normalizeContentFileReference(scope.contentFile) === activeScope.contentFile)
+  );
+}
+
 export function isActiveThreadContentScope(scope: ThreadContentRefreshScope | null | undefined): boolean {
   // WHAT: Reject absent event scopes before comparing active ownership.
   // WHY: Unscoped lifecycle events must never refresh the visible thread.
@@ -62,16 +88,26 @@ function serverOwnsThreadScope(ledger: AnyRecord, scope: ThreadContentRefreshSco
   return threadContentFile(ledger, scope.threadId) === normalizeContentFileReference(scope.contentFile);
 }
 
-export async function loadActiveThreadSlice(scope: ThreadContentRefreshScope): Promise<boolean> {
+export async function loadActiveThreadSlice(
+  scope: ThreadContentRefreshScope,
+  options: { signal?: AbortSignal; allowMissingContentFile?: boolean } = {}
+): Promise<boolean> {
   // WHAT: Reject work that no longer targets the active thread before any fetch.
   // WHY: Inactive ledger events must remain zero-IO no-ops.
-  if (!isActiveThreadContentScope(scope)) {
+  const bootstrapIdentity = options.allowMissingContentFile === true && !normalizeContentFileReference(scope.contentFile);
+  const ownsActiveScope = bootstrapIdentity
+    ? isActiveThreadIdentityScope(scope)
+    : isActiveThreadContentScope(scope);
+  if (!ownsActiveScope) {
     telemetry('thread-content-refresh-skipped', { reason: 'inactive-scope', ...scope });
     return false;
   }
   const activeLedgerAtRequest = state.activeLedger as AnyRecord;
   const endpoint = projectScopedRequestPath(`/api/ledgers/${encodeURIComponent(scope.ledgerId)}/threads/${encodeURIComponent(scope.threadId)}`, scope.projectId);
-  const response = await fetch(endpoint, replicaRequestInit(undefined, scope.replicaNodeId)).catch(() => undefined);
+  const response = await fetch(
+    endpoint,
+    replicaRequestInit(options.signal ? { signal: options.signal } : undefined, scope.replicaNodeId)
+  ).catch(() => undefined);
   // WHAT: Preserve the current thread on network and non-success responses.
   // WHY: Failed refreshes must not clear visible notes.
   if (!response?.ok) {
@@ -87,13 +123,17 @@ export async function loadActiveThreadSlice(scope: ThreadContentRefreshScope): P
   }
   // WHAT: Reject the response when route or thread identity changed during the fetch.
   // WHY: Awaited work must not cross an operator navigation boundary.
-  if (state.activeLedger !== activeLedgerAtRequest || !isActiveThreadContentScope(scope)) {
+  const stillOwnsActiveScope = () => state.activeLedger === activeLedgerAtRequest && (
+    bootstrapIdentity ? isActiveThreadIdentityScope(scope) : isActiveThreadContentScope(scope)
+  );
+  if (!stillOwnsActiveScope()) {
     telemetry('thread-content-refresh-skipped', { reason: 'active-thread-changed', ...scope });
     return false;
   }
   // WHAT: Require the response ledger to confirm the same thread content-file ownership.
   // WHY: Endpoint reuse must not admit a slice from mismatched server state.
-  if (!serverOwnsThreadScope(incomingLedger, scope)) {
+  const responseContentFile = threadContentFile(incomingLedger, scope.threadId);
+  if (!responseContentFile || (!bootstrapIdentity && !serverOwnsThreadScope(incomingLedger, scope))) {
     telemetry('thread-content-refresh-skipped', { reason: 'response-scope-mismatch', ...scope });
     return false;
   }
@@ -110,7 +150,7 @@ export async function loadActiveThreadSlice(scope: ThreadContentRefreshScope): P
   });
   // WHAT: Recheck ownership after local-note merging and before mutating active state.
   // WHY: Synchronous callbacks can change thread context between the fetch and apply boundary.
-  if (!incomingSlice || state.activeLedger !== activeLedgerAtRequest || !isActiveThreadContentScope(scope)) {
+  if (!incomingSlice || !stillOwnsActiveScope()) {
     telemetry('thread-content-refresh-skipped', { reason: 'active-thread-changed-before-apply', ...scope });
     return false;
   }
@@ -118,6 +158,10 @@ export async function loadActiveThreadSlice(scope: ThreadContentRefreshScope): P
   // WHY: An event-triggered thread read must not bypass acknowledgement of a locally persisted message.
   if (!acceptTaskClockForInstall(taskClockFromResponse(response), 'event-thread-content-refresh')) return false;
 
+  activeLedgerAtRequest.threadFiles = {
+    ...(isRecord(activeLedgerAtRequest.threadFiles) ? activeLedgerAtRequest.threadFiles : {}),
+    [threadId]: responseContentFile
+  };
   normalizeLedgerNotes(activeLedgerAtRequest)[threadId] = normalizeLedgerNotes(incomingSlice)[threadId] ?? [];
   normalizeDeletedNoteIds(activeLedgerAtRequest)[threadId] = normalizeDeletedNoteIds(incomingSlice)[threadId] ?? [];
   renderThreadNotes();

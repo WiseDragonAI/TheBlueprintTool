@@ -416,6 +416,45 @@ test('scoped thread refresh mutates only notes while preserving canvas, selectio
   assert.deepEqual(state.activeLedger.notes['thread-card-a'], [{ id: 'note-2', role: 'agent', message: 'Lifecycle result' }]);
 });
 
+test('active thread bootstrap requires response ownership before installing an omitted slice', async () => {
+  installRuntimeDom();
+  resetRuntimeState();
+  state.activeLedger.notes = {};
+  state.activeLedger.deletedNoteIds = {};
+  state.activeLedger.threadFiles = {};
+  const responses = [
+    revisionResponse({
+      ...structuredClone(state.activeLedger),
+      notes: { 'thread-card-a': [{ id: 'note-unowned', role: 'operator', message: 'Must not install' }] },
+    }, 1),
+    revisionResponse({
+      ...structuredClone(state.activeLedger),
+      notes: { 'thread-card-a': [{ id: 'note-restored', role: 'operator', message: 'Restored after reconnect' }] },
+      deletedNoteIds: { 'thread-card-a': [] },
+      threadFiles: { 'thread-card-a': '.decision-os/threads/specs/thread-card-a.md' },
+    }, 2),
+  ];
+  globalThis.fetch = (async () => responses.shift()!) as typeof fetch;
+  const {
+    activeThreadIdentityScope,
+    loadActiveThreadSlice
+  } = await import('../../src/runtime/thread/effect/load-active-thread-slice.js');
+  const scope = activeThreadIdentityScope();
+
+  assert.ok(scope);
+  assert.equal(scope.contentFile, '');
+  assert.equal(await loadActiveThreadSlice(scope, { allowMissingContentFile: true }), false);
+  assert.equal(state.activeLedger.threadFiles['thread-card-a'], undefined);
+  assert.equal(state.activeLedger.notes['thread-card-a'], undefined);
+  assert.equal(await loadActiveThreadSlice(scope, { allowMissingContentFile: true }), true);
+  assert.equal(state.activeLedger.threadFiles['thread-card-a'], '.decision-os/threads/specs/thread-card-a.md');
+  assert.deepEqual(state.activeLedger.notes['thread-card-a'], [{
+    id: 'note-restored',
+    role: 'operator',
+    message: 'Restored after reconnect'
+  }]);
+});
+
 test('event-triggered thread refresh rejects a causally stale task slice and accepts its acknowledgement', async () => {
   installRuntimeDom();
   resetRuntimeState();

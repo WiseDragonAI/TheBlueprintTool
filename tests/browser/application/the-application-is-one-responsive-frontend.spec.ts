@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
@@ -232,6 +232,53 @@ test('The responsive application preserves the mobile Control Room and expands t
   }
 });
 
+test('An interrupted responsive thread hydration recovers without an operator reload.', { timeout: 30_000 }, async () => {
+  const server = await startDecisionOsServer();
+  let browser: Browser | undefined;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    const route = localResponsiveCardRoute();
+    const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    let threadRequestCount = 0;
+    await desktop.route('**/api/ledgers/*/threads/*', async (request) => {
+      threadRequestCount += 1;
+      if (threadRequestCount === 1) {
+        await request.abort('connectionreset');
+        return;
+      }
+      const response = await request.fetch();
+      const payload = await response.json() as { notes?: Record<string, unknown[]> };
+      const threadId = decodeURIComponent(new URL(request.request().url()).pathname.split('/').at(-1) ?? '');
+      payload.notes = {
+        ...(payload.notes ?? {}),
+        [threadId]: [{
+          id: 'note-browser-thread-recovery',
+          role: 'operator',
+          message: 'Recovered thread note.',
+          timestamp: '2026-07-26T00:00:00.000Z',
+        }],
+      };
+      await request.fulfill({ response, contentType: 'application/json', body: JSON.stringify(payload) });
+    });
+
+    await desktop.goto(`${server.url}${route}`, { waitUntil: 'domcontentloaded' });
+    await desktop.locator('#card-view:not([hidden])').waitFor({ state: 'visible', timeout: 10_000 });
+    await desktop.getByRole('button', { name: 'Thread', exact: true }).click();
+    await desktop.locator('.thread-note').filter({ hasText: 'Recovered thread note.' }).waitFor({ state: 'visible', timeout: 10_000 });
+
+    assert.ok(threadRequestCount >= 2, `Expected an automatic thread retry, received ${threadRequestCount} request.`);
+    assert.ok(await desktop.locator('.thread-note').count() > 0);
+    assert.equal(await desktop.locator('.mobile-thread-inspector').isVisible(), true);
+  } finally {
+    await browser?.close();
+    await stopDecisionOsServer(server.process);
+  }
+});
+
 test('A new desktop task remains in its task view while its optimistic creation is pending.', { timeout: 60_000 }, async () => {
   const server = await startDecisionOsServer();
   let browser: Browser | undefined;
@@ -414,6 +461,27 @@ async function resolveResponsiveCardRoute(serverUrl: string): Promise<string> {
     }
   }
   assert.fail('The test workspace must expose one card and one zone for responsive card routing.');
+}
+
+function localResponsiveCardRoute(): string {
+  const project = JSON.parse(readFileSync(resolve(repoRoot, '.decision-os/project.json'), 'utf8')) as { id?: string };
+  const registry = JSON.parse(readFileSync(resolve(repoRoot, '.decision-os/state.json'), 'utf8')) as {
+    ledgers?: Array<{ id?: string; ledgerFile?: string }>;
+  };
+  assert.ok(project.id, 'The browser fixture must expose a project identity.');
+  for (const ledgerRef of registry.ledgers ?? []) {
+    if (!ledgerRef.id || !ledgerRef.ledgerFile) continue;
+    const ledger = JSON.parse(readFileSync(resolve(repoRoot, ledgerRef.ledgerFile), 'utf8')) as {
+      annotations?: Array<{ id?: string; variant?: string; color?: string }>;
+      cards?: Array<{ id?: string }>;
+      threadFiles?: Record<string, string>;
+    };
+    const zone = ledger.annotations?.find((candidate) => candidate.id && candidate.variant !== 'group' && typeof candidate.color === 'string');
+    const card = ledger.cards?.find((candidate) => candidate.id && ledger.threadFiles?.[`thread-${candidate.id}`]);
+    if (!zone?.id || !card?.id) continue;
+    return `/p/${encodeURIComponent(project.id)}/ledgers/${encodeURIComponent(ledgerRef.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`;
+  }
+  assert.fail('The browser fixture must expose one local card, zone, and thread.');
 }
 
 async function resolveCurrentProject(serverUrl: string): Promise<{ id: string; name: string }> {
