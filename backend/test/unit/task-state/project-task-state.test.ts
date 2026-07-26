@@ -645,6 +645,63 @@ test('unchanged content bytes do not create a second resource mutation when file
   assert.equal(published.flatMap((delta) => delta.entities).filter((entity) => entity.entityType === 'resource').length, 1);
 });
 
+test('reasserting preserved local bytes causally resolves concurrent content heads', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-content-resolve-'));
+  const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-project-content-resolve-remote-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const resource = '.decision-os/cards/tasks/card-a.md';
+  const contentFile = resolve(root, 'cards', 'tasks', 'card-a.md');
+  const ledger = { cards: [{ id: 'card-a', title: 'Task', status: 'todo' }], annotations: [], relationships: [] };
+  mkdirSync(dirname(contentFile), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify(ledger));
+  writeFileSync(contentFile, 'Preserved workstation body.');
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+  });
+  const remote = createTaskCurrentStateStore({
+    decisionOsRoot: remoteRoot,
+    projectId: 'project-a',
+    initializeLedger: ledger,
+  });
+  context.after(async () => {
+    await Promise.all([state.flush(), remote.flush()]);
+    rmSync(root, { recursive: true, force: true });
+    rmSync(remoteRoot, { recursive: true, force: true });
+  });
+
+  await state.recordContentContribution('card-a', resource);
+  const preserved = state.store.contentHeads(resource)[0];
+  const concurrent = await remote.mutate({
+    replicaId: 'phone',
+    changes: [{
+      entityType: 'resource',
+      entityId: resource,
+      changes: [{
+        path: 'head',
+        operation: 'set',
+        value: {
+          type: 'card-markdown',
+          key: resource,
+          hash: '5'.repeat(64),
+          bytes: 229,
+          changedAt: '2026-07-26T00:00:00.000Z',
+        },
+      }],
+    }],
+  });
+  await state.store.merge(concurrent.delta);
+  assert.equal(state.store.contentHeads(resource).length, 2);
+
+  const resolved = await state.recordContentContribution('card-a', resource);
+
+  assert.equal(resolved.entities.some((entity) => entity.entityType === 'resource' && entity.entityId === resource), true);
+  assert.deepEqual(state.store.contentHeads(resource), [preserved]);
+});
+
 test('watcher observation ignores materialization and publishes only the post-mutation thread head', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-materialized-mutation-'));
   const ledgerPath = resolve(root, 'tasks.json');

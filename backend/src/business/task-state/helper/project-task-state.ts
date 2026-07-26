@@ -8,7 +8,7 @@ import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.j
 import { captureTaskExecutionArtifact } from './capture-task-execution-artifact.js';
 import { createTaskCurrentStateStore } from './task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskEntityChange, type TaskStateDelta } from './task-current-state-types.js';
-import { createTaskContentObjectStore } from './task-content-object-store.js';
+import { createTaskContentObjectStore, type TaskContentHead } from './task-content-object-store.js';
 import { taskContentReferences } from './task-content-resources.js';
 import { taskCommandForMutation, taskCommandForProjection, type TaskProjectionCommand } from './task-mutation-command.js';
 import { taskMutationContentResources } from './task-mutation-content-resources.js';
@@ -78,6 +78,16 @@ export function createProjectTaskState(input: {
     await publish(result.delta);
     return result.delta;
   };
+
+  const contentHeadNeedsCausalUpdate = (head: TaskContentHead): boolean => {
+    const current = store.contentHeads(head.key);
+    // WHAT: Reassert the preserved local bytes when a resource has concurrent active heads.
+    // WHY: Matching one candidate is not convergence; a new observed write must causally replace every competing head.
+    return current.length !== 1
+      || current[0].type !== head.type
+      || current[0].hash !== head.hash
+      || current[0].bytes !== head.bytes;
+  };
   const executions = createTaskExecutionRepository({
     store,
     writerId: input.writerId,
@@ -146,9 +156,7 @@ export function createProjectTaskState(input: {
   const recordContentContribution = async (taskId: string, resourceIds: string | string[]): Promise<TaskStateDelta> => {
     const resources = [...new Set((Array.isArray(resourceIds) ? resourceIds : [resourceIds]).filter(Boolean))];
     const heads = (await Promise.all(resources.map((resourceId) => contentObjects.capture(resourceId)))).filter((head) => head !== null);
-    const changedHeads = heads.filter((head) => !store.contentHeads(head.key).some((current) => (
-      current.type === head.type && current.hash === head.hash && current.bytes === head.bytes
-    )));
+    const changedHeads = heads.filter(contentHeadNeedsCausalUpdate);
     const contentDelta = changedHeads.length > 0
       ? await persistChanges(changedHeads.map((head) => ({ entityType: 'resource', entityId: head.key, changes: [{ path: 'head', operation: 'set', value: head }] })), { activationTaskId: taskId })
       : { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
@@ -241,9 +249,7 @@ export function createProjectTaskState(input: {
     for (const resourceId of mutationResources) {
       const head = await contentObjects.capture(resourceId);
       if (!head) throw new Error(`task_content_capture_failed:${resourceId}`);
-      const headChanged = !store.contentHeads(head.key).some((current) => (
-        current.type === head.type && current.hash === head.hash && current.bytes === head.bytes
-      ));
+      const headChanged = contentHeadNeedsCausalUpdate(head);
       if (headChanged) {
         command.changes.push({ entityType: 'resource', entityId: head.key, changes: [{ path: 'head', operation: 'set', value: head }] });
         changedContentResources.push(head.key);
