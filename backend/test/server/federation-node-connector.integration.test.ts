@@ -916,12 +916,12 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       comment?: { contentFile?: string; what?: string };
       state?: { status?: string; content?: { status?: string; candidates?: unknown[] } };
     };
-    assert.equal(headlessCardResponse.status, 200, 'a converged card without published Markdown bytes must not synchronize forever');
+    assert.equal(headlessCardResponse.status, 200, 'a converged headless card keeps its structural state readable');
     assert.equal(headlessCard.id, 'beta-headless-card');
     assert.equal(headlessCard.comment?.contentFile, '.decision-os/cards/tasks/beta-headless-card.md');
     assert.equal(headlessCard.comment?.what, undefined);
-    assert.equal(headlessCard.state?.status, 'synchronized');
-    assert.equal(headlessCard.state?.content?.status, 'missing');
+    assert.equal(headlessCard.state?.status, 'degraded');
+    assert.equal(headlessCard.state?.content?.status, 'missing-head');
     assert.deepEqual(headlessCard.state?.content?.candidates, []);
     const remoteLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, { headers: remoteHeaders }).then((response) => response.json()) as { cards: Array<{ title: string }> };
     assert.equal(remoteLedger.cards[0].title, 'changed on owner');

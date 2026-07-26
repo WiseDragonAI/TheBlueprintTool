@@ -29,8 +29,7 @@ import { confirmThreadCodexSessionDeletionController } from '/src/runtime/codex/
 import { deleteThreadCodexSessionController } from '/src/runtime/codex/controller/delete-thread-codex-session-controller.js';
 import { collapseMobileThreadComposer, expandMobileThreadComposer } from './thread-composer.js';
 import { createMobileThreadSessionDeletionHandler, resetMobileThreadConfirmationModal } from './thread-session-deletion.js';
-import { projectReplicaRequestPath, projectScopedRequestPath, replicaRequestInit } from '/src/runtime/project/helper/project-request-scope.js';
-import { reconcileResponsiveThreadLedger } from './thread-ledger-reconciliation.js';
+import { projectReplicaRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 import { voiceRetryInput } from './thread-voice-retry.js';
 import { bindDesktopVoiceActionPreview } from '/src/runtime/voice/effect/update-desktop-voice-action-preview.js';
 import { hydrateThreadViewportState, saveThreadPanelScrollPositions } from '/src/runtime/thread/effect/persist-thread-scroll.js';
@@ -39,20 +38,20 @@ import { deleteNoteController } from '/src/runtime/thread/controller/delete-note
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
 import { retryPendingThreadMessageController } from '/src/runtime/thread/controller/retry-pending-thread-message-controller.js';
 import { activeThreadIdentityScope, loadActiveThreadSlice } from '/src/runtime/thread/effect/load-active-thread-slice.js';
+import { restoreThreadDocumentsIntoLedger } from '/src/runtime/thread/helper/thread-document-state.js';
+import { advanceLedgerRouteEpoch, beginActiveLedgerRequest, reconcileActiveLedgerState } from '/src/runtime/ledger/effect/reconcile-active-ledger-state.js';
 import { telemetry } from '/src/runtime/telemetry/effect/telemetry.js';
 
 let currentCard = null;
 let currentProjectId = '';
 let currentReplicaNodeId = '';
 let currentLedgerId = '';
-let onLedgerRefresh = async () => null;
 let onCodexStarted = async () => null;
 let onQuickVoiceSubmitted = async () => null;
 let initialized = false;
 let eventSource = null;
 let eventSourceUrl = '';
 let quickVoiceCapture = false;
-let threadRefreshGeneration = 0;
 let threadHydrationGeneration = 0;
 let threadHydrationTimer = null;
 let settleThreadHydrationDelay = null;
@@ -110,6 +109,8 @@ function hydrateThreadRun(runId, startedAt, status, queuePosition) {
 }
 
 export function syncMobileThreadContext(input) {
+  const projectReplicaChanged = currentProjectId !== String(input.projectId ?? '')
+    || currentReplicaNodeId !== String(input.replicaNodeId ?? '');
   const contextChanged = currentProjectId !== String(input.projectId ?? '')
     || currentReplicaNodeId !== String(input.replicaNodeId ?? '')
     || currentLedgerId !== String(input.ledgerId ?? '');
@@ -117,23 +118,31 @@ export function syncMobileThreadContext(input) {
   currentProjectId = String(input.projectId ?? '');
   currentReplicaNodeId = String(input.replicaNodeId ?? '');
   currentLedgerId = String(input.ledgerId ?? '');
-  onLedgerRefresh = input.onLedgerRefresh ?? onLedgerRefresh;
   onCodexStarted = input.onCodexStarted ?? onCodexStarted;
   onQuickVoiceSubmitted = input.onQuickVoiceSubmitted ?? onQuickVoiceSubmitted;
   canvasState.canvasMode = 'ledger';
   canvasState.projectId = currentProjectId;
   canvasState.replicaNodeId = currentReplicaNodeId;
   canvasState.activeTab = currentLedgerId;
-  canvasState.activeLedgerId = currentLedgerId;
-  canvasState.activeLedger = input.ledger;
   canvasState.ledgers = input.ledgers;
   canvasState.ledgerTabs = input.ledgers;
-  if (canvasState.ledgerReconciliation?.routeLedgerStateId !== currentLedgerId) {
-    canvasState.ledgerReconciliation.routeLedgerStateId = currentLedgerId;
-    canvasState.ledgerReconciliation.routeEpoch += 1;
-    canvasState.ledgerReconciliation.lastAppliedServerRevision = -1;
-    canvasState.ledgerReconciliation.lastAppliedSequence = 0;
+  if (projectReplicaChanged && canvasState.ledgerReconciliation?.routeLedgerStateId === currentLedgerId) {
+    advanceLedgerRouteEpoch(currentLedgerId);
   }
+  const request = beginActiveLedgerRequest(currentLedgerId);
+  reconcileActiveLedgerState({
+    ledger: input.ledger,
+    request,
+    serverRevision: null,
+    source: 'responsive-thread-context',
+    preserveLocalState: !projectReplicaChanged,
+  });
+  restoreThreadDocumentsIntoLedger({
+    projectId: currentProjectId,
+    replicaNodeId: currentReplicaNodeId,
+    ledgerId: currentLedgerId,
+    ledger: canvasState.activeLedger,
+  });
   if (canvasState.threadPanelOpen) subscribeEvents();
 }
 
@@ -192,7 +201,6 @@ export function closeMobileThread({ fromHistory = false, discardHistory = false 
   }
   canvasState.threadPanelOpen = false;
   disconnectThreadFollowBottomObserver();
-  threadRefreshGeneration += 1;
   unsubscribeEvents();
   document.body.classList.remove('card-thread-open');
   document.querySelector('.thread-panel').hidden = true;
@@ -313,45 +321,10 @@ async function stopQuickVoiceComment(launchMode = 'send') {
 }
 
 async function refreshThreadLedger(optimisticRunId = '') {
-  const owner = Object.freeze({
-    generation: ++threadRefreshGeneration,
-    projectId: currentProjectId,
-    replicaNodeId: currentReplicaNodeId,
-    ledgerId: currentLedgerId,
-    cardId: String(currentCard?.id || ''),
-    threadId: String(canvasState.threadId || ''),
-    panelOpen: canvasState.threadPanelOpen,
-  });
-  const ownsRefresh = () => owner.generation === threadRefreshGeneration
-    && owner.projectId === currentProjectId
-    && owner.replicaNodeId === currentReplicaNodeId
-    && owner.ledgerId === currentLedgerId
-    && owner.cardId === String(currentCard?.id || '')
-    && owner.threadId === String(canvasState.threadId || '')
-    && owner.panelOpen === canvasState.threadPanelOpen;
-  if (!owner.ledgerId || !owner.threadId || !owner.panelOpen) return;
-  const response = await fetch(
-    projectScopedRequestPath(`/api/ledgers/${encodeURIComponent(owner.ledgerId)}/threads/${encodeURIComponent(owner.threadId)}`, owner.projectId),
-    replicaRequestInit({ cache: 'no-store' }, owner.replicaNodeId)
-  ).catch(() => null);
-  if (!ownsRefresh()) return;
-  if (!response?.ok) return;
-  const slice = await response.json().catch(() => null);
-  if (!slice) return;
-  if (!ownsRefresh()) return;
-  const refreshed = await onLedgerRefresh(owner.ledgerId, owner.replicaNodeId);
-  if (!ownsRefresh()) return;
-  const reconciled = reconcileResponsiveThreadLedger({
-    activeLedger: canvasState.activeLedger,
-    refreshedLedger: refreshed,
-    slice,
-    currentCard,
-    optimisticRunId,
-  });
-  if (!reconciled.ledger) return;
-  canvasState.activeLedger = reconciled.ledger;
-  currentCard = reconciled.card;
-  renderThreadPanel();
+  const scope = activeThreadIdentityScope();
+  if (!scope || !canvasState.threadPanelOpen) return;
+  if (optimisticRunId && currentCard) currentCard.codexThreadRunId = optimisticRunId;
+  await loadActiveThreadSlice(scope, { allowMissingContentFile: true });
   updateLaunchReadiness();
 }
 

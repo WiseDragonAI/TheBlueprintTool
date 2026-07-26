@@ -83,7 +83,7 @@ function applyMutation(input: {
   ledgerPath: string;
   ledger: AnyRecord;
   mutation: LedgerMutation;
-}): void {
+}): ReturnType<typeof applyLedgerMutation> {
   const result = applyLedgerMutation({
     decisionOsRoot: input.project.decisionOsRoot,
     ledgerPath: input.ledgerPath,
@@ -91,6 +91,7 @@ function applyMutation(input: {
     mutation: input.mutation,
   });
   if (!result.ok) throw new Error(String(result.error?.body.error ?? 'Could not synchronize the runtime incident review task.'));
+  return result;
 }
 
 export async function synchronizeRuntimeIncidentReviewTask(input: {
@@ -160,8 +161,8 @@ export async function synchronizeRuntimeIncidentReviewTask(input: {
     };
   }
 
-  applyMutation({ project: input.project, ledgerPath, ledger: after, mutation });
-  let committed = await input.taskState.executeMutation(mutation, before, after);
+  const mutationResult = applyMutation({ project: input.project, ledgerPath, ledger: after, mutation });
+  let committed = await input.taskState.executeMutation(mutation, before, after, mutationResult.changedContentFiles);
   if (!existingCard) {
     // WHAT: Publish the newly held master task through one truthful thread contribution.
     // WHY: Task creation and replicated activation are separate epoch-3 operations.
@@ -176,8 +177,8 @@ export async function synchronizeRuntimeIncidentReviewTask(input: {
         body: 'Recurring runtime incident review task created automatically from the central incident ledger.',
       },
     };
-    applyMutation({ project: input.project, ledgerPath, ledger: noteAfter, mutation: noteMutation });
-    committed = await input.taskState.executeMutation(noteMutation, noteBefore, noteAfter);
+    const noteMutationResult = applyMutation({ project: input.project, ledgerPath, ledger: noteAfter, mutation: noteMutation });
+    committed = await input.taskState.executeMutation(noteMutation, noteBefore, noteAfter, noteMutationResult.changedContentFiles);
   }
   const card = (committed.ledger.cards as AnyRecord[] | undefined)?.find((entry) => String(entry.id ?? '') === runtimeIncidentReviewCardId);
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};

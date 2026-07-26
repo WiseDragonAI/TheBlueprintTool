@@ -135,8 +135,9 @@ test('task intake publishes no state until its first durable content contributio
   const execute = async (mutation: LedgerMutation) => {
     const before = structuredClone(state.projection().ledger);
     const after = structuredClone(before);
-    assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
-    return state.executeMutation(mutation, before, after);
+    const applied = applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation });
+    assert.equal(applied.ok, true);
+    return state.executeMutation(mutation, before, after, applied.changedContentFiles);
   };
   await execute({ action: 'create-task-intake', assignedNodeId: 'workstation', annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' }, card: { id: 'card-a', title: 'Local task', status: 'todo', labels: ['master-task'], domainId: 'tasks', comment: { what: 'Task' } } });
   assert.equal(published.length, 0);
@@ -216,8 +217,9 @@ test('voice note mutations replicate the transcript sidecar without publishing r
     },
   };
 
-  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
-  const committed = await state.executeMutation(mutation, before, after);
+  const applied = applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation });
+  assert.equal(applied.ok, true);
+  const committed = await state.executeMutation(mutation, before, after, applied.changedContentFiles);
 
   assert.ok(committed.deltas.flatMap((delta) => delta.entities).some((entity) => (
     entity.entityType === 'thread-note' && entity.entityId === `${threadId}/note-voice`
@@ -269,8 +271,9 @@ test('restore-note causally replaces a tombstone without importing unrelated sid
   const after = structuredClone(before);
   const mutation: LedgerMutation = { action: 'restore-note', note: { id: 'note-test', threadId } };
 
-  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
-  const restored = await state.executeMutation(mutation, before, after);
+  const applied = applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation });
+  assert.equal(applied.ok, true);
+  const restored = await state.executeMutation(mutation, before, after, applied.changedContentFiles);
 
   assert.equal(restored.changed, true);
   assert.deepEqual((state.projection().ledger.deletedNoteIds as Record<string, string[]>)[threadId], []);
@@ -285,8 +288,9 @@ test('restore-note causally replaces a tombstone without importing unrelated sid
   const retryBefore = structuredClone(state.projection().ledger);
   const retryAfter = structuredClone(retryBefore);
   const retryMutation: LedgerMutation = { action: 'restore-note', note: { id: 'note-test', threadId } };
-  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: retryAfter, mutation: retryMutation }).ok, true);
-  const retry = await state.executeMutation(retryMutation, retryBefore, retryAfter);
+  const retryApplied = applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: retryAfter, mutation: retryMutation });
+  assert.equal(retryApplied.ok, true);
+  const retry = await state.executeMutation(retryMutation, retryBefore, retryAfter, retryApplied.changedContentFiles);
   assert.equal(retry.changed, false);
   assert.deepEqual(retry.deltas.flatMap((delta) => delta.entities), []);
 });
@@ -323,8 +327,9 @@ test('restore-note adopts an orphan sidecar without rewriting its notes', async 
   const after = structuredClone(before);
   const mutation: LedgerMutation = { action: 'restore-note', note: { id: 'note-agent', threadId } };
 
-  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
-  const restored = await state.executeMutation(mutation, before, after);
+  const applied = applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation });
+  assert.equal(applied.ok, true);
+  const restored = await state.executeMutation(mutation, before, after, applied.changedContentFiles);
 
   assert.equal(restored.changed, true);
   assert.equal((state.projection().ledger.threadFiles as Record<string, string>)[threadId], threadRef);
@@ -367,8 +372,9 @@ test('assigned held task activates and reloads with one logical identity on both
   const execute = async (mutation: LedgerMutation) => {
     const before = structuredClone(workstation.projection().ledger);
     const after = structuredClone(before);
-    assert.equal(applyLedgerMutation({ decisionOsRoot: workstationRoot, ledgerPath: workstationLedger, ledger: after, mutation }).ok, true);
-    return workstation.executeMutation(mutation, before, after);
+    const applied = applyLedgerMutation({ decisionOsRoot: workstationRoot, ledgerPath: workstationLedger, ledger: after, mutation });
+    assert.equal(applied.ok, true);
+    return workstation.executeMutation(mutation, before, after, applied.changedContentFiles);
   };
 
   await execute({
@@ -412,8 +418,9 @@ test('held deletion reports local projection changes without publishing federati
   const execute = async (mutation: LedgerMutation) => {
     const before = structuredClone(state.projection().ledger);
     const after = structuredClone(before);
-    assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
-    return state.executeMutation(mutation, before, after);
+    const applied = applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation });
+    assert.equal(applied.ok, true);
+    return state.executeMutation(mutation, before, after, applied.changedContentFiles);
   };
 
   await execute({
@@ -448,8 +455,9 @@ test('master-task creation persists one master assignment and leaves subtasks in
   const before = structuredClone(state.projection().ledger);
   const after = structuredClone(before);
 
-  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
-  await state.executeMutation(mutation, before, after);
+  const applied = applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation });
+  assert.equal(applied.ok, true);
+  await state.executeMutation(mutation, before, after, applied.changedContentFiles);
 
   const cards = state.projection().ledger.cards as AnyRecord[];
   const assignment = cards.find((card) => card.id === 'master')?.assignment as AnyRecord;
@@ -504,8 +512,9 @@ test('card description patch commits its Markdown head with the structural mutat
     cardPatch: { id: 'card-a', description: 'Persist this body.' },
   };
 
-  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
-  const committed = await state.executeMutation(mutation, before, after);
+  const applied = applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation });
+  assert.equal(applied.ok, true);
+  const committed = await state.executeMutation(mutation, before, after, applied.changedContentFiles);
   const resource = '.decision-os/cards/tasks/card-a.md';
   const [head] = state.store.contentHeads(resource);
 
@@ -513,6 +522,50 @@ test('card description patch commits its Markdown head with the structural mutat
   assert.equal(readFileSync(cardFile, 'utf8'), 'Persist this body.');
   assert.equal(head.bytes, Buffer.byteLength('Persist this body.'));
   assert.equal(existsSync(resolve(root, 'task-state', 'project-a', 'objects', head.hash.slice(0, 2), head.hash)), true);
+});
+
+test('historical referenced Markdown files receive idempotent heads without synthesizing missing content', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-content-head-repair-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const cardKey = '.decision-os/cards/tasks/card-a.md';
+  const missingCardKey = '.decision-os/cards/tasks/card-missing.md';
+  const threadKey = '.decision-os/threads/tasks/thread-card-a.md';
+  mkdirSync(resolve(root, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(resolve(root, 'threads', 'tasks'), { recursive: true });
+  writeFileSync(resolve(root, 'cards', 'tasks', 'card-a.md'), 'Historical card body.');
+  writeFileSync(resolve(root, 'threads', 'tasks', 'thread-card-a.md'), 'Historical thread body.');
+  writeFileSync(ledgerPath, JSON.stringify({
+    cards: [
+      { id: 'card-a', title: 'A', comment: { contentFile: cardKey } },
+      { id: 'card-missing', title: 'Missing', comment: { contentFile: missingCardKey } },
+    ],
+    annotations: [],
+    relationships: [],
+    threadFiles: { 'thread-card-a': threadKey },
+  }));
+  const published: TaskStateDelta[] = [];
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+    publish: (delta) => { published.push(delta); },
+  });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+
+  const first = await state.repairMissingContentHeads();
+  const second = await state.repairMissingContentHeads();
+
+  assert.deepEqual(first.repaired.map((head) => head.key).sort(), [cardKey, threadKey].sort());
+  assert.deepEqual(first.missing, [missingCardKey]);
+  assert.deepEqual(second.repaired, []);
+  assert.deepEqual(second.missing, [missingCardKey]);
+  assert.equal(state.store.contentHeads(cardKey).length, 1);
+  assert.equal(state.store.contentHeads(threadKey).length, 1);
+  assert.equal(state.store.contentHeads(missingCardKey).length, 0);
+  assert.equal(existsSync(resolve(root, 'cards', 'tasks', 'card-missing.md')), false);
+  assert.equal(published.flatMap((delta) => delta.entities).filter((entity) => entity.entityType === 'resource').length, 2);
 });
 
 test('reassignment resolves concurrent assignment candidates and advances their maximum revision', async (context) => {
@@ -547,8 +600,9 @@ test('reassignment resolves concurrent assignment candidates and advances their 
   const before = structuredClone(state.projection().ledger);
   const after = structuredClone(before);
   const mutation: LedgerMutation = { action: 'reassign-task', cardId: 'master', assignedNodeId: 'phone' };
-  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
-  await state.executeMutation(mutation, before, after);
+  const applied = applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation });
+  assert.equal(applied.ok, true);
+  await state.executeMutation(mutation, before, after, applied.changedContentFiles);
 
   const assignment = (state.projection().ledger.cards as AnyRecord[])[0].assignment as AnyRecord;
   assert.equal(assignment.nodeId, 'phone');
@@ -764,8 +818,9 @@ test('watcher observation ignores materialization and publishes only the post-mu
 
   const before = structuredClone(state.projection().ledger);
   const after = structuredClone(before);
-  assert.equal(applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation }).ok, true);
-  await state.executeMutation(mutation, before, after);
+  const applied = applyLedgerMutation({ decisionOsRoot: root, ledgerPath, ledger: after, mutation });
+  assert.equal(applied.ok, true);
+  await state.executeMutation(mutation, before, after, applied.changedContentFiles);
   const finalMarkdown = readFileSync(threadFile, 'utf8');
   const finalHeads = state.store.contentHeads(key);
   assert.match(finalMarkdown, /Existing question\./);

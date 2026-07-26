@@ -112,22 +112,36 @@ export function applyLedgerMutation(input: {
     threadFiles?: Record<string, string>;
   };
   mutation: LedgerMutation;
-}): { ok: boolean; ledger: Record<string, unknown>; error?: MutationError } {
+}): { ok: boolean; ledger: Record<string, unknown>; changedContentFiles: string[]; error?: MutationError } {
   const { decisionOsRoot, ledgerPath, ledger, mutation } = input;
+  const changedContentFiles = new Set<string>();
+  const recordCardContent = (card: Record<string, unknown> | undefined): void => {
+    const comment = card?.comment && typeof card.comment === 'object' && !Array.isArray(card.comment)
+      ? card.comment as Record<string, unknown>
+      : {};
+    const contentFile = String(comment.contentFile ?? '');
+    if (contentFile) changedContentFiles.add(contentFile);
+  };
+  const recordThreadContent = (threadId: string): void => {
+    const contentFile = String(ledger.threadFiles?.[threadId] ?? '');
+    if (contentFile) changedContentFiles.add(contentFile);
+  };
+  const result = (error?: MutationError) => ({
+    ok: !error,
+    ledger,
+    changedContentFiles: [...changedContentFiles],
+    ...(error ? { error } : {}),
+  });
   if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(String(mutation.action)) && mutation.note?.threadId) {
     const referencedThreadFile = ledger.threadFiles?.[mutation.note.threadId];
     const resolvedThreadFile = resolveThreadContentFile(decisionOsRoot, referencedThreadFile);
     // WHAT: Reject mutation of an explicitly referenced thread whose bytes are not materialized.
     // WHY: Missing Epoch 4 bytes mean unavailable content, not an intentionally empty conversation.
     if (typeof referencedThreadFile === 'string' && (!resolvedThreadFile || !existsSync(resolvedThreadFile))) {
-      return {
-        ok: false,
-        ledger,
-        error: {
+      return result({
           statusCode: 503,
           body: { ok: false, error: 'task_content_not_materialized', contentFile: referencedThreadFile },
-        },
-      };
+      });
     }
     if (mutation.action === 'restore-note') {
       const threadFiles = ledger.threadFiles && typeof ledger.threadFiles === 'object' && !Array.isArray(ledger.threadFiles)
@@ -144,10 +158,10 @@ export function applyLedgerMutation(input: {
   let mutationError: MutationError | undefined;
   if (mutation.action === 'create-task-intake' || mutation.action === 'create-master-task') {
     if (!validAssignedNodeId(mutation.assignedNodeId)) {
-      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'assigned_node_id_required' } } };
+      return result({ statusCode: 400, body: { ok: false, error: 'assigned_node_id_required' } });
     }
     if (!mutation.card?.id || !mutation.annotation?.id) {
-      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'invalid_task_creation_payload' } } };
+      return result({ statusCode: 400, body: { ok: false, error: 'invalid_task_creation_payload' } });
     }
     mutation.card.assignment = assignment(mutation.assignedNodeId, mutation.card.createdAt, 1);
     if (mutation.action === 'create-master-task') {
@@ -159,7 +173,7 @@ export function applyLedgerMutation(input: {
         || Number(relationship.position) < 0
       ));
       if (ids.length !== cards.length || new Set(ids).size !== cards.length || invalidSubtaskRelationship) {
-        return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'Invalid master-task creation payload.' } } };
+        return result({ statusCode: 400, body: { ok: false, error: 'Invalid master-task creation payload.' } });
       }
       for (const card of mutation.cards ?? []) delete card.assignment;
     }
@@ -169,9 +183,9 @@ export function applyLedgerMutation(input: {
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
     const inherited = (ledger.relationships ?? []).some((relationship) => relationship.label === 'subtask' && String(relationship.to ?? '') === cardId);
     if (!cardId || !card || !validAssignedNodeId(mutation.assignedNodeId)) {
-      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'invalid_task_assignment' } } };
+      return result({ statusCode: 400, body: { ok: false, error: 'invalid_task_assignment' } });
     }
-    if (inherited) return { ok: false, ledger, error: { statusCode: 409, body: { ok: false, error: 'task_assignment_inherited' } } };
+    if (inherited) return result({ statusCode: 409, body: { ok: false, error: 'task_assignment_inherited' } });
     const current = card.assignment && typeof card.assignment === 'object' && !Array.isArray(card.assignment) ? card.assignment as Record<string, unknown> : {};
     card.assignment = assignment(mutation.assignedNodeId, new Date().toISOString(), Math.max(0, Number(current.revision) || 0) + 1);
   }
@@ -210,6 +224,8 @@ export function applyLedgerMutation(input: {
     const id = String(mutation.card.id);
     externalizeCardContent({ decisionOsRoot, card: mutation.card, ledgerPath });
     writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: `thread-${id}`, notes: [] });
+    recordCardContent(mutation.card);
+    recordThreadContent(`thread-${id}`);
     ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.card);
   }
   if (mutation.action === 'create-master-task' && mutation.card?.id) {
@@ -226,6 +242,8 @@ export function applyLedgerMutation(input: {
       for (const card of cards) {
         externalizeCardContent({ decisionOsRoot, card, ledgerPath });
         writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: `thread-${String(card.id)}`, notes: [] });
+        recordCardContent(card);
+        recordThreadContent(`thread-${String(card.id)}`);
       }
       ledger.cards = (ledger.cards ?? []).filter((entry) => !ids.has(String(entry.id ?? ''))).concat(cards);
       const relationshipIds = new Set(mutation.relationships.map((relationship) => String(relationship.id ?? '')).filter(Boolean));
@@ -307,6 +325,7 @@ export function applyLedgerMutation(input: {
       if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
       if (card && typeof mutation.cardPatch.description === 'string') {
         writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
+        recordCardContent(card);
       }
       if (card && includesLabels) {
         const requested = [...new Set(mutation.cardPatch.labels!.map((label) => label.trim()))];
@@ -368,6 +387,7 @@ export function applyLedgerMutation(input: {
       mutationError = { statusCode: 404, body: { ok: false, error: 'Card not found.', cardId: mutation.cardId } };
     } else {
       const deletion = deleteCardMarkdownImage({ decisionOsRoot, card, imageSrc, ledgerPath });
+      if (deletion.removedMarkdown) recordCardContent(card);
       if (!deletion.removedMarkdown) {
         mutationError = { statusCode: 404, body: { ok: false, error: 'Image source not found in card markdown.', cardId: mutation.cardId, imageSrc } };
       }
@@ -437,7 +457,8 @@ export function applyLedgerMutation(input: {
       notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
       ledger.notes = notesByThread;
       writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
-      return { ok: true, ledger };
+      recordThreadContent(mutation.note.threadId);
+      return result();
     }
     const existing = notes.find((entry) => String(entry.id ?? '') === noteId);
     const nextNote: Record<string, unknown> = { id: noteId, role: mutation.note.role === 'agent' ? 'agent' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), ...voiceMetadata(mutation.note) };
@@ -450,6 +471,7 @@ export function applyLedgerMutation(input: {
     } else notes.push(nextNote);
     notesByThread[mutation.note.threadId] = notes;
     writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
+    recordThreadContent(mutation.note.threadId);
   }
   if (mutation.action === 'update-note' && mutation.note?.threadId) {
     const notesByThread = normalizeLedgerNotes(ledger);
@@ -460,7 +482,8 @@ export function applyLedgerMutation(input: {
       notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
       ledger.notes = notesByThread;
       writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
-      return { ok: true, ledger };
+      recordThreadContent(mutation.note.threadId);
+      return result();
     }
     let note = notes.find((entry) => String(entry.id ?? '') === noteId || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
     if (!note && noteId) {
@@ -477,6 +500,7 @@ export function applyLedgerMutation(input: {
     }
     notesByThread[mutation.note.threadId] = notes;
     writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
+    recordThreadContent(mutation.note.threadId);
   }
   if (mutation.action === 'delete-note' && mutation.note?.threadId) {
     const notesByThread = normalizeLedgerNotes(ledger);
@@ -491,18 +515,19 @@ export function applyLedgerMutation(input: {
     }
     notesByThread[mutation.note.threadId] = noteId ? notes.filter((entry) => String(entry.id ?? '') !== noteId) : notes.slice(0, -1);
     writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
+    recordThreadContent(mutation.note.threadId);
   }
   if (mutation.action === 'restore-note' && mutation.note?.threadId) {
     const noteId = String(mutation.note.id ?? '').trim();
     if (!noteId) {
-      return { ok: false, ledger, error: { statusCode: 400, body: { ok: false, error: 'note_id_required' } } };
+      return result({ statusCode: 400, body: { ok: false, error: 'note_id_required' } });
     }
     const notesByThread = normalizeLedgerNotes(ledger);
     const notes = notesByThread[mutation.note.threadId] ?? [];
     let note = notes.find((entry) => String(entry.id ?? '') === noteId);
     if (!note) {
       if (typeof mutation.note.body !== 'string') {
-        return { ok: false, ledger, error: { statusCode: 409, body: { ok: false, error: 'note_content_required' } } };
+        return result({ statusCode: 409, body: { ok: false, error: 'note_content_required' } });
       }
       note = {
         id: noteId,
@@ -518,6 +543,7 @@ export function applyLedgerMutation(input: {
     ledger.deletedNoteIds = deletedNoteIds;
     notesByThread[mutation.note.threadId] = notes;
     writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
+    recordThreadContent(mutation.note.threadId);
   }
   if (mutation.action === 'paste-selection' && mutation.selection) {
     const requestedSuffix = String(mutation.pasteSuffix ?? '').trim();
@@ -545,6 +571,7 @@ export function applyLedgerMutation(input: {
         delete (copiedCard.comment as Record<string, unknown>).contentFile;
       }
       duplicateCardContentFile({ decisionOsRoot, ledgerPath, sourceCard: card, targetCard: copiedCard });
+      recordCardContent(copiedCard);
       return copiedCard;
     });
     const copiedAnnotations = (ledger.annotations ?? []).filter((annotation) => zoneIds.has(String(annotation.id ?? '')) || groupIds.has(String(annotation.id ?? ''))).map((annotation) => ({
@@ -557,5 +584,5 @@ export function applyLedgerMutation(input: {
     ledger.annotations = (ledger.annotations ?? []).concat(copiedAnnotations);
   }
 
-  return mutationError ? { ok: false, ledger, error: mutationError } : { ok: true, ledger };
+  return result(mutationError);
 }

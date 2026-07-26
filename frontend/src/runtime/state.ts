@@ -37,6 +37,12 @@ export type ThreadContentRefreshScope = {
   contentFile: string;
 };
 
+export type ThreadDocumentState = {
+  contentFile: string;
+  notes: Array<Record<string, unknown>>;
+  deletedNoteIds: string[];
+};
+
 export type LedgerContentRefreshState = {
   inFlight: boolean;
   ledgerReasons: string[];
@@ -105,6 +111,7 @@ export const state: any = {
   pointer: null,
   clipboard: null,
   threadId: '',
+  threadDocumentsByScope: {} as Record<string, ThreadDocumentState>,
   renderedThreadId: '',
   threadScrollTopByThreadId: {},
   threadFollowBottomByThreadId: {} as Record<string, boolean>,
