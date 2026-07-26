@@ -38,6 +38,8 @@ import { readPersistedState } from '/src/runtime/persistence/helper/read-persist
 import { deleteNoteController } from '/src/runtime/thread/controller/delete-note-controller.js';
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
 import { retryPendingThreadMessageController } from '/src/runtime/thread/controller/retry-pending-thread-message-controller.js';
+import { activeThreadIdentityScope, loadActiveThreadSlice } from '/src/runtime/thread/effect/load-active-thread-slice.js';
+import { telemetry } from '/src/runtime/telemetry/effect/telemetry.js';
 
 let currentCard = null;
 let currentProjectId = '';
@@ -51,7 +53,13 @@ let eventSource = null;
 let eventSourceUrl = '';
 let quickVoiceCapture = false;
 let threadRefreshGeneration = 0;
+let threadHydrationGeneration = 0;
+let threadHydrationTimer = null;
+let settleThreadHydrationDelay = null;
+let threadHydrationAbortController = null;
 let threadPresentationGeneration = Number(document.body.dataset.threadPresentationGeneration || 0);
+
+const THREAD_HYDRATION_RETRY_DELAYS_MS = Object.freeze([0, 250, 1_000, 2_500]);
 
 function bumpThreadPresentationGeneration() {
   threadPresentationGeneration += 1;
@@ -153,7 +161,7 @@ export function openMobileThread(card, zoneColor) {
   subscribeEvents();
   openThreadPanelController(threadId);
   updateLaunchReadiness();
-  void refreshThreadLedger();
+  void recoverActiveThreadHydration('thread-panel-open');
 }
 
 export function closeMobileThread({ fromHistory = false, discardHistory = false } = {}) {
@@ -325,10 +333,11 @@ async function refreshThreadLedger(optimisticRunId = '') {
   const response = await fetch(
     projectScopedRequestPath(`/api/ledgers/${encodeURIComponent(owner.ledgerId)}/threads/${encodeURIComponent(owner.threadId)}`, owner.projectId),
     replicaRequestInit({ cache: 'no-store' }, owner.replicaNodeId)
-  );
+  ).catch(() => null);
   if (!ownsRefresh()) return;
-  if (!response.ok) return;
-  const slice = await response.json();
+  if (!response?.ok) return;
+  const slice = await response.json().catch(() => null);
+  if (!slice) return;
   if (!ownsRefresh()) return;
   const refreshed = await onLedgerRefresh(owner.ledgerId, owner.replicaNodeId);
   if (!ownsRefresh()) return;
@@ -344,6 +353,63 @@ async function refreshThreadLedger(optimisticRunId = '') {
   currentCard = reconciled.card;
   renderThreadPanel();
   updateLaunchReadiness();
+}
+
+function cancelActiveThreadHydration() {
+  threadHydrationGeneration += 1;
+  threadHydrationAbortController?.abort();
+  threadHydrationAbortController = null;
+  if (threadHydrationTimer !== null) clearTimeout(threadHydrationTimer);
+  threadHydrationTimer = null;
+  const settle = settleThreadHydrationDelay;
+  settleThreadHydrationDelay = null;
+  settle?.(false);
+}
+
+function waitForThreadHydrationRetry(generation, delayMs) {
+  return new Promise((resolve) => {
+    if (generation !== threadHydrationGeneration || !canvasState.threadPanelOpen) {
+      resolve(false);
+      return;
+    }
+    settleThreadHydrationDelay = resolve;
+    threadHydrationTimer = setTimeout(() => {
+      threadHydrationTimer = null;
+      settleThreadHydrationDelay = null;
+      resolve(generation === threadHydrationGeneration && canvasState.threadPanelOpen);
+    }, delayMs);
+  });
+}
+
+async function recoverActiveThreadHydration(reason) {
+  cancelActiveThreadHydration();
+  const generation = threadHydrationGeneration;
+  for (let attempt = 0; attempt < THREAD_HYDRATION_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delayMs = THREAD_HYDRATION_RETRY_DELAYS_MS[attempt];
+    if (delayMs > 0 && !await waitForThreadHydrationRetry(generation, delayMs)) return false;
+    if (generation !== threadHydrationGeneration || !canvasState.threadPanelOpen) return false;
+    const scope = activeThreadIdentityScope();
+    if (!scope) return false;
+    const abortController = new AbortController();
+    threadHydrationAbortController = abortController;
+    const applied = await loadActiveThreadSlice(scope, {
+      signal: abortController.signal,
+      allowMissingContentFile: true
+    });
+    if (threadHydrationAbortController === abortController) threadHydrationAbortController = null;
+    if (generation !== threadHydrationGeneration || !canvasState.threadPanelOpen) return false;
+    if (applied) {
+      updateLaunchReadiness();
+      telemetry('thread-hydration-recovered', { reason, attempt: attempt + 1, ...scope });
+      return true;
+    }
+  }
+  telemetry('thread-hydration-recovery-exhausted', {
+    reason,
+    attempts: THREAD_HYDRATION_RETRY_DELAYS_MS.length,
+    threadId: String(canvasState.threadId || '')
+  });
+  return false;
 }
 
 async function appendTextNote() {
@@ -435,6 +501,9 @@ function subscribeEvents() {
   eventSource?.close();
   eventSourceUrl = url;
   eventSource = new EventSource(url);
+  eventSource.addEventListener('open', () => {
+    if (canvasState.threadPanelOpen) void recoverActiveThreadHydration('thread-event-source-open');
+  });
   const refresh = (event) => {
     let payload = {};
     try { payload = JSON.parse(event.data || '{}'); } catch {}
@@ -442,12 +511,13 @@ function subscribeEvents() {
     if (String(payload.projectId ?? currentProjectId) !== currentProjectId) return;
     if (String(payload.ledgerId ?? '') !== currentLedgerId) return;
     if (!payload.threadId || String(payload.threadId) !== String(canvasState.threadId)) return;
-    void refreshThreadLedger();
+    void recoverActiveThreadHydration('thread-content-event');
   };
   eventSource.addEventListener('ledger-content-change', refresh);
 }
 
 function unsubscribeEvents() {
+  cancelActiveThreadHydration();
   eventSource?.close();
   eventSource = null;
   eventSourceUrl = '';
