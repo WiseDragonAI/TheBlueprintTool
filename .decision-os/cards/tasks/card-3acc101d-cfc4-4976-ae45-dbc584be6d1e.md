@@ -1,12 +1,13 @@
 ## A. Scope
 
-Add a Wrangler `dev` environment for the existing relay implementation. Reuse the current federation protocol and packages while isolating Durable Object bindings, routes, secrets, deployment name, and diagnostic evidence from production.
+Add a Wrangler `dev` environment for the existing relay source and protocol. Isolate Worker name, `FEDERATIONS` Durable Object binding, namespace, credentials, URL, logs, and admission records while retaining current compatibility exports and migrations.
 
 ---
 
 ## B. Acceptance
 
-1. The dev relay has distinct bindings and URL.
-2. Compatibility exports remain intact.
-3. Health, manifest admission, and replication status are verified.
-4. Deployment and rollback commands are documented without exposing credentials.
+1. Dev and production relay identities are distinct.
+2. Compatibility exports and the existing protocol remain unchanged.
+3. Dev health, manifest admission, package synchronization, and replication status are verified.
+4. Production relay health and state remain unchanged.
+5. Deployment, credential rotation, rollback, and cleanup commands are documented without secrets.
