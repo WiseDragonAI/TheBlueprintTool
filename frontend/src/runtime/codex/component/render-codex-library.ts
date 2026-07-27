@@ -103,19 +103,26 @@ export function renderCodexLibrary<T extends CodexLibraryRecord>(input: CodexLib
   };
   const update = (patch: Partial<CodexLibraryFilterState>) => input.onFiltersChanged({ ...filters, ...patch });
 
-  const searchLabel = document.createElement('label');
-  searchLabel.className = 'codex-library-search';
-  const searchIcon = document.createElement('span');
-  searchIcon.setAttribute('aria-hidden', 'true');
-  searchIcon.textContent = '⌕';
-  const search = document.createElement('input');
-  search.className = 'codex-library-query';
+  const mountedSearch = input.controlsHost.querySelector<HTMLInputElement>('.codex-library-query');
+  const mountedSearchLabel = mountedSearch?.parentElement?.classList.contains('codex-library-search')
+    ? mountedSearch.parentElement as HTMLLabelElement
+    : undefined;
+  const searchLabel = mountedSearchLabel ?? document.createElement('label');
+  const search = mountedSearch ?? document.createElement('input');
+  if (!mountedSearchLabel) {
+    searchLabel.className = 'codex-library-search';
+    const searchIcon = document.createElement('span');
+    searchIcon.setAttribute('aria-hidden', 'true');
+    searchIcon.textContent = '⌕';
+    searchLabel.replaceChildren(searchIcon, search);
+  }
+  if (!mountedSearch) search.className = 'codex-library-query';
   search.type = 'search';
   search.placeholder = 'Search library';
   search.setAttribute('aria-label', 'Search library');
-  search.value = filters.query;
-  search.addEventListener('input', () => update({ query: search.value }));
-  searchLabel.replaceChildren(searchIcon, search);
+  search.dataset.codexFocusKey = 'codex-library-query';
+  if (search.value !== filters.query) search.value = filters.query;
+  search.oninput = () => update({ query: search.value });
 
   const projectFilters = document.createElement('div');
   projectFilters.className = 'codex-filter-row codex-library-project-filters';
@@ -153,7 +160,12 @@ export function renderCodexLibrary<T extends CodexLibraryRecord>(input: CodexLib
     actions.append(synchronize);
   }
   actions.append(clear);
-  input.controlsHost.replaceChildren(searchLabel, projectFilters, tagFilters, actions);
+  if (mountedSearchLabel) {
+    while (searchLabel.nextSibling) searchLabel.nextSibling.remove();
+    input.controlsHost.append(projectFilters, tagFilters, actions);
+  } else {
+    input.controlsHost.replaceChildren(searchLabel, projectFilters, tagFilters, actions);
+  }
 
   const visible = visibleCodexLibraryRecords(input.records, filters, input.favoriteFirst);
   if (visible.length) input.resultsHost.replaceChildren(...visible.map((record) => input.renderRecord(record, record.id === input.selectedId)));
