@@ -1,19 +1,18 @@
-## A. `exec-summary` Approval Objective
+## A. `exec-summary` Library Outcome
 
-1. **The objective is to standardize operator-facing Decision OS master-task summaries without creating an unapproved library package.** The corrected `SKILL.md` is ready for verbatim review under the requested name `exec-summary`.
-2. The shared skill library remains unchanged until the operator validates the exact editorial contract.
-
----
-
-## B. Corrected Skill Contract
-
-1. **One numbered list containing the operator's nine supplied instructions is the selected path.** It directly preserves the requested `executive summary` boundary and removes the additional workflow steps from the rejected draft.
-2. The proposed `SKILL.md` now uses **bold for decisive facts** and `backticks` for secondary terms while instructing the same formatting in generated master-task bodies.
-3. Implementation details remain in linked `subtasks`; the master-task body remains a terse, self-contained decision helper.
+1. The **objective** to `standardize` operator-facing Decision OS **master-task summaries** is `achieved`: the `exec-summary` **skill** now exists in the shared **server library**.
+2. The installed **body** `matches` the approved eight-item **validation source** byte-for-byte, and canonical **skill validation** `passes`.
 
 ---
 
-## C. Library Creation Decision
+## B. Approved Skill Contract
 
-1. **The pending operator action is approval of the corrected verbatim `SKILL.md`.** Review the validation artifact and reply `approved for library creation` to authorize package creation and synchronization through `ledger-cli skills create`.
-2. No library mutation is authorized before that approval.
+1. The **library package** `preserves` the operator-approved eight **instructions**, including semantic **bold**, operative `backticks`, efficient factual **military tone**, causal **reasoning**, and unchanged `subtasks`.
+2. No unapproved **workflow step** was `added` to the skill body.
+
+---
+
+## C. Creation Decision
+
+1. The **creation request** is `complete`; no **blocker** remains.
+2. No further **operator action** is `required` for library creation.

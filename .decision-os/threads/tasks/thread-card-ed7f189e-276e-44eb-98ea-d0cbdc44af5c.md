@@ -60,3 +60,32 @@ Ouais, mais enlève le code block, je ne veux pas que ce soit un code block, je 
 <!-- decision-os:note {"id":"note-agent-1785150729245-a89902ee-37c","timestamp":"2026-07-27T11:12:09.407Z"} -->
 
 1. Removed the fenced code block; the `exec-summary` draft is now presented as plain verbatim Markdown in the validation subtask.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785150992473-d6ac0730-c93","timestamp":"2026-07-27T11:16:32.488Z"} -->
+
+1. Added the semantic emphasis rule: bold decision-bearing nouns; backtick operative transitions and exact literals.
+2. Applied the rule across the complete `exec-summary` draft; library creation remains pending approval.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785151128730-2e024a02-3f6","timestamp":"2026-07-27T11:18:48.744Z"} -->
+
+1. Moved the nine `exec-summary` instructions out of the code block and into the rendered card body.
+2. Preserved the approved single-list content and inline emphasis rule; library creation remains pending approval.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785174329699-0510aae4-9d4","timestamp":"2026-07-27T17:45:29.713Z"} -->
+
+1. Applied the four requested wording changes while preserving inline **bold** and `backticks`.
+2. Removed the former seventh instruction; the `exec-summary` body now contains eight items.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1785174891703-56a392549a0b38","timestamp":"2026-07-27T17:54:51.720Z"} -->
+
+create the skill using the last version. skill name is 'exec-summary'
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785175057778-34f6f534-493","timestamp":"2026-07-27T17:57:37.959Z"} -->
+
+1. Created `exec-summary` in the shared skill library from the approved eight-item body.
+2. Verified the installed `SKILL.md` matches the validation artifact.
