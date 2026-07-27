@@ -505,6 +505,28 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "card-skill-exec-summary-skill-md-7e9ea6c6f4",
+      "title": "Skill / exec-summary",
+      "cardType": "note",
+      "domainId": "skills",
+      "status": "todo",
+      "x": 18762.48424480792,
+      "y": -8573.763458458423,
+      "w": 520,
+      "h": 280,
+      "labels": [
+        "skill",
+        "exec-summary",
+        "skill-main"
+      ],
+      "comment": {
+        "contentFile": ".decision-os/cards/skills/card-skill-exec-summary-skill-md-7e9ea6c6f4.md"
+      },
+      "skillName": "exec-summary",
+      "skillRole": "main",
+      "skillFile": ".skills/exec-summary/SKILL.md"
     }
   ],
   "annotations": [
@@ -567,6 +589,17 @@
       "y": 2181.2024631787317,
       "width": 3280.62113216904,
       "height": 1701.664991086866
+    },
+    {
+      "id": "zone-skill-exec-summary-00dd88f74a",
+      "label": "exec-summary",
+      "variant": "zone",
+      "color": "#38d9e8",
+      "x": 18722.48424480792,
+      "y": -8663.763458458423,
+      "width": 1200,
+      "height": 460,
+      "skillName": "exec-summary"
     }
   ],
   "relationships": [
@@ -647,7 +680,8 @@
     "thread-card-30d002e7-b3c9-460b-94e7-1824470ed4c9": ".decision-os/threads/skills/thread-card-30d002e7-b3c9-460b-94e7-1824470ed4c9.md",
     "thread-card-71f7c07c-4f27-4026-b2af-239b8e2c1005": ".decision-os/threads/skills/thread-card-71f7c07c-4f27-4026-b2af-239b8e2c1005.md",
     "thread-card-44811f32-2b0b-4fa8-89bf-394730ba4fe6": ".decision-os/threads/skills/thread-card-44811f32-2b0b-4fa8-89bf-394730ba4fe6.md",
-    "thread-card-codex-skill-1783695871406-24cf389e": ".decision-os/threads/skills/thread-card-codex-skill-1783695871406-24cf389e.md"
+    "thread-card-codex-skill-1783695871406-24cf389e": ".decision-os/threads/skills/thread-card-codex-skill-1783695871406-24cf389e.md",
+    "thread-card-skill-exec-summary-skill-md-7e9ea6c6f4": ".decision-os/threads/skills/thread-card-skill-exec-summary-skill-md-7e9ea6c6f4.md"
   },
   "deletedNoteIds": {
     "thread-card-codex-skill-1783485668635-1989a1e2": [

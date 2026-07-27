@@ -1,0 +1,4 @@
+interface:
+  display_name: "Exec Summary"
+  short_description: "Write decision-ready master-task summaries"
+  default_prompt: "Use $exec-summary to rewrite this master task as a decision-ready executive summary."

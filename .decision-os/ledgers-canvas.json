@@ -91,22 +91,6 @@
       }
     },
     {
-      "id": "ledger-card:skills",
-      "targetLedgerId": "skills",
-      "cardType": "ledger",
-      "domainId": "ledgers",
-      "title": "Skills",
-      "ledgerFile": ".decision-os/skills.json",
-      "status": "todo",
-      "x": 3.8065915488746525,
-      "y": 233.1321138215652,
-      "w": 423.0108891080715,
-      "h": 358.11058831340847,
-      "comment": {
-        "what": "Ledger: New Ledger"
-      }
-    },
-    {
       "id": "ledger-card:tasks",
       "targetLedgerId": "tasks",
       "cardType": "ledger",
@@ -198,6 +182,22 @@
       "y": 236.71346254692037,
       "w": 430.58811155342096,
       "h": 275.39380986278877,
+      "comment": {
+        "what": "Ledger: New Ledger"
+      }
+    },
+    {
+      "id": "ledger-card:skills",
+      "targetLedgerId": "skills",
+      "cardType": "ledger",
+      "domainId": "ledgers",
+      "title": "Skills",
+      "ledgerFile": ".decision-os/skills.json",
+      "status": "todo",
+      "x": 3.8065915488746525,
+      "y": 233.1321138215652,
+      "w": 423.0108891080715,
+      "h": 358.11058831340847,
       "comment": {
         "what": "Ledger: New Ledger"
       }
