@@ -1,19 +1,19 @@
-## A. Library Creation Boundary
+## A. `exec-summary` Approval Objective
 
-1. **The objective is to standardize operator-facing Decision OS master-task summaries without creating an unapproved library package.** The complete proposed `SKILL.md` is prepared verbatim for review; no package exists in the server skill library.
-2. The shared library remains unchanged until the operator validates the exact editorial contract.
-
----
-
-## B. Selected Skill Contract
-
-1. **One lean `SKILL.md` is the complete credible path.** The workflow selects and structures verified evidence; it needs no `scripts`, `references`, or `assets`.
-2. `decision-executive-summary` converts the complete task corpus into global context and objective, verified current state, strategic constraints and selected path, and the current decision or blocker.
-3. The contract keeps implementation detail outside the master body, preserves decision-relevant uncertainty, and requires a complete rendered-output inspection before submission.
+1. **The objective is to standardize operator-facing Decision OS master-task summaries without creating an unapproved library package.** The corrected `SKILL.md` is ready for verbatim review under the requested name `exec-summary`.
+2. The shared skill library remains unchanged until the operator validates the exact editorial contract.
 
 ---
 
-## C. Operator Approval
+## B. Corrected Skill Contract
 
-1. **The only pending decision is approval of the verbatim skill text.** Review the prepared `SKILL.md` and reply `approved for library creation` to authorize synchronization through `ledger-cli skills create`.
-2. No library mutation is authorized before that reply.
+1. **One numbered list containing the operator's nine supplied instructions is the selected path.** It directly preserves the requested `executive summary` boundary and removes the additional workflow steps from the rejected draft.
+2. The proposed `SKILL.md` now uses **bold for decisive facts** and `backticks` for secondary terms while instructing the same formatting in generated master-task bodies.
+3. Implementation details remain in linked `subtasks`; the master-task body remains a terse, self-contained decision helper.
+
+---
+
+## C. Library Creation Decision
+
+1. **The pending operator action is approval of the corrected verbatim `SKILL.md`.** Review the validation artifact and reply `approved for library creation` to authorize package creation and synchronization through `ledger-cli skills create`.
+2. No library mutation is authorized before that approval.

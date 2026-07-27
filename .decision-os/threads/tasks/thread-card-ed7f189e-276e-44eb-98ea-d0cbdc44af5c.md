@@ -39,3 +39,24 @@ prepare the creation of that skill in the library, use one subtask to create the
 
 1. Prepared the complete `decision-executive-summary` skill text for verbatim validation.
 2. Replaced the intake body with the decision-level executive summary; library creation remains pending operator approval.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1785150569660-88493b9838b5a8","timestamp":"2026-07-27T11:09:29.678Z"} -->
+
+skill title must be exec-summary
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785150642914-895072ad-e1e","timestamp":"2026-07-27T11:10:42.932Z"} -->
+
+1. Replaced the expanded draft with the operator's nine instructions in one numbered list.
+2. Renamed the proposed skill to `exec-summary`; library creation remains pending approval.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1785150682199-238e2561961ca","timestamp":"2026-07-27T11:11:22.315Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.decision-os/voice-uploads/voice-1785150682293-7034f366-3415-46f9-a199-4bc5600ee21b.wav","status":"transcribed","transcriptionStartedAt":"2026-07-27T11:11:22.341Z","uploadReceivedAt":"2026-07-27T11:11:22.293Z","audioPersistedAt":"2026-07-27T11:11:22.293Z","acceptedAt":"2026-07-27T11:11:22.293Z","providerStartedAt":"2026-07-27T11:11:22.341Z","providerSettledAt":"2026-07-27T11:11:24.027Z","completedAt":"2026-07-27T11:11:24.080Z","codexQueueRequestId":"voice:note-1785150682199-238e2561961ca","codexQueueLaunchMode":"run","codexQueueCardId":"card-ed7f189e-276e-44eb-98ea-d0cbdc44af5c","revision":4} -->
+
+Ouais, mais enlève le code block, je ne veux pas que ce soit un code block, je veux juste que ce soit verbatim. Quand je dis verbatim, ça veut dire verbatim, ça ne veut pas dire que tu mets dans un code block.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785150729245-a89902ee-37c","timestamp":"2026-07-27T11:12:09.407Z"} -->
+
+1. Removed the fenced code block; the `exec-summary` draft is now presented as plain verbatim Markdown in the validation subtask.
