@@ -89,3 +89,14 @@ create the skill using the last version. skill name is 'exec-summary'
 
 1. Created `exec-summary` in the shared skill library from the approved eight-item body.
 2. Verified the installed `SKILL.md` matches the validation artifact.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1785175722592-9766140ce5","timestamp":"2026-07-27T18:08:42.727Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.decision-os/voice-uploads/voice-1785175722700-d0a6564f-1953-4150-afc4-b2f76d7b0f87.wav","status":"transcribed","transcriptionStartedAt":"2026-07-27T18:08:42.767Z","uploadReceivedAt":"2026-07-27T18:08:42.699Z","audioPersistedAt":"2026-07-27T18:08:42.700Z","acceptedAt":"2026-07-27T18:08:42.700Z","providerStartedAt":"2026-07-27T18:08:42.767Z","providerSettledAt":"2026-07-27T18:08:46.299Z","completedAt":"2026-07-27T18:08:46.352Z","codexQueueRequestId":"voice:note-1785175722592-9766140ce5","codexQueueLaunchMode":"run","codexQueueCardId":"card-ed7f189e-276e-44eb-98ea-d0cbdc44af5c","revision":4} -->
+
+je ne la vois pas. Je cherche ce qu'il veut après installer de skills, mais je ne le vois pas dans le backend. Pourquoi dans le skill summary, je ne le vois pas là. On dirait que ça n'a pas été correctement intégré dans notre système.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785175943709-a82370da-5e1","timestamp":"2026-07-27T18:12:23.881Z"} -->
+
+1. Found the cause: creation was verified in the project workspace before the master server library converged.
+2. `exec-summary` is now present in the server catalog, federation manifest, and rendered `/skills` surface.
