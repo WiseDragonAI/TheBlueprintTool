@@ -4,10 +4,11 @@ Add a Wrangler `dev` environment for the existing relay source and protocol. Iso
 
 ---
 
-## B. Acceptance
+## B. Result
 
-1. Dev and production relay identities are distinct.
-2. Compatibility exports and the existing protocol remain unchanged.
-3. Dev health, manifest admission, package synchronization, and replication status are verified.
-4. Production relay health and state remain unchanged.
-5. Deployment, credential rotation, rollback, and cleanup commands are documented without secrets.
+1. **Environment:** `env.dev` declares a distinct Worker name plus environment-specific Durable Object binding and migrations.
+2. **Validation:** relay typecheck and Wrangler `--env dev --dry-run` passed with `FEDERATIONS` bound to `FederationRelay`.
+3. **Runtime:** MultiTerm owns the local Wrangler dev relay on loopback port `50152` with persistent dev-only Durable Object state.
+4. **Admission:** a distinct `workstation-dev` credential was provisioned for federation `decision-os-canary`.
+5. **Convergence:** the canary reports owner `workstation-dev`, converged project roots, empty `runtimeDirty`, and empty `pendingDeliveryIds`.
+6. **Production boundary:** no production relay identity, credential, URL, or state was reused. Public `workers.dev` deployment remains gated by the absent non-interactive Cloudflare token and is documented separately from the proven local canary.
