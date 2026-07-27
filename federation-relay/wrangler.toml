@@ -20,3 +20,18 @@ enabled = true
 
 [placement]
 mode = "smart"
+
+[env.dev]
+name = "decision-os-federation-relay-dev"
+
+[[env.dev.durable_objects.bindings]]
+name = "FEDERATIONS"
+class_name = "FederationRelay"
+
+[[env.dev.migrations]]
+tag = "v1"
+new_sqlite_classes = ["FederationRelay"]
+
+[[env.dev.migrations]]
+tag = "v2"
+new_sqlite_classes = ["FederationRelayV4"]
