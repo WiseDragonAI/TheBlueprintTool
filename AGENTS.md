@@ -90,10 +90,7 @@
 ### Formatting Contract
 
 1. **Content:** include only verified information needed for the next operator decision; use task-specific section titles, never a default schema.
-2. **Headings:** use letter-prefixed `H2` card sections.
-3. **Dividers:** put `---` between sections.
-4. **Lists:** use numbered list items.
-5. **Emphasis:** use **bold** for key points and `backticks` for exact literals.
+2. Use letter-prefixed H2 sections, --- between sections, numbered list items.
 
 ## Platform-Aware Chromium Procedure
 
