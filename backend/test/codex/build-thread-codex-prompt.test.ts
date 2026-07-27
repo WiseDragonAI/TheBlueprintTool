@@ -28,13 +28,9 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   assert.match(prompt.developerInstructions, /living strategic summary for a CTO/);
   assert.match(prompt.developerInstructions, /never as a run log, implementation inventory, or verification report/);
   assert.match(prompt.developerInstructions, /replace the complete body with the current strategic state/);
-  assert.match(prompt.developerInstructions, /short letter-prefixed H2 sections with `---` between sections/);
-  assert.match(prompt.developerInstructions, /compact numbered lists only/);
+  assert.match(prompt.developerInstructions, /Use letter-prefixed H2 sections, --- between sections, numbered list items\./);
   assert.match(prompt.developerInstructions, /one credible path and why it advances the objective/);
-  assert.match(prompt.developerInstructions, /\*\*bold inside sentences\*\*/);
-  assert.match(prompt.developerInstructions, /Never use bold as a list-item label, bold an entire bullet, or use bold for implementation detail/);
-  assert.match(prompt.developerInstructions, /Wrap every exact supporting mechanism, system state, dependency, route, command, field, or literal in `backticks`/);
-  assert.match(prompt.developerInstructions, /`Exec`, `failed`, `task-execution`, and `project-sync`/);
+  assert.doesNotMatch(prompt.developerInstructions, /bold inside sentences|backticks/);
   assert.match(prompt.developerInstructions, /never expose raw UUIDs, run IDs, card IDs, thread IDs, relationship IDs, hashes, encoded project IDs, or timestamps/);
   assert.match(prompt.developerInstructions, /Omit test counts, routine verification results, file inventories, commits, pushes, process narration, and implementation chronology/);
   assert.match(prompt.developerInstructions, /global context and objective; verified current state; strategic constraints and choices; current decision or blocker/);
