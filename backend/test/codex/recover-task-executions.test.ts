@@ -203,3 +203,93 @@ test('a replacement runtime adopts a durable process lease and settles its termi
   assert.deepEqual(JSON.parse(readFileSync(join(decisionOsRoot, 'task-state', 'codex-process-leases.json'), 'utf8')).leases, []);
   assert.match(readFileSync(stdoutFile, 'utf8'), /turn\.completed/);
 });
+
+test('adopted cancellation preserves Stop time when the process log reports complete', async (context) => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-adopted-cancellation-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const ledgerFile = join(decisionOsRoot, 'tasks.json');
+  const stdoutFile = join(decisionOsRoot, 'adopted-cancel.jsonl');
+  const stderrFile = join(decisionOsRoot, 'adopted-cancel.stderr.log');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(ledgerFile, JSON.stringify({
+    cards: [{ id: 'task-a', title: 'Task A', comment: { what: '' } }],
+    annotations: [],
+    relationships: [],
+  }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', name: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(stdoutFile, '{"type":"turn.started"}\n');
+  writeFileSync(stderrFile, '');
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot,
+    tasksLedgerFile: ledgerFile,
+    initialize: true,
+  });
+  await state.executions.admit({ metadata: metadata('execution-cancelled', '2026-07-23T03:00:00.000Z'), executorNodeId: 'workstation' });
+  await state.executions.transition('execution-cancelled', { phase: 'queued' });
+  await state.executions.transition('execution-cancelled', { phase: 'starting' });
+  await state.executions.transition('execution-cancelled', { phase: 'running' });
+  const stopAcceptedAt = new Date().toISOString();
+  await state.executions.transition('execution-cancelled', { phase: 'cancelling', changedAt: stopAcceptedAt });
+
+  const stdoutDescriptor = openSync(stdoutFile, 'a');
+  const stderrDescriptor = openSync(stderrFile, 'a');
+  const child = spawn(process.execPath, ['-e', "setTimeout(()=>process.stdout.write('{\"type\":\"turn.completed\"}\\n'),300)"], {
+    stdio: ['ignore', stdoutDescriptor, stderrDescriptor],
+    detached: process.platform !== 'win32',
+  });
+  closeSync(stdoutDescriptor);
+  closeSync(stderrDescriptor);
+  context.after(() => {
+    try { child.kill('SIGKILL'); } catch { /* already settled */ }
+    rmSync(workspace, { recursive: true, force: true });
+  });
+  const processId = child.pid ?? 0;
+  registerTaskExecutionProcess({ decisionOsRoot }, {
+    executionId: 'execution-cancelled',
+    sessionId: 'session-execution-cancelled',
+    child,
+    processId,
+    processStartTime: codexProcessIdentity(processId),
+    startedAt: '2026-07-23T03:00:00.000Z',
+    stdoutFile,
+    stderrFile,
+  });
+
+  const backgroundErrors: Error[] = [];
+  const settlements: Array<Record<string, unknown>> = [];
+  const scheduled: string[] = [];
+  const replacementRuntime: Record<string, unknown> = {
+    decisionOsRoot,
+    projectId: 'project-a',
+    taskExecutionState: state,
+    taskExecutionNodeId: 'workstation',
+    readTaskLedgerProjection: () => state.projection().ledger,
+    persistTaskLedgerProjection: (ledger: Record<string, unknown>, command: Parameters<typeof state.executeProjectionCommand>[0]) => state.executeProjectionCommand(command, ledger),
+    scheduleCodexProcesses: async () => { scheduled.push('scheduled'); },
+    onCodexRunSettled: async (event: Record<string, unknown>) => { settlements.push(event); },
+    onCodexBackgroundError: (entry: { error: Error }) => { backgroundErrors.push(entry.error); },
+  };
+
+  const recovered = await recoverTaskExecutions(replacementRuntime);
+  assert.deepEqual(recovered.adopted, ['execution-cancelled']);
+  const deadline = Date.now() + 5_000;
+  while (state.executions.find('execution-cancelled')?.lifecycle.phase === 'cancelling' && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  const execution = state.executions.find('execution-cancelled');
+  assert.equal(execution?.lifecycle.phase, 'cancelled');
+  assert.equal(execution?.lifecycle.finishedAt, stopAcceptedAt);
+  assert.equal(execution?.artifacts.revision, 2);
+  assert.deepEqual(settlements.map((entry) => ({ status: entry.status, finishedAt: entry.finishedAt })), [{
+    status: 'cancelled',
+    finishedAt: stopAcceptedAt,
+  }]);
+  assert.deepEqual(backgroundErrors, []);
+  assert.deepEqual(scheduled, ['scheduled']);
+  assert.deepEqual(taskExecutionProcesses(replacementRuntime), []);
+});

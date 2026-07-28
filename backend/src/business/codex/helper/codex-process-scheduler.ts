@@ -170,15 +170,24 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
           code: String(result.code ?? 'task_execution_dispatch_failed'),
           message: String(result.error ?? 'Dispatch failed.'),
         });
-        if (typeof input.runtime.onCodexRunSettled === 'function') input.runtime.onCodexRunSettled({
-          ledgerId: claimed.metadata.ledgerId,
-          cardId: claimed.metadata.sourceCardId,
-          outputCardId: claimed.metadata.ownerCardId,
-          threadId: `thread-${claimed.metadata.sourceCardId}`,
-          runId: claimed.metadata.sessionId,
-          executionId: claimed.metadata.executionId,
-          status: 'failed',
-        });
+        const failed = state.executions.find(claimed.metadata.executionId);
+        if (failed && typeof input.runtime.onCodexRunSettled === 'function') {
+          await input.runtime.onCodexRunSettled({
+            ledgerId: claimed.metadata.ledgerId,
+            cardId: claimed.metadata.sourceCardId,
+            outputCardId: claimed.metadata.ownerCardId,
+            threadId: `thread-${claimed.metadata.sourceCardId}`,
+            runId: claimed.metadata.sessionId,
+            executionId: claimed.metadata.executionId,
+            status: 'failed',
+            finishedAt: failed.lifecycle.finishedAt,
+            ...(claimed.metadata.pipelineRunId ? {
+              pipelineRunId: claimed.metadata.pipelineRunId,
+              pipelineStatus: 'failed',
+              pipelineTerminal: true,
+            } : {}),
+          });
+        }
       }
       continue;
     }

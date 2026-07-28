@@ -998,10 +998,11 @@ test('card skill run cancel route terminates the active codex process', async ()
       body: JSON.stringify({ ledgerId: 'specs', cardId: started.run.outputCardId, executionId: started.run.executionId })
     });
     assert.equal(cancelResponse.status, 202);
-    const cancelled = await cancelResponse.json() as { ok: boolean; status: string; cancellationRequested: boolean };
+    const cancelled = await cancelResponse.json() as { ok: boolean; status: string; cancellationRequested: boolean; finishedAt: string };
     assert.equal(cancelled.ok, true);
     assert.equal(cancelled.status, 'running');
     assert.equal(cancelled.cancellationRequested, true);
+    assert.match(cancelled.finishedAt, /^\d{4}-\d{2}-\d{2}T/);
 
     await waitForText(started.run.outputFile, 'Codex run cancelled: terminated by operator');
     // WHAT: Observe the replicated terminal lifecycle instead of using the mutable summary file as its completion barrier.
@@ -1011,8 +1012,9 @@ test('card skill run cancel route terminates the active codex process', async ()
     while (Date.now() < statusDeadline && terminalStatus !== 'cancelled') {
       const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${started.run.id}?ledgerId=specs&cardId=${started.run.outputCardId}&since=0`);
       assert.equal(statusResponse.status, 200);
-      const status = await statusResponse.json() as { ok: boolean; status: string };
+      const status = await statusResponse.json() as { ok: boolean; status: string; finishedAt: string };
       assert.equal(status.ok, true);
+      assert.equal(status.finishedAt, cancelled.finishedAt);
       terminalStatus = status.status;
       if (terminalStatus !== 'cancelled') await new Promise((resolve) => setTimeout(resolve, 25));
     }

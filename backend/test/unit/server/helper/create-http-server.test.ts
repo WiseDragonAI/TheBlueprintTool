@@ -644,6 +644,20 @@ test('Codex background failure pauses only project Codex work and remains diagno
     assert.match(startBody.scope, /^background:codex-runtime:/);
     const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; message: string }> };
     assert.ok(incidents.incidents.some((incident) => incident.operation === 'injected-codex-background-work' && incident.message === 'injected Codex background failure'));
+    const component = healthBody.pausedBackgroundComponents.find((entry) => entry.startsWith('codex-runtime:'));
+    assert.ok(component);
+    const resume = await fetch(`${baseUrl}/api/diagnostics/runtime/resume`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scope: `background:${component}`,
+        resolution: 'Loaded the corrected execution settlement contract.',
+      }),
+    });
+    assert.equal(resume.status, 200);
+    const resumedHealth = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { pausedBackgroundComponents: string[] };
+    assert.equal(resumedHealth.pausedBackgroundComponents.includes(component), false);
+    assert.notEqual((await fetch(`${baseUrl}/api/codex/threads/process`, { method: 'POST', body: '{}' })).status, 503);
   } finally {
     server.close();
     await once(server, 'close');

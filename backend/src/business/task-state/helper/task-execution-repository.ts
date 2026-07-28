@@ -312,13 +312,23 @@ export function createTaskExecutionRepository(input: {
     if (Date.parse(changedAt) < Date.parse(current.lifecycle.phaseSince)) throw new Error(`task_execution_timestamp_regression:${executionId}`);
     const terminal = terminalPhases.has(transition.phase);
     const requeued = current.lifecycle.phase === 'interrupted' && transition.phase === 'queued';
+    const normalizedChangedAt = new Date(changedAt).toISOString();
+    const finishedAt = requeued
+      ? null
+      : transition.phase === 'cancelling'
+        ? normalizedChangedAt
+        : terminal
+          ? current.lifecycle.finishedAt ?? normalizedChangedAt
+          : null;
     const lifecycle: TaskExecutionLifecycle = {
       phase: transition.phase,
-      phaseSince: new Date(changedAt).toISOString(),
+      phaseSince: normalizedChangedAt,
       startedAt: requeued
         ? null
-        : current.lifecycle.startedAt ?? (transition.phase === 'starting' || transition.phase === 'running' ? new Date(changedAt).toISOString() : null),
-      finishedAt: terminal ? new Date(changedAt).toISOString() : null,
+        : current.lifecycle.startedAt ?? (transition.phase === 'starting' || transition.phase === 'running' ? normalizedChangedAt : null),
+      // WHAT: Preserve the accepted Stop timestamp across process cleanup.
+      // WHY: A later child close must not redefine when the operator ended the execution.
+      finishedAt,
       executorNodeId: current.lifecycle.executorNodeId,
       providerSessionId: transition.providerSessionId === undefined ? current.lifecycle.providerSessionId : transition.providerSessionId,
       result: terminalResult(transition.phase, transition.result),

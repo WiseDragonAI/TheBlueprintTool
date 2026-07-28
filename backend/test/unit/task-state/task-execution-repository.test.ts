@@ -102,15 +102,20 @@ test('indexes pipeline identity and preserves legal awaited lifecycle plus termi
     repository.transition('execution-pipeline', { phase: 'cancelling', changedAt: '2026-07-23T00:59:00.000Z' }),
     /task_execution_timestamp_regression:execution-pipeline/,
   );
-  await repository.transition('execution-pipeline', { phase: 'cancelling' });
+  const stopAcceptedAt = '2026-07-23T01:00:10.000Z';
+  const cleanupSettledAt = '2026-07-23T01:00:12.000Z';
+  const cancelling = await repository.transition('execution-pipeline', { phase: 'cancelling', changedAt: stopAcceptedAt });
+  assert.equal(cancelling.lifecycle.finishedAt, stopAcceptedAt);
   const cancelled = await repository.transition('execution-pipeline', {
     phase: 'cancelled',
+    changedAt: cleanupSettledAt,
     result: { status: 'cancelled', summary: 'Cancelled by operator.' },
   });
 
   assert.equal(cancelled.lifecycle.revision, 6);
   assert.equal(cancelled.lifecycle.providerSessionId, 'provider-a');
-  assert.equal(cancelled.lifecycle.finishedAt, '2026-07-23T01:00:10.000Z');
+  assert.equal(cancelled.lifecycle.finishedAt, stopAcceptedAt);
+  assert.equal(cancelled.lifecycle.phaseSince, cleanupSettledAt);
   assert.deepEqual(repository.byPhase('cancelled').map((record) => record.metadata.executionId), ['execution-pipeline']);
   await assert.rejects(repository.transition('execution-pipeline', { phase: 'running' }), /task_execution_transition_invalid:cancelled:running/);
 

@@ -4,9 +4,11 @@
  */
 import { isSameCodexProcess } from './codex-process-identity.js';
 import { monitorAdoptedTaskExecution } from './monitor-adopted-task-execution.js';
+import { signalCodexProcessTree } from './reconcile-terminal-codex-process.js';
 import {
   finalizeTaskExecutionArtifacts,
   removeTaskExecutionProcess,
+  scheduleTaskExecutionCancellationDeadline,
   taskExecutionNodeId,
   taskExecutionProcess,
   taskExecutionState,
@@ -49,6 +51,19 @@ export async function recoverTaskExecutions(runtime: AnyRecord): Promise<TaskExe
     try {
       const registered = taskExecutionProcess(runtime, executionId);
       if (registered && isSameCodexProcess(registered.processId, registered.processStartTime)) {
+        if (execution.lifecycle.phase === 'cancelling') {
+          const finishedAt = execution.lifecycle.finishedAt ?? execution.lifecycle.phaseSince;
+          scheduleTaskExecutionCancellationDeadline({
+            runtime,
+            executionId,
+            deadlineAt: new Date(Date.parse(finishedAt) + 2_000).toISOString(),
+            onDeadline: () => {
+              if (isSameCodexProcess(registered.processId, registered.processStartTime)) {
+                signalCodexProcessTree({ child: registered.child ?? undefined, pid: registered.processId, signal: 'SIGKILL' });
+              }
+            },
+          });
+        }
         monitorAdoptedTaskExecution(runtime, executionId);
         result.adopted.push(executionId);
         continue;

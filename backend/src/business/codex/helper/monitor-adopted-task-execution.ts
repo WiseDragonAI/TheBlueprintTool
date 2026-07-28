@@ -7,6 +7,7 @@ import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run
 import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-event-ingestor.js';
 import { isSameCodexProcess } from './codex-process-identity.js';
 import { resolvePipelineLedgerContext } from './codex-pipeline-runner.js';
+import { commitTaskExecutionSettlement } from './commit-task-execution-settlement.js';
 import {
   finalizeTaskExecutionArtifacts,
   removeTaskExecutionProcess,
@@ -29,11 +30,11 @@ function monitors(runtime: AnyRecord): Map<string, NodeJS.Timeout> {
   return created;
 }
 
-function reportFailure(runtime: AnyRecord, executionId: string, error: unknown): void {
+function reportFailure(runtime: AnyRecord, executionId: string, operation: string, error: unknown): void {
   if (typeof runtime.onCodexBackgroundError !== 'function') return;
   try {
     runtime.onCodexBackgroundError({
-      operation: 'monitor-adopted-task-execution',
+      operation,
       error: error instanceof Error ? error : new Error(String(error)),
       context: { executionId },
     });
@@ -61,6 +62,12 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
   let offset = 0;
   let settling = false;
   let flushed = false;
+  let artifactsFinalized = false;
+  let lifecycleSettled = false;
+  let settlementPublished = false;
+  let settlementAttempt = 0;
+  let processSettledAt = '';
+  let committedSettlement: Awaited<ReturnType<typeof commitTaskExecutionSettlement>> | null = null;
   let poll!: () => void;
   const ingestor = createCardSkillRunEventIngestor({
     decisionOsRoot,
@@ -97,41 +104,53 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
   const settle = async (): Promise<void> => {
     if (settling) return;
     settling = true;
+    processSettledAt ||= new Date().toISOString();
     const timer = activeMonitors.get(executionId);
-    if (timer) clearInterval(timer);
+    if (timer) clearTimeout(timer);
     activeMonitors.delete(executionId);
+    let operation = 'monitor-adopted-task-execution';
     try {
       ingestAvailable();
       if (!flushed) {
         flushCardSkillRunEventIngestor(ingestor, execution.metadata.sessionId);
         flushed = true;
       }
-      const current = state.executions.find(executionId);
-      const cancelled = current?.lifecycle.phase === 'cancelling' || terminalStatus === 'cancelled';
-      const phase = cancelled ? 'cancelled' : terminalStatus === 'complete' ? 'succeeded' : terminalStatus === 'failed' ? 'failed' : 'interrupted';
-      await finalizeTaskExecutionArtifacts({
-        runtime,
-        executionId,
-        jsonl: process.stdoutFile,
-        stderr: process.stderrFile,
-        telemetry: `${process.stdoutFile}.telemetry.jsonl`,
-      });
-      if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
-        await state.executions.transition(executionId, {
-          phase,
-          result: {
-            status: phase,
-            summary: phase === 'interrupted'
-              ? 'The adopted Codex process exited without a terminal event.'
-              : `The adopted Codex process reported ${terminalStatus ?? phase}.`,
-          },
-          error: phase === 'failed'
-            ? { code: 'codex_process_failed', message: 'The adopted Codex process reported failure.' }
-            : null,
+      if (!artifactsFinalized) {
+        await finalizeTaskExecutionArtifacts({
+          runtime,
+          executionId,
+          jsonl: process.stdoutFile,
+          stderr: process.stderrFile,
+          telemetry: `${process.stdoutFile}.telemetry.jsonl`,
         });
+        artifactsFinalized = true;
       }
-      removeTaskExecutionProcess(runtime, executionId);
-      if (typeof runtime.onCodexRunSettled === 'function') {
+      if (!lifecycleSettled) {
+        const requestedPhase = terminalStatus === 'complete'
+          ? 'succeeded'
+          : terminalStatus === 'failed'
+            ? 'failed'
+            : terminalStatus === 'cancelled'
+              ? 'cancelled'
+              : 'interrupted';
+        committedSettlement = await commitTaskExecutionSettlement({
+          runtime,
+          executionId,
+          requestedPhase,
+          settledAt: processSettledAt,
+          summary: requestedPhase === 'interrupted'
+            ? 'The adopted Codex process exited without a terminal event.'
+            : `The adopted Codex process reported ${terminalStatus ?? requestedPhase}.`,
+          failureCode: 'codex_process_failed',
+        });
+        lifecycleSettled = true;
+        removeTaskExecutionProcess(runtime, executionId);
+      }
+      if (!committedSettlement) {
+        throw new Error(`task_execution_settlement_missing:${executionId}`);
+      }
+      if (!settlementPublished && typeof runtime.onCodexRunSettled === 'function') {
+        operation = 'monitor-adopted-task-execution-notification';
         await runtime.onCodexRunSettled({
           ledgerId: execution.metadata.ledgerId,
           cardId: execution.metadata.sourceCardId,
@@ -139,15 +158,18 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
           threadId: `thread-${execution.metadata.sourceCardId}`,
           runId: execution.metadata.sessionId,
           executionId,
-          status: terminalStatus ?? phase,
-          finishedAt: new Date().toISOString(),
+          status: committedSettlement.status,
+          finishedAt: committedSettlement.finishedAt,
         });
       }
+      settlementPublished = true;
       if (typeof runtime.scheduleCodexProcesses === 'function') await runtime.scheduleCodexProcesses();
     } catch (error) {
       settling = false;
-      reportFailure(runtime, executionId, error);
-      const retryTimer = setInterval(poll, 250);
+      settlementAttempt += 1;
+      reportFailure(runtime, executionId, operation, error);
+      if (settlementAttempt >= 5) return;
+      const retryTimer = setTimeout(() => { void settle(); }, Math.min(4_000, 250 * (2 ** (settlementAttempt - 1))));
       retryTimer.unref?.();
       activeMonitors.set(executionId, retryTimer);
     }
@@ -157,7 +179,7 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
       ingestAvailable();
       if (!isSameCodexProcess(process.processId, process.processStartTime)) void settle();
     } catch (error) {
-      reportFailure(runtime, executionId, error);
+      reportFailure(runtime, executionId, 'monitor-adopted-task-execution-ingest', error);
     }
   };
   try {
@@ -167,7 +189,7 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
       offset = existing.length;
     }
   } catch (error) {
-    reportFailure(runtime, executionId, error);
+    reportFailure(runtime, executionId, 'monitor-adopted-task-execution-ingest', error);
   }
   const timer = setInterval(poll, 50);
   timer.unref?.();
@@ -178,6 +200,6 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
 export function stopAdoptedTaskExecutionMonitors(runtime: AnyRecord): void {
   const current = runtime.adoptedTaskExecutionMonitors;
   if (!(current instanceof Map)) return;
-  for (const timer of current.values()) clearInterval(timer as NodeJS.Timeout);
+  for (const timer of current.values()) clearTimeout(timer as NodeJS.Timeout);
   current.clear();
 }

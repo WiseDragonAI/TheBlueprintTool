@@ -31,9 +31,57 @@ export type TaskExecutionCancellationResult = {
   executorNodeId?: string;
   phase?: string;
   revision?: number;
+  finishedAt?: string;
   cancellationRequested?: boolean;
   error?: string;
 };
+
+function cancellationDeadlines(runtime: AnyRecord): Map<string, NodeJS.Timeout> {
+  const current = runtime.taskExecutionCancellationDeadlines;
+  if (current instanceof Map) return current as Map<string, NodeJS.Timeout>;
+  const created = new Map<string, NodeJS.Timeout>();
+  Object.defineProperty(runtime, 'taskExecutionCancellationDeadlines', {
+    value: created,
+    configurable: true,
+    enumerable: false,
+  });
+  return created;
+}
+
+export function scheduleTaskExecutionCancellationDeadline(input: {
+  runtime: AnyRecord;
+  executionId: string;
+  deadlineAt: string;
+  onDeadline: () => void;
+}): void {
+  const deadlines = cancellationDeadlines(input.runtime);
+  const previous = deadlines.get(input.executionId);
+  if (previous) clearTimeout(previous);
+  const delayMs = Math.max(0, Date.parse(input.deadlineAt) - Date.now());
+  const timer = setTimeout(() => {
+    deadlines.delete(input.executionId);
+    try {
+      input.onDeadline();
+    } catch {
+      // Process termination diagnostics must never escape the owning execution.
+    }
+  }, Number.isFinite(delayMs) ? delayMs : 0);
+  timer.unref?.();
+  deadlines.set(input.executionId, timer);
+}
+
+export function clearTaskExecutionCancellationDeadline(runtime: AnyRecord, executionId: string): void {
+  const deadlines = cancellationDeadlines(runtime);
+  const timer = deadlines.get(executionId);
+  if (timer) clearTimeout(timer);
+  deadlines.delete(executionId);
+}
+
+export function stopTaskExecutionCancellationDeadlines(runtime: AnyRecord): void {
+  const deadlines = cancellationDeadlines(runtime);
+  for (const timer of deadlines.values()) clearTimeout(timer);
+  deadlines.clear();
+}
 
 function processRegistry(runtime: AnyRecord): Map<string, TaskExecutionProcess> {
   const current = runtime.taskExecutionProcesses;
@@ -91,6 +139,7 @@ export function taskExecutionProcess(runtime: AnyRecord, executionId: string): T
 }
 
 export function removeTaskExecutionProcess(runtime: AnyRecord, executionId: string): TaskExecutionProcess | null {
+  clearTaskExecutionCancellationDeadline(runtime, executionId);
   const registry = processRegistry(runtime);
   const process = registry.get(executionId) ?? null;
   registry.delete(executionId);

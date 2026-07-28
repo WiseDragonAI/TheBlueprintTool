@@ -157,6 +157,31 @@ test('epoch-4 validates atomic execution metadata, lifecycle, and artifact lanes
     }),
   };
   assert.doesNotThrow(() => domainEntity('execution', executionId, valid));
+  assert.doesNotThrow(() => domainEntity('execution', executionId, {
+    ...valid,
+    lifecycle: register('workstation', 2, {
+      ...(valid.lifecycle.candidates[0].value as Record<string, unknown>),
+      phase: 'cancelling',
+      finishedAt: '2026-07-23T01:00:02.000Z',
+      revision: 4,
+    }),
+  }));
+  // Legacy epoch-4 cancelling records remain readable during the compatible writer cutover.
+  assert.doesNotThrow(() => domainEntity('execution', executionId, {
+    ...valid,
+    lifecycle: register('workstation', 2, {
+      ...(valid.lifecycle.candidates[0].value as Record<string, unknown>),
+      phase: 'cancelling',
+      revision: 4,
+    }),
+  }));
+  assert.throws(() => domainEntity('execution', executionId, {
+    ...valid,
+    lifecycle: register('workstation', 2, {
+      ...(valid.lifecycle.candidates[0].value as Record<string, unknown>),
+      finishedAt: '2026-07-23T01:00:02.000Z',
+    }),
+  }), /invalid_task_current_execution_lifecycle/);
   assert.throws(() => domainEntity('execution', executionId, {
     ...valid,
     metadata: register('workstation', 1, { ...(valid.metadata.candidates[0].value as Record<string, unknown>), executionId: 'execution-b' }),
