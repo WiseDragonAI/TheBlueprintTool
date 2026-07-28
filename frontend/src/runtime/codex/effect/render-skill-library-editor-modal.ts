@@ -606,16 +606,6 @@ export async function openSkillLibraryEditor(input: {
   const skillName = input.skillName.trim();
   if (!skillName) return;
   returnFocusTo = activeFocusTarget();
-  if (!input.requestProjectId.trim()) {
-    startSession({
-      mode: 'edit',
-      skillName,
-      error: 'Select a project context before opening authored content.',
-      onSaveError: input.onSaveError,
-      onClosed: input.onClosed,
-    });
-    return;
-  }
   startSession({
     mode: 'edit',
     skillName,
@@ -636,6 +626,7 @@ function adoptDetail(detail: CodexSkillLibraryDetail, availableTags: string[], a
     : detail.contentKind === 'workspace-skill'
       ? 'workspace-skill'
       : 'federated-skill';
+  if (skillLibraryEditorState.contentKind !== 'workspace-skill') skillLibraryEditorState.requestProjectId = '';
   skillLibraryEditorState.markdown = detail.markdown;
   skillLibraryEditorState.persistedMarkdown = detail.markdown;
   skillLibraryEditorState.defaultCodexModel = detail.defaultCodexModel;
@@ -681,11 +672,6 @@ export async function reloadSkillLibraryDraft(): Promise<void> {
 
 export async function createSkillLibraryDraft(): Promise<boolean> {
   if (skillLibraryEditorState.mode !== 'create' || skillLibraryEditorState.saving) return false;
-  if (!skillLibraryEditorState.requestProjectId) {
-    skillLibraryEditorState.error = 'Select a project context before creating authored content.';
-    renderSkillLibraryEditorModal();
-    return false;
-  }
   if (skillLibraryEditorState.contentKind === 'workspace-skill' && !skillLibraryEditorState.workspaceProjectId) {
     skillLibraryEditorState.error = 'Select the project that owns this workspace skill.';
     renderSkillLibraryEditorModal();

@@ -4,7 +4,7 @@
  */
 import type { CodexSkillSummary } from './load-codex-skills.js';
 import type { CodexSkillGitRevision } from './load-codex-skill-revision.js';
-import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
+import { codexSkillAuthoringPath } from '../helper/codex-skill-authoring-path.js';
 
 export type CodexSkillLibraryDetail = CodexSkillSummary & {
   markdown: string;
@@ -25,7 +25,7 @@ type SkillLibraryResponse = Partial<CodexSkillLibraryLoadResult> & {
 };
 
 export async function loadCodexSkillLibrary(skillName: string, requestProjectId: string): Promise<CodexSkillLibraryLoadResult> {
-  const path = projectScopedRequestPath(`/api/codex/skill-library/${encodeURIComponent(skillName)}`, requestProjectId);
+  const path = codexSkillAuthoringPath(`/${encodeURIComponent(skillName)}`, requestProjectId);
   const response = await fetch(path).catch(() => undefined);
   if (!response) return { ok: false, statusCode: 0, availableTags: [], error: 'Request failed.' };
   const body = await response.json().catch(() => null) as SkillLibraryResponse | null;

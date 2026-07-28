@@ -23,7 +23,7 @@ function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 }
 
-test('served Skills creation requires project scope and preserves authored casing', { ...canaryOnly, timeout: 60_000 }, async () => {
+test('served Skills creation is projectless and preserves authored casing', { ...canaryOnly, timeout: 60_000 }, async () => {
   assert.equal(canaryUrl, 'http://127.0.0.1:50151', 'DECISION_OS_URL must select the registered canary.');
   mkdirSync(evidenceRoot, { recursive: true });
   let browser: Browser | undefined;
@@ -47,14 +47,6 @@ test('served Skills creation requires project scope and preserves authored casin
     const library = page.locator('.process-modal[open]');
     await library.waitFor({ state: 'visible' });
     const newSkill = library.getByRole('button', { name: 'New skill', exact: true });
-    await newSkill.click();
-    await library.getByText('Select a project context before creating authored content.', { exact: true }).waitFor({ state: 'visible' });
-    assert.equal(await page.locator('.skill-library-editor-modal[open]').count(), 0);
-    assert.deepEqual(creationRequests, []);
-
-    const proofProject = library.getByRole('button', { name: 'G12 Served Proof', exact: true });
-    await proofProject.click();
-    assert.equal(await proofProject.getAttribute('aria-pressed'), 'true');
     await newSkill.click();
 
     const creator = page.locator('.skill-library-editor-modal[open]');
@@ -90,7 +82,7 @@ test('served Skills creation requires project scope and preserves authored casin
     assert.match(presentation?.text ?? '', /Markdown title/);
     assert.match(presentation?.text ?? '', /lowercase body/);
     assert.deepEqual(creationRequests, []);
-    await page.screenshot({ path: join(evidenceRoot, 'editor-theme-project-scope.png'), fullPage: false });
+    await page.screenshot({ path: join(evidenceRoot, 'editor-theme-projectless-skill.png'), fullPage: false });
   } finally {
     await browser?.close();
   }

@@ -15,7 +15,8 @@ export async function requestCodexSkillLibraryCreate(input: {
   requestProjectId: string;
 }): Promise<{ ok: boolean; statusCode: number; skill?: CodexSkillLibraryDetail; error?: string }> {
   const { requestProjectId, ...payload } = input;
-  const response = await fetch(projectScopedRequestPath('/api/codex/skill-library', requestProjectId), {
+  const ownerProjectId = payload.contentKind === 'workspace-skill' ? requestProjectId : '';
+  const response = await fetch(projectScopedRequestPath('/api/codex/skill-library', ownerProjectId), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),

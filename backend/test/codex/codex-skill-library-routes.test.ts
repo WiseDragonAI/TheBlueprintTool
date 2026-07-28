@@ -876,6 +876,16 @@ test('committed federated create and save routes preserve local success across r
       execFileSync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], { cwd: serverRoot, encoding: 'utf8' }).trim().split('\n'),
       ['.skills/published-locally/SKILL.md'],
     );
+    const historyResponse = await fetch(`${baseUrl}/api/codex/server-skills/published-locally/revisions`);
+    assert.equal(historyResponse.status, 200);
+    const history = await historyResponse.json() as Record<string, any>;
+    assert.equal(history.ok, true);
+    assert.equal(history.history.length, 2);
+    const revisionResponse = await fetch(`${baseUrl}/api/codex/server-skills/published-locally/revisions/${history.history[0].commit}`);
+    assert.equal(revisionResponse.status, 200);
+    const revision = await revisionResponse.json() as Record<string, any>;
+    assert.equal(revision.ok, true);
+    assert.equal(revision.revision.markdown, savedMarkdown);
     const savedManifest = await fetch(`${baseUrl}/api/federation/skills-manifest`).then((manifestResponse) => manifestResponse.json()) as Record<string, any>;
     assert.notEqual(savedManifest.skills[0].revision, createdManifest.skills[0].revision);
 

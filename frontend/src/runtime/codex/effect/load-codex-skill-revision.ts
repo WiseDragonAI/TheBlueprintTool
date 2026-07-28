@@ -2,7 +2,7 @@
  * WHAT: Loads one immutable Git revision selected from a skill detail history.
  * WHY: Revision navigation must address only server-authorized skill identity and commit identity.
  */
-import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
+import { codexSkillAuthoringPath } from '../helper/codex-skill-authoring-path.js';
 export type CodexSkillGitRevision = {
   commit: string;
   authoredAt: string;
@@ -30,10 +30,7 @@ export async function loadCodexSkillRevisionHistory(
   const query = new URLSearchParams();
   if (input.cursor) query.set('cursor', input.cursor);
   query.set('limit', String(input.limit ?? 50));
-  const path = projectScopedRequestPath(
-    `/api/codex/skill-library/${encodeURIComponent(skillName)}/revisions?${query}`,
-    input.requestProjectId,
-  );
+  const path = codexSkillAuthoringPath(`/${encodeURIComponent(skillName)}/revisions?${query}`, input.requestProjectId);
   const response = await fetch(path).catch(() => undefined);
   if (!response) return { ok: false, statusCode: 0, history: [], nextCursor: null, error: 'Request failed.' };
   const body = await response.json().catch(() => null) as {
@@ -59,7 +56,7 @@ export async function loadCodexSkillRevision(skillName: string, commit: string, 
   revision?: CodexSkillGitRevisionDetail;
   error?: string;
 }> {
-  const path = projectScopedRequestPath(`/api/codex/skill-library/${encodeURIComponent(skillName)}/revisions/${encodeURIComponent(commit)}`, requestProjectId);
+  const path = codexSkillAuthoringPath(`/${encodeURIComponent(skillName)}/revisions/${encodeURIComponent(commit)}`, requestProjectId);
   const response = await fetch(path).catch(() => undefined);
   if (!response) return { ok: false, statusCode: 0, error: 'Request failed.' };
   const body = await response.json().catch(() => null) as { ok?: boolean; revision?: CodexSkillGitRevisionDetail; error?: string } | null;

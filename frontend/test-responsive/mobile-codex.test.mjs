@@ -178,9 +178,9 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /onEdit: \(\) => editGlobalSkill\(record\)/);
   assert.match(script, /openSkillLibraryEditor\(\{/);
   assert.match(script, /openSkillLibraryCreator\(\{/);
-  assert.match(script, /state\.projectFilter === 'All'/);
-  assert.match(script, /Select a project context before creating authored content\./);
-  assert.match(script, /requestProjectId: state\.projectFilter/);
+  assert.doesNotMatch(script, /Select a project context before creating authored content\./);
+  assert.match(script, /function createGlobalSkill\(\) \{[^]*requestProjectId: ''/);
+  assert.match(script, /function editGlobalSkill\(record\) \{[^]*requestProjectId: ''/);
   assert.match(html, /class="primary-button skill-new"[^>]*>New skill<\/button>/);
   assert.match(script, /serverSkillPath\(record\.name\)/);
   assert.doesNotMatch(script, /Promise\.all\(recordProjects\(record\)\.map\(\(project\) => jsonRequest\(`\/api\/codex\/skill-library/);

@@ -4,7 +4,7 @@
  */
 import type { CodexEffort, CodexModel } from '../helper/codex-run-options.js';
 import type { CodexSkillLibraryDetail } from './load-codex-skill-library.js';
-import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
+import { codexSkillAuthoringPath } from '../helper/codex-skill-authoring-path.js';
 
 export type CodexSkillLibrarySaveRequest = {
   skillName: string;
@@ -39,7 +39,7 @@ type SkillLibrarySaveResponse = Partial<CodexSkillLibrarySaveResult> & {
 
 export async function requestCodexSkillLibrarySave(input: CodexSkillLibrarySaveRequest): Promise<CodexSkillLibrarySaveResult> {
   const { skillName, requestProjectId, ...payload } = input;
-  const response = await fetch(projectScopedRequestPath(`/api/codex/skill-library/${encodeURIComponent(skillName)}`, requestProjectId), {
+  const response = await fetch(codexSkillAuthoringPath(`/${encodeURIComponent(skillName)}`, requestProjectId), {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
@@ -69,7 +69,7 @@ export async function requestCodexSkillRevisionRetry(input: {
 }): Promise<CodexSkillLibrarySaveResult> {
   const { skillName, requestProjectId, ...payload } = input;
   const response = await fetch(
-    projectScopedRequestPath(`/api/codex/skill-library/${encodeURIComponent(skillName)}/revisions/retry`, requestProjectId),
+    codexSkillAuthoringPath(`/${encodeURIComponent(skillName)}/revisions/retry`, requestProjectId),
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

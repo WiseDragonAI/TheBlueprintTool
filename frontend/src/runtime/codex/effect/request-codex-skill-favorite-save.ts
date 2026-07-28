@@ -3,7 +3,7 @@
  * WHY: Favorite toggles must not read or rewrite SKILL.md.
  */
 import type { CodexSkillLibraryDetail } from './load-codex-skill-library.js';
-import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
+import { codexSkillAuthoringPath } from '../helper/codex-skill-authoring-path.js';
 
 export type CodexSkillFavoriteSaveResult = {
   ok: boolean;
@@ -17,7 +17,7 @@ export async function requestCodexSkillMetadataSave(
   metadata: { favorite?: boolean; tags?: readonly string[] },
   requestProjectId: string,
 ): Promise<CodexSkillFavoriteSaveResult> {
-  const response = await fetch(projectScopedRequestPath(`/api/codex/skill-library/${encodeURIComponent(skillName)}`, requestProjectId), {
+  const response = await fetch(codexSkillAuthoringPath(`/${encodeURIComponent(skillName)}`, requestProjectId), {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(metadata),

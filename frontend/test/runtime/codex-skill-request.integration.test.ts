@@ -154,13 +154,16 @@ test('loadCodexSkillsResult distinguishes catalog failure from a valid empty cat
   }
 });
 
-test('skill creation sends all three content kinds without a physical path', async () => {
+test('skill creation keeps shared content projectless and workspace content project-scoped', async () => {
   const previousFetch = globalThis.fetch;
   const kinds = ['federated-skill', 'workspace-skill', 'pipeline-prompt'] as const;
   let index = 0;
   try {
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
-      assert.equal(url, '/p/project-a/api/codex/skill-library');
+      const contentKind = kinds[index];
+      assert.equal(url, contentKind === 'workspace-skill'
+        ? '/p/project-a/api/codex/skill-library'
+        : '/api/codex/skill-library');
       assert.equal(init?.method, 'POST');
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       assert.deepEqual(body, {
@@ -170,7 +173,6 @@ test('skill creation sends all three content kinds without a physical path', asy
         contentKind: kinds[index],
       });
       assert.equal('path' in body, false);
-      const contentKind = kinds[index];
       index += 1;
       return new Response(JSON.stringify({
         ok: true,
@@ -195,6 +197,64 @@ test('skill creation sends all three content kinds without a physical path', asy
       assert.equal(result.skill?.executionVisibility, kinds[requestIndex] === 'pipeline-prompt' ? 'pipeline-only' : 'agent');
     }
     assert.equal(index, kinds.length);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('server-owned skill authoring uses the projectless detail, revision, and metadata routes', async () => {
+  const previousFetch = globalThis.fetch;
+  const requests: Array<{ url: string; method: string }> = [];
+  try {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      requests.push({ url, method: init?.method ?? 'GET' });
+      if (url.endsWith('/revisions?limit=50')) {
+        return new Response(JSON.stringify({ ok: true, history: [], nextCursor: null }), { status: 200 });
+      }
+      if (url.endsWith('/revisions/commit-a')) {
+        return new Response(JSON.stringify({
+          ok: true,
+          revision: { commit: 'commit-a', authoredAt: '2026-07-28T00:00:00.000Z', subject: 'Revise', markdown: '# Skill', patch: '' },
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        ok: true,
+        skill: {
+          name: 'global-skill',
+          markdown: '# Skill',
+          references: [],
+          history: [],
+        },
+      }), { status: 200 });
+    }) as typeof fetch;
+
+    await loadCodexSkillLibrary('global-skill', '');
+    await requestCodexSkillLibrarySave({
+      skillName: 'global-skill',
+      markdown: '# Skill',
+      revision: 'revision-a',
+      defaultCodexModel: null,
+      defaultCodexEffort: null,
+      requestProjectId: '',
+    });
+    await requestCodexSkillMetadataSave('global-skill', { tags: ['Implementation'] }, '');
+    await loadCodexSkillRevisionHistory('global-skill', { requestProjectId: '' });
+    await loadCodexSkillRevision('global-skill', 'commit-a', '');
+    await requestCodexSkillRevisionRetry({
+      skillName: 'global-skill',
+      contentRevision: 'revision-a',
+      recoveryToken: 'retry-a',
+      requestProjectId: '',
+    });
+
+    assert.deepEqual(requests, [
+      { url: '/api/codex/server-skills/global-skill', method: 'GET' },
+      { url: '/api/codex/server-skills/global-skill', method: 'PUT' },
+      { url: '/api/codex/server-skills/global-skill', method: 'PUT' },
+      { url: '/api/codex/server-skills/global-skill/revisions?limit=50', method: 'GET' },
+      { url: '/api/codex/server-skills/global-skill/revisions/commit-a', method: 'GET' },
+      { url: '/api/codex/server-skills/global-skill/revisions/retry', method: 'POST' },
+    ]);
   } finally {
     globalThis.fetch = previousFetch;
   }

@@ -4654,9 +4654,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result));
       return;
     }
-    const skillRevisionRetryRoute = url.match(/^\/api\/codex\/skill-library\/([^/]+)\/revisions\/retry$/);
+    const skillRevisionRetryRoute = url.match(/^\/api\/codex\/(skill-library|server-skills)\/([^/]+)\/revisions\/retry$/);
     if (skillRevisionRetryRoute && request.method === 'POST') {
-      const skillName = decodeRouteSegment(skillRevisionRetryRoute[1]);
+      const serverOwned = skillRevisionRetryRoute[1] === 'server-skills';
+      const skillName = decodeRouteSegment(skillRevisionRetryRoute[2]);
+      const skillRuntime = serverOwned
+        ? { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' }
+        : requestRuntime;
       const bodyBuffer = await readRequestBuffer(request);
       const retryPayload = (() => {
         try {
@@ -4667,7 +4671,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       })();
       let result = applyOwnedSkillDetail(await retryCodexSkillRevisionController({
         action_payload: { ...retryPayload, skillName },
-        runtime_state: requestRuntime,
+        runtime_state: skillRuntime,
       }));
       const skill = result.skill as AnyRecord | undefined;
       if (result.ok === true && skill?.contentKind === 'federated-skill') {
@@ -4679,19 +4683,23 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result));
       return;
     }
-    const skillRevisionRoute = url.match(/^\/api\/codex\/skill-library\/([^/]+)\/revisions(?:\/([^/]+))?$/);
+    const skillRevisionRoute = url.match(/^\/api\/codex\/(skill-library|server-skills)\/([^/]+)\/revisions(?:\/([^/]+))?$/);
     if (skillRevisionRoute && request.method === 'GET') {
-      const skillName = decodeRouteSegment(skillRevisionRoute[1]);
-      const commit = skillRevisionRoute[2] ? decodeRouteSegment(skillRevisionRoute[2]) : '';
+      const serverOwned = skillRevisionRoute[1] === 'server-skills';
+      const skillName = decodeRouteSegment(skillRevisionRoute[2]);
+      const commit = skillRevisionRoute[3] ? decodeRouteSegment(skillRevisionRoute[3]) : '';
+      const skillRuntime = serverOwned
+        ? { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' }
+        : requestRuntime;
       const result = commit
-        ? await readCodexSkillRevisionContentController({ action_payload: { skillName, commit }, runtime_state: requestRuntime })
+        ? await readCodexSkillRevisionContentController({ action_payload: { skillName, commit }, runtime_state: skillRuntime })
         : await readCodexSkillRevisionHistoryController({
             action_payload: {
               skillName,
               cursor: requestUrl.searchParams.get('cursor'),
               limit: requestUrl.searchParams.get('limit'),
             },
-            runtime_state: requestRuntime,
+            runtime_state: skillRuntime,
           });
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');

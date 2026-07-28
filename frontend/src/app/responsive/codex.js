@@ -171,12 +171,8 @@ async function refreshGlobalSkillAuthoring(savedSkill) {
   if (!el('.process-detail').hidden) await renderProcessDetail(refreshed);
 }
 function createGlobalSkill() {
-  if (state.projectFilter === 'All') {
-    message('.process-message', 'Select a project context before creating authored content.', true);
-    return;
-  }
   openSkillLibraryCreator({
-    requestProjectId: state.projectFilter,
+    requestProjectId: '',
     projects: state.projects.map((project) => ({ id: project.id, name: project.name })),
     onSaved: async (savedSkill) => { await refreshGlobalSkillAuthoring(savedSkill); },
     onSaveError: (error) => { message('.process-message', error, true); },
@@ -184,13 +180,9 @@ function createGlobalSkill() {
 }
 function editGlobalSkill(record) {
   if (!record.editable) return;
-  if (state.projectFilter === 'All') {
-    message('.process-detail-message', 'Select a project context before editing authored content.', true);
-    return;
-  }
   void openSkillLibraryEditor({
     skillName: record.name,
-    requestProjectId: state.projectFilter,
+    requestProjectId: '',
     onSaved: async (savedSkill) => { await refreshGlobalSkillAuthoring(savedSkill); },
     onSaveError: (error) => { message('.process-detail-message', error, true); },
   });
