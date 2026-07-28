@@ -144,9 +144,9 @@ test('formats a stable waiting age', () => {
   assert.equal(waitingAge('2026-07-10T10:00:00.000Z', Date.parse('2026-07-12T10:00:00.000Z')), '2d waiting');
 });
 
-test('formats the exact executing Codex session duration as a minute-second stopwatch', () => {
+test('formats the exact executing Codex session duration as an hours-aware stopwatch', () => {
   assert.equal(executionStopwatch('2026-07-12T10:00:00.000Z', Date.parse('2026-07-12T10:03:07.999Z')), '03:07');
-  assert.equal(executionStopwatch('2026-07-12T10:00:00.000Z', Date.parse('2026-07-12T11:02:03.000Z')), '62:03');
+  assert.equal(executionStopwatch('2026-07-12T10:00:00.000Z', Date.parse('2026-07-12T11:02:03.000Z')), '1:02:03');
 });
 
 test('renders every Control Room task as the same direct-link card without disclosure details', () => {

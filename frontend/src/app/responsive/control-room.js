@@ -2,6 +2,8 @@
  * WHAT: Projects responsive task presentation from structural card and relationship state.
  * WHY: Narrative Markdown and node-local observations cannot classify tasks or override replicated lifecycle state.
  */
+import { codexRunDurationLabel } from '../../runtime/codex/helper/codex-run-duration-label.js';
+
 export function cardCodexRunId(card) {
   return String(card?.execution?.sessionId ?? '').trim()
     || String(card?.codexThreadRunId ?? '').trim();
@@ -101,10 +103,7 @@ export function executionAge(timestamp, now = Date.now()) {
 }
 
 export function executionStopwatch(timestamp, now = Date.now()) {
-  const elapsedSeconds = Math.floor(Math.max(0, now - Date.parse(timestamp)) / 1000);
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = elapsedSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  return codexRunDurationLabel(Math.max(0, now - Date.parse(timestamp)));
 }
 
 export function executionPresentation(task, now = Date.now()) {
