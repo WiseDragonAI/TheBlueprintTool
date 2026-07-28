@@ -13,7 +13,9 @@ export function buildPipelineSkillPrompt(input: {
   stepTitle: string;
   stepInputCardId: string;
   stepInputCardContent: string;
+  outputParentCardId: string;
   outputCardId: string;
+  outputSubtaskPosition: number;
   outputMarkdownFile: string;
   serverSkill?: { markdown: string; packageRoot: string } | null;
 }): string {
@@ -40,7 +42,10 @@ export function buildPipelineSkillPrompt(input: {
     `Active step title: ${input.stepTitle}`,
     `Current skill: ${input.skillName}`,
     `Input card id: ${input.stepInputCardId}`,
-    `Output card id: ${input.outputCardId}`,
+    `Output subtask parent card id: ${input.outputParentCardId}`,
+    `Output subtask card id: ${input.outputCardId}`,
+    `Output subtask position: ${input.outputSubtaskPosition}`,
+    `Output card role: linked subtask of ${input.outputParentCardId}`,
     ...serverSkill,
     '',
     'Input card content:',
@@ -49,11 +54,12 @@ export function buildPipelineSkillPrompt(input: {
     '```',
     '',
     `Write the final result to this Markdown file: ${input.outputMarkdownFile}`,
+    'Update the output subtask card title to a concise result-specific title by running:',
+    `ledger-cli mutate --ledger "$DECISION_OS_LEDGER_FILE" --card-id "${input.outputCardId}" --card-title "<result-specific-title>"`,
     '',
     'Use English only.',
-    'Do not edit the source card or any other pipeline step card.',
+    'Use letter-prefixed H2 sections, --- between sections, numbered list items.',
     'Do not edit ledger JSON manually.',
     'Keep unrelated files unchanged.',
-    'When finished, ensure the output Markdown file contains the useful result for the operator and the next pipeline skill.',
   ].join('\n');
 }

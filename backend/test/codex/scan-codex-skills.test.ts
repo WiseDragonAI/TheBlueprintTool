@@ -107,10 +107,18 @@ test('one server skill wins in every managed project and supplies exact run inst
     const prompt = buildPipelineSkillPrompt({
       skillName: 'shared-skill', ledgerFile: '/ledger.json', pipelineRunId: 'run', pipelineName: 'Pipeline',
       sourceCardId: 'source', sourceCardTitle: 'Source', stepId: 'step', stepTitle: 'Step',
-      stepInputCardId: 'input', stepInputCardContent: 'Input', outputCardId: 'output', outputMarkdownFile: '/output.md', serverSkill: context,
+      stepInputCardId: 'input', stepInputCardContent: 'Input', outputParentCardId: 'master',
+      outputCardId: 'output', outputSubtaskPosition: 4, outputMarkdownFile: '/output.md', serverSkill: context,
     });
     assert.match(prompt, /Decision OS server skill package:/);
     assert.match(prompt, /# Server workflow/);
+    assert.match(prompt, /Output subtask parent card id: master/);
+    assert.match(prompt, /Output subtask card id: output/);
+    assert.match(prompt, /Output subtask position: 4/);
+    assert.match(prompt, /ledger-cli mutate --ledger "\$DECISION_OS_LEDGER_FILE" --card-id "output" --card-title "<result-specific-title>"/);
+    assert.match(prompt, /Use letter-prefixed H2 sections, --- between sections, numbered list items\./);
+    assert.doesNotMatch(prompt, /Do not edit the source card or any other pipeline step card\./);
+    assert.doesNotMatch(prompt, /When finished, ensure the output Markdown file contains/);
   } finally {
     rmSync(serverRoot, { recursive: true, force: true });
   }

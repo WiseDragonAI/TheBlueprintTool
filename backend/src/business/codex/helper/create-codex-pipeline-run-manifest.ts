@@ -32,6 +32,8 @@ export function createCodexPipelineRunManifest(input: {
   ledgerId: string;
   sourceCardId: string;
   sourceCardTitle: string;
+  outputParentCardId: string;
+  firstOutputSubtaskPosition: number;
   ledgerPath: string;
   restartOfPipelineRunId?: string | null;
   reservedRunId?: string;
@@ -56,6 +58,7 @@ export function createCodexPipelineRunManifest(input: {
       name: step.name,
       purpose: step.purpose,
       outputCardId,
+      outputSubtaskPosition: input.firstOutputSubtaskPosition + stepIndex,
       status: 'pending',
       skills: step.skills.map((skill, skillIndex) => {
         // WHAT: Reuse the temporary pipeline id as its sole skill-run id.
@@ -110,6 +113,7 @@ export function createCodexPipelineRunManifest(input: {
     ledgerId: input.ledgerId,
     sourceCardId: input.sourceCardId,
     sourceCardTitle: input.sourceCardTitle,
+    outputParentCardId: input.outputParentCardId,
     status: 'pending',
     steps,
     createdAt: now,
