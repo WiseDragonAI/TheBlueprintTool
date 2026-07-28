@@ -183,6 +183,8 @@ test('clean local prompt admission persists and injects one immutable snapshot w
       ledgerId: 'specs',
       sourceCardId: 'source-card',
       sourceCardTitle: 'Source Card',
+      outputParentCardId: 'source-card',
+      firstOutputSubtaskPosition: 1,
       ledgerPath: join(fixture.decisionOsRoot, 'specs.json'),
       admittedPromptSnapshots: admitted,
     });
@@ -207,7 +209,9 @@ test('clean local prompt admission persists and injects one immutable snapshot w
       stepTitle: manifest.steps[0].name,
       stepInputCardId: manifest.sourceCardId,
       stepInputCardContent: 'Input',
+      outputParentCardId: manifest.outputParentCardId,
       outputCardId: manifest.steps[0].outputCardId,
+      outputSubtaskPosition: manifest.steps[0].outputSubtaskPosition,
       outputMarkdownFile: join(fixture.decisionOsRoot, 'output.md'),
     });
     assert.equal(processPrompt.split(snapshot.promptSnapshot).length - 1, 1);
@@ -215,6 +219,60 @@ test('clean local prompt admission persists and injects one immutable snapshot w
     assert.deepEqual(readCodexPipelineStore({ decisionOsRoot: fixture.decisionOsRoot }).store.runs, []);
   } finally {
     rmSync(fixture.workspace, { recursive: true, force: true });
+  }
+});
+
+test('direct card processing admits a pipeline prompt as a temporary one-step run', async () => {
+  const previousCodexBin = process.env.CODEX_BIN;
+  const fixture = createPromptRepository({ prefix: 'decision-os-direct-prompt-' });
+  const runnerRoot = mkdtempSync(join(tmpdir(), 'decision-os-direct-prompt-runner-'));
+  const fakeCodex = join(runnerRoot, 'fake-codex.mjs');
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { writeFileSync } from "node:fs";',
+    'let prompt = "";',
+    'process.stdin.on("data", (chunk) => { prompt += chunk; });',
+    'process.stdin.on("end", () => {',
+    '  const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    '  writeFileSync(output.trim(), prompt.includes("# Review output") ? "pipeline prompt seen\\n" : "pipeline prompt missing\\n");',
+    '  console.log(JSON.stringify({ type: "turn.completed" }));',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = { decisionOsRoot: fixture.decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const response = await fetch(`${baseUrl}/api/codex/skills/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ledgerId: 'specs',
+        cardId: 'source-card',
+        skillName: 'review-output',
+        contentKind: 'pipeline-prompt',
+      }),
+    });
+    const body = await response.json() as Record<string, any>;
+    assert.equal(response.status, 202, JSON.stringify(body));
+    const runSkill = body.pipelineRun.steps[0].skills[0];
+    assert.equal(runSkill.contentKind, 'pipeline-prompt');
+    assert.match(runSkill.promptSnapshot, /# Review output/);
+    await waitFor(() => {
+      if (!existsSync(body.run.outputFile)) return null;
+      const output = readFileSync(body.run.outputFile, 'utf8');
+      return output.includes('pipeline prompt seen') ? output : null;
+    }, 'direct prompt output');
+    assert.match(readFileSync(body.run.outputFile, 'utf8'), /^pipeline prompt seen\n/);
+  } finally {
+    await closeServer(server);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(fixture.workspace, { recursive: true, force: true });
+    rmSync(runnerRoot, { recursive: true, force: true });
   }
 });
 
@@ -235,7 +293,9 @@ test('local prompt construction rejects corrupted immutable evidence before proc
     stepTitle: 'Prompt step',
     stepInputCardId: 'source-card',
     stepInputCardContent: 'Input',
+    outputParentCardId: 'source-card',
     outputCardId: 'output-card',
+    outputSubtaskPosition: 1,
     outputMarkdownFile: '/output.md',
   };
   const cases: Array<[string, Partial<typeof valid>, RegExp]> = [

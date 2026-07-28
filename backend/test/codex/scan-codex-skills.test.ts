@@ -128,7 +128,8 @@ test('one server skill wins in every managed project and supplies exact run inst
       promptSnapshot,
       ledgerFile: '/ledger.json', pipelineRunId: 'run', pipelineName: 'Pipeline',
       sourceCardId: 'source', sourceCardTitle: 'Source', stepId: 'step', stepTitle: 'Step',
-      stepInputCardId: 'input', stepInputCardContent: 'Input', outputCardId: 'output', outputMarkdownFile: '/output.md',
+      stepInputCardId: 'input', stepInputCardContent: 'Input', outputParentCardId: 'source',
+      outputCardId: 'output', outputSubtaskPosition: 1, outputMarkdownFile: '/output.md',
     });
     assert.equal(injected.startsWith('$pipeline-only'), false);
     assert.match(injected, /intentionally unavailable to natural Codex skill discovery/);

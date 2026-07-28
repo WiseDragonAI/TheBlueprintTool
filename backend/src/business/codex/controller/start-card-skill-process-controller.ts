@@ -3,6 +3,7 @@
  * WHY: Direct and saved workflows must share durable lifecycle, locking, defaults, logs, and resume behavior.
  */
 import { resolve } from 'node:path';
+import { codexContentKinds, type CodexContentKind } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { isAllowedCodexEffort, isAllowedCodexModel } from '../helper/resolve-codex-command.js';
 import { outputFileForPipelineCard, resolvePipelineLedgerContext } from '../helper/codex-pipeline-runner.js';
 import { startTemporaryPipelineRun } from './start-codex-pipeline-run-controller.js';
@@ -30,6 +31,10 @@ export async function startCardSkillProcessController(
   }
   const codexModel = optionalText(payload.codexModel);
   const codexEffort = optionalText(payload.codexEffort);
+  const requestedContentKind = optionalText(payload.contentKind);
+  if (requestedContentKind && !codexContentKinds.includes(requestedContentKind as CodexContentKind)) {
+    return { ok: false, statusCode: 400, error: 'Unsupported content kind.', contentKind: requestedContentKind };
+  }
   // WHAT: Reject explicit options outside the shared Codex catalog.
   // WHY: Temporary manifests must contain executable immutable option snapshots.
   if (codexModel && !isAllowedCodexModel(codexModel)) {
@@ -46,6 +51,7 @@ export async function startCardSkillProcessController(
     ledgerId,
     sourceCardId: cardId,
     skillName,
+    contentKind: requestedContentKind ? requestedContentKind as CodexContentKind : undefined,
     codexModel: explicitCodexModel,
     codexEffort: explicitCodexEffort,
     onLedgerChange: payload.onLedgerChange,

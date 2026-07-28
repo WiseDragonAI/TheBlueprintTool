@@ -433,7 +433,7 @@ test('Process card derives source content, reloads skill defaults on reopen, and
       }
       if (url === '/api/codex/skills') {
         catalogVersion += 1;
-        const skills = catalog.map((skill, index) => index === 0
+        const skills = [...catalog, pipelinePrompt].map((skill, index) => index === 0
           ? { ...skill, effectiveCodexModel: catalogVersion === 1 ? 'gpt-5.5' : 'gpt-5.6-sol', effectiveCodexEffort: catalogVersion === 1 ? 'high' : 'ultra' }
           : skill);
         return new Response(JSON.stringify({ ok: true, skills }), { status: 200 });
@@ -457,6 +457,7 @@ test('Process card derives source content, reloads skill defaults on reopen, and
     assert.equal(pipelinesPanel?.hidden, true);
     assert.equal(pipelinesPanel?.getAttribute('aria-labelledby'), 'process-tab-pipelines');
     assert.equal(processModalState.mode, 'skills');
+    assert.ok(fakeDocument.processModal.querySelector('[data-process-skill-name="pipeline-outline"]'));
     assert.equal(processModalState.codexModel, 'gpt-5.5');
     assert.equal(processModalState.codexEffort, 'high');
     const directSelects = fakeDocument.processModal.querySelectorAll('.process-run-controls select');
@@ -576,6 +577,7 @@ test('direct skill defaults remain inherited until the operator sets a one-run o
       return new Response(JSON.stringify({ ok: false, error: 'Fixture stop.' }), { status: 400 });
     }) as typeof fetch;
     assert.equal(await processSelectedCardSkill(), false);
+    assert.equal(bodies[0].contentKind, 'workspace-skill');
     assert.equal('codexModel' in bodies[0], false);
     assert.equal('codexEffort' in bodies[0], false);
 
@@ -585,6 +587,40 @@ test('direct skill defaults remain inherited until the operator sets a one-run o
     assert.equal(await processSelectedCardSkill(), false);
     assert.equal(bodies[1].codexModel, 'gpt-5.6-sol');
     assert.equal('codexEffort' in bodies[1], false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    state.activeTab = previousTab;
+  }
+});
+
+test('pipeline-only prompts remain hidden from agent discovery but can directly process a card', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousTab = state.activeTab;
+  const bodies: Array<Record<string, unknown>> = [];
+  try {
+    state.activeTab = 'specs';
+    Object.assign(processModalState, {
+      cardId: 'card-source',
+      mode: 'skills',
+      skills: [...catalog, pipelinePrompt],
+      selectedSkillName: '',
+      sourceContentMissing: false,
+      loadingSkills: false,
+      processing: false,
+      error: '',
+    });
+    selectProcessSkill(pipelinePrompt.name, false);
+    renderCardProcessModal();
+    assert.ok(fakeDocument.processModal.querySelector('[data-process-skill-name="pipeline-outline"]'));
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      assert.equal(url, '/api/codex/skills/process');
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ ok: false, error: 'Fixture stop.' }), { status: 400 });
+    }) as typeof fetch;
+
+    assert.equal(await processSelectedCardSkill(), false);
+    assert.equal(bodies[0].skillName, 'pipeline-outline');
+    assert.equal(bodies[0].contentKind, 'pipeline-prompt');
   } finally {
     globalThis.fetch = previousFetch;
     state.activeTab = previousTab;

@@ -223,6 +223,20 @@ function safeRegularFile(file: string, missingCode: string): void {
   }
 }
 
+function samePipelinePromptRegistration(left: AnyRecord | undefined, right: AnyRecord | undefined): boolean {
+  return Boolean(
+    left
+    && right
+    && left.id === right.id
+    && left.kind === 'pipeline-prompt'
+    && right.kind === 'pipeline-prompt'
+    && left.description === right.description
+    && left.contentFile === right.contentFile
+    && left.createdAt === right.createdAt
+    && left.updatedAt === right.updatedAt,
+  );
+}
+
 export async function admitPipelinePromptSnapshots(input: {
   ownerDecisionOsRoot: string;
   steps: readonly CodexPipelineStep[];
@@ -436,9 +450,30 @@ export async function admitPipelinePromptSnapshots(input: {
       );
     }
 
+    let committedRecord: AnyRecord | undefined;
+    try {
+      const committedRaw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(headStore.stdout, 'utf8'))) as AnyRecord;
+      const committed = normalizeCodexPipelineStore(committedRaw);
+      if (codexPipelineStoreWriteBlocker(committed)) throw new Error('invalid committed pipeline store');
+      committedRecord = committed.store.authoredContent.find((entry) => entry.id === name) as AnyRecord | undefined;
+    } catch {
+      throw new PipelinePromptAdmissionError(
+        'pipeline_prompt_uncommitted',
+        409,
+        `Pipeline prompt ${name} has no valid registration in HEAD.`,
+      );
+    }
+    if (!samePipelinePromptRegistration(record as AnyRecord, committedRecord)) {
+      throw new PipelinePromptAdmissionError(
+        'pipeline_prompt_dirty',
+        409,
+        `Pipeline prompt ${name} registration differs from HEAD.`,
+      );
+    }
+
     const clean = await git({
       cwd: context.root,
-      args: ['diff', '--quiet', commit, '--', promptPath, storePath],
+      args: ['diff', '--quiet', commit, '--', promptPath],
       operation: 'verify-clean-content',
       signal: input.signal,
     });
@@ -447,7 +482,7 @@ export async function admitPipelinePromptSnapshots(input: {
         throw new PipelinePromptAdmissionError(
           'pipeline_prompt_dirty',
           409,
-          `Pipeline prompt ${name} or its registration differs from HEAD.`,
+          `Pipeline prompt ${name} differs from HEAD.`,
         );
       }
       throw new PipelinePromptAdmissionError(
@@ -457,7 +492,7 @@ export async function admitPipelinePromptSnapshots(input: {
       );
     }
     if (!Buffer.from(headPrompt.stdout, 'utf8').equals(promptBytes)
-      || !Buffer.from(headStore.stdout, 'utf8').equals(storeBytes)) {
+      || !readFileSync(storeFile).equals(storeBytes)) {
       throw new PipelinePromptAdmissionError(
         'pipeline_prompt_stale',
         409,

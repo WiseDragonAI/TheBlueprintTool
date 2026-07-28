@@ -554,6 +554,7 @@ export async function startTemporaryPipelineRun(input: {
   ledgerId: string;
   sourceCardId: string;
   skillName: string;
+  contentKind?: CodexContentKind;
   codexModel?: CodexModel | null;
   codexEffort?: CodexEffort | null;
   onLedgerChange?: unknown;
@@ -579,7 +580,7 @@ export async function startTemporaryPipelineRun(input: {
         skills: [{
           id: `temporary-skill-${safeSegment(input.skillName)}`,
           skillName: input.skillName,
-          contentKind: 'federated-skill',
+          contentKind: input.contentKind ?? 'federated-skill',
           codexModel: input.codexModel ?? null,
           codexEffort: input.codexEffort ?? null,
         }],
