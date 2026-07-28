@@ -120,3 +120,12 @@ export type TaskExecutionPresentation = {
   readonly execution: TaskExecutionPresentationMetadata;
   readonly events: readonly TaskExecutionPresentationEvent[];
 };
+
+/**
+ * WHAT: Carries one bounded executor-produced presentation update across the existing observation lane.
+ * WHY: Replica backends must answer browser polling locally without persisting a second execution authority.
+ */
+export type TaskExecutionPresentationUpdate = {
+  readonly reset: boolean;
+  readonly events: readonly TaskExecutionPresentationEvent[];
+};

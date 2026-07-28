@@ -8,6 +8,7 @@ import { requestCardSkillRunStatus, type CardSkillRunStatus, type CardSkillRunSu
 import { requestCardSkillRunCancel } from './request-card-skill-run-cancel.js';
 import { requestCardSkillRunContinue } from './request-card-skill-run-continue.js';
 import { activeCardCodexRunPreference } from '../helper/card-codex-run-preference.js';
+import { requestTaskExecutionPresentation } from './request-task-execution-state.js';
 import {
   requestCodexPipelineRunCancel,
   requestCodexPipelineRunRestart,
@@ -1059,6 +1060,10 @@ async function pollPipelineStep(poller: PipelineStepPoller): Promise<void> {
   poller.inFlight = false;
   setPipelineButtonState(retryButton(poller.element), false, 'Retry status', 'Checking');
   if (!result.ok || !result.run) {
+    if (result.error === 'pipeline_presentation_synchronizing') {
+      schedulePipelinePoll(poller, 500);
+      return;
+    }
     poller.terminal = true;
     paintPipelineError(poller, result.error || 'Pipeline status could not be loaded.');
     telemetry('codex-pipeline-widget-status-failed', { pipelineRunId: poller.pipelineRunId, cardId: poller.cardId, error: result.error ?? '' });
@@ -1090,24 +1095,28 @@ async function pollPipelineStep(poller: PipelineStepPoller): Promise<void> {
       schedulePipelinePoll(poller, 500);
       return;
     }
-    const summary = await requestCardSkillRunStatus({
+    const presentation = await requestTaskExecutionPresentation({
       projectId: poller.projectId,
       replicaNodeId: poller.replicaNodeId,
-      ledgerId: poller.ledgerId,
-      cardId: poller.cardId,
-      runId: skill.runId,
-      since: poller.since,
+      executionId: skill.executionId,
     });
-    if (!summary.ok) {
-      paintPipelineError(poller, summary.error || 'The active skill log could not be read.', { keepCancel: result.canCancel });
+    if ('error' in presentation) {
+      paintPipelineError(poller, presentation.error || 'The active skill log could not be read.', { keepCancel: result.canCancel });
       schedulePipelinePoll(poller);
       return;
     }
-    poller.since = Math.max(poller.since, summary.nextSince, summary.lineCount);
-    setText(poller.element, '[data-codex-run-tools]', String(summary.toolCallCount));
-    setText(poller.element, '[data-codex-run-messages]', String(summary.agentMessageCount + summary.thinkingCount));
-    setText(poller.element, '[data-codex-run-files]', String(summary.fileChangeCount));
-    setText(poller.element, '[data-codex-run-latest]', latestEventLabel(summary));
+    const counts = presentation.value.execution.counts;
+    const latest = presentation.value.events.at(-1);
+    setText(poller.element, '[data-codex-run-tools]', String(counts.tools));
+    setText(poller.element, '[data-codex-run-messages]', String(counts.messages + counts.thinking));
+    setText(poller.element, '[data-codex-run-files]', String(counts.files));
+    setText(
+      poller.element,
+      '[data-codex-run-latest]',
+      latest
+        ? latest.kind === 'tool_call' ? latest.command : latest.title || latest.kind
+        : 'Waiting for output',
+    );
   }
   const pipelineTerminal = result.run.status === 'complete' || result.run.status === 'failed' || result.run.status === 'cancelled';
   poller.terminal = pipelineTerminal;

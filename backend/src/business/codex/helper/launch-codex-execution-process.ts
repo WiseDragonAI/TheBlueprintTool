@@ -19,6 +19,7 @@ import { codexRunSegmentMarker, codexRunTurnStartedMarker, type CodexRunSegment,
 import { createTerminalCodexProcessReconciler, signalCodexProcessTree, type TerminalCodexStatus } from './reconcile-terminal-codex-process.js';
 import type { CodexCommand } from './resolve-codex-command.js';
 import { codexExecutionTimeoutMs, reportCodexBackgroundFailure } from './codex-runtime-run-store.js';
+import { taskExecutionState } from './task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -184,9 +185,11 @@ export async function launchCodexExecutionProcess(input: {
     ledgerPath: input.ledgerPath,
     cardId: input.cardId,
     runId: input.runId,
+    executionId: input.executionId,
     startLine: input.startLine,
     telemetryFile: input.telemetryFile ?? `${input.stdoutFile}.telemetry.jsonl`,
-    projectId: String(input.runtime.projectId ?? ''),
+    projectId: taskExecutionState(input.runtime)?.executions.find(input.executionId)?.metadata.projectId
+      ?? String(input.runtime.projectId ?? ''),
     runtime: input.runtime,
     onTerminalEvent: terminalReconciler.observe,
     onTurnStarted: (event, observedAt) => {

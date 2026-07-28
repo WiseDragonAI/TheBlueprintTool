@@ -4,6 +4,7 @@
  */
 import { createHash, randomUUID, type Hash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { mkdir, open, rename, rm, type FileHandle } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import WebSocket from 'ws';
@@ -11,6 +12,7 @@ import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
 import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 import { taskCurrentBaselineEpoch, taskCurrentStateVersion, taskStateProtocol } from '../../task-state/helper/task-current-state-types.js';
 import type { TaskExecutionObservation } from '../../../../../shared/schemas/task-execution-types.js';
+import type { TaskExecutionPresentationUpdate } from '../../../../../shared/schemas/task-execution-presentation-types.js';
 
 type ProjectManifest = Pick<DecisionOsProject, 'id' | 'name' | 'description' | 'color' | 'ledgers' | 'originFingerprint'>;
 type RelayFrame = {
@@ -50,7 +52,12 @@ export type FederationExecutionObservationFrame = {
   type: 'state-execution-observation';
   from: string;
   projectId: string;
-  payload: { executionId: string; observation: TaskExecutionObservation | null };
+  payload: {
+    executionId: string;
+    observation?: TaskExecutionObservation | null;
+    presentation?: TaskExecutionPresentationUpdate;
+    pipeline?: { runId: string; result: Record<string, unknown> };
+  };
 };
 
 export type FederationSettings = {
@@ -207,6 +214,7 @@ export function createFederationNodeConnector(input: {
   onStateFrame?: (frame: FederationStateFrame) => void | Promise<void>;
   onExecutionObservation?: (frame: FederationExecutionObservationFrame) => void;
   onError?: (error: unknown, context: { operation: string; frameType?: string }) => void;
+  catalogFile?: string;
   internalRequestTimeoutMs?: number;
   flowControlTimeoutMs?: number;
   ownerRequestTimeoutMs?: number;
@@ -238,6 +246,65 @@ export function createFederationNodeConnector(input: {
 
   const reportError = (error: unknown, operation: string, frameType = ''): void => {
     try { input.onError?.(error, { operation, ...(frameType ? { frameType } : {}) }); } catch { /* Error reporting cannot fail the connector. */ }
+  };
+
+  let catalogWritable = true;
+  if (input.catalogFile && existsSync(input.catalogFile)) {
+    try {
+      const retained = JSON.parse(readFileSync(input.catalogFile, 'utf8')) as {
+        version?: unknown;
+        federationId?: unknown;
+        nodes?: Array<{ nodeId?: unknown; nodeLabel?: unknown; projects?: unknown }>;
+      };
+      if (retained.version !== 1
+        || String(retained.federationId ?? '') !== String(settings?.federationId ?? '')
+        || !Array.isArray(retained.nodes)) throw new Error('invalid_federation_project_catalog');
+      for (const node of retained.nodes) {
+        const nodeId = String(node.nodeId ?? '').trim();
+        if (!nodeId
+          || nodeId === settings?.nodeId
+          || !Array.isArray(node.projects)
+          || node.projects.some((project) => {
+            if (!project || typeof project !== 'object' || Array.isArray(project)) return true;
+            const manifest = project as Record<string, unknown>;
+            return !String(manifest.id ?? '').trim()
+              || typeof manifest.name !== 'string'
+              || typeof manifest.description !== 'string'
+              || typeof manifest.color !== 'string'
+              || !Array.isArray(manifest.ledgers)
+              || typeof manifest.originFingerprint !== 'string';
+          })) throw new Error('invalid_federation_project_catalog_node');
+        remoteNodes.set(nodeId, {
+          nodeLabel: String(node.nodeLabel || nodeId),
+          online: false,
+          projects: node.projects as ProjectManifest[],
+        });
+      }
+    } catch (error) {
+      catalogWritable = false;
+      remoteNodes.clear();
+      reportError(error, 'read-retained-project-catalog');
+    }
+  }
+
+  const persistRemoteCatalog = (): void => {
+    if (!input.catalogFile || !catalogWritable) return;
+    const temporary = `${input.catalogFile}.tmp`;
+    try {
+      mkdirSync(dirname(input.catalogFile), { recursive: true });
+      writeFileSync(temporary, JSON.stringify({
+        version: 1,
+        federationId: settings?.federationId ?? '',
+        nodes: [...remoteNodes].map(([nodeId, node]) => ({
+          nodeId,
+          nodeLabel: node.nodeLabel,
+          projects: node.projects,
+        })),
+      }, null, 2) + '\n', 'utf8');
+      renameSync(temporary, input.catalogFile);
+    } catch (error) {
+      reportError(error, 'persist-project-catalog');
+    }
   };
 
   const setPhase = (value: FederationConnectionPhase): void => {
@@ -391,6 +458,7 @@ export function createFederationNodeConnector(input: {
       for (const node of frame.nodes ?? []) {
         if (node.nodeId !== settings?.nodeId) remoteNodes.set(node.nodeId, { nodeLabel: String(node.nodeLabel || node.nodeId), online: node.online, projects: node.projects });
       }
+      persistRemoteCatalog();
       input.onRemoteCatalogChange?.();
       return;
     }
@@ -748,7 +816,7 @@ export function createFederationNodeConnector(input: {
       connectedAt = null;
       nextRetryAt = null;
       connectionStartedAt = null;
-      remoteNodes.clear();
+      for (const stream of remoteNodes.values()) stream.online = false;
       setPhase(settings ? 'disconnected' : 'not_configured');
     },
     reconfigure(value: unknown): void {

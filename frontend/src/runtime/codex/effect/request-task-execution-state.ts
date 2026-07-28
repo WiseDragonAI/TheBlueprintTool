@@ -32,7 +32,9 @@ async function requestJson<T>(input: {
       replicaRequestInit({ cache: 'no-store', signal: abort.signal }, input.replicaNodeId),
     );
     const body = await response.json().catch(() => ({})) as Record<string, unknown>;
-    if (!response.ok) return { ok: false, error: String(body.error ?? `Request failed with HTTP ${response.status}.`) };
+    if (!response.ok || body.ok === false) {
+      return { ok: false, error: String(body.error ?? `Request failed with HTTP ${response.status}.`) };
+    }
     return { ok: true, value: body as T };
   } catch (error) {
     return {

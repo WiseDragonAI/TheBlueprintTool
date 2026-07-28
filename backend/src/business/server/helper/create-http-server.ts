@@ -66,8 +66,15 @@ import { cancelTaskExecutionLocally } from '../../codex/helper/cancel-task-execu
 import { projectTaskExecutionState } from '../../codex/helper/project-task-execution-state.js';
 import { buildTaskExecutionPresentation } from '../../codex/helper/task-execution-presentation.js';
 import { taskExecutionPresentationHttpResult } from '../../codex/helper/task-execution-presentation-http-result.js';
+import {
+  applyTaskExecutionPresentationUpdate,
+  isTaskExecutionPresentationUpdate,
+  replicatedTaskExecutionPresentation,
+} from '../../codex/helper/replicated-task-execution-presentation.js';
+import { replicatedCardSkillRunStatus } from '../../codex/helper/replicated-card-skill-run-status.js';
 import { executeFederatedPipelineSkill } from '../../codex/helper/codex-pipeline-runner.js';
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import type { TaskExecutionPresentation, TaskExecutionPresentationEvent } from '../../../../../shared/schemas/task-execution-presentation-types.js';
 import type { TaskEntityChange, TaskExecutionMetadata } from '../../task-state/helper/task-current-state-types.js';
 import { resolveCatalogProject, tasksLedgerForProject, type DecisionOsProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
@@ -317,6 +324,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   type ExecutionState = Pick<ProjectTaskState, 'executions' | 'finalizeExecutionArtifacts'>;
   const federatedExecutionStates = new Map<string, ExecutionState>();
   const federatedExecutionObservations = new Map<string, TaskExecutionObservation>();
+  const federatedExecutionPresentations = new Map<string, TaskExecutionPresentationEvent[]>();
+  const federatedPipelinePresentations = new Map<string, AnyRecord>();
+  const terminalArtifactHydrations = new Map<string, Promise<void>>();
   const pausedTaskProjects = new Map<string, RuntimeIncident>();
   const pausedFederatedTaskProjects = new Map<string, RuntimeIncident>();
   const pausedBackgroundComponents = new Set<string>();
@@ -329,6 +339,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   let globalRuntimeIncident: RuntimeIncident | null = null;
   let projectSyncController: ReturnType<typeof createProjectSyncController> | null = null;
   let resumeProjectSyncRuntime: (() => void) | null = null;
+  let publishExecutionPresentationSnapshot = (
+    _projectId: string,
+    _executionId: string,
+    _record: ReturnType<ProjectTaskState['executions']['find']>,
+  ): void => {};
+  let publishPipelineRunSnapshot = (
+    _projectId: string,
+    _pipelineRunId: string,
+    _executionId: string,
+  ): void => {};
+  let scheduleTerminalArtifactHydration = (
+    _projectId: string,
+    _executorNodeId: string,
+    _record: ReturnType<ProjectTaskState['executions']['find']>,
+  ): void => {};
 
   const disposeProjectContext = (context: ProjectContext): void => {
     stopCodexRuntimeTimers(context.runtime);
@@ -462,6 +487,55 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         // A disconnected event client cannot fail the committed execution transition.
       }
     }
+    if (input.record && input.record.lifecycle.executorNodeId === (federation?.localOwner().ownerNodeId ?? 'local')) {
+      publishExecutionPresentationSnapshot(input.projectId, input.executionId, input.record);
+    }
+    if (input.record?.metadata.pipelineRunId) {
+      publishPipelineRunSnapshot(input.projectId, input.record.metadata.pipelineRunId, input.executionId);
+    }
+  };
+
+  const publishTaskExecutionPresentationEvents = (input: {
+    projectId: string;
+    executionId: string;
+    events: readonly TaskExecutionPresentationEvent[];
+    reset?: boolean;
+  }): void => {
+    if (!input.projectId || !input.executionId || !federation) return;
+    const chunks = Array.from(
+      { length: Math.max(1, Math.ceil(input.events.length / 128)) },
+      (_, index) => input.events.slice(index * 128, (index + 1) * 128),
+    );
+    chunks.forEach((events, index) => {
+      federation?.publishExecutionObservation(input.projectId, {
+        executionId: input.executionId,
+        presentation: {
+          reset: input.reset === true && index === 0,
+          events,
+        },
+      });
+    });
+  };
+
+  const locallyHydratedTaskExecutionPresentation = (
+    state: Pick<ProjectTaskState, 'executions'>,
+    execution: NonNullable<ReturnType<ProjectTaskState['executions']['find']>>,
+  ): TaskExecutionPresentation | null => {
+    if (!['succeeded', 'failed', 'cancelled', 'interrupted'].includes(execution.lifecycle.phase)) return null;
+    const heads = [execution.artifacts.jsonl, execution.artifacts.stderr].filter((head) => head !== null);
+    if (heads.some((head) => !existsSync(federationContentStore.objectFile(head.hash)))) return null;
+    const artifactRuntime: AnyRecord = {
+      taskExecutionNodeId: federation?.localOwner().ownerNodeId ?? 'local',
+      taskExecutionArtifactFile: (hash: string) => /^[a-f0-9]{64}$/i.test(hash)
+        ? federationContentStore.objectFile(hash)
+        : '',
+    };
+    const result = buildTaskExecutionPresentation({
+      executionId: execution.metadata.executionId,
+      state,
+      runtime: artifactRuntime,
+    });
+    return 'presentation' in result ? result.presentation : null;
   };
 
   const scheduleTaskContentHeadRepair = (projectId: string, state: ProjectTaskState): void => {
@@ -1049,6 +1123,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const invalidationRevision = ledgerId ? revisions.advance(ledgerId) : 0;
       broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId, invalidationRevision })}\n\n`);
       federation?.publishContentChange();
+      const pipelineRunId = String(event.pipelineRunId ?? '');
+      if (pipelineRunId) {
+        publishPipelineRunSnapshot(projectId, pipelineRunId, String(event.executionId ?? ''));
+      }
     };
     let activeTaskState: ProjectTaskState | null = null;
     if (projectId) {
@@ -1116,6 +1194,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     projectRuntime.onPipelineLedgerChange = publishLedger;
     projectRuntime.scheduleCodexProcesses = scheduleGlobalCodexProcesses;
+    projectRuntime.publishTaskExecutionPresentationEvents = (event: AnyRecord): void => {
+      publishTaskExecutionPresentationEvents({
+        projectId: String(event.projectId ?? ''),
+        executionId: String(event.executionId ?? ''),
+        events: Array.isArray(event.events) ? event.events as TaskExecutionPresentationEvent[] : [],
+      });
+    };
     projectRuntime.onCodexRunAccepted = (event: AnyRecord): void => {
       publishLedger({
         reason: 'codex-run-accepted', ledgerId: String(event.ledgerId ?? ''), runId: String(event.runId ?? ''),
@@ -1242,6 +1327,58 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       : recoverCodexStartup();
     startupProjectTasks.push(startupTask);
     return context;
+  };
+  publishExecutionPresentationSnapshot = (projectId, executionId, record): void => {
+    if (!record || record.lifecycle.executorNodeId !== (federation?.localOwner().ownerNodeId ?? 'local')) return;
+    const localProject = projectCatalogStore.projects().find((project) => project.id === projectId);
+    const executionRuntime = federatedSchedulerContexts.get(executionId)?.runtime
+      ?? (localProject ? projectContexts.get(localProject.decisionOsRoot)?.runtime : null);
+    const state = executionStateForProject(projectId, record.lifecycle.executorNodeId);
+    if (!executionRuntime || !state) return;
+    queueMicrotask(() => {
+      try {
+        const result = buildTaskExecutionPresentation({ executionId, state, runtime: executionRuntime });
+        if ('presentation' in result) {
+          publishTaskExecutionPresentationEvents({
+            projectId,
+            executionId,
+            events: result.presentation.events,
+            reset: true,
+          });
+        }
+      } catch (error) {
+        recordStoppedOperation({
+          scope: `task-execution-presentation-publish:${projectId}:${executionId}`,
+          component: 'task-execution-presentation',
+          operation: 'publish-execution-presentation-snapshot',
+          error,
+          context: { projectId, executionId },
+        });
+      }
+    });
+  };
+  publishPipelineRunSnapshot = (projectId, pipelineRunId, executionId): void => {
+    const localProject = projectCatalogStore.projects().find((project) => project.id === projectId && project.available);
+    const pipelineRuntime = localProject ? projectContexts.get(localProject.decisionOsRoot)?.runtime : null;
+    if (!localProject || !pipelineRuntime || !federation || !pipelineRunId) return;
+    void readCodexPipelineRunController({
+      action_payload: { runId: pipelineRunId },
+      runtime_state: pipelineRuntime,
+    }).then((result) => {
+      if (result.ok !== true) return;
+      federation?.publishExecutionObservation(projectId, {
+        executionId,
+        pipeline: { runId: pipelineRunId, result },
+      });
+    }).catch((error: unknown) => {
+      recordStoppedOperation({
+        scope: `pipeline-presentation-publish:${projectId}:${pipelineRunId}`,
+        component: 'codex-pipeline-presentation',
+        operation: 'publish-pipeline-presentation-snapshot',
+        error,
+        context: { projectId, pipelineRunId, executionId },
+      });
+    });
   };
   const tryProjectContext = (project: DecisionOsProject, operation: string): ProjectContext | null => {
     if (pausedProjectWatchers.has(project.id) || pausedProjectRuntimes.has(project.id)) return null;
@@ -1471,10 +1608,30 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     Object.defineProperty(runtime, 'federatedLibrarySyncPromise', { value: run, writable: true, configurable: true, enumerable: false });
     return run;
   };
+  const publishLocalExecutionPresentationSnapshots = (): void => {
+    const localNodeId = federation?.localOwner().ownerNodeId ?? 'local';
+    const pipelineRuns = new Map<string, { projectId: string; executionId: string }>();
+    for (const [projectId, state] of [...projectTaskStates, ...federatedExecutionStates]) {
+      for (const record of state.executions.all()) {
+        if (record.lifecycle.executorNodeId === localNodeId) {
+          publishExecutionPresentationSnapshot(projectId, record.metadata.executionId, record);
+        } else {
+          scheduleTerminalArtifactHydration(projectId, record.lifecycle.executorNodeId, record);
+        }
+        if (record.metadata.pipelineRunId) {
+          pipelineRuns.set(record.metadata.pipelineRunId, { projectId, executionId: record.metadata.executionId });
+        }
+      }
+    }
+    for (const [pipelineRunId, identity] of pipelineRuns) {
+      publishPipelineRunSnapshot(identity.projectId, pipelineRunId, identity.executionId);
+    }
+  };
   federation = createFederationNodeConnector({
     settings: runtime.decisionOsSettings,
     localProjects: projectCatalog,
     localServerUrl: () => `http://127.0.0.1:${federationServerPort}`,
+    catalogFile: resolve(masterDecisionOsRoot, 'cache', 'federation-project-catalog.json'),
     onRemoteContentChange: () => {
       for (const client of globalContentEventClients) client.write('event: ledger-content-change\ndata: {"remote":true}\n\n');
     },
@@ -1482,7 +1639,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       for (const project of projectCatalog().filter((entry) => entry.available)) tryTaskStateForProject(project);
       controlRoomProjectionStore?.invalidate();
       federationTaskStateReplicator?.reconcileRelay();
-      for (const projectId of new Set(federation?.remoteProjects().map((project) => project.localProjectId) ?? [])) federationTaskStateReplicator?.reconcileProject('relay', projectId);
+      for (const project of federation?.remoteProjects().filter((entry) => entry.online) ?? []) {
+        federationTaskStateReplicator?.reconcileProject(project.ownerNodeId, project.localProjectId);
+      }
+      publishLocalExecutionPresentationSnapshots();
       if (!pausedBackgroundComponents.has('federated-library-sync')) void synchronizeFederatedLibraries()
         .catch(() => undefined);
       projectSyncController?.resume();
@@ -1512,14 +1672,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     },
     onExecutionObservation: (frame) => {
       const executionId = String(frame.payload?.executionId ?? '').trim();
-      const observation = frame.payload?.observation;
       const key = `${frame.projectId}\0${executionId}\0${frame.from}`;
+      if (!executionId || !frame.projectId || !frame.from) return;
+      const record = executionStateForProject(frame.projectId, frame.from)?.executions.find(executionId) ?? null;
+      let changed = false;
+      const hasObservation = Object.prototype.hasOwnProperty.call(frame.payload, 'observation');
+      const observation = frame.payload?.observation;
       const now = Date.now();
       const observedAt = observation ? Date.parse(observation.observedAt) : Number.NaN;
       const expiresAt = observation ? Date.parse(observation.expiresAt) : Number.NaN;
-      if (!executionId || !frame.projectId || !frame.from) return;
-      if (observation === null) federatedExecutionObservations.delete(key);
-      else if (observation
+      if (hasObservation && observation === null) {
+        federatedExecutionObservations.delete(key);
+        changed = true;
+      } else if (hasObservation && observation
         && observation.executionId === executionId
         && observation.executorNodeId === frame.from
         && (observation.phase === 'starting' || observation.phase === 'running')
@@ -1528,7 +1693,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         && Number.isFinite(expiresAt) && expiresAt > now && expiresAt <= now + 60_000
         && expiresAt > observedAt && expiresAt - observedAt <= 60_000) {
         federatedExecutionObservations.set(key, observation);
-      } else {
+        changed = true;
+      } else if (hasObservation) {
         recordStoppedOperation({
           scope: `federation-execution-observation:${frame.projectId}:${frame.from}`,
           component: 'federation-execution-observation',
@@ -1537,8 +1703,61 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           context: { projectId: frame.projectId, nodeId: frame.from, executionId },
         });
       }
+      if (frame.payload?.presentation !== undefined) {
+        if ((!record || record.lifecycle.executorNodeId === frame.from)
+          && isTaskExecutionPresentationUpdate(frame.payload.presentation)) {
+          federatedExecutionPresentations.set(
+            key,
+            applyTaskExecutionPresentationUpdate(
+              federatedExecutionPresentations.get(key) ?? [],
+              frame.payload.presentation,
+            ),
+          );
+          changed = true;
+        } else {
+          recordStoppedOperation({
+            scope: `federation-execution-presentation:${frame.projectId}:${frame.from}`,
+            component: 'federation-execution-presentation',
+            operation: 'validate-execution-presentation',
+            error: new Error('invalid_federated_execution_presentation'),
+            context: { projectId: frame.projectId, nodeId: frame.from, executionId },
+          });
+        }
+      }
+      if (frame.payload?.pipeline !== undefined) {
+        const pipeline = frame.payload.pipeline;
+        const result = pipeline?.result;
+        const run = result?.run;
+        const sourceOwnsProject = federation?.remoteProjects().some((project) => (
+          project.ownerNodeId === frame.from && project.localProjectId === frame.projectId
+        )) === true;
+        let bytes = Number.POSITIVE_INFINITY;
+        try { bytes = Buffer.byteLength(JSON.stringify(result)); } catch { /* Invalid cyclic payloads remain rejected. */ }
+        if (sourceOwnsProject
+          && typeof pipeline.runId === 'string'
+          && pipeline.runId.length > 0
+          && pipeline.runId.length <= 256
+          && result && typeof result === 'object' && !Array.isArray(result)
+          && run && typeof run === 'object' && !Array.isArray(run)
+          && String((run as AnyRecord).id ?? '') === pipeline.runId
+          && bytes <= 256 * 1024) {
+          federatedPipelinePresentations.set(
+            `${frame.projectId}\0${pipeline.runId}\0${frame.from}`,
+            structuredClone(result),
+          );
+          changed = true;
+        } else {
+          recordStoppedOperation({
+            scope: `federation-pipeline-presentation:${frame.projectId}:${frame.from}`,
+            component: 'federation-pipeline-presentation',
+            operation: 'validate-pipeline-presentation',
+            error: new Error('invalid_federated_pipeline_presentation'),
+            context: { projectId: frame.projectId, nodeId: frame.from, pipelineRunId: String(pipeline?.runId ?? '') },
+          });
+        }
+      }
+      if (!changed) return;
       controlRoomProjectionStore?.invalidate(frame.projectId);
-      const record = executionStateForProject(frame.projectId, frame.from)?.executions.find(executionId) ?? null;
       for (const client of globalContentEventClients) client.write(`event: codex-execution-change\ndata: ${JSON.stringify({
         remote: true,
         projectId: frame.projectId,
@@ -1552,7 +1771,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     },
     onStateConnected: () => {
       federationTaskStateReplicator?.reconcileRelay();
-      for (const projectId of new Set(federation?.remoteProjects().map((project) => project.localProjectId) ?? [])) federationTaskStateReplicator?.reconcileProject('relay', projectId);
+      for (const project of federation?.remoteProjects().filter((entry) => entry.online) ?? []) {
+        federationTaskStateReplicator?.reconcileProject(project.ownerNodeId, project.localProjectId);
+      }
+      publishLocalExecutionPresentationSnapshots();
       if (!pausedBackgroundComponents.has('federated-library-sync')) void synchronizeFederatedLibraries().catch(() => undefined);
     },
     onError: (error, context) => {
@@ -1565,6 +1787,38 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
     },
   });
+  scheduleTerminalArtifactHydration = (projectId, executorNodeId, record): void => {
+    if (!record
+      || !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(record.lifecycle.phase)
+      || executorNodeId === federation?.localOwner().ownerNodeId
+      || !federation?.nodes().some((node) => node.nodeId === executorNodeId && node.online)) return;
+    const heads = [record.artifacts.jsonl, record.artifacts.stderr].filter((head) => (
+      head !== null && !existsSync(federationContentStore.objectFile(head.hash))
+    ));
+    if (heads.length === 0) return;
+    const key = `${projectId}\0${record.metadata.executionId}\0${executorNodeId}`;
+    if (terminalArtifactHydrations.has(key)) return;
+    const hydration = Promise.all(heads.map(async (head) => {
+      const result = await federation!.requestToFile(
+        executorNodeId,
+        `/api/federation/content-object?projectId=${encodeURIComponent(projectId)}&hash=${encodeURIComponent(head.hash)}`,
+        federationContentStore.objectFile(head.hash),
+        head.hash,
+      );
+      if (result.status !== 200) throw new Error(`terminal_execution_artifact_fetch_failed:${result.status}`);
+    })).then(() => undefined).catch((error: unknown) => {
+      recordStoppedOperation({
+        scope: `terminal-execution-artifact:${projectId}:${record.metadata.executionId}`,
+        component: 'task-execution-artifact-cache',
+        operation: 'hydrate-terminal-execution-artifacts',
+        error,
+        context: { projectId, executionId: record.metadata.executionId, executorNodeId },
+      });
+    }).finally(() => {
+      terminalArtifactHydrations.delete(key);
+    });
+    terminalArtifactHydrations.set(key, hydration);
+  };
   for (const project of projectCatalog().filter((entry) => entry.available)) tryTaskStateForProject(project);
   const reconcileMergeableTaskConflicts = (
     projectId: string,
@@ -1616,15 +1870,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       controlRoomProjectionStore?.invalidate(projectId, delta.entities);
       for (const executionId of new Set(delta.entities.filter((entity) => entity.entityType === 'execution').map((entity) => entity.entityId))) {
         const executionState = executionStateForProject(projectId, from);
+        const record = executionState?.executions.all().find((candidate) => candidate.metadata.executionId === executionId) ?? null;
         publishExecutionChange({
           projectId,
           nodeId: from,
           executionId,
           // WHAT: Publish only conflict-free execution records while retaining repository diagnostics.
           // WHY: An expected causal execution conflict must not escape federation invalidation and pause the project.
-          record: executionState?.executions.all().find((record) => record.metadata.executionId === executionId) ?? null,
+          record,
           remote: true,
         });
+        scheduleTerminalArtifactHydration(projectId, record?.lifecycle.executorNodeId ?? from, record);
       }
       for (const client of globalContentEventClients) client.write(`event: ledger-content-change\ndata: ${JSON.stringify({ remote: true, projectId, nodeId: from })}\n\n`);
       reconcileMergeableTaskConflicts(projectId, delta.entities);
@@ -2080,13 +2336,137 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       const taskStore = federatedTaskStoreForProject(localProjectId, ownerNodeId);
       const projection = taskStore && taskStore.diagnostics().entityCount > 0 ? taskStore.projection() : null;
+      const remoteTaskExecutionStateRead = request.method === 'GET'
+        ? projectScope.scopedPath.match(/^\/api\/tasks\/([^/]+)\/execution-state$/)
+        : null;
+      if (remoteTaskExecutionStateRead) {
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        const state = federatedTaskStateForProject(localProjectId, ownerNodeId);
+        if (!state || !projection) {
+          response.statusCode = 202;
+          response.end(JSON.stringify({ ok: false, error: 'task_execution_state_synchronizing' }));
+          return;
+        }
+        const requestedCardId = decodeRouteSegment(remoteTaskExecutionStateRead[1]);
+        const taskId = resolveTaskLineage({
+          ledger: projection.ledger,
+          sourceCardId: requestedCardId,
+        }).taskId;
+        response.end(JSON.stringify(projectTaskExecutionState({
+          taskId,
+          state,
+          queuePosition: (record) => {
+            if (record.lifecycle.executorNodeId !== localNodeId) return null;
+            const schedulerRuntime = federatedSchedulerContexts.get(record.metadata.executionId)?.runtime;
+            return schedulerRuntime
+              ? unifiedCodexQueuePosition({
+                decisionOsRoot: String(schedulerRuntime.decisionOsRoot ?? ''),
+                id: record.metadata.executionId,
+                createdAt: record.metadata.requestedAt,
+                runtime: schedulerRuntime,
+              })
+              : null;
+          },
+        })));
+        return;
+      }
+      const remoteTaskExecutionPresentationRead = request.method === 'GET'
+        ? projectScope.scopedPath.match(/^\/api\/task-executions\/([^/]+)$/)
+        : null;
+      if (remoteTaskExecutionPresentationRead) {
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        const executionId = decodeRouteSegment(remoteTaskExecutionPresentationRead[1]);
+        const state = federatedTaskStateForProject(localProjectId, ownerNodeId);
+        const execution = state?.executions.find(executionId) ?? null;
+        if (!state || !execution) {
+          response.statusCode = 404;
+          response.end(JSON.stringify({ ok: false, error: 'task_execution_not_found', executionId }));
+          return;
+        }
+        if (execution.lifecycle.executorNodeId === localNodeId) {
+          const executionRuntime = federatedSchedulerContexts.get(executionId)?.runtime;
+          const result = executionRuntime
+            ? buildTaskExecutionPresentation({ executionId, state, runtime: executionRuntime })
+            : { ok: false as const, statusCode: 202, error: 'task_execution_presentation_synchronizing' };
+          const httpResult = taskExecutionPresentationHttpResult(executionId, result);
+          response.statusCode = httpResult.statusCode;
+          response.end(httpResult.body);
+          return;
+        }
+        const events = federatedExecutionPresentations.get(
+          `${localProjectId}\0${executionId}\0${execution.lifecycle.executorNodeId}`,
+        );
+        if (!events) {
+          const hydrated = locallyHydratedTaskExecutionPresentation(state, execution);
+          if (hydrated) {
+            response.end(JSON.stringify(hydrated));
+            return;
+          }
+          response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, [])));
+          return;
+        }
+        response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, events)));
+        return;
+      }
+      const remotePipelineRunRead = request.method === 'GET'
+        ? projectScope.scopedPath.match(/^\/api\/codex\/pipelines\/runs\/([^/]+)$/)
+        : null;
+      if (remotePipelineRunRead) {
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        const pipelineRunId = decodeRouteSegment(remotePipelineRunRead[1]);
+        const result = federatedPipelinePresentations.get(
+          `${localProjectId}\0${pipelineRunId}\0${ownerNodeId}`,
+        );
+        if (!result) {
+          response.statusCode = 202;
+          response.end(JSON.stringify({ ok: false, error: 'pipeline_presentation_synchronizing', runId: pipelineRunId }));
+          return;
+        }
+        response.end(JSON.stringify(result));
+        return;
+      }
+      const remoteCardSkillRunRead = request.method === 'GET'
+        ? projectScope.scopedPath.match(/^\/api\/codex\/skills\/runs\/([^/]+)$/)
+        : null;
+      if (remoteCardSkillRunRead) {
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        const runId = decodeRouteSegment(remoteCardSkillRunRead[1]);
+        const ledgerId = requestUrl.searchParams.get('ledgerId') ?? '';
+        const cardId = requestUrl.searchParams.get('cardId') ?? '';
+        const state = federatedTaskStateForProject(localProjectId, ownerNodeId);
+        const execution = state?.executions.bySessionId(runId)
+          .filter((candidate) => candidate.metadata.ledgerId === ledgerId
+            && (candidate.metadata.sourceCardId === cardId || candidate.metadata.ownerCardId === cardId))
+          .sort((left, right) => right.metadata.requestedAt.localeCompare(left.metadata.requestedAt)
+            || right.metadata.executionId.localeCompare(left.metadata.executionId))[0] ?? null;
+        if (!state || !execution) {
+          response.statusCode = 404;
+          response.end(JSON.stringify({ ok: false, error: 'Execution not found.', runId }));
+          return;
+        }
+        const events = federatedExecutionPresentations.get(
+          `${localProjectId}\0${execution.metadata.executionId}\0${execution.lifecycle.executorNodeId}`,
+        ) ?? locallyHydratedTaskExecutionPresentation(state, execution)?.events ?? [];
+        response.end(JSON.stringify(replicatedCardSkillRunStatus({
+          runId,
+          ledgerId,
+          cardId,
+          executions: state.executions.all(),
+          events,
+          queuePosition: null,
+        })));
+        return;
+      }
       const relayConvergence = federationTaskStateReplicator?.diagnostics().convergence.find((entry) => entry.peerId === 'relay' && entry.projectId === localProjectId);
       const taskRootReady = Boolean(projection);
       const relayRootCurrent = Boolean(
         relayConvergence?.converged
         && relayConvergence.root === taskStore?.rootHash(),
       );
-      if (!relayRootCurrent) federationTaskStateReplicator?.reconcileProject('relay', localProjectId);
       const taskStateStatus = !remoteProject.online
         ? { status: 'offline', updatedAt: relayConvergence?.lastRepairAt ?? '', message: 'Serving the durable local task replica while its owner is offline.', resource: '', root: relayConvergence?.root ?? '' }
         : relayRootCurrent
@@ -2186,7 +2566,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         return;
       }
       if (replicaRead) {
-        if (!taskRootReady) federationTaskStateReplicator?.reconcileProject('relay', localProjectId);
         response.statusCode = 202;
         response.setHeader('cache-control', 'no-store');
         response.setHeader('content-type', 'application/json');
@@ -2608,7 +2987,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const remoteProjections = requestUrl.searchParams.get('localOnly') === '1' ? [] : federation.remoteProjects().flatMap((project) => {
         const store = federatedTaskStoreForProject(project.localProjectId, project.ownerNodeId);
         if (!store || store.diagnostics().entityCount === 0) {
-          federationTaskStateReplicator?.reconcileProject(project.ownerNodeId, project.localProjectId);
           return [];
         }
         const executionRepository = createTaskExecutionRepository({
@@ -2723,56 +3101,25 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       const executorNodeId = execution.lifecycle.executorNodeId;
       const localExecutorNodeId = federation.localOwner().ownerNodeId;
-      const terminal = ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(execution.lifecycle.phase);
-      if (executorNodeId !== localExecutorNodeId && !terminal) {
-        // WHAT: Proxy an active read to the node that owns the exact process.
-        // WHY: Mutable live artifacts remain executor-local until settlement.
-        const remote = await federation.request(
-          executorNodeId,
-          `/api/internal/task-executions/${encodeURIComponent(executionId)}/presentation?projectId=${encodeURIComponent(execution.metadata.projectId)}`,
+      if (executorNodeId !== localExecutorNodeId) {
+        const events = federatedExecutionPresentations.get(
+          `${execution.metadata.projectId}\0${executionId}\0${executorNodeId}`,
         );
-        response.statusCode = remote.status;
-        response.end(remote.body);
+        if (!events) {
+          const hydrated = locallyHydratedTaskExecutionPresentation(executionState, execution);
+          if (hydrated) {
+            response.end(JSON.stringify(hydrated));
+            return;
+          }
+          response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, [])));
+          return;
+        }
+        response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, events)));
         return;
       }
       // WHAT: Prefer the execution-scoped runtime used by federated pipeline work on this node.
       // WHY: Its live process registry can differ from the project page's ordinary request runtime.
-      let presentationRuntime = federatedSchedulerContexts.get(executionId)?.runtime ?? requestRuntime;
-      if (executorNodeId !== localExecutorNodeId) {
-        try {
-          // WHAT: Fetch only artifacts required to build the terminal presentation.
-          // WHY: Telemetry and result objects add transfer cost without contributing log entries.
-          const heads = [execution.artifacts.jsonl, execution.artifacts.stderr].filter((head) => head !== null);
-          await Promise.all(heads.map((head) => federation.requestToFile(
-            executorNodeId,
-            `/api/federation/content-object?projectId=${encodeURIComponent(execution.metadata.projectId)}&hash=${encodeURIComponent(head.hash)}`,
-            federationContentStore.objectFile(head.hash),
-            head.hash,
-          )));
-          presentationRuntime = Object.create(requestRuntime) as AnyRecord;
-          Object.defineProperty(presentationRuntime, 'taskExecutionArtifactFile', {
-            value: (hash: string) => /^[a-f0-9]{64}$/i.test(hash) ? federationContentStore.objectFile(hash) : '',
-            configurable: true,
-            enumerable: false,
-          });
-        } catch (error) {
-          const incidentId = recordStoppedOperation({
-            scope: `task-execution-presentation:${executionId}`,
-            component: 'task-execution-presentation',
-            operation: 'fetch-terminal-artifacts',
-            error,
-            context: { projectId: execution.metadata.projectId, executionId, executorNodeId },
-          });
-          response.statusCode = 502;
-          response.end(JSON.stringify({
-            ok: false,
-            error: 'task_execution_artifact_unavailable',
-            executionId,
-            incidentId,
-          }));
-          return;
-        }
-      }
+      const presentationRuntime = federatedSchedulerContexts.get(executionId)?.runtime ?? requestRuntime;
       const result = buildTaskExecutionPresentation({
         executionId,
         state: executionState,
@@ -3893,7 +4240,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const ledgerId = requestUrl.searchParams.get('ledgerId') ?? '';
       const cardId = requestUrl.searchParams.get('cardId') ?? '';
       const since = requestUrl.searchParams.get('since') ?? '0';
-      const replicatedExecution = taskExecutionState(requestRuntime)?.executions.bySessionId(runId)
+      const replicatedState = taskExecutionState(requestRuntime);
+      const replicatedExecution = replicatedState?.executions.bySessionId(runId)
         .filter((record) => record.metadata.ledgerId === ledgerId && (
           record.metadata.sourceCardId === cardId || record.metadata.ownerCardId === cardId
         ))
@@ -3901,37 +4249,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           right.metadata.requestedAt.localeCompare(left.metadata.requestedAt)
           || right.metadata.executionId.localeCompare(left.metadata.executionId)
         ))[0] ?? null;
-      let statusRuntime = requestRuntime;
       if (replicatedExecution && replicatedExecution.lifecycle.executorNodeId !== federation.localOwner().ownerNodeId) {
-        const terminal = ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(replicatedExecution.lifecycle.phase);
-        if (!terminal) {
-          const remote = await federation.request(
-            replicatedExecution.lifecycle.executorNodeId,
-            `/api/internal/task-executions/${encodeURIComponent(replicatedExecution.metadata.executionId)}/status?projectId=${encodeURIComponent(replicatedExecution.metadata.projectId)}&since=${encodeURIComponent(since)}`,
-          );
-          response.setHeader('content-type', 'application/json');
-          response.statusCode = remote.status;
-          response.end(remote.body);
-          return;
-        }
-        const heads = [
-          replicatedExecution.artifacts.jsonl,
-          replicatedExecution.artifacts.stderr,
-          replicatedExecution.artifacts.telemetry,
-          replicatedExecution.artifacts.result,
-        ].filter((head) => head !== null);
-        await Promise.all(heads.map((head) => federation.requestToFile(
-          replicatedExecution.lifecycle.executorNodeId,
-          `/api/federation/content-object?projectId=${encodeURIComponent(replicatedExecution.metadata.projectId)}&hash=${encodeURIComponent(head.hash)}`,
-          federationContentStore.objectFile(head.hash),
-          head.hash,
-        )));
-        statusRuntime = Object.create(requestRuntime) as AnyRecord;
-        Object.defineProperty(statusRuntime, 'taskExecutionArtifactFile', {
-          value: (hash: string) => /^[a-f0-9]{64}$/i.test(hash) ? federationContentStore.objectFile(hash) : '',
-          configurable: true,
-          enumerable: false,
+        const events = federatedExecutionPresentations.get(
+          `${replicatedExecution.metadata.projectId}\0${replicatedExecution.metadata.executionId}\0${replicatedExecution.lifecycle.executorNodeId}`,
+        ) ?? (replicatedState
+          ? locallyHydratedTaskExecutionPresentation(replicatedState, replicatedExecution)?.events
+          : undefined) ?? [];
+        const result = replicatedCardSkillRunStatus({
+          runId,
+          ledgerId,
+          cardId,
+          executions: replicatedState?.executions.all() ?? [],
+          events,
+          queuePosition: null,
         });
+        response.setHeader('content-type', 'application/json');
+        response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+        response.end(JSON.stringify(result));
+        return;
       }
       const result = await readCardSkillRunController({
         action_payload: {
@@ -3941,7 +4276,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           since,
           traceId
         },
-        runtime_state: statusRuntime
+        runtime_state: requestRuntime
       });
       if (traceId) logCodexContinueDebug('status-route-response', {
         traceId,

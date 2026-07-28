@@ -68,8 +68,9 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
     ledgerPath: context.ledgerPath,
     cardId: execution.metadata.ownerCardId,
     runId: execution.metadata.sessionId,
+    executionId,
     startLine: 0,
-    projectId: String(runtime.projectId ?? ''),
+    projectId: execution.metadata.projectId,
     runtime,
     onTerminalEvent: (event) => {
       if (event.status === 'complete' || event.status === 'failed' || event.status === 'cancelled') {

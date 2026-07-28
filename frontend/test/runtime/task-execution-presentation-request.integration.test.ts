@@ -74,3 +74,22 @@ test('caller cancellation aborts an in-flight execution presentation read', asyn
     globalThis.fetch = previousFetch;
   }
 });
+
+test('treats a synchronizing local presentation cache as retryable failure', async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      ok: false,
+      error: 'task_execution_presentation_synchronizing',
+    }), { status: 202, headers: { 'content-type': 'application/json' } })) as typeof globalThis.fetch;
+    assert.deepEqual(await requestTaskExecutionPresentation({
+      projectId: 'project-a',
+      executionId: 'execution-a',
+    }), {
+      ok: false,
+      error: 'task_execution_presentation_synchronizing',
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
