@@ -30,9 +30,13 @@ function taskLedger(assignedNodeId = 'workstation') {
         assignment: { nodeId: assignedNodeId, changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
       },
       { id: 'child', title: 'Child', status: 'todo', labels: ['subtask'] },
+      { id: 'child-b', title: 'Child B', status: 'todo', labels: ['subtask'] },
     ],
     annotations: [],
-    relationships: [{ id: 'relationship-a', from: 'master', to: 'child', label: 'subtask', position: 0 }],
+    relationships: [
+      { id: 'relationship-a', from: 'master', to: 'child', label: 'subtask', position: 0 },
+      { id: 'relationship-b', from: 'master', to: 'child-b', label: 'subtask', position: 1 },
+    ],
   };
 }
 
@@ -477,6 +481,80 @@ test('serializes concurrent local admission so exactly one direct execution reac
   assert.equal(results[1].status === 'rejected' ? results[1].reason.code : '', 'task_execution_active');
   assert.equal(workstation.state.executions.find('execution-a')?.lifecycle.phase, 'queued');
   assert.equal(workstation.state.executions.find('execution-b')?.lifecycle.phase, 'failed');
+});
+
+test('admits the master and distinct subtasks concurrently while preserving one active execution per source', async (context) => {
+  const workstation = fixture('workstation');
+  context.after(() => dispose(workstation));
+  const router = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => workstation.state,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+  });
+
+  const results = await Promise.all([
+    router.route(request({
+      requestId: 'request-master',
+      executionId: 'execution-master',
+      sessionId: 'session-master',
+      sourceCardId: 'master',
+      ownerCardId: 'master',
+    })),
+    router.route(request()),
+    router.route(request({
+      requestId: 'request-child-b',
+      executionId: 'execution-child-b',
+      sessionId: 'session-child-b',
+      sourceCardId: 'child-b',
+      ownerCardId: 'child-b',
+    })),
+  ]);
+
+  assert.deepEqual(results.map((receipt) => receipt.taskId), ['master', 'master', 'master']);
+  assert.deepEqual(results.map((receipt) => receipt.assignedNodeId), ['workstation', 'workstation', 'workstation']);
+  assert.deepEqual(
+    workstation.state.executions.byTaskId('master').map((record) => [
+      record.metadata.sourceCardId,
+      record.lifecycle.phase,
+    ]),
+    [['child', 'queued'], ['child-b', 'queued'], ['master', 'queued']],
+  );
+});
+
+test('admits a pipeline batch while a sibling source is active', async (context) => {
+  const workstation = fixture('workstation');
+  context.after(() => dispose(workstation));
+  const router = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => workstation.state,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+  });
+  await router.route(request({
+    requestId: 'request-child-b',
+    executionId: 'execution-child-b',
+    sessionId: 'session-child-b',
+    sourceCardId: 'child-b',
+    ownerCardId: 'child-b',
+  }));
+  const topology = ['a', 'b'].map((suffix, index) => request({
+    requestId: `request-pipeline-${suffix}`,
+    executionId: `execution-pipeline-${suffix}`,
+    sessionId: `session-pipeline-${suffix}`,
+    kind: 'pipeline-skill',
+    pipelineRunId: 'pipeline-child',
+    pipelineStepId: `step-${suffix}`,
+    pipelineSkillRunId: `skill-${suffix}`,
+    predecessorExecutionId: index === 0 ? null : 'execution-pipeline-a',
+  }));
+
+  const receipts = await router.routeBatch(topology);
+
+  assert.deepEqual(receipts.map((receipt) => receipt.phase), ['queued', 'queued']);
+  assert.equal(workstation.state.executions.find('execution-child-b')?.lifecycle.phase, 'queued');
 });
 
 test('validates session ownership and configured executor capacity before queueing', async (context) => {

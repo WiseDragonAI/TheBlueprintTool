@@ -46,7 +46,8 @@ test('responsive optimism precedes settlement and success or rejection forces ca
 
   assert.ok(run.indexOf("decision-os:codex-run-preparing") < run.indexOf('await requestCardSkillRunContinue'));
   assert.match(begin, /optimisticExecutionIntents\.set\(identity, intent\);[\s\S]*applyOptimisticExecutionIntent\(state\.controlRoom, intent\)/);
-  assert.match(acknowledge, /intent\.requestId = String\(detail\.requestId[\s\S]*intent\.executionId = String\(detail\.executionId[\s\S]*intent\.revision = Math\.max/);
+  assert.match(acknowledge, /removeAcknowledgedExecutionIntent\(optimisticExecutionIntents, detail\)/);
+  assert.ok(acknowledge.indexOf('removeAcknowledgedExecutionIntent') < acknowledge.indexOf("loadControlRoom({ force: true })"));
   assert.match(acknowledge, /loadControlRoom\(\{ force: true \}\)/);
   assert.match(reject, /optimisticExecutionIntents\.delete\(identity\)/);
   assert.ok(reject.indexOf('optimisticExecutionIntents.delete(identity)') < reject.indexOf("loadControlRoom({ force: true })"));

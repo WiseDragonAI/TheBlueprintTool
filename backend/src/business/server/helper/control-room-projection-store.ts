@@ -78,7 +78,7 @@ function zoneIdFor(card: AnyRecord, ledger: AnyRecord): string {
   return selected;
 }
 
-function selectedExecutionCandidate(master: AnyRecord, subtasks: AnyRecord[], executions: ReplicatedTaskExecutionRecord[]): { selected: ExecutionCandidate | null; activeCount: number } {
+function selectedExecutionCandidate(master: AnyRecord, subtasks: AnyRecord[], executions: ReplicatedTaskExecutionRecord[]): ExecutionCandidate | null {
   const cards = new Map([master, ...subtasks].map((card) => [text(card.id), card]));
   const replicated = executions.filter((record) => record.metadata.taskId === text(master.id) && activeExecutionPhase(record.lifecycle.phase)).map((record): ExecutionCandidate => ({
     card: cards.get(record.metadata.ownerCardId) ?? master,
@@ -90,9 +90,10 @@ function selectedExecutionCandidate(master: AnyRecord, subtasks: AnyRecord[], ex
   }));
   const candidates = replicated;
   const priority = (candidate: ExecutionCandidate): number => candidate.state === 'running' ? 0 : candidate.state === 'starting' ? 1 : candidate.state === 'queued' ? 2 : 3;
-  return { selected: candidates.sort((left, right) => priority(left) - priority(right)
+  return candidates.sort((left, right) => priority(left) - priority(right)
     || Number(left.ownerKind === 'subtask') - Number(right.ownerKind === 'subtask')
-    || text(left.ownerCardId).localeCompare(text(right.ownerCardId)))[0] ?? null, activeCount: candidates.length };
+    || text(left.ownerCardId).localeCompare(text(right.ownerCardId))
+    || text(left.record?.metadata.executionId).localeCompare(text(right.record?.metadata.executionId)))[0] ?? null;
 }
 
 function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsProject['ledgers'][number]; ledger: AnyRecord; card: AnyRecord; conflicts?: AnyRecord[]; index?: TaskLedgerIndex; runtime?: AnyRecord; executions?: ReplicatedTaskExecutionRecord[]; executionDiagnostics?: ReturnType<TaskExecutionRepository['diagnostics']>; executionObservationFor?: (executionId: string) => AnyRecord | null }): AnyRecord | null {
@@ -105,8 +106,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     .filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask')
     .sort((left, right) => Number(left.position) - Number(right.position) || text(left.id).localeCompare(text(right.id)));
   const linkedCards = relationships.map((relationship) => cards.get(text(relationship.to))).filter((card): card is AnyRecord => Boolean(card));
-  const executionSelection = selectedExecutionCandidate(input.card, linkedCards, input.executions ?? []);
-  const execution = executionSelection.selected;
+  const execution = selectedExecutionCandidate(input.card, linkedCards, input.executions ?? []);
   const executionLifecycle = execution?.intent ?? {};
   const lifecycleStatus = text(lifecycle.status);
   const executionState = executionPhase(executionLifecycle);
@@ -136,7 +136,6 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   if (taskConflicts.length > 0) diagnostics.push(...taskConflicts.map((conflict) => `task-conflict:${text(conflict.entityId)}`));
   if (assignmentConflicts.length > 0) diagnostics.push(`assignment-conflict:${text(input.card.id)}`);
   if (!text(assignment.nodeId)) diagnostics.push('missing_assignment');
-  if (executionSelection.activeCount > 1) diagnostics.push('multiple_active_executions');
   for (const executionDiagnostic of input.executionDiagnostics ?? []) {
     if (executionDiagnostic.taskId === text(input.card.id)) diagnostics.push(`${executionDiagnostic.code}:${executionDiagnostic.executionId}`);
   }

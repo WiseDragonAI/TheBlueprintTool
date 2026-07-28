@@ -21,6 +21,7 @@ function executionItem(record: ExecutionRecord, queuePosition: number | null): T
   return {
     executionId: record.metadata.executionId,
     sessionId: record.metadata.sessionId,
+    sourceCardId: record.metadata.sourceCardId,
     kind: record.metadata.kind,
     phase: record.lifecycle.phase,
     requestedAt: record.metadata.requestedAt,

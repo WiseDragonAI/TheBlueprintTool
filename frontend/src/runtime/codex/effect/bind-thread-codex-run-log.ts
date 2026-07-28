@@ -9,6 +9,7 @@ import type {
 import { state } from '../../state.js';
 import { projectIdFromLocation, replicaNodeIdFromLocation } from '../../project/helper/project-request-scope.js';
 import { findTaskExecution } from '../helper/find-task-execution.js';
+import { scopeTaskExecutionState } from '../helper/scope-task-execution-state.js';
 import { taskExecutionDisplayStatus } from '../helper/task-execution-display-status.js';
 import { requestTaskExecutionPresentation, requestTaskExecutionState } from './request-task-execution-state.js';
 import { shouldAcceptReplicatedTaskState } from '../../refresh/helper/task-projection-acceptance.js';
@@ -100,7 +101,7 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
       retryDelay = 1_500;
       return;
     }
-    const summary = summaryResult.value;
+    const summary = scopeTaskExecutionState(summaryResult.value, poller.identity.cardId);
     recordState('threadTaskExecutionStateByThreadId')[threadId] = summary;
     delete recordState('threadExecutionStateErrorByThreadId')[threadId];
     const selectedIds = recordState('threadSelectedExecutionIdByThreadId');
@@ -158,14 +159,14 @@ function installExecutionInvalidation(): void {
     let payload: Record<string, unknown> = {};
     try { payload = JSON.parse(String((event as MessageEvent).data ?? '{}')) as Record<string, unknown>; } catch { return; }
     const projectId = String(payload.projectId ?? '');
-    const taskId = String(payload.taskId ?? '');
+    const sourceCardId = String(payload.sourceCardId ?? '');
     const executionId = String(payload.executionId ?? '');
     const incomingRevision = Number(payload.revision ?? 0);
     const incomingPhase = String(payload.phase ?? '');
     // WHAT: Revalidate only pollers whose task identity matches the changed execution.
     // WHY: One execution transition must not trigger log reads for every open project.
     for (const poller of taskLogPollers.values()) {
-      if (poller.identity.projectId !== projectId || poller.identity.cardId !== taskId) continue;
+      if (poller.identity.projectId !== projectId || poller.identity.cardId !== sourceCardId) continue;
       const summary = recordState('threadTaskExecutionStateByThreadId')[poller.identity.threadId] as TaskExecutionStateSummary | undefined;
       const installed = executionId ? findTaskExecution(summary ?? null, executionId) : null;
       // WHAT: Suppress invalidations already represented by the installed execution snapshot.

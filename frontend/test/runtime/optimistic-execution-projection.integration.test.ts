@@ -5,6 +5,7 @@ import {
   controlRoomTaskForExecution,
   createOptimisticExecutionIntent,
   optimisticExecutionConfirmed,
+  removeAcknowledgedExecutionIntent,
 } from '../../src/app/responsive/optimistic-execution-projection.js';
 
 const task = {
@@ -47,4 +48,14 @@ test('canonical reconciliation requires the same request and a non-stale revisio
   assert.equal(optimisticExecutionConfirmed(intent, { execution: { requestId: 'request-b', revision: 3 } }), false);
   assert.equal(optimisticExecutionConfirmed(intent, { execution: { requestId: 'request-a', revision: 1 } }), false);
   assert.equal(optimisticExecutionConfirmed(intent, { execution: { requestId: 'request-a', revision: 2 } }), true);
+});
+
+test('admission success removes the exact optimistic request immediately', () => {
+  const intents = new Map([
+    ['project-a:master-a', createOptimisticExecutionIntent(task, { requestId: 'request-a', acceptedAt: '2026-07-23T10:00:00.000Z' })],
+    ['project-a:master-b', createOptimisticExecutionIntent({ ...task, cardId: 'master-b' }, { requestId: 'request-b', acceptedAt: '2026-07-23T10:01:00.000Z' })],
+  ]);
+
+  assert.equal(removeAcknowledgedExecutionIntent(intents, { clientRequestId: 'request-a', requestId: 'server-request-a' }), true);
+  assert.deepEqual([...intents.keys()], ['project-a:master-b']);
 });

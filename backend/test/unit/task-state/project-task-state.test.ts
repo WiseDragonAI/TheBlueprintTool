@@ -911,12 +911,17 @@ test('successful execution settlement refreshes the waiting timestamp without re
   }));
   const state = createProjectTaskState({ projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
   const finishedAt = '2026-07-25T06:37:53.459Z';
+  const olderFinishedAt = '2026-07-25T06:37:52.459Z';
 
   const refreshed = await state.transitionCardLifecycle('open', 'todo', finishedAt);
+  const repeated = await state.transitionCardLifecycle('open', 'todo', finishedAt);
+  const regressed = await state.transitionCardLifecycle('open', 'todo', olderFinishedAt);
   const ignored = await state.transitionCardLifecycle('closed', 'todo', finishedAt);
   const cards = state.projection().ledger.cards as AnyRecord[];
 
   assert.equal(refreshed.changed, true);
+  assert.equal(repeated.changed, false);
+  assert.equal(regressed.changed, false);
   assert.equal(ignored.changed, false);
   assert.deepEqual(cards.find((card) => card.id === 'open')?.lifecycle, {
     status: 'todo',

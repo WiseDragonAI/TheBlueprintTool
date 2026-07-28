@@ -53,6 +53,7 @@ import {
   TaskExecutionAdmissionError,
   createTaskExecutionRouter,
   isTaskExecutionReceipt,
+  resolveTaskLineage,
   type TaskExecutionLaunchRequest,
   type TaskExecutionRouter,
 } from '../../codex/helper/task-execution-router.js';
@@ -450,6 +451,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       nodeId: input.nodeId,
       executionId: input.executionId,
       taskId: input.record?.metadata.taskId ?? '',
+      sourceCardId: input.record?.metadata.sourceCardId ?? '',
       phase: input.record?.lifecycle.phase ?? 'deleted',
       phaseSince: input.record?.lifecycle.phaseSince ?? '',
       revision: input.record?.lifecycle.revision ?? 0,
@@ -1139,15 +1141,29 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         runId: String(event.runId ?? ''), executionId: String(event.executionId ?? ''), cardId,
         outputCardId: String(event.outputCardId ?? event.cardId ?? ''), threadId: String(event.threadId ?? '')
       };
-      if (!event.pipelineRunId && ledgerId === 'tasks' && status === 'complete') {
-        const finishedAt = String(event.finishedAt ?? '');
+      let durablePipelineExecution = false;
+      if (ledgerId === 'tasks' && status === 'complete') {
         if (!activeTaskState) throw new Error(`task_execution_state_unavailable:${projectId}`);
-        return activeTaskState.transitionCardLifecycle(cardId, 'todo', finishedAt).then((committed) => {
-          if (committed.changed) controlRoomProjectionStore?.invalidate(projectId, committed.localChanges);
-          publishLedger(directSettlementEvent);
-        });
+        const executionId = String(event.executionId ?? '');
+        const execution = activeTaskState.executions.find(executionId);
+        if (!execution) throw new Error(`task_execution_not_found:${executionId}`);
+        if (execution.metadata.ledgerId !== 'tasks') throw new Error(`task_execution_ledger_mismatch:${executionId}`);
+        if (execution.metadata.kind === 'pipeline-skill') {
+          durablePipelineExecution = true;
+        } else {
+          const finishedAt = String(execution.lifecycle.finishedAt ?? '');
+          if (execution.lifecycle.phase !== 'succeeded' || !Number.isFinite(Date.parse(finishedAt))) {
+            throw new Error(`task_execution_success_state_invalid:${executionId}`);
+          }
+          const taskId = String(execution.metadata.taskId ?? '');
+          if (!taskId) throw new Error(`task_execution_task_missing:${executionId}`);
+          return activeTaskState.transitionCardLifecycle(taskId, 'todo', finishedAt).then((committed) => {
+            if (committed.changed) controlRoomProjectionStore?.invalidate(projectId, committed.localChanges);
+            publishLedger(directSettlementEvent);
+          });
+        }
       }
-      if (!event.pipelineRunId) {
+      if (!event.pipelineRunId && !durablePipelineExecution) {
         publishLedger(directSettlementEvent);
       }
       if (event.pipelineRunId && event.pipelineTerminal === true) {
@@ -1529,6 +1545,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         nodeId: frame.from,
         executionId,
         taskId: record?.metadata.taskId ?? '',
+        sourceCardId: record?.metadata.sourceCardId ?? '',
         phase: record?.lifecycle.phase ?? '',
         revision: record?.lifecycle.revision ?? 0,
       })}\n\n`);
@@ -2665,13 +2682,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (taskExecutionStateRead) {
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
-      const taskId = decodeRouteSegment(taskExecutionStateRead[1]);
+      const requestedCardId = decodeRouteSegment(taskExecutionStateRead[1]);
       const executionState = taskExecutionState(requestRuntime);
       if (!executionState) {
         response.statusCode = 503;
-        response.end(JSON.stringify({ ok: false, error: 'task_execution_state_unavailable', taskId }));
+        response.end(JSON.stringify({ ok: false, error: 'task_execution_state_unavailable', taskId: requestedCardId }));
         return;
       }
+      const taskId = resolveTaskLineage({
+        ledger: executionState.projection().ledger,
+        sourceCardId: requestedCardId,
+      }).taskId;
       // WHAT: Derive the complete lightweight hierarchy from the indexed Epoch 4 projection.
       // WHY: Opening a task must not read every JSONL artifact or depend on card session aliases.
       response.end(JSON.stringify(projectTaskExecutionState({

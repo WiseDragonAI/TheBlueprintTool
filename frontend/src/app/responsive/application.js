@@ -30,8 +30,11 @@ import {
   controlRoomTaskForExecution,
   createOptimisticExecutionIntent,
   optimisticExecutionConfirmed,
+  removeAcknowledgedExecutionIntent,
 } from './optimistic-execution-projection.js';
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
+import { requestTaskExecutionState } from '/src/runtime/codex/effect/request-task-execution-state.js';
+import { applyMasterSubtaskExecutionState } from './master-subtask-execution-state.js';
 
 installProjectRequestScope();
 
@@ -127,6 +130,7 @@ let replicaRetryTimer = 0;
 let presentedCardIdentity = '';
 let routeLoadGeneration = 0;
 let routeLoadController = null;
+let masterSubtaskExecutionController = null;
 let codexSettingsRequest = null;
 const optimisticExecutionIntents = new Map();
 const optimisticTaskIntents = new Map();
@@ -137,6 +141,8 @@ function currentRouteSnapshot() {
 
 function beginRouteLoad() {
   routeLoadController?.abort();
+  masterSubtaskExecutionController?.abort();
+  masterSubtaskExecutionController = null;
   routeLoadController = new AbortController();
   return Object.freeze({ generation: ++routeLoadGeneration, route: currentRouteSnapshot(), signal: routeLoadController.signal });
 }
@@ -417,13 +423,7 @@ function beginOptimisticExecution(detail) {
 }
 
 function acknowledgeOptimisticExecution(detail) {
-  const clientRequestId = String(detail?.clientRequestId ?? detail?.requestId ?? '');
-  const intent = [...optimisticExecutionIntents.values()].find((candidate) => candidate.requestId === clientRequestId);
-  if (intent) {
-    intent.requestId = String(detail.requestId ?? intent.requestId);
-    intent.executionId = String(detail.executionId ?? intent.executionId);
-    intent.revision = Math.max(intent.revision, Number(detail.revision ?? 0) || 0);
-  }
+  removeAcknowledgedExecutionIntent(optimisticExecutionIntents, detail);
   void loadControlRoom({ force: true }).then(() => {
     if (location.pathname === '/') renderControlRoom();
   }).catch((error) => console.error('Execution admission confirmation failed.', error));
@@ -1886,6 +1886,32 @@ async function flushPendingControlRoomRefresh() {
   await refreshControlRoomFromEvent();
 }
 
+async function refreshMasterSubtaskExecutionState(masterCardId) {
+  masterSubtaskExecutionController?.abort();
+  const controller = new AbortController();
+  masterSubtaskExecutionController = controller;
+  const route = currentRouteSnapshot();
+  const projectId = state.resourceProjectId;
+  const result = await requestTaskExecutionState({
+    projectId,
+    replicaNodeId: route.replicaNodeId,
+    taskId: masterCardId,
+    signal: controller.signal,
+  });
+  if (controller.signal.aborted
+    || masterSubtaskExecutionController !== controller
+    || projectId !== state.resourceProjectId
+    || String(state.activeCardId) !== masterCardId
+    || elements['card-view'].dataset.masterTask !== 'true'
+    || !sameRouteSnapshot(route, currentRouteSnapshot())) return;
+  masterSubtaskExecutionController = null;
+  if (!result.ok) {
+    console.error(`Master subtask execution state failed: ${result.error}`);
+    return;
+  }
+  applyMasterSubtaskExecutionState(elements['card-body'], result.value);
+}
+
 function subscribeControlRoomEvents() {
   if (controlRoomEventSource || typeof EventSource === 'undefined') return;
   controlRoomEventSource = new EventSource('/api/control-room-events');
@@ -1909,6 +1935,13 @@ function subscribeControlRoomEvents() {
       controlRoomExecutionRevisions.set(identity, revision);
     }
     if (payload.phase === 'deleted') controlRoomExecutionRevisions.delete(identity);
+    const route = currentRouteSnapshot();
+    if (String(payload.projectId || '') === String(route.projectId || '')
+      && String(payload.taskId || '') === String(state.activeCardId || '')
+      && elements['card-view'].dataset.masterTask === 'true') {
+      void refreshMasterSubtaskExecutionState(String(payload.taskId))
+        .catch((error) => console.error('Master subtask execution refresh failed.', error));
+    }
     refresh();
   });
   controlRoomEventSource.addEventListener('project-sync-change', refresh);
@@ -2492,6 +2525,9 @@ function renderCard(card) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'subtask-row';
+      button.dataset.cardId = subtask.cardId;
+      button.dataset.taskTitle = subtask.title;
+      button.dataset.taskStatus = subtask.status;
       button.innerHTML = '<span></span><small></small>';
       button.querySelector('span').textContent = subtask.title;
       button.querySelector('small').textContent = subtask.status;
@@ -2636,6 +2672,11 @@ function renderCard(card) {
   elements['card-view'].style.setProperty('--accent', cardAccent);
   openCardDetail(card, cardAccent);
   document.title = `${elements['card-title'].textContent} · ${state.projectName}`;
+  if (parsedTask.masterTask) {
+    subscribeControlRoomEvents();
+    void refreshMasterSubtaskExecutionState(String(card.id))
+      .catch((error) => console.error('Master subtask execution refresh failed.', error));
+  }
 }
 
 document.querySelector('.cancel-delete-master-task-button').addEventListener('click', () => deleteMasterTaskModal.close());
