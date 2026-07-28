@@ -6,11 +6,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
-import { codexProcessIdentity } from '@backend/business/codex/helper/codex-process-identity.js';
+import { codexProcessIdentity, isSameCodexProcess } from '@backend/business/codex/helper/codex-process-identity.js';
 import { recoverTaskExecutions } from '@backend/business/codex/helper/recover-task-executions.js';
 import { registerTaskExecutionProcess, taskExecutionProcesses } from '@backend/business/codex/helper/task-execution-runtime.js';
 import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
@@ -121,4 +121,85 @@ test('recovery adopts an exact live process, interrupts a missing process, and w
   assert.notEqual(state.executions.find('execution-stale')?.artifacts.stderr, null);
   assert.deepEqual(taskExecutionProcesses(runtime).map((entry) => entry.executionId), ['execution-adopted']);
   assert.deepEqual(scheduled, ['scheduled']);
+});
+
+test('a replacement runtime adopts a durable process lease and settles its terminal event', async (context) => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-durable-task-execution-recovery-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const ledgerFile = join(decisionOsRoot, 'tasks.json');
+  const stdoutFile = join(decisionOsRoot, 'adopted.jsonl');
+  const stderrFile = join(decisionOsRoot, 'adopted.stderr.log');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(ledgerFile, JSON.stringify({
+    cards: [{ id: 'task-a', title: 'Task A', comment: { what: '' } }],
+    annotations: [],
+    relationships: [],
+  }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', name: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(stdoutFile, '{"type":"turn.started"}\n');
+  writeFileSync(stderrFile, '');
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot,
+    tasksLedgerFile: ledgerFile,
+    initialize: true,
+  });
+  await state.executions.admit({ metadata: metadata('execution-durable', '2026-07-23T02:00:00.000Z'), executorNodeId: 'workstation' });
+  await state.executions.transition('execution-durable', { phase: 'queued' });
+  await state.executions.transition('execution-durable', { phase: 'starting' });
+  await state.executions.transition('execution-durable', { phase: 'running' });
+  const stdoutDescriptor = openSync(stdoutFile, 'a');
+  const stderrDescriptor = openSync(stderrFile, 'a');
+  const child = spawn(process.execPath, ['-e', "setTimeout(()=>process.stdout.write('{\"type\":\"turn.completed\"}\\n'),750)"], {
+    stdio: ['ignore', stdoutDescriptor, stderrDescriptor],
+    detached: process.platform !== 'win32',
+  });
+  closeSync(stdoutDescriptor);
+  closeSync(stderrDescriptor);
+  context.after(() => {
+    try { child.kill('SIGKILL'); } catch { /* already settled */ }
+    rmSync(workspace, { recursive: true, force: true });
+  });
+  const processId = child.pid ?? 0;
+  const processStartTime = codexProcessIdentity(processId);
+  assert.equal(isSameCodexProcess(processId, processStartTime), true);
+  registerTaskExecutionProcess({ decisionOsRoot }, {
+    executionId: 'execution-durable',
+    sessionId: 'session-execution-durable',
+    child,
+    processId,
+    processStartTime,
+    startedAt: '2026-07-23T02:00:00.000Z',
+    stdoutFile,
+    stderrFile,
+  });
+  const backgroundErrors: Error[] = [];
+  const replacementRuntime: Record<string, unknown> = {
+    decisionOsRoot,
+    projectId: 'project-a',
+    taskExecutionState: state,
+    taskExecutionNodeId: 'workstation',
+    readTaskLedgerProjection: () => state.projection().ledger,
+    persistTaskLedgerProjection: (ledger: Record<string, unknown>, command: Parameters<typeof state.executeProjectionCommand>[0]) => state.executeProjectionCommand(command, ledger),
+    scheduleCodexProcesses: async () => undefined,
+    onCodexBackgroundError: (entry: { error: Error }) => { backgroundErrors.push(entry.error); },
+  };
+  assert.deepEqual(taskExecutionProcesses(replacementRuntime).map((entry) => entry.executionId), ['execution-durable']);
+
+  const recovered = await recoverTaskExecutions(replacementRuntime);
+  assert.deepEqual(backgroundErrors.map((error) => error.message), []);
+  assert.deepEqual(recovered.adopted, ['execution-durable']);
+  assert.equal(taskExecutionProcesses(replacementRuntime)[0]?.child, null);
+  const deadline = Date.now() + 5_000;
+  while (state.executions.find('execution-durable')?.lifecycle.phase === 'running' && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  assert.equal(state.executions.find('execution-durable')?.lifecycle.phase, 'succeeded');
+  assert.deepEqual(taskExecutionProcesses(replacementRuntime), []);
+  assert.deepEqual(JSON.parse(readFileSync(join(decisionOsRoot, 'task-state', 'codex-process-leases.json'), 'utf8')).leases, []);
+  assert.match(readFileSync(stdoutFile, 'utf8'), /turn\.completed/);
 });

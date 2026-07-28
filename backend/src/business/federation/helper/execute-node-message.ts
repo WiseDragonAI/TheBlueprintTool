@@ -4,7 +4,7 @@
  */
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { createWriteStream, mkdirSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
 import { decisionOsCodexEnvironment } from '../../codex/helper/decision-os-codex-runtime.js';
@@ -146,18 +146,29 @@ export async function executeNodeMessage(input: {
     ].join('\n');
 
     return await new Promise<NodeMessageExecutionResult>((resolvePromise, reject) => {
-      const stdout = createWriteStream(stdoutFile, { flags: 'wx' });
-      const stderr = createWriteStream(stderrFile, { flags: 'wx' });
-      const child = spawn(command.command, command.args, {
-        cwd: input.project.root,
-        env: decisionOsCodexEnvironment({ runtime: input.runtime, decisionOsRoot: input.project.decisionOsRoot, ledgerFile }),
-        stdio: ['pipe', 'pipe', 'pipe'],
-        detached: process.platform !== 'win32',
-      });
-      let answer = '';
-      let remainder = '';
-      let stderrTail = '';
-      let outputBytes = 0;
+      const promptFile = `${stderrFile}.${runId}.stdin`;
+      writeFileSync(promptFile, prompt, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+      let stdinDescriptor: number | undefined;
+      let stdoutDescriptor: number | undefined;
+      let stderrDescriptor: number | undefined;
+      let child;
+      try {
+        stdinDescriptor = openSync(promptFile, 'r');
+        stdoutDescriptor = openSync(stdoutFile, 'wx');
+        stderrDescriptor = openSync(stderrFile, 'wx');
+        child = spawn(command.command, command.args, {
+          cwd: input.project.root,
+          env: decisionOsCodexEnvironment({ runtime: input.runtime, decisionOsRoot: input.project.decisionOsRoot, ledgerFile }),
+          stdio: [stdinDescriptor, stdoutDescriptor, stderrDescriptor],
+          detached: process.platform !== 'win32',
+        });
+      } finally {
+        if (stdinDescriptor !== undefined) closeSync(stdinDescriptor);
+        if (stdoutDescriptor !== undefined) closeSync(stdoutDescriptor);
+        if (stderrDescriptor !== undefined) closeSync(stderrDescriptor);
+        if (existsSync(promptFile)) unlinkSync(promptFile);
+      }
+      child.unref();
       let settled = false;
       let forceKillTimer: NodeJS.Timeout | null = null;
       let forcedSettlementTimer: NodeJS.Timeout | null = null;
@@ -176,32 +187,18 @@ export async function executeNodeMessage(input: {
       };
       const onAbort = (): void => stop(new Error('Node message execution was cancelled.'));
       input.signal?.addEventListener('abort', onAbort, { once: true });
-      child.stdout.on('data', (chunk: Buffer) => {
-        outputBytes += chunk.length;
-        if (outputBytes > maximumExecutionOutputBytes) {
-          stop(new Error(`Node message execution exceeded ${maximumExecutionOutputBytes} output bytes.`));
-          return;
+      const outputLimitTimer = setInterval(() => {
+        try {
+          const outputBytes = (existsSync(stdoutFile) ? statSync(stdoutFile).size : 0)
+            + (existsSync(stderrFile) ? statSync(stderrFile).size : 0);
+          if (outputBytes > maximumExecutionOutputBytes) {
+            stop(new Error(`Node message execution exceeded ${maximumExecutionOutputBytes} output bytes.`));
+          }
+        } catch (error) {
+          stop(error instanceof Error ? error : new Error(String(error)));
         }
-        stdout.write(chunk);
-        remainder += chunk.toString('utf8');
-        const lines = remainder.split('\n');
-        remainder = lines.pop() ?? '';
-        for (const line of lines) answer = lastAgentAnswer(line) || answer;
-      });
-      child.stderr.on('data', (chunk: Buffer) => {
-        outputBytes += chunk.length;
-        if (outputBytes > maximumExecutionOutputBytes) {
-          stop(new Error(`Node message execution exceeded ${maximumExecutionOutputBytes} output bytes.`));
-          return;
-        }
-        stderr.write(chunk);
-        stderrTail = `${stderrTail}${chunk.toString('utf8')}`.slice(-8_192);
-      });
-      child.stdin.on('error', (error) => stop(error));
-      child.stdout.on('error', (error) => stop(error));
-      child.stderr.on('error', (error) => stop(error));
-      stdout.on('error', (error) => stop(error));
-      stderr.on('error', (error) => stop(error));
+      }, 50);
+      outputLimitTimer.unref?.();
 
       settle = async (error: Error | null, exitCode: number | null): Promise<void> => {
         if (settled) return;
@@ -209,13 +206,16 @@ export async function executeNodeMessage(input: {
         if (forceKillTimer) clearTimeout(forceKillTimer);
         if (forcedSettlementTimer) clearTimeout(forcedSettlementTimer);
         clearTimeout(executionDeadline);
+        clearInterval(outputLimitTimer);
         input.signal?.removeEventListener('abort', onAbort);
         try {
-          if (remainder) answer = lastAgentAnswer(remainder) || answer;
-          await Promise.all([
-            stdout.destroyed || stdout.writableEnded ? Promise.resolve() : new Promise<void>((resolveStream) => stdout.end(resolveStream)),
-            stderr.destroyed || stderr.writableEnded ? Promise.resolve() : new Promise<void>((resolveStream) => stderr.end(resolveStream)),
-          ]);
+          const stdout = existsSync(stdoutFile) ? readFileSync(stdoutFile, 'utf8') : '';
+          const stderr = existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
+          if (Buffer.byteLength(stdout) + Buffer.byteLength(stderr) > maximumExecutionOutputBytes) {
+            error = new Error(`Node message execution exceeded ${maximumExecutionOutputBytes} output bytes.`);
+          }
+          const answer = stdout.split('\n').reduce((current, line) => lastAgentAnswer(line) || current, '');
+          const stderrTail = stderr.slice(-8_192);
           const finishedAt = new Date().toISOString();
           const cancelled = Boolean(input.signal?.aborted);
           const failure = (error ?? pendingFailure)?.message
@@ -253,7 +253,6 @@ export async function executeNodeMessage(input: {
       executionDeadline.unref?.();
       child.once('error', (error) => { void settle(error, null); });
       child.once('close', (code) => { void settle(null, code); });
-      child.stdin.end(prompt);
     });
   } finally {
     release();

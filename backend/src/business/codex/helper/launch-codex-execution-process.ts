@@ -1,9 +1,18 @@
 /**
- * WHAT: Launches one Codex child with the canonical stream, marker, ingestion, and one-shot settlement lifecycle.
- * WHY: Thread start, continuation, and pipeline execution must not implement divergent process engines.
+ * WHAT: Launches one Codex process with direct durable-file stdio, ingestion, and one-shot settlement.
+ * WHY: Codex must survive replacement of the HTTP server that launched it.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { appendFileSync, createWriteStream, type WriteStream } from 'node:fs';
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  openSync,
+  readSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run-events.js';
 import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-event-ingestor.js';
 import { codexRunSegmentMarker, codexRunTurnStartedMarker, type CodexRunSegment, type CodexRunSegmentMetadata } from './codex-run-segment-marker.js';
@@ -17,20 +26,57 @@ export type CodexProcessSettlement =
   | { kind: 'error'; error: Error; exitCode: null; terminalStatus: TerminalCodexStatus | null; finishedAt: string }
   | { kind: 'close'; exitCode: number | null; terminalStatus: TerminalCodexStatus | null; finishedAt: string };
 
-function finishStreams(stdout: WriteStream, stderr: WriteStream, callback: () => void): void {
-  let pending = 2;
-  const done = (): void => {
-    pending -= 1;
-    // WHAT: Settle the execution only after both append streams are closed.
-    // WHY: Consumers must never observe terminal state before durable log bytes are flushed.
-    if (pending === 0) callback();
-  };
-  for (const stream of [stdout, stderr]) {
-    // WHAT: Count an already-finished stream immediately and end every writable stream.
-    // WHY: Error and close paths share one deterministic two-stream barrier.
-    if (stream.destroyed || stream.writableEnded) done();
-    else stream.end(done);
+function fileSize(path: string): number {
+  try {
+    return statSync(path).size;
+  } catch {
+    return 0;
   }
+}
+
+function createFileTail(input: {
+  path: string;
+  startOffset: number;
+  onChunk: (chunk: Buffer) => void;
+  onError: (error: unknown) => void;
+}): { drain(): void; stop(): void } {
+  let offset = input.startOffset;
+  let stopped = false;
+  let reading = false;
+  const drain = (): void => {
+    if (stopped || reading) return;
+    reading = true;
+    try {
+      const size = fileSize(input.path);
+      if (size <= offset) return;
+      const descriptor = openSync(input.path, 'r');
+      try {
+        while (offset < size) {
+          const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, size - offset));
+          const bytesRead = readSync(descriptor, chunk, 0, chunk.length, offset);
+          if (bytesRead <= 0) break;
+          offset += bytesRead;
+          input.onChunk(chunk.subarray(0, bytesRead));
+        }
+      } finally {
+        closeSync(descriptor);
+      }
+    } catch (error) {
+      input.onError(error);
+    } finally {
+      reading = false;
+    }
+  };
+  const timer = setInterval(drain, 25);
+  timer.unref?.();
+  return {
+    drain,
+    stop() {
+      drain();
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
 }
 
 export async function launchCodexExecutionProcess(input: {
@@ -59,14 +105,39 @@ export async function launchCodexExecutionProcess(input: {
   onSettled: (settlement: CodexProcessSettlement) => unknown;
 }): Promise<{ child: ChildProcess; startedAt: string }> {
   const startedAt = String(input.startedAt ?? '').trim() || new Date().toISOString();
-  const child = spawn(input.command.command, input.command.args, {
-    cwd: input.workspaceRoot,
-    env: input.env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    detached: process.platform !== 'win32',
-  });
-  const stdout = createWriteStream(input.stdoutFile, { flags: 'a' });
-  const stderr = createWriteStream(input.stderrFile, { flags: 'a' });
+  appendFileSync(input.stderrFile, codexRunSegmentMarker({
+    runId: input.runId,
+    executionId: input.executionId,
+    startedAt,
+    segment: input.segment,
+    startLine: input.startLine,
+    metadata: input.metadata,
+  }), 'utf8');
+  const stdoutStartOffset = fileSize(input.stdoutFile);
+  const stderrStartOffset = fileSize(input.stderrFile);
+  const promptFile = `${input.stderrFile}.${input.executionId}.stdin`;
+  writeFileSync(promptFile, input.prompt, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+  let stdinDescriptor: number | undefined;
+  let stdoutDescriptor: number | undefined;
+  let stderrDescriptor: number | undefined;
+  let child: ChildProcess;
+  try {
+    stdinDescriptor = openSync(promptFile, 'r');
+    stdoutDescriptor = openSync(input.stdoutFile, 'a');
+    stderrDescriptor = openSync(input.stderrFile, 'a');
+    child = spawn(input.command.command, input.command.args, {
+      cwd: input.workspaceRoot,
+      env: input.env,
+      stdio: [stdinDescriptor, stdoutDescriptor, stderrDescriptor],
+      detached: process.platform !== 'win32',
+    });
+  } finally {
+    if (stdinDescriptor !== undefined) closeSync(stdinDescriptor);
+    if (stdoutDescriptor !== undefined) closeSync(stdoutDescriptor);
+    if (stderrDescriptor !== undefined) closeSync(stderrDescriptor);
+    if (existsSync(promptFile)) unlinkSync(promptFile);
+  }
+  child.unref();
   let terminalStatus: TerminalCodexStatus | null = null;
   let backgroundStopRequested = false;
   let executionDeadline: NodeJS.Timeout | undefined;
@@ -128,41 +199,45 @@ export async function launchCodexExecutionProcess(input: {
       if (input.onTurnStarted) invokeCallback('publish-codex-turn-started', () => input.onTurnStarted?.({ line: event.line }, observedAt));
     },
   });
-  stdout.on('error', (error) => stopForFailure('write-codex-stdout-log', error));
-  stderr.on('error', (error) => stopForFailure('write-codex-stderr-log', error));
-  child.stdout.on('error', (error) => stopForFailure('read-codex-stdout', error));
-  child.stderr.on('error', (error) => stopForFailure('read-codex-stderr', error));
-  child.stdout.on('data', (chunk: Buffer) => {
-    try {
-      ingestor.ingest(chunk);
-    } catch (error) {
-      stopForFailure('ingest-codex-output', error);
-      return;
-    }
-    if (input.onStdoutChunk) invokeCallback('observe-codex-stdout', () => input.onStdoutChunk?.(chunk));
+  const stdoutTail = createFileTail({
+    path: input.stdoutFile,
+    startOffset: stdoutStartOffset,
+    onChunk: (chunk) => {
+      try {
+        ingestor.ingest(chunk);
+      } catch (error) {
+        stopForFailure('ingest-codex-output', error);
+        return;
+      }
+      if (input.onStdoutChunk) invokeCallback('observe-codex-stdout', () => input.onStdoutChunk?.(chunk));
+    },
+    onError: (error) => stopForFailure('read-codex-stdout-log', error),
   });
-  child.stderr.on('data', (chunk: Buffer) => {
-    if (input.onStderrChunk) invokeCallback('observe-codex-stderr', () => input.onStderrChunk?.(chunk));
+  const stderrTail = createFileTail({
+    path: input.stderrFile,
+    startOffset: stderrStartOffset,
+    onChunk: (chunk) => {
+      if (input.onStderrChunk) invokeCallback('observe-codex-stderr', () => input.onStderrChunk?.(chunk));
+    },
+    onError: (error) => stopForFailure('read-codex-stderr-log', error),
   });
   let settled = false;
   let spawnReady = false;
   let pendingSettlement: CodexProcessSettlement | null = null;
   const settle = (settlement: CodexProcessSettlement): void => {
-    // WHAT: Accept only the first process terminal signal.
-    // WHY: Node can emit both `error` and `close` for one failed launch.
     if (settled) return;
     settled = true;
     clearTimeout(executionDeadline);
     clearTimeout(forceStopDeadline);
     terminalReconciler.dispose();
-    finishStreams(stdout, stderr, () => {
-      try {
-        flushCardSkillRunEventIngestor(ingestor, input.runId);
-      } catch (error) {
-        reportFailure('flush-codex-output-events', error);
-      }
-      invokeCallback('settle-codex-process', () => input.onSettled(settlement));
-    });
+    stdoutTail.stop();
+    stderrTail.stop();
+    try {
+      flushCardSkillRunEventIngestor(ingestor, input.runId);
+    } catch (error) {
+      reportFailure('flush-codex-output-events', error);
+    }
+    invokeCallback('settle-codex-process', () => input.onSettled(settlement));
   };
   const requestSettlement = (settlement: CodexProcessSettlement): void => {
     if (spawnReady) settle(settlement);
@@ -170,31 +245,18 @@ export async function launchCodexExecutionProcess(input: {
   };
   child.once('error', (error) => requestSettlement({ kind: 'error', error, exitCode: null, terminalStatus, finishedAt: new Date().toISOString() }));
   child.once('close', (exitCode) => requestSettlement({ kind: 'close', exitCode, terminalStatus, finishedAt: new Date().toISOString() }));
-  child.stdin.on('error', () => undefined);
-  child.stdout.pipe(stdout, { end: false });
-  child.stderr.pipe(stderr, { end: false });
   try {
-    appendFileSync(input.stderrFile, codexRunSegmentMarker({
-      runId: input.runId,
-      executionId: input.executionId,
-      startedAt,
-      segment: input.segment,
-      startLine: input.startLine,
-      metadata: input.metadata,
-    }), 'utf8');
     await input.onSpawn(child, startedAt);
   } catch (error) {
     clearTimeout(executionDeadline);
     clearTimeout(forceStopDeadline);
     terminalReconciler.dispose();
+    stdoutTail.stop();
+    stderrTail.stop();
     signalCodexProcessTree({ child, signal: 'SIGKILL' });
-    child.stdin.destroy();
-    stdout.destroy();
-    stderr.destroy();
     throw error;
   }
   spawnReady = true;
   if (pendingSettlement) settle(pendingSettlement);
-  else child.stdin.end(input.prompt);
   return { child, startedAt };
 }

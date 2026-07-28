@@ -1,8 +1,9 @@
 /**
  * WHAT: Recovers locally assigned non-terminal epoch-4 executions from replicated state.
- * WHY: Startup must adopt exact live children, interrupt missing children, and wake queued work without consulting legacy queues or card leases.
+ * WHY: Startup must adopt exact live processes, interrupt missing processes, and wake queued work without consulting legacy queues or card leases.
  */
 import { isSameCodexProcess } from './codex-process-identity.js';
+import { monitorAdoptedTaskExecution } from './monitor-adopted-task-execution.js';
 import {
   finalizeTaskExecutionArtifacts,
   removeTaskExecutionProcess,
@@ -48,6 +49,7 @@ export async function recoverTaskExecutions(runtime: AnyRecord): Promise<TaskExe
     try {
       const registered = taskExecutionProcess(runtime, executionId);
       if (registered && isSameCodexProcess(registered.processId, registered.processStartTime)) {
+        monitorAdoptedTaskExecution(runtime, executionId);
         result.adopted.push(executionId);
         continue;
       }

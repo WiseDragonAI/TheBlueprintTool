@@ -5,13 +5,18 @@
 import type { ChildProcess } from 'node:child_process';
 import type { ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import type { TaskExecutionRouter } from './task-execution-router.js';
+import {
+  readTaskExecutionProcessLeases,
+  removeTaskExecutionProcessLease,
+  upsertTaskExecutionProcessLease,
+} from './task-execution-process-lease.js';
 
 type AnyRecord = Record<string, unknown>;
 
 export type TaskExecutionProcess = {
   executionId: string;
   sessionId: string;
-  child: ChildProcess;
+  child: ChildProcess | null;
   processId: number;
   processStartTime: string;
   startedAt: string;
@@ -33,7 +38,12 @@ export type TaskExecutionCancellationResult = {
 function processRegistry(runtime: AnyRecord): Map<string, TaskExecutionProcess> {
   const current = runtime.taskExecutionProcesses;
   if (current instanceof Map) return current as Map<string, TaskExecutionProcess>;
-  const registry = new Map<string, TaskExecutionProcess>();
+  const decisionOsRoot = String(runtime.decisionOsRoot ?? '').trim();
+  const registry = new Map<string, TaskExecutionProcess>(
+    decisionOsRoot
+      ? readTaskExecutionProcessLeases(decisionOsRoot).map((lease) => [lease.executionId, { ...lease, child: null }])
+      : [],
+  );
   Object.defineProperty(runtime, 'taskExecutionProcesses', {
     value: registry,
     configurable: true,
@@ -62,6 +72,17 @@ export function taskExecutionNodeId(runtime: AnyRecord): string {
 export function registerTaskExecutionProcess(runtime: AnyRecord, process: TaskExecutionProcess): void {
   const registry = processRegistry(runtime);
   if (registry.has(process.executionId)) throw new Error(`task_execution_process_already_registered:${process.executionId}`);
+  const decisionOsRoot = String(runtime.decisionOsRoot ?? '').trim();
+  if (decisionOsRoot && process.processId > 0 && process.processStartTime && process.stdoutFile && process.stderrFile) upsertTaskExecutionProcessLease(decisionOsRoot, {
+    executionId: process.executionId,
+    sessionId: process.sessionId,
+    processId: process.processId,
+    processStartTime: process.processStartTime,
+    processGroupId: process.processId,
+    startedAt: process.startedAt,
+    stdoutFile: process.stdoutFile,
+    stderrFile: process.stderrFile,
+  });
   registry.set(process.executionId, process);
 }
 
@@ -73,6 +94,8 @@ export function removeTaskExecutionProcess(runtime: AnyRecord, executionId: stri
   const registry = processRegistry(runtime);
   const process = registry.get(executionId) ?? null;
   registry.delete(executionId);
+  const decisionOsRoot = String(runtime.decisionOsRoot ?? '').trim();
+  if (decisionOsRoot) removeTaskExecutionProcessLease(decisionOsRoot, executionId);
   return process;
 }
 
