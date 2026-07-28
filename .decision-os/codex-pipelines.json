@@ -12,6 +12,16 @@
       ],
       "createdAt": "2026-07-18T05:55:52.994Z",
       "updatedAt": "2026-07-18T05:55:52.994Z"
+    },
+    {
+      "id": "codex-pipeline-abc71bb3-8c7a-4891-8044-79e3a76651b7",
+      "name": "ReflectLife",
+      "purpose": "",
+      "stepIds": [
+        "codex-step-dad96b0a-cada-4c9a-ae90-9244eb8311f2"
+      ],
+      "createdAt": "2026-07-28T16:19:04.151Z",
+      "updatedAt": "2026-07-28T16:19:04.151Z"
     }
   ],
   "steps": [
@@ -62,6 +72,22 @@
       ],
       "createdAt": "2026-07-18T05:55:52.994Z",
       "updatedAt": "2026-07-18T05:55:52.994Z"
+    },
+    {
+      "id": "codex-step-dad96b0a-cada-4c9a-ae90-9244eb8311f2",
+      "name": "Step 1",
+      "purpose": "",
+      "skills": [
+        {
+          "id": "codex-pipeline-skill-d0e3b6bc-adcb-4dc4-9eb7-bdfe844f7672",
+          "skillName": "psychoqwak",
+          "contentKind": "pipeline-prompt",
+          "codexModel": "gpt-5.6-sol",
+          "codexEffort": "low"
+        }
+      ],
+      "createdAt": "2026-07-28T16:19:04.151Z",
+      "updatedAt": "2026-07-28T16:19:04.151Z"
     }
   ],
   "runs": [],
