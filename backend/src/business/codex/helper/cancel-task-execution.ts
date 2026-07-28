@@ -3,6 +3,7 @@
  * WHY: Cancellation must persist `cancelling` before signalling and must never target a process from mutable card state.
  */
 import { signalCodexProcessTree } from './reconcile-terminal-codex-process.js';
+import { isSameCodexProcess } from './codex-process-identity.js';
 import {
   taskExecutionNodeId,
   taskExecutionProcess,
@@ -63,7 +64,7 @@ export async function cancelTaskExecutionLocally(input: {
     };
   }
   const process = taskExecutionProcess(input.runtime, input.executionId);
-  if (!process || process.child.exitCode !== null) {
+  if (!process || (process.child ? process.child.exitCode !== null : !isSameCodexProcess(process.processId, process.processStartTime))) {
     return {
       ok: false,
       statusCode: 409,
@@ -78,7 +79,7 @@ export async function cancelTaskExecutionLocally(input: {
     : {};
   const runtimeRun = runtimeRuns[execution.metadata.sessionId];
   if (runtimeRun) runtimeRun.cancelRequestedAt = cancelling.lifecycle.phaseSince;
-  if (!signalCodexProcessTree({ child: process.child, signal: 'SIGTERM' })) {
+  if (!signalCodexProcessTree({ child: process.child ?? undefined, pid: process.processId, signal: 'SIGTERM' })) {
     await state.executions.transition(input.executionId, {
       phase: 'failed',
       error: { code: 'task_execution_cancel_signal_failed', message: 'Could not signal the live execution process.' },
@@ -92,7 +93,9 @@ export async function cancelTaskExecutionLocally(input: {
     };
   }
   const forceStop = setTimeout(() => {
-    if (process.child.exitCode === null) signalCodexProcessTree({ child: process.child, signal: 'SIGKILL' });
+    if (isSameCodexProcess(process.processId, process.processStartTime)) {
+      signalCodexProcessTree({ child: process.child ?? undefined, pid: process.processId, signal: 'SIGKILL' });
+    }
   }, 2_000);
   forceStop.unref?.();
   return {

@@ -218,7 +218,7 @@ test('timestamp validation failure leaves materialized card and thread bytes unc
 async function cleanup(context: ReturnType<typeof fixture>): Promise<void> {
   for (const process of taskExecutionProcesses(context.runtime)) {
     try {
-      process.child.kill('SIGKILL');
+      process.child?.kill('SIGKILL');
     } catch {
       // The execution already settled.
     }

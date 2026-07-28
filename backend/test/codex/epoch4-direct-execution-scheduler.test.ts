@@ -103,7 +103,7 @@ test('offline local direct retry spawns one child and reaches terminal replicate
   });
   context.after(async () => {
     for (const process of taskExecutionProcesses(runtime)) {
-      try { process.child.kill('SIGKILL'); } catch { /* already settled */ }
+      try { process.child?.kill('SIGKILL'); } catch { /* already settled */ }
     }
     await state.flush();
     rmSync(workspace, { recursive: true, force: true });
@@ -349,7 +349,7 @@ test('running-state persistence failure after spawn kills the child and settles 
   };
   context.after(async () => {
     for (const process of taskExecutionProcesses(runtime)) {
-      try { process.child.kill('SIGKILL'); } catch { /* already settled */ }
+      try { process.child?.kill('SIGKILL'); } catch { /* already settled */ }
     }
     await state.flush();
     rmSync(workspace, { recursive: true, force: true });

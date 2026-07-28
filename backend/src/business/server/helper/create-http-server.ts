@@ -48,6 +48,7 @@ import { readCodexPipelineRunController } from '../../codex/controller/read-code
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
 import { recoverTaskExecutions } from '../../codex/helper/recover-task-executions.js';
+import { stopAdoptedTaskExecutionMonitors } from '../../codex/helper/monitor-adopted-task-execution.js';
 import {
   TaskExecutionAdmissionError,
   createTaskExecutionRouter,
@@ -330,6 +331,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
 
   const disposeProjectContext = (context: ProjectContext): void => {
     stopCodexRuntimeTimers(context.runtime);
+    stopAdoptedTaskExecutionMonitors(context.runtime);
     context.watcher.close();
     context.clients.clear();
   };

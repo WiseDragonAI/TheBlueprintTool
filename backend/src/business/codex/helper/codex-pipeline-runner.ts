@@ -3,7 +3,7 @@
  * WHY: Pipeline ordering must survive process-local state loss without letting manifest compatibility fields become runtime authority.
  */
 import { spawn } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type {
   CodexPipelineRun,
@@ -795,15 +795,31 @@ export async function executePipelineSkillInWorkspace(input: {
     // streams; replacing that validation would weaken the Git verification boundary.
     const maximumOutputBytes = 8 * 1024 * 1024;
     const executionTimeoutMs = codexExecutionTimeoutMs(input.runtime);
-    const child = spawn(command.command, command.args, {
-      cwd: input.workspaceRoot,
-      env: decisionOsCodexEnvironment({ runtime: input.runtime, decisionOsRoot: input.decisionOsRoot, ledgerFile: input.ledgerFile }),
-      stdio: ['pipe', 'pipe', 'pipe'],
-      detached: process.platform !== 'win32',
-    });
-    let stdout = '';
-    let stderr = '';
-    let outputBytes = 0;
+    const stdoutOffset = existsSync(stdoutFile) ? statSync(stdoutFile).size : 0;
+    const stderrOffset = existsSync(stderrFile) ? statSync(stderrFile).size : 0;
+    const promptFile = `${stderrFile}.${input.executionId ?? input.skillRunId}.stdin`;
+    writeFileSync(promptFile, prompt, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    let stdinDescriptor: number | undefined;
+    let stdoutDescriptor: number | undefined;
+    let stderrDescriptor: number | undefined;
+    let child;
+    try {
+      stdinDescriptor = openSync(promptFile, 'r');
+      stdoutDescriptor = openSync(stdoutFile, 'a');
+      stderrDescriptor = openSync(stderrFile, 'a');
+      child = spawn(command.command, command.args, {
+        cwd: input.workspaceRoot,
+        env: decisionOsCodexEnvironment({ runtime: input.runtime, decisionOsRoot: input.decisionOsRoot, ledgerFile: input.ledgerFile }),
+        stdio: [stdinDescriptor, stdoutDescriptor, stderrDescriptor],
+        detached: process.platform !== 'win32',
+      });
+    } finally {
+      if (stdinDescriptor !== undefined) closeSync(stdinDescriptor);
+      if (stdoutDescriptor !== undefined) closeSync(stdoutDescriptor);
+      if (stderrDescriptor !== undefined) closeSync(stderrDescriptor);
+      if (existsSync(promptFile)) unlinkSync(promptFile);
+    }
+    child.unref();
     let pendingFailure: Error | null = null;
     let settled = false;
     let forceTimer: NodeJS.Timeout | undefined;
@@ -815,6 +831,7 @@ export async function executePipelineSkillInWorkspace(input: {
       clearTimeout(deadline);
       clearTimeout(forceTimer);
       clearTimeout(settlementTimer);
+      clearInterval(outputLimitTimer);
       if (input.executionId) removeTaskExecutionProcess(input.runtime, input.executionId);
       if (error) reject(error);
       else if (result) resolvePromise(result);
@@ -830,30 +847,29 @@ export async function executePipelineSkillInWorkspace(input: {
     };
     const deadline = setTimeout(() => stop(new Error(`Pipeline skill ${input.skillName} exceeded ${executionTimeoutMs}ms.`)), executionTimeoutMs);
     deadline.unref?.();
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    const capture = (target: 'stdout' | 'stderr', chunk: string): void => {
-      if (pendingFailure) return;
-      outputBytes += Buffer.byteLength(chunk);
-      if (outputBytes > maximumOutputBytes) {
-        stop(new Error(`Pipeline skill ${input.skillName} exceeded ${maximumOutputBytes} captured output bytes.`));
-        return;
+    const outputLimitTimer = setInterval(() => {
+      try {
+        const outputBytes = Math.max(0, (existsSync(stdoutFile) ? statSync(stdoutFile).size : 0) - stdoutOffset)
+          + Math.max(0, (existsSync(stderrFile) ? statSync(stderrFile).size : 0) - stderrOffset);
+        if (outputBytes > maximumOutputBytes) {
+          stop(new Error(`Pipeline skill ${input.skillName} exceeded ${maximumOutputBytes} captured output bytes.`));
+        }
+      } catch (error) {
+        stop(error instanceof Error ? error : new Error(String(error)));
       }
-      if (target === 'stdout') {
-        stdout += chunk;
-        appendFileSync(stdoutFile, chunk, 'utf8');
-      } else {
-        stderr += chunk;
-        appendFileSync(stderrFile, chunk, 'utf8');
-      }
+    }, 50);
+    outputLimitTimer.unref?.();
+    const currentOutput = (file: string, offset: number): string => {
+      const bytes = existsSync(file) ? readFileSync(file) : Buffer.alloc(0);
+      return bytes.subarray(Math.min(offset, bytes.length)).toString('utf8');
     };
-    child.stdout.on('data', (chunk: string) => capture('stdout', chunk));
-    child.stderr.on('data', (chunk: string) => capture('stderr', chunk));
-    child.stdin.on('error', (error) => stop(error));
-    child.stdout.on('error', (error) => stop(error));
-    child.stderr.on('error', (error) => stop(error));
     child.once('error', (error) => finish(error));
     child.once('close', (code) => {
+      const stdout = currentOutput(stdoutFile, stdoutOffset);
+      const stderr = currentOutput(stderrFile, stderrOffset);
+      if (Buffer.byteLength(stdout) + Buffer.byteLength(stderr) > maximumOutputBytes) {
+        return finish(new Error(`Pipeline skill ${input.skillName} exceeded ${maximumOutputBytes} captured output bytes.`));
+      }
       if (pendingFailure) return finish(pendingFailure);
       if (code !== 0) return finish(new Error(`Pipeline skill ${input.skillName} exited with code ${code}: ${stderr.trim() || 'no diagnostic'}`));
       const candidates = stdout.split('\n').filter(Boolean).flatMap((line) => nestedJsonObjects(line));
@@ -892,7 +908,6 @@ export async function executePipelineSkillInWorkspace(input: {
         }
       }
       input.onSpawned?.({ processId: child.pid ?? 0, startedAt });
-      child.stdin.end(prompt);
     };
     void registerAndStart().catch((error: unknown) => stop(error instanceof Error ? error : new Error(String(error))));
   });
