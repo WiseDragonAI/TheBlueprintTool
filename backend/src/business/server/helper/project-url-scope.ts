@@ -21,6 +21,7 @@ export function isGlobalProjectEndpoint(pathname: string): boolean {
     || pathname.startsWith('/api/project-sync/')
     || pathname === '/api/codex/server-pipelines'
     || pathname.startsWith('/api/codex/server-pipelines/')
+    || pathname === '/api/codex/skill-library'
     || pathname === '/api/codex/server-skills'
     || pathname.startsWith('/api/codex/server-skills/')
     || pathname === '/api/federation/libraries/synchronize'

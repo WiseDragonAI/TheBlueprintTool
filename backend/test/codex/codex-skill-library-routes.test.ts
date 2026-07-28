@@ -929,6 +929,7 @@ test('server and project skill views share migrated server-owned favorite metada
     }],
     activeWorkspaceRun: null,
   }));
+  initializeGitRepository(serverRoot);
 
   const runtime: Record<string, any> = {};
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: serverRoot }, runtime_state: runtime });
@@ -940,6 +941,21 @@ test('server and project skill views share migrated server-owned favorite metada
   try {
     const catalog = await fetch(`${baseUrl}/decision-os/projects`).then((response) => response.json()) as Record<string, any>;
     const projectId = catalog.projects.find((project: Record<string, any>) => project.name === 'child').id;
+    const globalCreateResponse = await fetch(`${baseUrl}/api/codex/skill-library`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'projectless-server-skill',
+        description: 'Created without project ownership.',
+        instructions: 'Preserve the server-owned boundary.',
+        contentKind: 'federated-skill',
+      }),
+    });
+    assert.equal(globalCreateResponse.status, 201);
+    const globalCreated = await globalCreateResponse.json() as Record<string, any>;
+    assert.equal(globalCreated.ok, true);
+    assert.equal(globalCreated.skill.name, 'projectless-server-skill');
+    assert.equal(existsSync(join(serverRoot, '.skills', 'projectless-server-skill', 'SKILL.md')), true);
     const projectSkills = await fetch(`${baseUrl}/p/${encodeURIComponent(projectId)}/api/codex/skills`).then((response) => response.json()) as Record<string, any>;
     const projectSkill = projectSkills.skills.find((skill: Record<string, any>) => skill.name === 'server-owned-skill');
     assert.equal(projectSkill.favorite, true);
