@@ -61,8 +61,9 @@ import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCo
 import { createCodexCapacitySlots, type CodexSlotAcquireOptions } from '../../codex/helper/codex-capacity-slots.js';
 import { scheduleCodexRuntimeTimer, stopCodexRuntimeTimers } from '../../codex/helper/codex-runtime-run-store.js';
 import { installFederatedPipelineRun, installRemotePipelineRun, removeInstalledRemotePipelineRun } from '../../codex/helper/install-remote-pipeline-run.js';
-import { taskExecutionState } from '../../codex/helper/task-execution-runtime.js';
+import { stopTaskExecutionCancellationDeadlines, taskExecutionState } from '../../codex/helper/task-execution-runtime.js';
 import { cancelTaskExecutionLocally } from '../../codex/helper/cancel-task-execution.js';
+import { committedTaskExecutionSettlement } from '../../codex/helper/commit-task-execution-settlement.js';
 import { projectTaskExecutionState } from '../../codex/helper/project-task-execution-state.js';
 import { buildTaskExecutionPresentation } from '../../codex/helper/task-execution-presentation.js';
 import { taskExecutionPresentationHttpResult } from '../../codex/helper/task-execution-presentation-http-result.js';
@@ -133,7 +134,10 @@ function isExecutionScopedCodexFailure(operation: string): boolean {
   return operation === 'codex-execution-timeout'
     || operation === 'adopted-codex-execution-timeout'
     || operation === 'adopted-pipeline-execution-timeout'
-    || operation === 'task-execution-dispatch-failed';
+    || operation === 'task-execution-dispatch-failed'
+    || operation === 'task-execution-cancellation-notification'
+    || operation === 'monitor-adopted-task-execution-ingest'
+    || operation === 'monitor-adopted-task-execution-notification';
 }
 
 class FederatedLibraryRequestError extends Error {
@@ -333,6 +337,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const disposeProjectContext = (context: ProjectContext): void => {
     stopCodexRuntimeTimers(context.runtime);
     stopAdoptedTaskExecutionMonitors(context.runtime);
+    stopTaskExecutionCancellationDeadlines(context.runtime);
     context.watcher.close();
     context.clients.clear();
   };
@@ -1132,47 +1137,48 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         threadId: String(event.threadId ?? ''), startedAt: String(event.startedAt ?? '')
       });
     };
-    projectRuntime.onCodexRunSettled = (event: AnyRecord): Promise<void> | void => {
+    projectRuntime.onCodexRunSettled = async (event: AnyRecord): Promise<void> => {
       const ledgerId = String(event.ledgerId ?? '');
       const cardId = String(event.cardId ?? event.outputCardId ?? '');
-      const status = String(event.status ?? '');
-      const directSettlementEvent = {
-        reason: 'codex-thread-settled', ledgerId, status,
-        runId: String(event.runId ?? ''), executionId: String(event.executionId ?? ''), cardId,
-        outputCardId: String(event.outputCardId ?? event.cardId ?? ''), threadId: String(event.threadId ?? '')
-      };
+      const executionId = String(event.executionId ?? '');
+      let status = String(event.status ?? '');
+      let finishedAt = String(event.finishedAt ?? '');
       let durablePipelineExecution = false;
-      if (ledgerId === 'tasks' && status === 'complete') {
+      let taskId = '';
+      if (ledgerId === 'tasks') {
         if (!activeTaskState) throw new Error(`task_execution_state_unavailable:${projectId}`);
-        const executionId = String(event.executionId ?? '');
         const execution = activeTaskState.executions.find(executionId);
         if (!execution) throw new Error(`task_execution_not_found:${executionId}`);
         if (execution.metadata.ledgerId !== 'tasks') throw new Error(`task_execution_ledger_mismatch:${executionId}`);
-        if (execution.metadata.kind === 'pipeline-skill') {
-          durablePipelineExecution = true;
-        } else {
-          const finishedAt = String(execution.lifecycle.finishedAt ?? '');
-          if (execution.lifecycle.phase !== 'succeeded' || !Number.isFinite(Date.parse(finishedAt))) {
-            throw new Error(`task_execution_success_state_invalid:${executionId}`);
-          }
-          const taskId = String(execution.metadata.taskId ?? '');
-          if (!taskId) throw new Error(`task_execution_task_missing:${executionId}`);
-          return activeTaskState.transitionCardLifecycle(taskId, 'todo', finishedAt).then((committed) => {
-            if (committed.changed) controlRoomProjectionStore?.invalidate(projectId, committed.localChanges);
-            publishLedger(directSettlementEvent);
-          });
+        const committedExecution = committedTaskExecutionSettlement(execution);
+        status = committedExecution.status;
+        finishedAt = committedExecution.finishedAt;
+        taskId = String(execution.metadata.taskId ?? '');
+        if (!taskId) throw new Error(`task_execution_task_missing:${executionId}`);
+        durablePipelineExecution = execution.metadata.kind === 'pipeline-skill';
+        if (!durablePipelineExecution || event.pipelineTerminal === true) {
+          const committedTask = await activeTaskState.transitionCardLifecycle(taskId, 'todo', finishedAt);
+          if (committedTask.changed) controlRoomProjectionStore?.invalidate(projectId, committedTask.localChanges);
         }
       }
+      const directSettlementEvent = {
+        reason: 'codex-thread-settled', ledgerId, status, finishedAt,
+        runId: String(event.runId ?? ''), executionId, cardId,
+        outputCardId: String(event.outputCardId ?? event.cardId ?? ''), threadId: String(event.threadId ?? '')
+      };
       if (!event.pipelineRunId && !durablePipelineExecution) {
         publishLedger(directSettlementEvent);
       }
       if (event.pipelineRunId && event.pipelineTerminal === true) {
-        const pipelineStatus = String(event.pipelineStatus ?? event.status ?? 'complete');
+        const reportedPipelineStatus = String(event.pipelineStatus ?? status);
+        const pipelineStatus = status === 'cancelled' || status === 'failed'
+          ? status
+          : reportedPipelineStatus;
         publishLedger({
           reason: pipelineStatus === 'complete' ? 'pipeline-completed' : pipelineStatus === 'cancelled' ? 'pipeline-cancelled' : 'pipeline-failed',
           ledgerId: String(event.ledgerId ?? ''), pipelineRunId: String(event.pipelineRunId), pipelineStatus,
-          status: String(event.status ?? pipelineStatus), runId: String(event.runId ?? ''),
-          executionId: String(event.executionId ?? ''),
+          status, finishedAt, runId: String(event.runId ?? ''),
+          executionId,
           cardId: String(event.cardId ?? event.outputCardId ?? ''), outputCardId: String(event.outputCardId ?? event.cardId ?? ''),
           threadId: String(event.threadId ?? '')
         });

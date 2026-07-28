@@ -22,6 +22,10 @@ import { resolveServerSkillContext } from './server-skill-context.js';
 import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { codexProcessIdentity } from './codex-process-identity.js';
 import { launchCodexExecutionProcess } from './launch-codex-execution-process.js';
+import {
+  commitTaskExecutionSettlement,
+  taskExecutionSettlementTimestamp,
+} from './commit-task-execution-settlement.js';
 import { signalCodexProcessTree } from './reconcile-terminal-codex-process.js';
 import {
   attachCodexRuntimeChild as attachRuntimeChild,
@@ -442,20 +446,20 @@ export async function spawnPipelineSkillProcess(input: {
       notify(input.runtime.onCodexTurnStarted, { ledgerId: input.pipelineRun.ledgerId, cardId: input.pipelineRun.sourceCardId, outputCardId: input.step.outputCardId, threadId: `thread-${input.pipelineRun.sourceCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', startedAt: observedAt });
     },
     onSettled: async (settlement) => {
-      const cancelled = replicatedState.executions.find(input.skill.executionId)?.lifecycle.phase === 'cancelling';
-      const status: TerminalStatus = cancelled
+      const current = replicatedState.executions.find(input.skill.executionId);
+      const cancelled = current?.lifecycle.phase === 'cancelling';
+      const predictedStatus: TerminalStatus = cancelled
         ? 'cancelled'
         : settlement.kind === 'error'
           ? 'failed'
           : settlement.terminalStatus ?? (settlement.exitCode === 0 ? 'complete' : 'failed');
       const exitCode = settlement.exitCode;
-      const detail = status === 'cancelled' ? 'terminated by operator' : settlement.kind === 'error' ? settlement.error.message : `exit code ${exitCode ?? 'unknown'}`;
-      const error = status === 'failed' ? detail : '';
-      appendRunStatus(outputFile, status, detail);
-      updateRuntimeRun(input.runtime, input.skill.runId, { status, exitCode, error, finishedAt: settlement.finishedAt });
-      if (status === 'cancelled') appendFileSync(input.skill.stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
-      if (status === 'failed') appendFileSync(input.skill.stderrFile, `Codex run failed: ${detail}\n`, 'utf8');
-      appendFileSync(input.skill.stderrFile, codexRunExecutionFinishedMarker({ runId: input.skill.runId, executionId: input.skill.executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
+      const detail = predictedStatus === 'cancelled' ? 'terminated by operator' : settlement.kind === 'error' ? settlement.error.message : `exit code ${exitCode ?? 'unknown'}`;
+      const finishedAt = taskExecutionSettlementTimestamp(current, settlement.finishedAt);
+      appendRunStatus(outputFile, predictedStatus, detail);
+      if (predictedStatus === 'cancelled') appendFileSync(input.skill.stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
+      if (predictedStatus === 'failed') appendFileSync(input.skill.stderrFile, `Codex run failed: ${detail}\n`, 'utf8');
+      appendFileSync(input.skill.stderrFile, codexRunExecutionFinishedMarker({ runId: input.skill.runId, executionId: input.skill.executionId, finishedAt, status: predictedStatus }), 'utf8');
       // WHAT: Capture the completed process evidence before publishing its terminal lifecycle.
       // WHY: Relay consumers must never observe a terminal execution whose immutable log heads are still absent.
       await finalizeTaskExecutionArtifacts({
@@ -465,14 +469,25 @@ export async function spawnPipelineSkillProcess(input: {
         stderr: input.skill.stderrFile,
         telemetry: `${input.skill.stdoutFile}.telemetry.jsonl`,
       });
-      const current = replicatedState.executions.find(input.skill.executionId);
-      if (current && (current.lifecycle.phase === 'starting' || current.lifecycle.phase === 'running' || current.lifecycle.phase === 'cancelling')) {
-        await replicatedState.executions.transition(input.skill.executionId, {
-          phase: status === 'complete' ? 'succeeded' : status,
-          result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
-          error: status === 'failed' ? { code: 'codex_pipeline_skill_failed', message: detail } : null,
-        });
+      const committed = await commitTaskExecutionSettlement({
+        runtime: input.runtime,
+        executionId: input.skill.executionId,
+        requestedPhase: predictedStatus === 'complete' ? 'succeeded' : predictedStatus,
+        settledAt: settlement.finishedAt,
+        summary: detail,
+        failureCode: 'codex_pipeline_skill_failed',
+      });
+      if (committed.status === 'interrupted') {
+        throw new Error(`task_execution_settlement_status_invalid:${input.skill.executionId}:interrupted`);
       }
+      const status: TerminalStatus = committed.status;
+      const error = status === 'failed' ? detail : '';
+      updateRuntimeRun(input.runtime, input.skill.runId, {
+        status,
+        exitCode,
+        error,
+        finishedAt: committed.finishedAt,
+      });
       if (status === 'failed' || status === 'cancelled') {
         await cancelPipelineDependents({
           runtime: input.runtime,
@@ -483,11 +498,26 @@ export async function spawnPipelineSkillProcess(input: {
       // Keep the settled process paths readable until immutable artifact heads exist.
       // Removing them earlier creates a terminal-status window with no live log source.
       removeTaskExecutionProcess(input.runtime, input.skill.executionId);
-      const reassessed = reassessPipelineAfterSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, settledStatus: status, error, exitCode, finishedAt: settlement.finishedAt });
+      const reassessed = reassessPipelineAfterSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, settledStatus: status, error, exitCode, finishedAt: committed.finishedAt });
       updateRuntimeRun(input.runtime, input.skill.runId, { settledAt: new Date().toISOString() });
       notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-settled', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, cardId: input.step.outputCardId, status, pipelineStatus: reassessed?.status ?? status });
       scheduleCodexRuntime(input.runtime, 'schedule-after-pipeline-settlement', { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId });
-      notify(input.runtime.onCodexRunSettled, { ledgerId: input.pipelineRun.ledgerId, cardId: input.step.outputCardId, outputCardId: input.step.outputCardId, threadId: `thread-${input.step.outputCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, pipelineRunId: input.pipelineRun.id, status, pipelineStatus: reassessed?.status ?? status, pipelineTerminal: Boolean(reassessed && isTerminal(reassessed.status)), exitCode });
+      if (typeof input.runtime.onCodexRunSettled === 'function') {
+        await input.runtime.onCodexRunSettled({
+          ledgerId: input.pipelineRun.ledgerId,
+          cardId: input.step.outputCardId,
+          outputCardId: input.step.outputCardId,
+          threadId: `thread-${input.step.outputCardId}`,
+          runId: input.skill.runId,
+          executionId: input.skill.executionId,
+          pipelineRunId: input.pipelineRun.id,
+          status,
+          pipelineStatus: reassessed?.status ?? status,
+          pipelineTerminal: Boolean(reassessed && isTerminal(reassessed.status)),
+          exitCode,
+          finishedAt: committed.finishedAt,
+        });
+      }
     },
   });
   return publicPipelineSkillRuntimeRun(runtimeRun);

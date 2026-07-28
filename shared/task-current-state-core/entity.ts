@@ -119,7 +119,12 @@ function assertExecutionLifecycle(candidate: TaskRegisterCandidate): void {
   assertExecutionResult(lifecycle.result);
   assertExecutionError(lifecycle.error);
   const terminal = terminalExecutionPhases.has(lifecycle.phase);
-  if (terminal !== (lifecycle.finishedAt !== null) || terminal !== (lifecycle.result !== null)) throw new Error('invalid_task_current_execution_lifecycle');
+  const finishing = lifecycle.phase === 'cancelling';
+  // WHAT: Permit the accepted Stop timestamp while cancellation cleanup is still active.
+  // WHY: `finishedAt` is the logical execution finish; process exit is a later cleanup observation.
+  if (terminal !== (lifecycle.result !== null)) throw new Error('invalid_task_current_execution_lifecycle');
+  if (terminal && lifecycle.finishedAt === null) throw new Error('invalid_task_current_execution_lifecycle');
+  if (!terminal && !finishing && lifecycle.finishedAt !== null) throw new Error('invalid_task_current_execution_lifecycle');
   if (!terminal && lifecycle.error !== null) throw new Error('invalid_task_current_execution_lifecycle');
   if (lifecycle.phase === 'failed' && lifecycle.error === null) throw new Error('invalid_task_current_execution_lifecycle');
   if (lifecycle.phase !== 'failed' && lifecycle.error !== null) throw new Error('invalid_task_current_execution_lifecycle');

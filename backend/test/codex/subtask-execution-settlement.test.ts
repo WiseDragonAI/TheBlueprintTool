@@ -1,5 +1,5 @@
 /**
- * WHAT: Verifies successful subtask executions refresh only their canonical master lifecycle.
+ * WHAT: Verifies terminal subtask executions refresh only their canonical master lifecycle.
  * WHY: Settlement events retain source-card routing, while durable execution metadata owns task identity and time.
  */
 import assert from 'node:assert/strict';
@@ -57,6 +57,24 @@ async function succeedExecution(
     phase: 'succeeded',
     changedAt: finishedAt,
     result: { status: 'succeeded', summary: 'complete' },
+  });
+}
+
+async function cancelExecution(
+  state: NonNullable<ReturnType<typeof taskExecutionState>>,
+  execution: TaskExecutionMetadata,
+  stopAcceptedAt: string,
+  cleanupSettledAt: string,
+): Promise<void> {
+  await state.executions.admit({ metadata: execution, executorNodeId: 'workstation' });
+  await state.executions.transition(execution.executionId, { phase: 'queued', changedAt: execution.requestedAt });
+  await state.executions.transition(execution.executionId, { phase: 'starting', changedAt: execution.requestedAt });
+  await state.executions.transition(execution.executionId, { phase: 'running', changedAt: execution.requestedAt });
+  await state.executions.transition(execution.executionId, { phase: 'cancelling', changedAt: stopAcceptedAt });
+  await state.executions.transition(execution.executionId, {
+    phase: 'cancelled',
+    changedAt: cleanupSettledAt,
+    result: { status: 'cancelled', summary: 'cancelled' },
   });
 }
 
@@ -120,6 +138,7 @@ test('subtask settlement targets the canonical master and keeps its waiting time
     assert.ok(state);
     const firstFinishedAt = '2026-07-28T07:03:22.393Z';
     const secondFinishedAt = '2026-07-28T07:04:22.393Z';
+    const cancelledFinishedAt = '2026-07-28T07:05:22.393Z';
     const first = metadata({
       executionId: 'execution-child-a',
       requestId: 'request-child-a',
@@ -132,8 +151,15 @@ test('subtask settlement targets the canonical master and keeps its waiting time
       sourceCardId: 'child-b',
       requestedAt: '2026-07-28T07:01:00.000Z',
     });
+    const cancelled = metadata({
+      executionId: 'execution-child-cancelled',
+      requestId: 'request-child-cancelled',
+      sourceCardId: 'child-a',
+      requestedAt: '2026-07-28T07:02:00.000Z',
+    });
     await succeedExecution(state, first, firstFinishedAt);
     await succeedExecution(state, second, secondFinishedAt);
+    await cancelExecution(state, cancelled, cancelledFinishedAt, '2026-07-28T07:05:24.393Z');
     const settle = runtime.onCodexRunSettled as (event: Record<string, unknown>) => Promise<void>;
 
     await settle({
@@ -156,9 +182,20 @@ test('subtask settlement targets the canonical master and keeps its waiting time
       status: 'complete',
       finishedAt: '2026-07-29T00:00:00.000Z',
     });
+    await settle({
+      ledgerId: 'tasks',
+      cardId: 'child-a',
+      outputCardId: 'child-a',
+      threadId: 'thread-child-a',
+      runId: cancelled.sessionId,
+      executionId: cancelled.executionId,
+      // The durable lifecycle must override a contradictory process observation.
+      status: 'complete',
+      finishedAt: '2026-07-29T00:00:00.000Z',
+    });
 
     const cards = state.projection().ledger.cards as Array<Record<string, any>>;
-    assert.equal(cards.find((card) => card.id === 'master')?.lifecycle?.waitingAt, secondFinishedAt);
+    assert.equal(cards.find((card) => card.id === 'master')?.lifecycle?.waitingAt, cancelledFinishedAt);
     assert.equal(cards.find((card) => card.id === 'child-a')?.lifecycle?.waitingAt, originalWaitingAt);
     assert.equal(cards.find((card) => card.id === 'child-b')?.lifecycle?.waitingAt, originalWaitingAt);
 
@@ -168,7 +205,7 @@ test('subtask settlement targets the canonical master and keeps its waiting time
     const controlRoom = await response.json() as Record<string, any>;
     const projectedMaster = (controlRoom.allTasks as Array<Record<string, any>>)
       .find((task) => task.cardId === 'master');
-    assert.equal(projectedMaster?.waitingSince, secondFinishedAt);
+    assert.equal(projectedMaster?.waitingSince, cancelledFinishedAt);
   } finally {
     server.close();
     process.chdir(originalCwd);

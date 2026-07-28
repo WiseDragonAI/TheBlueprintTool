@@ -49,7 +49,12 @@ function fixture(context: test.TestContext) {
     projectId: 'project-a',
     initializeLedger: { cards: [], annotations: [], relationships: [] },
   });
-  const executions = createTaskExecutionRepository({ store, writerId: 'workstation', projectId: 'project-a' });
+  const executions = createTaskExecutionRepository({
+    store,
+    writerId: 'workstation',
+    projectId: 'project-a',
+    now: () => new Date('2026-07-23T10:00:05.000Z'),
+  });
   context.after(async () => {
     await store.flush();
     rmSync(root, { recursive: true, force: true });
@@ -59,6 +64,10 @@ function fixture(context: test.TestContext) {
 
 test('terminally cancels a queued execution without requiring process identity', async (context) => {
   const { executions, runtime } = fixture(context);
+  const settled: Array<Record<string, unknown>> = [];
+  const scheduled: string[] = [];
+  runtime.onCodexRunSettled = async (event: Record<string, unknown>) => { settled.push(event); };
+  runtime.scheduleCodexProcesses = async () => { scheduled.push('scheduled'); };
   await executions.admit(metadata('queued', 'workstation'));
   await executions.transition('queued', { phase: 'queued' });
 
@@ -66,7 +75,14 @@ test('terminally cancels a queued execution without requiring process identity',
 
   assert.equal(result.ok, true);
   assert.equal(result.phase, 'cancelled');
+  assert.equal(result.finishedAt, '2026-07-23T10:00:05.000Z');
   assert.equal(executions.find('queued')?.lifecycle.phase, 'cancelled');
+  assert.equal(executions.find('queued')?.lifecycle.finishedAt, result.finishedAt);
+  assert.deepEqual(settled.map((event) => ({ status: event.status, finishedAt: event.finishedAt })), [{
+    status: 'cancelled',
+    finishedAt: result.finishedAt,
+  }]);
+  assert.deepEqual(scheduled, ['scheduled']);
 });
 
 test('persists cancelling before signalling the registered live process', async (context) => {
@@ -76,11 +92,13 @@ test('persists cancelling before signalling the registered live process', async 
   await executions.transition('running', { phase: 'starting' });
   await executions.transition('running', { phase: 'running' });
   let phaseWhenSignalled = '';
+  let finishedAtWhenSignalled: string | null = null;
   const child = {
     pid: 0,
     exitCode: null as number | null,
     kill() {
       phaseWhenSignalled = executions.find('running')?.lifecycle.phase ?? '';
+      finishedAtWhenSignalled = executions.find('running')?.lifecycle.finishedAt ?? null;
       this.exitCode = 0;
       return true;
     },
@@ -100,8 +118,11 @@ test('persists cancelling before signalling the registered live process', async 
 
   assert.equal(result.ok, true);
   assert.equal(result.phase, 'cancelling');
+  assert.equal(result.finishedAt, '2026-07-23T10:00:05.000Z');
   assert.equal(phaseWhenSignalled, 'cancelling');
+  assert.equal(finishedAtWhenSignalled, result.finishedAt);
   assert.equal(executions.find('running')?.lifecycle.phase, 'cancelling');
+  assert.equal(executions.find('running')?.lifecycle.finishedAt, result.finishedAt);
 });
 
 test('routes cancellation to the immutable remote executor without mutating locally', async (context) => {

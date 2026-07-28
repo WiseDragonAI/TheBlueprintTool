@@ -7,6 +7,7 @@ import { isSameCodexProcess } from './codex-process-identity.js';
 import {
   taskExecutionNodeId,
   taskExecutionProcess,
+  scheduleTaskExecutionCancellationDeadline,
   taskExecutionState,
   type TaskExecutionCancellationResult,
 } from './task-execution-runtime.js';
@@ -14,6 +15,41 @@ import {
 type AnyRecord = Record<string, unknown>;
 
 const terminalPhases = new Set(['succeeded', 'failed', 'cancelled', 'interrupted']);
+
+async function publishQueuedCancellation(runtime: AnyRecord, execution: {
+  metadata: {
+    ledgerId: string;
+    sourceCardId: string;
+    ownerCardId: string;
+    sessionId: string;
+    executionId: string;
+  };
+  lifecycle: { finishedAt: string | null };
+}): Promise<void> {
+  try {
+    if (typeof runtime.onCodexRunSettled === 'function') {
+      await runtime.onCodexRunSettled({
+        ledgerId: execution.metadata.ledgerId,
+        cardId: execution.metadata.sourceCardId,
+        outputCardId: execution.metadata.ownerCardId,
+        threadId: `thread-${execution.metadata.sourceCardId}`,
+        runId: execution.metadata.sessionId,
+        executionId: execution.metadata.executionId,
+        status: 'cancelled',
+        finishedAt: execution.lifecycle.finishedAt,
+      });
+    }
+    if (typeof runtime.scheduleCodexProcesses === 'function') await runtime.scheduleCodexProcesses();
+  } catch (error) {
+    if (typeof runtime.onCodexBackgroundError === 'function') {
+      runtime.onCodexBackgroundError({
+        operation: 'task-execution-cancellation-notification',
+        error,
+        context: { executionId: execution.metadata.executionId },
+      });
+    }
+  }
+}
 
 export async function cancelTaskExecutionLocally(input: {
   runtime: AnyRecord;
@@ -35,13 +71,22 @@ export async function cancelTaskExecutionLocally(input: {
   }
   const phase = execution.lifecycle.phase;
   if (terminalPhases.has(phase)) {
-    return { ok: true, statusCode: 200, executionId: input.executionId, executorNodeId: localNodeId, phase, revision: execution.lifecycle.revision };
+    return {
+      ok: true,
+      statusCode: 200,
+      executionId: input.executionId,
+      executorNodeId: localNodeId,
+      phase,
+      revision: execution.lifecycle.revision,
+      finishedAt: execution.lifecycle.finishedAt ?? undefined,
+    };
   }
   if (phase === 'preparing' || phase === 'queued') {
     const cancelled = await state.executions.transition(input.executionId, {
       phase: 'cancelled',
       result: { status: 'cancelled', summary: 'Cancelled by operator.' },
     });
+    await publishQueuedCancellation(input.runtime, cancelled);
     return {
       ok: true,
       statusCode: 202,
@@ -49,6 +94,7 @@ export async function cancelTaskExecutionLocally(input: {
       executorNodeId: localNodeId,
       phase: cancelled.lifecycle.phase,
       revision: cancelled.lifecycle.revision,
+      finishedAt: cancelled.lifecycle.finishedAt ?? undefined,
       cancellationRequested: true,
     };
   }
@@ -60,6 +106,7 @@ export async function cancelTaskExecutionLocally(input: {
       executorNodeId: localNodeId,
       phase,
       revision: execution.lifecycle.revision,
+      finishedAt: execution.lifecycle.finishedAt ?? undefined,
       cancellationRequested: true,
     };
   }
@@ -74,16 +121,30 @@ export async function cancelTaskExecutionLocally(input: {
     };
   }
   const cancelling = await state.executions.transition(input.executionId, { phase: 'cancelling' });
+  const finishedAt = cancelling.lifecycle.finishedAt;
+  if (!finishedAt) throw new Error(`task_execution_cancel_timestamp_missing:${input.executionId}`);
   const runtimeRuns = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object'
     ? input.runtime.codexSkillRuns as Record<string, AnyRecord>
     : {};
   const runtimeRun = runtimeRuns[execution.metadata.sessionId];
-  if (runtimeRun) runtimeRun.cancelRequestedAt = cancelling.lifecycle.phaseSince;
-  if (!signalCodexProcessTree({ child: process.child ?? undefined, pid: process.processId, signal: 'SIGTERM' })) {
-    await state.executions.transition(input.executionId, {
-      phase: 'failed',
-      error: { code: 'task_execution_cancel_signal_failed', message: 'Could not signal the live execution process.' },
-    });
+  if (runtimeRun) {
+    runtimeRun.cancelRequestedAt = finishedAt;
+    runtimeRun.finishedAt = finishedAt;
+  }
+  const processTarget = { child: process.child ?? undefined, pid: process.processId };
+  const termSignalled = signalCodexProcessTree({ ...processTarget, signal: 'SIGTERM' });
+  const deadlineAt = new Date(Date.parse(finishedAt) + 2_000).toISOString();
+  scheduleTaskExecutionCancellationDeadline({
+    runtime: input.runtime,
+    executionId: input.executionId,
+    deadlineAt,
+    onDeadline: () => {
+      if (isSameCodexProcess(process.processId, process.processStartTime)) {
+        signalCodexProcessTree({ ...processTarget, signal: 'SIGKILL' });
+      }
+    },
+  });
+  if (!termSignalled && !signalCodexProcessTree({ ...processTarget, signal: 'SIGKILL' })) {
     return {
       ok: false,
       statusCode: 500,
@@ -92,12 +153,6 @@ export async function cancelTaskExecutionLocally(input: {
       executorNodeId: localNodeId,
     };
   }
-  const forceStop = setTimeout(() => {
-    if (isSameCodexProcess(process.processId, process.processStartTime)) {
-      signalCodexProcessTree({ child: process.child ?? undefined, pid: process.processId, signal: 'SIGKILL' });
-    }
-  }, 2_000);
-  forceStop.unref?.();
   return {
     ok: true,
     statusCode: 202,
@@ -105,6 +160,7 @@ export async function cancelTaskExecutionLocally(input: {
     executorNodeId: localNodeId,
     phase: cancelling.lifecycle.phase,
     revision: cancelling.lifecycle.revision,
+    finishedAt,
     cancellationRequested: true,
   };
 }

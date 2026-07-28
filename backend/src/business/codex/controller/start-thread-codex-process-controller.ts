@@ -24,6 +24,10 @@ import { persistLedgerProjection } from '@backend/business/task-state/helper/per
 import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-process.js';
+import {
+  commitTaskExecutionSettlement,
+  taskExecutionSettlementTimestamp,
+} from '../helper/commit-task-execution-settlement.js';
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import { TaskExecutionAdmissionError, createTaskExecutionLaunchRequest } from '../helper/task-execution-router.js';
 import {
@@ -452,33 +456,13 @@ export async function startThreadCodexProcessController(input: { action_payload?
       onSettled: async (settlement) => {
         let retainProcessForArtifactFailure = false;
         try {
-          if (settlement.kind === 'error') {
-            const ownsExecution = updateRuntimeExecution(runtime, runId, executionId, { status: 'failed', error: settlement.error.message, finishedAt: settlement.finishedAt });
-            if (!ownsExecution) return;
-            appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status: 'failed' }), 'utf8');
-            try {
-              await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
-            } catch (error) {
-              retainProcessForArtifactFailure = true;
-              throw error;
-            }
-            const current = taskExecutionState(runtime)?.executions.find(executionId);
-            if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
-              await taskExecutionState(runtime)!.executions.transition(executionId, {
-                phase: 'failed',
-                error: { code: 'codex_process_start_failed', message: settlement.error.message },
-              });
-            }
-            appendRunStatus(runSummaryFile, 'failed', settlement.error.message);
-            updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
-            scheduleCodexRuntime(runtime, 'schedule-after-thread-start-failure', { runId, executionId });
-            notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status: 'failed' });
-            return;
-          }
           if (String(runtimeRuns(runtime)[runId]?.executionId ?? '') !== executionId) return;
-          const cancelled = Boolean(runtimeRuns(runtime)[runId]?.cancelRequestedAt) || runtimeRunStatus(runtime, runId) === 'cancelled';
-          const sessionId = settlement.exitCode === 0 || cancelled ? '' : readCodexSessionId(stdoutFile);
-          if (!cancelled && settlement.exitCode !== 0 && sessionId && isTransientCodexCapacityFailure({ stdoutFile, stderrFile, stdoutByteOffset, stderrByteOffset })) {
+          const current = taskExecutionState(runtime)?.executions.find(executionId) ?? null;
+          const cancelled = current?.lifecycle.phase === 'cancelling'
+            || Boolean(runtimeRuns(runtime)[runId]?.cancelRequestedAt)
+            || runtimeRunStatus(runtime, runId) === 'cancelled';
+          const sessionId = settlement.kind === 'close' && (settlement.exitCode === 0 || cancelled) ? '' : readCodexSessionId(stdoutFile);
+          if (settlement.kind === 'close' && !cancelled && settlement.exitCode !== 0 && sessionId && isTransientCodexCapacityFailure({ stdoutFile, stderrFile, stdoutByteOffset, stderrByteOffset })) {
             const retryAt = new Date(Date.now() + codexCapacityResumeDelayMs).toISOString();
             appendRunStatus(runSummaryFile, 'running', `model capacity reached; resuming the same session after ${codexCapacityResumeDelayMs / 1000} seconds`);
             if (!updateRuntimeExecution(runtime, runId, executionId, { status: 'running', transientRetryAt: retryAt, exitCode: settlement.exitCode })) return;
@@ -490,32 +474,51 @@ export async function startThreadCodexProcessController(input: { action_payload?
             }, { runId, executionId, sessionId });
             return;
           }
-          const status: ProcessStatus = cancelled ? 'cancelled' : settlement.terminalStatus ?? (settlement.exitCode === 0 ? 'complete' : 'failed');
-          const detail = status === 'cancelled' ? 'terminated by operator' : `exit code ${settlement.exitCode ?? 'unknown'}`;
-          if (!updateRuntimeExecution(runtime, runId, executionId, { status, exitCode: settlement.exitCode, finishedAt: settlement.finishedAt })) return;
-          appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
+          const requestedPhase = cancelled
+            ? 'cancelled'
+            : settlement.kind === 'error'
+              ? 'failed'
+              : settlement.terminalStatus === 'complete'
+                ? 'succeeded'
+                : settlement.terminalStatus ?? (settlement.exitCode === 0 ? 'succeeded' : 'failed');
+          const predictedStatus: ProcessStatus = requestedPhase === 'succeeded' ? 'complete' : requestedPhase;
+          const finishedAt = taskExecutionSettlementTimestamp(current, settlement.finishedAt);
+          const detail = predictedStatus === 'cancelled'
+            ? 'terminated by operator'
+            : settlement.kind === 'error'
+              ? settlement.error.message
+              : `exit code ${settlement.exitCode ?? 'unknown'}`;
+          appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt, status: predictedStatus }), 'utf8');
           try {
             await finalizeTaskExecutionArtifacts({ runtime, executionId, jsonl: stdoutFile, stderr: stderrFile, telemetry: `${stdoutFile}.telemetry.jsonl` });
           } catch (error) {
             retainProcessForArtifactFailure = true;
             throw error;
           }
-          const current = taskExecutionState(runtime)?.executions.find(executionId);
-          if (current && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.lifecycle.phase)) {
-            await taskExecutionState(runtime)!.executions.transition(executionId, {
-              phase: status === 'complete' ? 'succeeded' : status,
-              result: { status: status === 'complete' ? 'succeeded' : status, summary: detail },
-              error: status === 'failed' ? { code: 'codex_process_failed', message: detail } : null,
-            });
-          }
+          const committed = await commitTaskExecutionSettlement({
+            runtime,
+            executionId,
+            requestedPhase,
+            settledAt: settlement.finishedAt,
+            summary: detail,
+            failureCode: settlement.kind === 'error' ? 'codex_process_start_failed' : 'codex_process_failed',
+          });
+          const status = committed.status;
+          if (status === 'interrupted') throw new Error(`task_execution_settlement_status_invalid:${executionId}:interrupted`);
+          updateRuntimeExecution(runtime, runId, executionId, {
+            status,
+            exitCode: settlement.exitCode,
+            error: status === 'failed' ? detail : '',
+            finishedAt: committed.finishedAt,
+            settledAt: new Date().toISOString(),
+          });
           appendRunStatus(runSummaryFile, status, detail);
-          updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
           scheduleCodexRuntime(runtime, 'schedule-after-thread-settlement', { runId, executionId, status });
           if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
           if (typeof runtime.onCodexRunSettled === 'function') {
             await runtime.onCodexRunSettled({
               ledgerId, cardId, threadId, runId, executionId, status,
-              exitCode: settlement.exitCode, finishedAt: settlement.finishedAt,
+              exitCode: settlement.exitCode, finishedAt: committed.finishedAt,
             });
           }
         } finally {
