@@ -20,7 +20,7 @@ import { assertPipelineRunSkillPromptEvidence } from './pipeline-prompt-snapshot
 import { resolveCodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 import { resolveServerSkillContext } from './server-skill-context.js';
-import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
+import { hasLedgerProjectionSource, readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { codexProcessIdentity } from './codex-process-identity.js';
 import { launchCodexExecutionProcess } from './launch-codex-execution-process.js';
 import {
@@ -125,7 +125,7 @@ export function resolvePipelineLedgerContext(input: {
   if (!tab) return null;
   const ledgerFile = String(tab.ledgerFile ?? '').replace(/^\.decision-os\//, '');
   const ledgerPath = resolve(input.decisionOsRoot, ledgerFile);
-  if (!isInside(input.decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return null;
+  if (!isInside(input.decisionOsRoot, ledgerPath) || !hasLedgerProjectionSource({ ledgerId: input.ledgerId, ledgerPath, runtime: input.runtime })) return null;
   return {
     ledgerId: input.ledgerId,
     ledgerPath,

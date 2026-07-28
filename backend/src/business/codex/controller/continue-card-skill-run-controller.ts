@@ -18,7 +18,7 @@ import { randomUUID } from 'node:crypto';
 import { codexProcessIdentity } from '../helper/codex-process-identity.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
-import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
+import { hasLedgerProjectionSource, readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-process.js';
 import {
@@ -153,7 +153,9 @@ export async function continueCardSkillRunController(input: { action_payload?: A
 
   const ledgerFile = String(tab.ledgerFile ?? '').replace(/^\.decision-os\//, '');
   const ledgerPath = resolve(decisionOsRoot, ledgerFile);
-  if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return fail(404, 'Ledger file not found.', { ledgerId, ledgerPath });
+  if (!isInside(decisionOsRoot, ledgerPath) || !hasLedgerProjectionSource({ ledgerId, ledgerPath, runtime })) {
+    return fail(404, 'Ledger source not found.', { ledgerId, ledgerPath });
+  }
 
   const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime }) as AnyRecord & { cards?: AnyRecord[] };
   const runFiles = resolveCardSkillRunFiles({ ledger, decisionOsRoot, ledgerPath, cardId, runId });

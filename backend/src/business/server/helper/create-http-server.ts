@@ -83,6 +83,7 @@ import { executeFederatedPipelineSkill } from '../../codex/helper/codex-pipeline
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { TaskExecutionPresentation, TaskExecutionPresentationEvent } from '../../../../../shared/schemas/task-execution-presentation-types.js';
 import type { TaskEntityChange, TaskExecutionMetadata } from '../../task-state/helper/task-current-state-types.js';
+import { hasLedgerProjectionSource } from '../../task-state/helper/read-ledger-projection.js';
 import { resolveCatalogProject, tasksLedgerForProject, tasksLedgerId, type DecisionOsProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
@@ -5203,6 +5204,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           ? 'ledgers-canvas.json'
           : String(tab?.ledgerFile ?? '').replace(/^\.decision-os\//, '');
       const ledgerPath = resolve(decisionOsRoot, ledgerFile);
+      const hasLedgerSource = hasLedgerProjectionSource({ ledgerId: tabId, ledgerPath, runtime: requestRuntime });
       response.setHeader('content-type', 'application/json');
       if (!ledgerFile) {
         response.statusCode = 404;
@@ -5210,7 +5212,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         return;
       }
       if (isLedgersCanvas) ensureLedgersCanvasDocument({ decisionOsRoot });
-      if (tabId !== 'state' && request.method !== 'GET' && existsSync(ledgerPath)) {
+      if (tabId !== 'state' && request.method !== 'GET' && hasLedgerSource) {
         const bodyBuffer = await readRequestBuffer(request);
         const mutation = bodyBuffer.length > 0 ? JSON.parse(bodyBuffer.toString('utf8')) as LedgerMutation : {};
         const ledger = (tabId === 'tasks' && localProject
@@ -5300,7 +5302,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         await persistLedgerMutationAndRespond(tabId, ledgerPath, beforeLedger, ledger, mutation, mutationResult.changedContentFiles, response);
         return;
       }
-      if (existsSync(ledgerPath)) {
+      if (hasLedgerSource) {
         const ledger = isLedgersCanvas
           ? ensureLedgersCanvasDocument({ decisionOsRoot }).document
           : tabId === 'tasks' && localProject
@@ -5313,7 +5315,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           ? { projectId: activeProject?.id ?? '', projectName: projectNameForDecisionOsRoot(decisionOsRoot), projectColor: activeProject?.color ?? '#38d9e8', ledgers: stateRead.ledgers }
           : hydrateLedgerCardContent(ledger, decisionOsRoot)));
       } else {
-        response.end(JSON.stringify({ ok: false, missing: ledgerPath }));
+        response.statusCode = 404;
+        response.end(JSON.stringify({ ok: false, error: 'ledger_source_not_found', missing: ledgerPath }));
       }
       return;
     }

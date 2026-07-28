@@ -8,7 +8,7 @@ import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 import { queueLedgerProjectionPersistence } from '@backend/business/task-state/helper/persist-ledger-projection.js';
-import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
+import { hasLedgerProjectionSource, readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -32,7 +32,9 @@ export function persistCardSkillRunEvents(input: {
 }): number {
   // WHAT: Reject persistence when the declared owning ledger no longer exists.
   // WHY: Falling back to a different ledger could leak lifecycle notes across scopes.
-  if (!existsSync(input.ledgerPath)) throw new Error(`Ledger file not found: ${input.ledgerPath}`);
+  if (!hasLedgerProjectionSource({ ledgerId: input.ledgerId ?? '', ledgerPath: input.ledgerPath, runtime: input.runtime })) {
+    throw new Error(`Ledger source not found: ${input.ledgerPath}`);
+  }
   const ledger = input.ledgerId === 'tasks'
     ? readLedgerProjection({ ledgerId: input.ledgerId, ledgerPath: input.ledgerPath, runtime: input.runtime })
     : JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord;

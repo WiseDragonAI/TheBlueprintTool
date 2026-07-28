@@ -90,13 +90,15 @@ function assignedTaskState(input: { workspace: string; nodeId: string; writerId:
   }));
   writeFileSync(join(input.workspace, cardRef), '# Voice task\n');
   writeFileSync(join(input.workspace, threadRef), '');
-  return createProjectTaskState({
+  const state = createProjectTaskState({
     projectId: 'project-a',
     writerId: input.writerId,
     decisionOsRoot,
     tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
     initialize: true,
   });
+  rmSync(join(decisionOsRoot, 'tasks.json'));
+  return state;
 }
 
 function taskRuntime(input: { workspace: string; nodeId: string; state: ReturnType<typeof assignedTaskState> }): Record<string, unknown> {
