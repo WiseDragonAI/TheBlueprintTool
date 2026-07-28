@@ -31,11 +31,11 @@ test('dispatches ordered federated skills through durable per-step executors', a
     const roles = ['source-publisher', 'initiator-reconciler', 'source-finalizer'];
     const run: CodexPipelineRun = {
       id: 'pipeline-run', pipelineId: 'project-synchronization', pipelineName: 'Project synchronization', temporary: false,
-      executionMode: 'federated', ledgerId: 'specs', sourceCardId: 'master', sourceCardTitle: 'Synchronize', status: 'pending',
+      executionMode: 'federated', ledgerId: 'specs', sourceCardId: 'master', sourceCardTitle: 'Synchronize', outputParentCardId: 'master', status: 'pending',
       createdAt: '2026-07-17T00:00:00.000Z', updatedAt: '2026-07-17T00:00:00.000Z', startedAt: null, finishedAt: null, resumedAt: null, error: '',
       steps: roles.map((role, index) => ({
         id: `run-step-${index + 1}`, stepId: `step-${index + 1}`, name: role, purpose: role,
-        outputCardId: outputCards[index], status: 'pending', startedAt: null, finishedAt: null, error: '',
+        outputCardId: outputCards[index], outputSubtaskPosition: index, status: 'pending', startedAt: null, finishedAt: null, error: '',
         skills: [{
           id: `skill-${index + 1}`, pipelineSkillId: `pipeline-skill-${index + 1}`, skillName: `project-sync-${role}`,
           runId: `skill-run-${index + 1}`, executionId: `execution-${index + 1}`, status: 'pending', codexModel: 'gpt-5.6-sol', codexEffort: 'medium',

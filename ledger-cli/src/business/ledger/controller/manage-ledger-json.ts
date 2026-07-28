@@ -11,6 +11,7 @@ import { readLedgerJson } from '../helper/read-ledger-json.js';
 import { writeLedgerJson } from '../effect/write-ledger-json.js';
 import { transitionCardLifecycle } from '../effect/transition-card-lifecycle.js';
 import { appendTaskThreadAnswer } from '../effect/append-task-thread-answer.js';
+import { submitTaskMutation } from '../effect/submit-task-mutation.js';
 import { isWorkerOwnedTaskLedger } from '../helper/is-worker-owned-task-ledger.js';
 import { formatLedgerOverview } from '../helper/format-ledger-overview.js';
 import { formatLedgerMarkdownExport } from '../helper/format-ledger-markdown-export.js';
@@ -288,6 +289,30 @@ export async function manageLedgerJsonController(
     return appendTaskThreadAnswer(actionPayload.answerOperation, fs);
   }
   if (isWorkerOwnedTaskLedger(actionPayload.ledgerJsonFile, fs) && actionPayload.ledgerCommand === 'mutate') {
+    const operation = actionPayload.mutationOperation;
+    const title = String(operation?.cardTitle ?? '').trim();
+    const cardId = String(operation?.cardId ?? '').trim();
+    const titleOnly = !actionPayload.mutation
+      && !actionPayload.mutationFile
+      && Boolean(cardId)
+      && Boolean(title)
+      && !operation?.addCardFile
+      && (operation?.addRelationships ?? []).length === 0
+      && operation?.cardComment === undefined
+      && !operation?.cardCommentFile
+      && !operation?.cardQuestionnairesFile
+      && (operation?.cardLabels ?? []).length === 0
+      && operation?.cardX === undefined
+      && operation?.cardY === undefined
+      && operation?.cardW === undefined
+      && operation?.cardH === undefined
+      && (operation?.removeCardIds ?? []).length === 0
+      && (operation?.removeRelationshipIds ?? []).length === 0;
+    if (titleOnly) {
+      // WHAT: Submit the one declared title patch through the task worker.
+      // WHY: Skill outputs need meaningful titles without reopening aggregate Tasks writes.
+      return submitTaskMutation({ action: 'patch-card', cardPatch: { id: cardId, title } });
+    }
     // WHAT: Reject an undeclared aggregate task mutation before helper-side file effects.
     // WHY: Only typed task commands may select current-state lanes.
     return { ok: false, error: 'scoped_task_command_required:mutate' };

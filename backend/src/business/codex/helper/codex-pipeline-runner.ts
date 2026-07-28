@@ -366,7 +366,9 @@ export async function spawnPipelineSkillProcess(input: {
     stepTitle: input.step.name,
     stepInputCardId: stageInput.cardId,
     stepInputCardContent: stageInput.content,
+    outputParentCardId: input.pipelineRun.outputParentCardId,
     outputCardId: input.step.outputCardId,
+    outputSubtaskPosition: input.step.outputSubtaskPosition,
     outputMarkdownFile: outputFile,
     serverSkill: resolveServerSkillContext({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, skillName: input.skill.skillName }),
   });

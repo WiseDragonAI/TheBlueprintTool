@@ -1,6 +1,6 @@
 /**
- * WHAT: Writes the generated card and relationship chain for one pending Codex pipeline run.
- * WHY: Ledger mutations are the start controller's final output effect and must remain separate from manifest derivation.
+ * WHAT: Writes generated cards as positioned siblings for one pending Codex pipeline run.
+ * WHY: Ledger mutations are the start controller's final output effect and must preserve the manifest's task topology.
  */
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { applyLedgerMutation } from '@backend/business/ledger/helper/apply-ledger-mutation.js';
@@ -13,16 +13,17 @@ type AnyRecord = Record<string, unknown>;
 export async function createCodexPipelineStepCards(input: {
   decisionOsRoot: string;
   context: PipelineLedgerContext;
-  source: AnyRecord;
   run: CodexPipelineRun;
 }): Promise<AnyRecord | null> {
-  const sourceX = Number(input.source.x ?? 0);
-  const sourceY = Number(input.source.y ?? 0);
-  const sourceWidth = Math.max(220, Number(input.source.w ?? 360));
+  const parent = (input.context.ledger.cards ?? [])
+    .find((card) => String(card.id ?? '') === input.run.outputParentCardId);
+  if (!parent) return { error: 'Pipeline output parent card not found.' };
+  const parentX = Number(parent.x ?? 0);
+  const parentY = Number(parent.y ?? 0);
+  const parentWidth = Math.max(220, Number(parent.w ?? 360));
   const safeRunId = String(input.run.id || 'untitled')
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'untitled';
-  let previousCardId = input.run.sourceCardId;
   const relationshipIds: string[] = [];
   const synchronizationRun = input.run.pipelineId === 'project-synchronization';
   for (const [index, step] of input.run.steps.entries()) {
@@ -33,8 +34,8 @@ export async function createCodexPipelineStepCards(input: {
         ? `${firstSkill?.skillName || step.name} result`
         : `${input.run.pipelineName} · ${step.name}`,
       cardType: 'codex-skill-run',
-      x: sourceX + sourceWidth + 96 + index * (700 + 96),
-      y: sourceY,
+      x: parentX + parentWidth + 96 + step.outputSubtaskPosition * (700 + 96),
+      y: parentY,
       w: 700,
       h: 260,
       status: 'todo',
@@ -63,10 +64,10 @@ export async function createCodexPipelineStepCards(input: {
     if (cardMutation.ok === false) return cardMutation.error?.body ?? { error: 'Could not create a pipeline step card.' };
     const relationship = {
       id: `rel-${safeRunId}-${index + 1}`.slice(0, 180),
-      from: synchronizationRun ? input.run.sourceCardId : previousCardId,
+      from: input.run.outputParentCardId,
       to: step.outputCardId,
-      label: synchronizationRun ? 'subtask' : step.name,
-      ...(synchronizationRun ? { position: index } : {}),
+      label: 'subtask',
+      position: step.outputSubtaskPosition,
     };
     relationshipIds.push(relationship.id);
     const relationMutation = applyLedgerMutation({
@@ -76,9 +77,8 @@ export async function createCodexPipelineStepCards(input: {
       mutation: { action: 'create-relationship', relationship },
     });
     // WHAT: Return the ledger's exact relationship-creation error to the controller.
-    // WHY: A partial chain must not be reported as a launchable pipeline.
+    // WHY: A partial subtask set must not be reported as a launchable pipeline.
     if (relationMutation.ok === false) return relationMutation.error?.body ?? { error: 'Could not create a pipeline step relationship.' };
-    previousCardId = step.outputCardId;
   }
   stripHydratedThreadNotes(input.context.ledger);
   await persistLedgerProjection({

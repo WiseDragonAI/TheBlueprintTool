@@ -129,6 +129,8 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
     assert.equal(started.run.steps[0].skills[0].codexEffort, 'high');
     assert.equal(started.run.steps[0].skills[1].codexModel, 'gpt-5.5');
     assert.equal(started.run.steps[0].skills[1].codexEffort, 'low');
+    assert.equal(started.run.outputParentCardId, 'source-card');
+    assert.deepEqual(started.run.steps.map((step: Record<string, any>) => step.outputSubtaskPosition), [0, 1, 2]);
 
     const queuedResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -154,6 +156,8 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
     assert.equal(completed.steps.every((step) => step.status === 'complete'), true);
     const immutableManifest = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === pipelineRunId);
     assert.equal(immutableManifest?.status, 'pending');
+    assert.equal(immutableManifest?.outputParentCardId, 'source-card');
+    assert.deepEqual(immutableManifest?.steps.map((step) => step.outputSubtaskPosition), [0, 1, 2]);
     assert.equal(immutableManifest?.steps.every((step) => step.skills.every((skill) => skill.status === 'pending')), true);
     assert.equal(immutableManifest?.steps.every((step) => step.skills.every((skill) => skill.processId === undefined && skill.processStartTime === undefined)), true);
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, null);
@@ -178,7 +182,10 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
     assert.equal(sourceCard.codexQueuedPipelineRunId, undefined);
     assert.equal(sourceCard.codexQueuedRunId, undefined);
     assert.equal(generated.every((card: Record<string, any>) => card.w === 700), true);
-    assert.deepEqual(ledger.relationships.slice(-3).map((relationship: Record<string, any>) => relationship.label), ['One', 'Two', 'Three']);
+    const outputRelationships = ledger.relationships.slice(-3);
+    assert.deepEqual(outputRelationships.map((relationship: Record<string, any>) => relationship.from), ['source-card', 'source-card', 'source-card']);
+    assert.deepEqual(outputRelationships.map((relationship: Record<string, any>) => relationship.label), ['subtask', 'subtask', 'subtask']);
+    assert.deepEqual(outputRelationships.map((relationship: Record<string, any>) => relationship.position), [0, 1, 2]);
   } finally {
     await closeServer(server);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;

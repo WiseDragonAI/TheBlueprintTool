@@ -38,6 +38,7 @@ function topology(run: CodexPipelineRun): string {
     ledgerId: run.ledgerId,
     sourceCardId: run.sourceCardId,
     sourceCardTitle: run.sourceCardTitle,
+    outputParentCardId: run.outputParentCardId,
     createdAt: run.createdAt,
     steps: run.steps.map((step) => ({
       id: step.id,
@@ -45,6 +46,7 @@ function topology(run: CodexPipelineRun): string {
       name: step.name,
       purpose: step.purpose,
       outputCardId: step.outputCardId,
+      outputSubtaskPosition: step.outputSubtaskPosition,
       skills: step.skills.map((skill) => ({
         id: skill.id,
         pipelineSkillId: skill.pipelineSkillId,

@@ -347,10 +347,15 @@ test('card skill process route creates a linked output card and launches codex',
         codexRunEffort?: string;
         comment?: { contentFile?: string };
       }>;
-      relationships: Array<{ from: string; to: string; label: string }>;
+      relationships: Array<{ from: string; to: string; label: string; position: number }>;
     };
     assert.equal(ledger.cards.some((card) => card.id === body.run.outputCardId && card.x > 420), true);
-    assert.equal(ledger.relationships.some((relationship) => relationship.from === 'source-card' && relationship.to === body.run.outputCardId && relationship.label === 'test-skill'), true);
+    assert.equal(ledger.relationships.some((relationship) => (
+      relationship.from === 'source-card'
+      && relationship.to === body.run.outputCardId
+      && relationship.label === 'subtask'
+      && relationship.position === 0
+    )), true);
     const outputCard = ledger.cards.find((card) => card.id === body.run.outputCardId);
     assert.equal(outputCard?.comment?.contentFile?.endsWith(`${body.run.outputCardId}.md`), true);
     assert.equal(outputCard?.codexRunModel, 'gpt-5.4');

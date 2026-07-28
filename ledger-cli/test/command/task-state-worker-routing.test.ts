@@ -101,6 +101,77 @@ test('tasks.json generic mutate fails before applying an undeclared projection c
   }
 });
 
+test('tasks.json title-only mutate submits one scoped card patch', async () => {
+  const previousServerUrl = process.env.DECISION_OS_SERVER_URL;
+  const previousProjectId = process.env.DECISION_OS_PROJECT_ID;
+  const previousFetch = globalThis.fetch;
+  process.env.DECISION_OS_SERVER_URL = 'http://127.0.0.1:50150';
+  process.env.DECISION_OS_PROJECT_ID = 'project-a';
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requests.push({ url: String(url), init });
+    if (!init) return new Response(JSON.stringify({ ok: true, ledger: { cards: [{ id: 'output-card', title: 'analysis result' }] } }), { status: 200 });
+    return new Response('{"ok":true}', { status: 200 });
+  }) as typeof fetch;
+  try {
+    const result = await dispatchLedgerCliCommandController([
+      'mutate',
+      '--ledger',
+      '/workspace/.decision-os/tasks.json',
+      '--card-id',
+      'output-card',
+      '--card-title',
+      'Verified runtime analysis',
+    ], { emit: () => undefined });
+    assert.equal(result.ok, true);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1]?.url, 'http://127.0.0.1:50150/p/project-a/decision-os/tasks');
+    assert.equal(requests[1]?.init?.method, 'PATCH');
+    assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), {
+      action: 'patch-card',
+      cardPatch: { id: 'output-card', title: 'Verified runtime analysis' },
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousServerUrl === undefined) delete process.env.DECISION_OS_SERVER_URL;
+    else process.env.DECISION_OS_SERVER_URL = previousServerUrl;
+    if (previousProjectId === undefined) delete process.env.DECISION_OS_PROJECT_ID;
+    else process.env.DECISION_OS_PROJECT_ID = previousProjectId;
+  }
+});
+
+test('tasks.json title mutate with an additional field remains rejected', async () => {
+  const previousServerUrl = process.env.DECISION_OS_SERVER_URL;
+  const previousProjectId = process.env.DECISION_OS_PROJECT_ID;
+  const previousFetch = globalThis.fetch;
+  process.env.DECISION_OS_SERVER_URL = 'http://127.0.0.1:50150';
+  process.env.DECISION_OS_PROJECT_ID = 'project-a';
+  let requests = 0;
+  globalThis.fetch = (async () => {
+    requests += 1;
+    return new Response(JSON.stringify({ ok: true, ledger: { cards: [{ id: 'output-card', title: 'analysis result' }] } }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const result = await manageLedgerJsonController({
+      ledgerCommand: 'mutate',
+      ledgerJsonFile: '/workspace/.decision-os/tasks.json',
+      mutationOperation: {
+        cardId: 'output-card',
+        cardTitle: 'Verified runtime analysis',
+        cardX: 40,
+      },
+    });
+    assert.deepEqual(result, { ok: false, error: 'scoped_task_command_required:mutate' });
+    assert.equal(requests, 1);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousServerUrl === undefined) delete process.env.DECISION_OS_SERVER_URL;
+    else process.env.DECISION_OS_SERVER_URL = previousServerUrl;
+    if (previousProjectId === undefined) delete process.env.DECISION_OS_PROJECT_ID;
+    else process.env.DECISION_OS_PROJECT_ID = previousProjectId;
+  }
+});
+
 test('tasks.json reads use the current task-state projection instead of the migration source file', async () => {
   const previousServerUrl = process.env.DECISION_OS_SERVER_URL;
   const previousProjectId = process.env.DECISION_OS_PROJECT_ID;

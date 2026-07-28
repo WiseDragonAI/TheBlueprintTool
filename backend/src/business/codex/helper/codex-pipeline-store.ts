@@ -246,12 +246,16 @@ function normalizeRunSkill(input: AnyRecord, stepId: string, index: number): Cod
 
 function normalizeRunStep(input: AnyRecord, runId: string, index: number): CodexPipelineRunStep {
   const id = text(input.id) || `${runId}-run-step-${index + 1}`;
+  const outputSubtaskPosition = Number(input.outputSubtaskPosition);
   return {
     id,
     stepId: text(input.stepId),
     name: text(input.name) || text(input.stepId) || id,
     purpose: text(input.purpose),
     outputCardId: text(input.outputCardId),
+    outputSubtaskPosition: Number.isSafeInteger(outputSubtaskPosition) && outputSubtaskPosition >= 0
+      ? outputSubtaskPosition
+      : index,
     status: status(input.status),
     skills: records(input.skills).map((skill, skillIndex) => normalizeRunSkill(skill, id, skillIndex)),
     startedAt: nullableText(input.startedAt),
@@ -284,6 +288,7 @@ function normalizeRuns(raw: unknown, issues: CodexPipelineStoreIssue[]): CodexPi
       ledgerId: text(input.ledgerId),
       sourceCardId: text(input.sourceCardId),
       sourceCardTitle: text(input.sourceCardTitle),
+      outputParentCardId: text(input.outputParentCardId) || text(input.sourceCardId),
       status: status(input.status),
       steps: records(input.steps).map((step, stepIndex) => normalizeRunStep(step, id, stepIndex)),
       createdAt: text(input.createdAt),

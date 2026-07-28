@@ -82,6 +82,7 @@ export type CodexPipelineRunStep = {
   readonly name: string;
   readonly purpose: string;
   readonly outputCardId: string;
+  readonly outputSubtaskPosition: number;
   readonly status: CodexPipelineStatus;
   readonly skills: readonly CodexPipelineRunSkill[];
   readonly startedAt: string | null;
@@ -99,6 +100,7 @@ export type CodexPipelineRun = {
   readonly ledgerId: string;
   readonly sourceCardId: string;
   readonly sourceCardTitle: string;
+  readonly outputParentCardId: string;
   /** See CodexPipelineRunSkill.status. This value is never used for runtime admission or settlement. */
   readonly status: CodexPipelineStatus;
   readonly steps: readonly CodexPipelineRunStep[];

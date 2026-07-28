@@ -35,6 +35,7 @@ import {
   TaskExecutionAdmissionError,
 } from '../helper/task-execution-router.js';
 import { taskExecutionNodeId, taskExecutionRouter, taskExecutionState } from '../helper/task-execution-runtime.js';
+import { resolvePipelineOutputParent } from '../helper/resolve-pipeline-output-parent.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -87,6 +88,7 @@ export async function startPipelineRun(input: {
   definition: PipelineDefinition;
   onLedgerChange?: unknown;
   admissionLocked?: boolean;
+  outputParentAdmissionLocked?: boolean;
   restartOfRun?: CodexPipelineRun | null;
   reservedRunId?: string;
   reservedFirstExecutionId?: string;
@@ -183,6 +185,38 @@ export async function startPipelineRun(input: {
   if (input.definition.steps.some((step) => step.skills.length === 0)) {
     return { ok: false, statusCode: 400, error: 'Every pipeline step must contain at least one skill.' };
   }
+  let outputParent: ReturnType<typeof resolvePipelineOutputParent>;
+  try {
+    outputParent = resolvePipelineOutputParent({
+      ledgerId: input.ledgerId,
+      ledger: context.ledger,
+      sourceCardId: input.sourceCardId,
+    });
+  } catch (error) {
+    if (error instanceof TaskExecutionAdmissionError) {
+      return {
+        ok: false,
+        statusCode: error.statusCode,
+        code: error.code,
+        retryable: false,
+        error: error.message,
+        context: error.context,
+      };
+    }
+    throw error;
+  }
+  if (!input.outputParentAdmissionLocked && outputParent.outputParentCardId !== input.sourceCardId) {
+    // WHAT: Serialize output position reservation on the resolved parent.
+    // WHY: Concurrent runs from different source subtasks must not claim the same sibling position.
+    return withCardCodexAdmission(
+      {
+        decisionOsRoot: input.decisionOsRoot,
+        ledgerId: input.ledgerId,
+        cardId: outputParent.outputParentCardId,
+      },
+      () => startPipelineRun({ ...input, outputParentAdmissionLocked: true }),
+    );
+  }
 
   let run: CodexPipelineRun;
   try {
@@ -195,6 +229,8 @@ export async function startPipelineRun(input: {
       ledgerId: input.ledgerId,
       sourceCardId: input.sourceCardId,
       sourceCardTitle: String(source.title ?? input.sourceCardId),
+      outputParentCardId: outputParent.outputParentCardId,
+      firstOutputSubtaskPosition: outputParent.firstOutputSubtaskPosition,
       ledgerPath: context.ledgerPath,
       restartOfPipelineRunId: input.restartOfRun?.id ?? null,
       reservedRunId: input.reservedRunId,
@@ -231,7 +267,6 @@ export async function startPipelineRun(input: {
   const cardError = await createCodexPipelineStepCards({
     decisionOsRoot: input.decisionOsRoot,
     context,
-    source,
     run,
   });
   // WHAT: Stop when the ledger rejects a generated card or relationship.
@@ -355,7 +390,7 @@ export async function startPipelineRun(input: {
             sessionId: skill.runId,
             projectId: String(input.runtime.projectId ?? ''),
             ledgerId: run.ledgerId,
-            taskId: run.sourceCardId,
+            taskId: run.ledgerId === 'tasks' ? run.outputParentCardId : '',
             sourceCardId: run.sourceCardId,
             ownerCardId: step.outputCardId,
             kind: 'pipeline-skill',

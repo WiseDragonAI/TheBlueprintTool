@@ -182,18 +182,15 @@ function assertLaunchRequest(request: TaskExecutionLaunchRequest): void {
   }
 }
 
-function resolveTask(input: {
-  state: ProjectTaskState;
-  request: TaskExecutionLaunchRequest;
-  localNodeId: string;
-}): { taskId: string; assignedNodeId: string; lineage: string[] } {
-  if (input.request.ledgerId !== 'tasks') return { taskId: '', assignedNodeId: input.localNodeId, lineage: [] };
-  const projection = input.state.projection();
-  const cards = records(projection.ledger.cards);
-  const relationships = records(projection.ledger.relationships);
+export function resolveTaskLineage(input: {
+  ledger: AnyRecord;
+  sourceCardId: string;
+}): { taskId: string; lineage: string[] } {
+  const cards = records(input.ledger.cards);
+  const relationships = records(input.ledger.relationships);
   const cardIds = new Set(cards.map((card) => String(card.id ?? '')).filter(Boolean));
-  if (!cardIds.has(input.request.sourceCardId)) {
-    throw new TaskExecutionAdmissionError('task_card_not_found', 404, { cardId: input.request.sourceCardId });
+  if (!cardIds.has(input.sourceCardId)) {
+    throw new TaskExecutionAdmissionError('task_card_not_found', 404, { cardId: input.sourceCardId });
   }
   const parents = new Map<string, string[]>();
   for (const relationship of relationships) {
@@ -202,9 +199,9 @@ function resolveTask(input: {
     const child = String(relationship.to ?? '');
     if (parent && child) parents.set(child, [...(parents.get(child) ?? []), parent]);
   }
-  const lineage = [input.request.sourceCardId];
+  const lineage = [input.sourceCardId];
   const visited = new Set(lineage);
-  let taskId = input.request.sourceCardId;
+  let taskId = input.sourceCardId;
   while (parents.has(taskId)) {
     const candidates = [...new Set(parents.get(taskId)!)];
     if (candidates.length !== 1) {
@@ -216,6 +213,21 @@ function resolveTask(input: {
     visited.add(taskId);
     lineage.push(taskId);
   }
+  return { taskId, lineage };
+}
+
+function resolveTask(input: {
+  state: ProjectTaskState;
+  request: TaskExecutionLaunchRequest;
+  localNodeId: string;
+}): { taskId: string; assignedNodeId: string; lineage: string[] } {
+  if (input.request.ledgerId !== 'tasks') return { taskId: '', assignedNodeId: input.localNodeId, lineage: [] };
+  const projection = input.state.projection();
+  const cards = records(projection.ledger.cards);
+  const { taskId, lineage } = resolveTaskLineage({
+    ledger: projection.ledger,
+    sourceCardId: input.request.sourceCardId,
+  });
   if (projection.conflicts.some((conflict) => (
     conflict.kind === 'assignment-conflict'
     && conflict.entityType === 'card'
