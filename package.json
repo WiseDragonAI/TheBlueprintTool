@@ -16,6 +16,7 @@
   },
   "scripts": {
     "start:workspace": "node ./bin/decision-os-server.mjs",
+    "pull:restart": "node ./bin/decision-os-pull-restart.mjs",
     "save-html": "node ./bin/save-html.mjs",
     "typecheck:frontend": "frontend/node_modules/.bin/tsc -p frontend/tsconfig.json --noEmit",
     "typecheck:backend": "backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit",
