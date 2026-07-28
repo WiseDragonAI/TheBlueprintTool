@@ -35,6 +35,14 @@ import {
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
 import { requestTaskExecutionState } from '/src/runtime/codex/effect/request-task-execution-state.js';
 import { applyMasterSubtaskExecutionState } from './master-subtask-execution-state.js';
+import {
+  openLedgerCardEditor,
+  requestActiveLedgerCardEditorClose,
+} from '/src/runtime/content-authoring/controller/ledger-card-editor.js';
+import {
+  openSkillLibraryEditor,
+  requestSkillLibraryEditorClose,
+} from '/src/runtime/codex/effect/render-skill-library-editor-modal.js';
 
 installProjectRequestScope();
 
@@ -318,20 +326,20 @@ function pathForTask(task) {
 }
 
 function taskForCurrentRoute() {
-  const scope = parseProjectScope(location.pathname);
-  const [, ledgerId, , , , cardId] = scope?.segments ?? [];
-  return (state.controlRoom?.allTasks ?? []).find((task) => task.projectId === scope?.projectId && task.ledgerId === ledgerId && task.cardId === cardId) ?? null;
+  const route = captureRouteSnapshot(location, parseProjectScope);
+  return (state.controlRoom?.allTasks ?? []).find((task) => (
+    task.projectId === route.projectId && task.ledgerId === route.ledgerId && task.cardId === route.cardId
+  )) ?? null;
 }
 
 function renderTaskReplicaShell(task, replica = task?.replica) {
-  const scope = parseProjectScope(location.pathname);
-  const [, ledgerId, , zoneId, , cardId] = scope?.segments ?? [];
-  const project = state.projects.find((entry) => entry.id === scope?.projectId);
+  const route = captureRouteSnapshot(location, parseProjectScope);
+  const project = state.projects.find((entry) => entry.id === route.projectId);
   if (project) setResourceProject(project.id);
-  state.activeLedgerId = ledgerId || task?.ledgerId || '';
-  state.activeZoneId = zoneId || task?.zoneId || 'ungrouped';
+  state.activeLedgerId = route.ledgerId || task?.ledgerId || '';
+  state.activeZoneId = route.zoneId || task?.zoneId || 'ungrouped';
   state.activeZoneColor = task?.projectColor || project?.color || defaultAccent;
-  state.activeCardId = cardId || task?.cardId || '';
+  state.activeCardId = route.cardId || task?.cardId || '';
   setMobileCodexContext({ projectId: state.resourceProjectId, ledgerId: state.activeLedgerId, cardId: state.activeCardId });
   const status = replica?.status || 'synchronizing';
   const label = {
@@ -377,9 +385,8 @@ function commitRouteView() {
   }
   if (isProjectCardPath(location.pathname)) {
     const task = taskForCurrentRoute();
-    const scope = parseProjectScope(location.pathname);
-    const [, ledgerId, , , , cardId] = scope?.segments ?? [];
-    const cached = state.activeLedgerId === ledgerId && state.ledger?.cards?.find((card) => String(card.id) === cardId && ledgerCardBody(card));
+    const { ledgerId, cardId } = currentRouteSnapshot();
+    const cached = state.activeLedgerId === ledgerId && state.ledger?.cards?.find((card) => String(card.id) === cardId);
     if (cached) renderCard(cached);
     else renderTaskReplicaShell(task);
     return true;
@@ -391,6 +398,8 @@ function navigate(path, replace = false, returnPathOverride = '') {
   const destination = new URL(path, location.origin);
   const currentLocation = `${location.pathname}${location.search}${location.hash}`;
   const nextLocation = `${destination.pathname}${destination.search}${destination.hash}`;
+  if (currentLocation !== nextLocation && !requestActiveLedgerCardEditorClose('route')) return false;
+  if (currentLocation !== nextLocation && !requestSkillLibraryEditorClose('route')) return false;
   if (currentLocation !== nextLocation && !closeCardDetail({ discardHistory: true })) return false;
   const projectScope = parseProjectScope(destination.pathname);
   const desktopCanvasRoute = window.matchMedia?.('(min-width: 761px)').matches === true
@@ -408,6 +417,14 @@ function navigate(path, replace = false, returnPathOverride = '') {
   const retained = commitRouteView();
   void loadRoute({ retainView: retained });
   return true;
+}
+
+function removeEditorQuery(expectedEditor) {
+  const url = new URL(location.href);
+  if (url.searchParams.get('editor') !== expectedEditor) return;
+  url.searchParams.delete('editor');
+  url.searchParams.delete('name');
+  history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 function beginOptimisticExecution(detail) {
@@ -2871,6 +2888,17 @@ async function loadRoute({ retainView = false } = {}) {
       renderLedgerLinks();
       setView('empty-view');
       openMobileCodexLibrary(owner.route.pathname.slice(1));
+      const query = new URLSearchParams(owner.route.search);
+      const skillName = query.get('name')?.trim();
+      if (owner.route.pathname === '/skills' && query.get('editor') === 'skill' && skillName) {
+        // WHAT: Keep deep-link editor loading inside the active route waterfall.
+        // WHY: The route owner must render a terminal failure instead of detaching a rejected modal load.
+        await openSkillLibraryEditor({
+          skillName,
+          requestProjectId: query.get('projectId')?.trim() || '',
+          onClosed: () => removeEditorQuery('skill'),
+        });
+      }
       return;
     }
     const scope = parseProjectScope(owner.route.pathname);
@@ -2900,8 +2928,6 @@ async function loadRoute({ retainView = false } = {}) {
     }
 
     const { section, ledgerId: requestedLedger, zoneId: requestedZone, cardId: requestedCard } = owner.route;
-    const zoneMarker = requestedZone ? 'zones' : '';
-    const cardMarker = requestedCard ? 'cards' : '';
     if (section === 'ledgers' && !requestedLedger) {
       state.activeLedgerId = '';
       renderLedgerLinks();
@@ -2916,8 +2942,8 @@ async function loadRoute({ retainView = false } = {}) {
     if (state.activeLedgerId !== ledgerId || !state.ledger) await loadLedger(ledgerId, owner);
     requireRouteOwnership(owner);
     const zones = ledgerZones();
-    const zone = zoneMarker === 'zones' ? zones.find((entry) => String(entry.id) === requestedZone) : null;
-    if (zone && cardMarker === 'cards' && requestedCard) {
+    const zone = requestedZone ? zones.find((entry) => String(entry.id) === requestedZone) : null;
+    if (requestedCard) {
       const localCard = state.ledger.cards?.find((entry) => String(entry.id) === requestedCard);
       const locallyOwned = localCard?.persistenceState === 'creating' || localCard?.persistenceState === 'failed';
       let card = locallyOwned ? localCard : null;
@@ -2936,8 +2962,9 @@ async function loadRoute({ retainView = false } = {}) {
       }
       if (card) {
         state.ledger.cards = state.ledger.cards.map((entry) => String(entry.id) === requestedCard ? card : entry);
-        state.activeZoneId = asText(zone.id);
-        state.activeZoneColor = asText(zone.color);
+        const cardZone = zone ?? zones.find((entry) => entry.cards.some((candidate) => String(candidate.id) === requestedCard));
+        state.activeZoneId = asText(cardZone?.id ?? 'ungrouped');
+        state.activeZoneColor = asText(cardZone?.color ?? '#9ba3ad');
         syncMobileThreadContext({
           projectId: state.resourceProjectId,
           replicaNodeId: owner.route.replicaNodeId,
@@ -2948,8 +2975,28 @@ async function loadRoute({ retainView = false } = {}) {
           onQuickVoiceSubmitted: navigateVoiceSubmission
         });
         renderCard(card);
+        const query = new URLSearchParams(owner.route.search);
+        if (query.get('thread') === 'open') openMobileThread(card, responsiveCardAccent(card));
+        if (query.get('editor') === 'markdown') {
+          // WHAT: Keep deep-link card editor loading inside the active route waterfall.
+          // WHY: Route cancellation and load errors belong to the route owner.
+          await openLedgerCardEditor({
+            projectId: owner.route.projectId,
+            ledgerId,
+            cardId: requestedCard,
+            card,
+            returnFocusTo: elements['card-title'],
+            onSaved: (saved) => {
+              const index = state.ledger?.cards?.findIndex((entry) => String(entry.id) === requestedCard) ?? -1;
+              if (index >= 0) state.ledger.cards[index] = saved;
+              if (state.activeCardId === requestedCard) renderCard(saved);
+            },
+            onClosed: () => removeEditorQuery('markdown'),
+          });
+        }
       }
-      else navigate(zonePath(ledgerId, zone.id), true);
+      else if (zone) navigate(zonePath(ledgerId, zone.id), true);
+      else navigate(ledgerPath(ledgerId), true);
     } else if (zone) {
       renderZone(zone);
     } else {
@@ -3107,6 +3154,8 @@ elements['done-sort'].addEventListener('change', (event) => {
   renderDone();
 });
 window.addEventListener('popstate', () => {
+  if (!requestActiveLedgerCardEditorClose('back')) return;
+  if (!requestSkillLibraryEditorClose('back')) return;
   if (closeCardDetail({ fromHistory: true })) {
     const retained = commitRouteView();
     void loadRoute({ retainView: retained });

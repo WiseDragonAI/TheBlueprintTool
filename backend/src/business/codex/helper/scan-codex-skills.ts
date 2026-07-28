@@ -7,7 +7,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync, type Dir
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
-export type CodexSkillSource = 'server' | 'workspace' | 'user' | 'system' | 'plugin';
+export type CodexSkillSource = 'server' | 'workspace' | 'user' | 'system' | 'plugin' | 'pipeline-prompt';
 
 export type CodexSkillSummary = {
   name: string;
@@ -33,6 +33,8 @@ export type SkillRoot = {
   excludedDirectories?: readonly string[];
 };
 
+export const importedFederatedSkillMarker = '.decision-os-imported-skill.json';
+
 function codexHome(): string {
   return resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
 }
@@ -44,8 +46,8 @@ export function candidateSkillRoots(workspaceRoot: string, serverRoot?: string):
   const workspace = resolve(workspaceRoot);
   const server = serverRoot ? resolve(serverRoot) : '';
   return [
-    ...(server && server !== workspace ? [{ directory: resolve(server, '.skills'), source: 'server' as const, maxDepth: 5 }] : []),
-    { directory: resolve(workspace, '.skills'), source: 'workspace', maxDepth: 5 },
+    ...(server ? [{ directory: resolve(server, '.skills'), source: 'server' as const, maxDepth: 5 }] : []),
+    ...(server !== workspace ? [{ directory: resolve(workspace, '.skills'), source: 'workspace' as const, maxDepth: 5 }] : []),
     { directory: userSkills, source: 'user', maxDepth: 6, excludedDirectories: [systemSkills] },
     { directory: systemSkills, source: 'system', maxDepth: 5 },
     { directory: resolve(home, 'plugins', 'cache'), source: 'plugin', maxDepth: 10 },
@@ -143,9 +145,12 @@ function isInside(parent: string, child: string): boolean {
 }
 
 function sourceEditability(skillFile: string, root: SkillRoot): { editable: boolean; readOnlyReason: string | null } {
-  if (root.source === 'server') return { editable: false, readOnlyReason: 'Server skills are synchronized through ledger-cli.' };
+  if (root.source === 'user') return { editable: false, readOnlyReason: 'User skills are read-only.' };
   if (root.source === 'system') return { editable: false, readOnlyReason: 'System skills are read-only.' };
   if (root.source === 'plugin') return { editable: false, readOnlyReason: 'Plugin skills are read-only.' };
+  if (root.source === 'server' && existsSync(resolve(skillFile, '..', importedFederatedSkillMarker))) {
+    return { editable: false, readOnlyReason: 'Imported federated skills are read-only on this node.' };
+  }
   try {
     const canonicalRoot = realpathSync(root.directory);
     const canonicalFile = realpathSync(skillFile);

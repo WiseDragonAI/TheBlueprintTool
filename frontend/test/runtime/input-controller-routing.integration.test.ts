@@ -297,7 +297,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(pipelineEditor, /openPipelineSkillPicker\(\{/);
   assert.doesNotMatch(pipelineEditor, /function renderSkillPicker\(/);
   assert.match(pipelineEditor, /export function removePipelineStep/);
-  assert.match(skillLibraryEditor, /detail\.readOnlyReason \|\| 'This skill is read-only\.'/);
+  assert.match(skillLibraryEditor, /detail\.readOnlyReason \|\| 'This authored file is read-only\.'/);
   assert.match(indexHtml, /class="skill-modal process-modal"/);
   assert.match(indexHtml, /class="pipelines-modal codex-admin-modal"/);
   assert.match(indexHtml, /class="pipeline-editor-modal codex-editor-modal"/);

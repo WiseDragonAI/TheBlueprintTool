@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,6 +12,10 @@ import { createHttpServer } from '@backend/business/server/helper/create-http-se
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
 import { discoverDecisionOsProjects } from '@backend/business/server/helper/project-catalog.js';
 import { taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
+import { admitPipelinePromptSnapshots } from '@backend/business/codex/helper/pipeline-prompt-snapshot.js';
+import { createCodexPipelineRunManifest, type PipelineDefinition } from '@backend/business/codex/helper/create-codex-pipeline-run-manifest.js';
+import { buildPipelineSkillPrompt } from '@backend/business/codex/helper/build-pipeline-skill-prompt.js';
+import { startPipelineRun } from '@backend/business/codex/controller/start-codex-pipeline-run-controller.js';
 
 async function closeServer(server: Server): Promise<void> {
   if (!server.listening) return;
@@ -59,6 +65,296 @@ function createWorkspace(prefix: string): { workspace: string; decisionOsRoot: s
   }, null, 2));
   return { workspace, decisionOsRoot };
 }
+
+function git(workspace: string, args: string[]): string {
+  return execFileSync('git', args, { cwd: workspace, encoding: 'utf8' }).trim();
+}
+
+function promptDefinition(): PipelineDefinition {
+  return {
+    pipelineId: 'prompt-pipeline',
+    pipelineName: 'Prompt pipeline',
+    temporary: false,
+    steps: [{
+      id: 'prompt-step',
+      name: 'Prompt step',
+      purpose: 'Execute immutable prompt evidence.',
+      skills: [{
+        id: 'prompt-skill',
+        skillName: 'review-output',
+        contentKind: 'pipeline-prompt',
+        codexModel: null,
+        codexEffort: null,
+      }],
+      createdAt: '2026-07-28T00:00:00.000Z',
+      updatedAt: '2026-07-28T00:00:00.000Z',
+    }],
+  };
+}
+
+function createPromptRepository(input: {
+  prefix: string;
+  markdown?: string | Buffer;
+  recordKind?: 'pipeline-prompt' | 'federated-skill';
+  commitPrompt?: boolean;
+  stagePrompt?: boolean;
+}): { workspace: string; decisionOsRoot: string; promptFile: string } {
+  const { workspace, decisionOsRoot } = createWorkspace(input.prefix);
+  git(workspace, ['init', '-q']);
+  git(workspace, ['config', 'user.name', 'Prompt Test']);
+  git(workspace, ['config', 'user.email', 'prompt@example.test']);
+  const promptFile = join(decisionOsRoot, 'pipeline-prompts', 'review-output.md');
+  mkdirSync(join(promptFile, '..'), { recursive: true });
+  writeFileSync(promptFile, input.markdown ?? '# Review output\n\nUse the admitted bytes.');
+  const definition = promptDefinition();
+  const recordKind = input.recordKind ?? 'pipeline-prompt';
+  writeCodexPipelineStore({
+    decisionOsRoot,
+    availableSkillNames: ['review-output'],
+    availableContentKinds: [['review-output', recordKind]],
+    store: {
+      version: 2,
+      pipelines: [{
+        id: 'prompt-pipeline',
+        name: 'Prompt pipeline',
+        purpose: '',
+        stepIds: ['prompt-step'],
+        createdAt: '2026-07-28T00:00:00.000Z',
+        updatedAt: '2026-07-28T00:00:00.000Z',
+      }],
+      steps: definition.steps.map((step) => ({
+        ...step,
+        skills: step.skills.map((skill) => ({ ...skill, contentKind: recordKind })),
+      })),
+      runs: [],
+      skillLibrary: [],
+      authoredContent: recordKind === 'pipeline-prompt'
+        ? [{
+            id: 'review-output',
+            kind: 'pipeline-prompt',
+            description: 'Review output',
+            contentFile: 'pipeline-prompts/review-output.md',
+            createdAt: '2026-07-28T00:00:00.000Z',
+            updatedAt: '2026-07-28T00:00:00.000Z',
+          }]
+        : [{
+            id: 'review-output',
+            kind: 'federated-skill',
+            description: 'Review output',
+            contentFile: '.skills/review-output/SKILL.md',
+            createdAt: '2026-07-28T00:00:00.000Z',
+            updatedAt: '2026-07-28T00:00:00.000Z',
+          }],
+      activeWorkspaceRun: null,
+    },
+  });
+  git(workspace, ['add', '.decision-os/codex-pipelines.json']);
+  git(workspace, ['commit', '-q', '-m', 'Register prompt']);
+  if (input.commitPrompt !== false) {
+    git(workspace, ['add', '.decision-os/pipeline-prompts/review-output.md']);
+    git(workspace, ['commit', '-q', '-m', 'Commit prompt']);
+  } else if (input.stagePrompt) {
+    git(workspace, ['add', '.decision-os/pipeline-prompts/review-output.md']);
+  }
+  return { workspace, decisionOsRoot, promptFile };
+}
+
+test('clean local prompt admission persists and injects one immutable snapshot without rereading its file', async () => {
+  const fixture = createPromptRepository({ prefix: 'decision-os-prompt-admission-' });
+  try {
+    const definition = promptDefinition();
+    const admitted = await admitPipelinePromptSnapshots({
+      ownerDecisionOsRoot: fixture.decisionOsRoot,
+      steps: definition.steps,
+    });
+    const snapshot = admitted.get('review-output');
+    assert.ok(snapshot);
+    const store = readCodexPipelineStore({
+      decisionOsRoot: fixture.decisionOsRoot,
+      availableSkillNames: ['review-output'],
+      availableContentKinds: [['review-output', 'pipeline-prompt']],
+    }).store;
+    const manifest = createCodexPipelineRunManifest({
+      decisionOsRoot: fixture.decisionOsRoot,
+      definition,
+      store,
+      workspaceRoot: fixture.workspace,
+      runtime: {},
+      ledgerId: 'specs',
+      sourceCardId: 'source-card',
+      sourceCardTitle: 'Source Card',
+      ledgerPath: join(fixture.decisionOsRoot, 'specs.json'),
+      admittedPromptSnapshots: admitted,
+    });
+    const skill = manifest.steps[0].skills[0];
+    assert.equal(skill.contentKind, 'pipeline-prompt');
+    assert.equal(skill.contentKind === 'pipeline-prompt' ? skill.promptSnapshot : '', snapshot.promptSnapshot);
+    rmSync(fixture.promptFile);
+    const processPrompt = buildPipelineSkillPrompt({
+      skillName: skill.skillName,
+      contentKind: skill.contentKind ?? 'federated-skill',
+      ...(skill.contentKind === 'pipeline-prompt' ? {
+        contentRevision: skill.contentRevision,
+        contentCommit: skill.contentCommit,
+        promptSnapshot: skill.promptSnapshot,
+      } : {}),
+      ledgerFile: join(fixture.decisionOsRoot, 'specs.json'),
+      pipelineRunId: manifest.id,
+      pipelineName: manifest.pipelineName,
+      sourceCardId: manifest.sourceCardId,
+      sourceCardTitle: manifest.sourceCardTitle,
+      stepId: manifest.steps[0].stepId,
+      stepTitle: manifest.steps[0].name,
+      stepInputCardId: manifest.sourceCardId,
+      stepInputCardContent: 'Input',
+      outputCardId: manifest.steps[0].outputCardId,
+      outputMarkdownFile: join(fixture.decisionOsRoot, 'output.md'),
+    });
+    assert.equal(processPrompt.split(snapshot.promptSnapshot).length - 1, 1);
+    assert.equal(processPrompt.includes('$review-output'), false);
+    assert.deepEqual(readCodexPipelineStore({ decisionOsRoot: fixture.decisionOsRoot }).store.runs, []);
+  } finally {
+    rmSync(fixture.workspace, { recursive: true, force: true });
+  }
+});
+
+test('local prompt construction rejects corrupted immutable evidence before process launch', () => {
+  const promptSnapshot = '# Admitted local prompt';
+  const valid: Parameters<typeof buildPipelineSkillPrompt>[0] = {
+    skillName: 'review-output',
+    contentKind: 'pipeline-prompt',
+    contentRevision: createHash('sha256').update(promptSnapshot).digest('hex'),
+    contentCommit: 'a'.repeat(40),
+    promptSnapshot,
+    ledgerFile: '/ledger.json',
+    pipelineRunId: 'pipeline-run',
+    pipelineName: 'Prompt pipeline',
+    sourceCardId: 'source-card',
+    sourceCardTitle: 'Source Card',
+    stepId: 'prompt-step',
+    stepTitle: 'Prompt step',
+    stepInputCardId: 'source-card',
+    stepInputCardContent: 'Input',
+    outputCardId: 'output-card',
+    outputMarkdownFile: '/output.md',
+  };
+  const cases: Array<[string, Partial<typeof valid>, RegExp]> = [
+    ['snapshot', { promptSnapshot: undefined }, /pipeline_prompt_snapshot_missing/],
+    ['revision', { contentRevision: 'b'.repeat(64) }, /pipeline_prompt_snapshot_revision_mismatch/],
+    ['commit', { contentCommit: 'not-a-commit' }, /pipeline_prompt_snapshot_commit_invalid/],
+    ['kind', { contentKind: 'workspace-skill' }, /pipeline_prompt_snapshot_kind_mismatch/],
+  ];
+  for (const [label, overrides, expected] of cases) {
+    assert.throws(
+      () => buildPipelineSkillPrompt({ ...valid, ...overrides }),
+      expected,
+      label,
+    );
+  }
+});
+
+test('invalid local prompt states fail before run, card, and process side effects', async () => {
+  const cases: Array<{
+    label: string;
+    setup: () => { workspace: string; decisionOsRoot: string; promptFile: string };
+    expected: RegExp;
+    beforeAdmission?: (fixture: { workspace: string; decisionOsRoot: string; promptFile: string }) => void;
+    race?: (context: { name: string; promptFile: string; storeFile: string }, fixture: { workspace: string; decisionOsRoot: string; promptFile: string }) => void;
+  }> = [
+    {
+      label: 'missing',
+      setup: () => createPromptRepository({ prefix: 'decision-os-prompt-missing-' }),
+      beforeAdmission: (fixture) => rmSync(fixture.promptFile),
+      expected: /pipeline_prompt_missing/,
+    },
+    {
+      label: 'dirty',
+      setup: () => createPromptRepository({ prefix: 'decision-os-prompt-dirty-' }),
+      beforeAdmission: (fixture) => writeFileSync(fixture.promptFile, '# Dirty prompt'),
+      expected: /pipeline_prompt_dirty/,
+    },
+    {
+      label: 'untracked',
+      setup: () => createPromptRepository({ prefix: 'decision-os-prompt-untracked-', commitPrompt: false }),
+      expected: /pipeline_prompt_untracked/,
+    },
+    {
+      label: 'uncommitted',
+      setup: () => createPromptRepository({ prefix: 'decision-os-prompt-uncommitted-', commitPrompt: false, stagePrompt: true }),
+      expected: /pipeline_prompt_uncommitted/,
+    },
+    {
+      label: 'oversized',
+      setup: () => createPromptRepository({ prefix: 'decision-os-prompt-oversized-', markdown: 'x'.repeat(1_000_001) }),
+      expected: /pipeline_prompt_oversized/,
+    },
+    {
+      label: 'malformed',
+      setup: () => createPromptRepository({ prefix: 'decision-os-prompt-malformed-', markdown: Buffer.from([0xc3, 0x28]) }),
+      expected: /pipeline_prompt_malformed/,
+    },
+    {
+      label: 'kind mismatch',
+      setup: () => createPromptRepository({ prefix: 'decision-os-prompt-kind-', recordKind: 'federated-skill' }),
+      expected: /pipeline_prompt_kind_mismatch/,
+    },
+    {
+      label: 'stale',
+      setup: () => createPromptRepository({ prefix: 'decision-os-prompt-stale-' }),
+      race: (_context, fixture) => {
+        writeFileSync(fixture.promptFile, '# Replacement committed during admission');
+        git(fixture.workspace, ['add', '.decision-os/pipeline-prompts/review-output.md']);
+        git(fixture.workspace, ['commit', '-q', '-m', 'Replace prompt during admission']);
+      },
+      expected: /pipeline_prompt_stale/,
+    },
+  ];
+  for (const testCase of cases) {
+    const fixture = testCase.setup();
+    try {
+      testCase.beforeAdmission?.(fixture);
+      const storeFile = join(fixture.decisionOsRoot, 'codex-pipelines.json');
+      const ledgerFile = join(fixture.decisionOsRoot, 'specs.json');
+      const storeBefore = readFileSync(storeFile);
+      const ledgerBefore = readFileSync(ledgerFile);
+      let processLaunches = 0;
+      if (testCase.race) {
+        await assert.rejects(
+          admitPipelinePromptSnapshots({
+            ownerDecisionOsRoot: fixture.decisionOsRoot,
+            steps: promptDefinition().steps,
+            beforeGitValidation: (context) => testCase.race!(context, fixture),
+          }),
+          testCase.expected,
+          testCase.label,
+        );
+      } else {
+        const result = await startPipelineRun({
+          decisionOsRoot: fixture.decisionOsRoot,
+          runtime: {
+            scheduleCodexProcesses: () => {
+              processLaunches += 1;
+            },
+          },
+          ledgerId: 'specs',
+          sourceCardId: 'source-card',
+          definition: promptDefinition(),
+        });
+        assert.equal(result.ok, false, testCase.label);
+        assert.match(`${result.code ?? ''}:${result.error ?? ''}`, testCase.expected, testCase.label);
+      }
+      assert.deepEqual(readFileSync(storeFile), storeBefore, testCase.label);
+      assert.deepEqual(readFileSync(ledgerFile), ledgerBefore, testCase.label);
+      const store = readCodexPipelineStore({ decisionOsRoot: fixture.decisionOsRoot }).store;
+      assert.deepEqual(store.runs, [], testCase.label);
+      assert.equal(JSON.parse(readFileSync(join(fixture.decisionOsRoot, 'specs.json'), 'utf8')).cards.length, 1, testCase.label);
+      assert.equal(existsSync(join(fixture.decisionOsRoot, 'runs')), false, testCase.label);
+      assert.equal(processLaunches, 0, testCase.label);
+    } finally {
+      rmSync(fixture.workspace, { recursive: true, force: true });
+    }
+  }
+});
 
 test('saved pipeline is idempotent while active and runs five isolated skills strictly in order', async () => {
   const previousCodexBin = process.env.CODEX_BIN;

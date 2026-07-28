@@ -103,6 +103,25 @@ function largeCurrentEntity(projectId: string, entityId: string, marker: string)
 }
 
 describe('federation relay', () => {
+  it('exposes exact release, protocol, environment, and Durable Object namespace identity', async () => {
+    const response = await SELF.fetch('https://relay.test/health');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      status: 'ready',
+      service: 'decision-os-federation-relay',
+      releaseSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      deliveryProtocol: 1,
+      protocolVersion: 1,
+      stateProtocol: taskStateProtocol,
+      stateSchema: taskCurrentStateVersion,
+      baselineEpoch: taskCurrentBaselineEpoch,
+      environment: 'dev',
+      workerName: 'decision-os-federation-relay-dev',
+      durableObjectNamespace: 'decision-os-federations-dev',
+    });
+  });
+
   it('resets one offline project state without deleting federation credentials', async () => {
     const federationId = `reset-${crypto.randomUUID()}`;
     const credential = await createNode(federationId, 'workstation');

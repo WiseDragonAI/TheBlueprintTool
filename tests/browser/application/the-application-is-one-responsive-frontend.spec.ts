@@ -390,7 +390,7 @@ test('A new desktop task remains in its task view while its optimistic creation 
     await creationRequest;
     await desktop.locator('#card-view:not([hidden])').waitFor({ state: 'visible' });
 
-    assert.match(new URL(desktop.url()).pathname, /\/ledgers\/tasks\/zones\/[^/]+\/cards\/[^/]+$/);
+    assert.match(new URL(desktop.url()).pathname, /\/ledgers\/tasks\/cards\/[^/]+$/);
     assert.equal(await desktop.locator('.canvas').count(), 0);
     assert.equal(cardDetailReads, 0, 'route hydration must not read a card that is still locally owned');
     assert.deepEqual(pageErrors, []);

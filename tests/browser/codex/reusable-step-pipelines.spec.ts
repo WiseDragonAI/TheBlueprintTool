@@ -4,7 +4,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -215,7 +215,7 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
     assert.deepEqual(detailPayload.skill.references?.map((reference: { name: string }) => reference.name), ['guide.md']);
     assert.deepEqual(pageErrors, []);
 
-    await library.getByRole('heading', { name: 'SKILL.md', exact: true }).waitFor({ state: 'visible' });
+    await library.getByRole('button', { name: 'Edit SKILL.md', exact: true }).waitFor({ state: 'visible' });
     assert.equal(await library.getByRole('heading', { name: 'Browser fixture', exact: true }).isVisible(), true);
     const geometry = await page.evaluate(() => {
       const modal = document.querySelector<HTMLElement>('.process-modal');
@@ -249,8 +249,8 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
     assert.equal(geometry.actionsInsideModal, true);
     assert.equal(geometry.favoriteInsideModal, true);
     assert.equal(geometry.markdownPadding, '18px');
-    assert.match(geometry.markdownBackground, /linear-gradient/);
-    assert.notEqual(geometry.markdownShadow, 'none');
+    assert.equal(geometry.markdownBackground, 'none');
+    assert.equal(geometry.markdownShadow, 'none');
     const reference = library.getByRole('button', { name: 'guide.md', exact: true });
     await reference.waitFor({ state: 'attached' });
     await reference.scrollIntoViewIfNeeded();
@@ -269,7 +269,7 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
     assert.equal(await reference.getAttribute('aria-expanded'), 'true');
     assert.equal(await library.getByText('Reference content is readable.', { exact: true }).isVisible(), true);
 
-    const metadataPath = `/api/codex/server-skills/${skillName}`;
+    const metadataPath = `/api/codex/skill-library/${skillName}`;
     const metadataPattern = `**${metadataPath}`;
     let releaseFavoriteSave = () => {};
     let observeFavoriteRequest = () => {};
@@ -282,7 +282,7 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
       await route.continue();
     };
     await page.route(metadataPattern, delayFavoriteSave);
-    const favoriteSavePromise = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === metadataPath);
+    const favoriteSavePromise = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname.endsWith(metadataPath));
     await library.getByRole('button', { name: 'Remove from favorites', exact: true }).click();
     await favoriteRequestObserved;
     assert.equal(await library.getByRole('button', { name: 'Add to favorites', exact: true }).getAttribute('aria-pressed'), 'false');
@@ -294,7 +294,7 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
 
     const tagChoice = library.getByRole('button', { name: 'Set Interface tag', exact: true });
     await tagChoice.waitFor({ state: 'visible' });
-    const tagSavePromise = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === metadataPath);
+    const tagSavePromise = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname.endsWith(metadataPath));
     await tagChoice.click();
     const tagSave = await tagSavePromise;
     assert.equal(tagSave.status(), 200);
@@ -436,8 +436,17 @@ async function createPipelineAndSkillDefaults(page: Page): Promise<void> {
   await skillEditor.waitFor({ state: 'visible' });
   await skillEditor.getByLabel('Default model', { exact: true }).selectOption('gpt-5.4');
   await skillEditor.getByLabel('Default effort', { exact: true }).selectOption('high');
-  await skillEditor.getByRole('button', { name: 'Save skill', exact: true }).click();
-  await skillEditor.getByText('Skill saved. Inherited run settings have been refreshed.', { exact: true }).waitFor({ state: 'visible' });
+  const content = skillEditor.locator('.cm-content');
+  await content.click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\nUse the configured defaults for this browser run.');
+  const saveResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'PUT' && response.url().includes(`/api/codex/skill-library/${skillName}`));
+  await skillEditor.getByRole('button', { name: 'Save new revision', exact: true }).click();
+  const saveResponse = await saveResponsePromise;
+  const savePayload = await saveResponse.json();
+  assert.equal(saveResponse.status(), 200, JSON.stringify(savePayload));
+  await skillEditor.getByText('Saved as a new Git revision.', { exact: true }).waitFor({ state: 'visible' });
   await skillEditor.getByRole('button', { name: 'Close', exact: true }).click();
   await skillEditor.waitFor({ state: 'hidden' });
   await skillPicker.waitFor({ state: 'visible' });
@@ -624,6 +633,11 @@ function createFixture(options: { extraSkillCount?: number } = {}): BrowserFixtu
   }
   writeFileSync(fakeCodexFile, fakeCodexSource({ launchFile, counterFile }), 'utf8');
   chmodSync(fakeCodexFile, 0o755);
+  execFileSync('git', ['init', '-q'], { cwd: workspace });
+  execFileSync('git', ['config', 'user.name', 'Decision OS Test'], { cwd: workspace });
+  execFileSync('git', ['config', 'user.email', 'test@decision-os.invalid'], { cwd: workspace });
+  execFileSync('git', ['add', '.'], { cwd: workspace });
+  execFileSync('git', ['commit', '-q', '-m', 'initialize browser pipeline fixture'], { cwd: workspace });
   return { workspace, codexHome, fakeCodexFile, launchFile };
 }
 

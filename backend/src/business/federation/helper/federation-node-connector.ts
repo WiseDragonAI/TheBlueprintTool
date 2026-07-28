@@ -13,6 +13,8 @@ import { readRepositoryOriginIdentity } from '../../project-sync/helper/reposito
 import { taskCurrentBaselineEpoch, taskCurrentStateVersion, taskStateProtocol } from '../../task-state/helper/task-current-state-types.js';
 import type { TaskExecutionObservation } from '../../../../../shared/schemas/task-execution-types.js';
 import type { TaskExecutionPresentationUpdate } from '../../../../../shared/schemas/task-execution-presentation-types.js';
+import { parseDeliveryNodeCommand, type DeliveryNodeCommand } from '../../../../../shared/schemas/decision-os-delivery-types.js';
+import { maximumDeliveryRequestBytes } from '../../delivery/helper/delivery-http-boundary.js';
 
 type ProjectManifest = Pick<DecisionOsProject, 'id' | 'name' | 'description' | 'color' | 'ledgers' | 'originFingerprint'>;
 type RelayFrame = {
@@ -187,6 +189,7 @@ type RequesterStream = {
   headers: Record<string, string>;
   chunks: Buffer[];
   bytes: number;
+  maximumBytes?: number;
   resolve?: (response: InternalResponse) => void;
   timeout?: NodeJS.Timeout;
   abortSignal?: AbortSignal;
@@ -199,10 +202,53 @@ type OwnerStream = {
   headers: Record<string, string>;
   chunks: Buffer[];
   bytes: number;
+  maximumBytes: number;
   responseCredit: CreditGate;
   abort: AbortController;
   timeout?: NodeJS.Timeout;
 };
+
+export function createDeliveryTransportCapabilityAuthority(input: {
+  now?: () => number;
+  ttlMs?: number;
+} = {}) {
+  const now = input.now ?? Date.now;
+  const ttlMs = Math.max(1_000, Math.min(60_000, Math.floor(input.ttlMs ?? 15_000)));
+  const capabilities = new Map<string, {
+    requesterNodeId: string;
+    targetNodeId: string;
+    requestId: string;
+    expiresAt: number;
+  }>();
+  const prune = (): void => {
+    const observedAt = now();
+    for (const [token, capability] of capabilities) {
+      if (capability.expiresAt <= observedAt) capabilities.delete(token);
+    }
+  };
+  return {
+    issue(requesterNodeId: string, targetNodeId: string, requestId: string): string {
+      prune();
+      if (![requesterNodeId, targetNodeId, requestId].every((entry) => /^[A-Za-z0-9][A-Za-z0-9._:-]{0,239}$/.test(entry))) {
+        throw new Error('delivery_transport_capability_identity_invalid');
+      }
+      const token = randomUUID();
+      capabilities.set(token, { requesterNodeId, targetNodeId, requestId, expiresAt: now() + ttlMs });
+      return token;
+    },
+    consume(token: string, targetNodeId: string): { requesterNodeId: string; requestId: string } | null {
+      prune();
+      const capability = capabilities.get(token);
+      if (!capability) return null;
+      capabilities.delete(token);
+      if (capability.targetNodeId !== targetNodeId || capability.expiresAt <= now()) return null;
+      return { requesterNodeId: capability.requesterNodeId, requestId: capability.requestId };
+    },
+    clear(): void {
+      capabilities.clear();
+    },
+  };
+}
 
 export function createFederationNodeConnector(input: {
   settings: unknown;
@@ -226,6 +272,7 @@ export function createFederationNodeConnector(input: {
   let localOwner = configuredLocalOwner(input.settings);
   const requesterStreams = new Map<string, RequesterStream>();
   const ownerStreams = new Map<string, OwnerStream>();
+  const deliveryCapabilities = createDeliveryTransportCapabilityAuthority();
   const remoteNodes = new Map<string, { nodeLabel: string; online: boolean; projects: ProjectManifest[] }>();
   let socket: WebSocket | null = null;
   let reconnectTimer: NodeJS.Timeout | null = null;
@@ -493,12 +540,28 @@ export function createFederationNodeConnector(input: {
         previous.abort.abort(new Error('federation_request_replaced'));
         previous.responseCredit.close(new Error('federation_request_replaced'));
       }
+      const headers = { ...(frame.headers ?? {}) };
+      delete headers['x-decision-os-delivery-capability'];
+      if (
+        String(frame.method ?? 'GET').toUpperCase() === 'POST'
+        && String(frame.path ?? '') === '/api/internal/delivery'
+        && String(frame.from ?? '')
+      ) {
+        headers['x-decision-os-delivery-capability'] = deliveryCapabilities.issue(
+          String(frame.from),
+          localOwner.ownerNodeId,
+          requestId,
+        );
+      }
       const stream: OwnerStream = {
         method: String(frame.method ?? 'GET').toUpperCase(),
         path: String(frame.path ?? '/'),
-        headers: frame.headers ?? {},
+        headers,
         chunks: [],
         bytes: 0,
+        maximumBytes: String(frame.path ?? '') === '/api/internal/delivery'
+          ? maximumDeliveryRequestBytes
+          : maximumBodyBytes,
         responseCredit: new CreditGate(flowControlTimeoutMs),
         abort: new AbortController(),
       };
@@ -520,12 +583,18 @@ export function createFederationNodeConnector(input: {
     if (frame.type === 'request-chunk' && owner) {
       const chunk = Buffer.from(String(frame.data ?? ''), 'base64');
       owner.bytes += chunk.byteLength;
-      if (owner.bytes > maximumBodyBytes) {
+      if (owner.bytes > owner.maximumBytes) {
         ownerStreams.delete(requestId);
         if (owner.timeout) clearTimeout(owner.timeout);
         owner.abort.abort(new Error('federation_body_limit'));
         owner.responseCredit.close(new Error('federation_body_limit'));
-        send({ version: 1, type: 'response-error', requestId, code: 'federation_body_limit', message: 'Remote body exceeds 25 MiB.' });
+        send({
+          version: 1,
+          type: 'response-error',
+          requestId,
+          code: 'federation_body_limit',
+          message: `Remote body exceeds ${owner.maximumBytes} bytes.`,
+        });
         return;
       }
       owner.chunks.push(chunk);
@@ -565,7 +634,7 @@ export function createFederationNodeConnector(input: {
     if (frame.type === 'response-chunk') {
       const chunk = Buffer.from(String(frame.data ?? ''), 'base64');
       requester.bytes += chunk.byteLength;
-      if (requester.bytes > (requester.file ? maximumContentBodyBytes : maximumBodyBytes)) {
+      if (requester.bytes > (requester.maximumBytes ?? (requester.file ? maximumContentBodyBytes : maximumBodyBytes))) {
         failRequester(requestId, 413, 'federation_body_limit', requester.file ? 'Remote content exceeds 1 GiB.' : 'Remote response exceeds 25 MiB.');
         return;
       }
@@ -608,7 +677,14 @@ export function createFederationNodeConnector(input: {
     }
   };
 
-  const openRequest = (ownerNodeId: string, path: string, options: { method?: string; body?: Buffer; headers?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal } = {}): { requestId: string; response: Promise<InternalResponse> } => {
+  const openRequest = (ownerNodeId: string, path: string, options: {
+    method?: string;
+    body?: Buffer;
+    headers?: Record<string, string>;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    maximumResponseBytes?: number;
+  } = {}): { requestId: string; response: Promise<InternalResponse> } => {
     if (options.signal?.aborted) {
       return { requestId: '', response: Promise.resolve({ status: 499, headers: { 'content-type': 'application/json' }, body: Buffer.from('{"ok":false,"error":"client_cancelled"}') }) };
     }
@@ -618,12 +694,14 @@ export function createFederationNodeConnector(input: {
     const requestId = randomUUID();
     const method = String(options.method ?? 'GET').toUpperCase();
     const body = options.body ?? Buffer.alloc(0);
-    if (body.byteLength > maximumBodyBytes) return { requestId: '', response: Promise.resolve({ status: 413, headers: { 'content-type': 'application/json' }, body: Buffer.from('{"ok":false,"error":"federation_body_limit"}') }) };
+    const maximumRequestBytes = path === '/api/internal/delivery' ? maximumDeliveryRequestBytes : maximumBodyBytes;
+    if (body.byteLength > maximumRequestBytes) return { requestId: '', response: Promise.resolve({ status: 413, headers: { 'content-type': 'application/json' }, body: Buffer.from('{"ok":false,"error":"federation_body_limit"}') }) };
     let resolveResponse: (response: InternalResponse) => void = () => undefined;
     const response = new Promise<InternalResponse>((resolve) => { resolveResponse = resolve; });
     const stream: RequesterStream = {
       requestCredit: new CreditGate(flowControlTimeoutMs), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
       resolve: resolveResponse,
+      maximumBytes: options.maximumResponseBytes,
     };
     const requestedTimeoutMs = Number(options.timeoutMs ?? internalRequestTimeoutMs);
     const requestTimeoutMs = Number.isFinite(requestedTimeoutMs)
@@ -817,6 +895,7 @@ export function createFederationNodeConnector(input: {
       nextRetryAt = null;
       connectionStartedAt = null;
       for (const stream of remoteNodes.values()) stream.online = false;
+      deliveryCapabilities.clear();
       setPhase(settings ? 'disconnected' : 'not_configured');
     },
     reconfigure(value: unknown): void {
@@ -864,8 +943,22 @@ export function createFederationNodeConnector(input: {
     localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
       return localOwner;
     },
+    consumeDeliveryCapability(token: string): { requesterNodeId: string; requestId: string } | null {
+      return deliveryCapabilities.consume(token, localOwner.ownerNodeId);
+    },
     nodes(): Array<{ nodeId: string; nodeLabel: string; online: boolean; projectCount: number }> {
       return [...remoteNodes].map(([nodeId, node]) => ({ nodeId, nodeLabel: node.nodeLabel, online: node.online, projectCount: node.projects.length }));
+    },
+    topologyNodes(): Array<{ nodeId: string; nodeLabel: string; online: boolean; projects: Array<{ projectId: string; originFingerprint: string }> }> {
+      return [...remoteNodes].map(([nodeId, node]) => ({
+        nodeId,
+        nodeLabel: node.nodeLabel,
+        online: node.online,
+        projects: node.projects.map((project) => ({
+          projectId: project.id,
+          originFingerprint: project.originFingerprint,
+        })),
+      }));
     },
     remoteProjects(): RemoteDecisionOsProject[] {
       if (!settings) return [];
@@ -933,6 +1026,18 @@ export function createFederationNodeConnector(input: {
     },
     async request(ownerNodeId: string, path: string, options?: { method?: string; body?: Buffer; headers?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal }): Promise<FederationInternalResponse> {
       const opened = openRequest(ownerNodeId, path, options);
+      return { ...await opened.response, requestId: opened.requestId };
+    },
+    async requestDelivery(ownerNodeId: string, commandInput: DeliveryNodeCommand, options?: { timeoutMs?: number; signal?: AbortSignal }): Promise<FederationInternalResponse> {
+      const command = parseDeliveryNodeCommand(commandInput);
+      const opened = openRequest(ownerNodeId, '/api/internal/delivery', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: Buffer.from(JSON.stringify(command)),
+        timeoutMs: options?.timeoutMs,
+        signal: options?.signal,
+        maximumResponseBytes: 64 * 1024,
+      });
       return { ...await opened.response, requestId: opened.requestId };
     },
     async requestToFile(ownerNodeId: string, path: string, target: string, expectedHash: string): Promise<{ status: number; bytes: number }> {

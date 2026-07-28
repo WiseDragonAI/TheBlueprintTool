@@ -62,8 +62,8 @@ test('pipeline library routes expose empty, create, invalid-reference, conflict,
         name: 'Analyze',
         purpose: '',
         skills: [
-          { id: 'skill-a', skillName: 'analysis', codexModel: null, codexEffort: null },
-          { id: 'skill-missing', skillName: 'deleted-skill', codexModel: 'gpt-5.5', codexEffort: 'xhigh' },
+          { id: 'skill-a', skillName: 'analysis', contentKind: 'federated-skill', codexModel: null, codexEffort: null },
+          { id: 'skill-missing', skillName: 'deleted-skill', contentKind: 'federated-skill', codexModel: 'gpt-5.5', codexEffort: 'xhigh' },
         ],
       }],
     };
@@ -130,7 +130,7 @@ test('pipeline library routes expose empty, create, invalid-reference, conflict,
     const skillsText = await skillsResponse.text();
     const skills = JSON.parse(skillsText) as Record<string, any>;
     const analysis = skills.skills.find((skill: Record<string, any>) => skill.name === 'analysis');
-    assert.equal(analysis.source, 'workspace');
+    assert.equal(analysis.source, 'server');
     assert.equal(analysis.editable, true);
     assert.equal(analysis.defaultCodexModel, null);
     assert.equal(typeof analysis.effectiveCodexModel, 'string');

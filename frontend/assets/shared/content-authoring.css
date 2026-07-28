@@ -1,0 +1,5 @@
+/**
+ * WHAT: Delivers the shared authored-file dialog system to non-canvas surfaces.
+ * WHY: Skill and Task Markdown editors must keep the same geometry and controls regardless of route surface.
+ */
+@import url('../canvas/dialogs.css');

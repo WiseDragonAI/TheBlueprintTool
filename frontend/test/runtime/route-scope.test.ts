@@ -17,6 +17,9 @@ test('parses global and project-scoped application routes', () => {
   assert.deepEqual(routeScope('/p/project/ledgers/specs/zones/zone-a/cards/card-a'), {
     view: 'card', projectId: 'project', ledgerId: 'specs', zoneId: 'zone-a', cardId: 'card-a',
   });
+  assert.deepEqual(routeScope('/p/project/ledgers/specs/cards/card-a'), {
+    view: 'card', projectId: 'project', ledgerId: 'specs', zoneId: '', cardId: 'card-a',
+  });
 });
 
 test('serializes canonical canvas hierarchy routes', () => {

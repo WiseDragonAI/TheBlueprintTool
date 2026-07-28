@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
 
+const releaseSha = 'a'.repeat(40);
+
 async function freePort(): Promise<number> {
   const server = createServer();
   await new Promise<void>((resolveListen, reject) => {
@@ -29,6 +31,17 @@ test('launcher serves durable diagnostics after its server child exits', async (
   mkdirSync(resolve(fixtureRepository, 'bin'), { recursive: true });
   mkdirSync(resolve(fixtureRepository, 'backend/src'), { recursive: true });
   mkdirSync(resolve(workspace, '.decision-os'), { recursive: true });
+  const releaseRoot = resolve(workspace, '.decision-os', 'delivery');
+  const releasePath = resolve(releaseRoot, 'releases', releaseSha);
+  const currentPointer = resolve(releaseRoot, 'current');
+  mkdirSync(releasePath, { recursive: true });
+  writeFileSync(resolve(fixtureRepository, '.decision-os-release.json'), `${JSON.stringify({ protocol: 1, releaseSha })}\n`);
+  writeFileSync(resolve(releasePath, '.decision-os-release.json'), `${JSON.stringify({ protocol: 1, releaseSha })}\n`);
+  symlinkSync(`releases/${releaseSha}`, currentPointer);
+  writeFileSync(resolve(workspace, '.decision-os', '.settings.json'), `${JSON.stringify({
+    deliveryProtocol: 1,
+    deliveryCurrentPointer: currentPointer,
+  })}\n`);
   copyFileSync(resolve(repositoryRoot, 'bin/decision-os-server.mjs'), resolve(fixtureRepository, 'bin/decision-os-server.mjs'));
   copyFileSync(resolve(repositoryRoot, 'bin/decision-os-launcher-emergency.mjs'), resolve(fixtureRepository, 'bin/decision-os-launcher-emergency.mjs'));
   symlinkSync(resolve(repositoryRoot, 'backend/node_modules'), resolve(fixtureRepository, 'backend/node_modules'), 'dir');
@@ -66,6 +79,10 @@ test('launcher serves durable diagnostics after its server child exits', async (
   assert.equal(diagnostics.status, 'degraded');
   assert.equal(diagnostics.launcherEmergency, true);
   assert.equal(diagnostics.startupPaused, true);
+  assert.equal(diagnostics.releaseSha, releaseSha);
+  assert.equal(diagnostics.deliveryProtocol, 1);
+  assert.equal(diagnostics.activeReleasePointer, `current:${releaseSha}`);
+  assert.equal(Number.isFinite(Date.parse(String(diagnostics.processStartedAt))), true);
   const incidents = diagnostics.incidents as Array<Record<string, unknown>>;
   assert.equal(incidents[0]?.scope, 'server-launcher');
   assert.equal(incidents[0]?.code, 'server_child_exited');
@@ -86,11 +103,29 @@ test('launcher preserves an intentional zero-code server restart exit', async ()
     copyFileSync(resolve(repositoryRoot, 'bin/decision-os-server.mjs'), resolve(fixtureRepository, 'bin/decision-os-server.mjs'));
     copyFileSync(resolve(repositoryRoot, 'bin/decision-os-launcher-emergency.mjs'), resolve(fixtureRepository, 'bin/decision-os-launcher-emergency.mjs'));
     symlinkSync(resolve(repositoryRoot, 'backend/node_modules'), resolve(fixtureRepository, 'backend/node_modules'), 'dir');
-    writeFileSync(resolve(fixtureRepository, 'backend/tsconfig.json'), JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext' } }));
-    writeFileSync(resolve(fixtureRepository, 'backend/src/server.ts'), 'process.exitCode = 0;\n');
+    writeFileSync(resolve(fixtureRepository, 'backend/tsconfig.json'), JSON.stringify({
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        paths: { '@backend/*': ['./src/*'] },
+      },
+    }));
+    writeFileSync(resolve(fixtureRepository, 'backend/src/launcher-module-owner.ts'), 'export const launcherModuleOwner = "fixture-repository";\n');
+    writeFileSync(
+      resolve(fixtureRepository, 'backend/src/server.ts'),
+      'import { launcherModuleOwner } from "@backend/launcher-module-owner.js";\n'
+        + 'if (launcherModuleOwner !== "fixture-repository") throw new Error("wrong launcher module owner");\n'
+        + 'process.exitCode = 0;\n',
+    );
     const child = spawn(process.execPath, [resolve(fixtureRepository, 'bin/decision-os-server.mjs')], {
       cwd: workspace,
-      env: { ...process.env, PORT: String(await freePort()), HOST: '127.0.0.1' },
+      env: {
+        ...process.env,
+        PORT: String(await freePort()),
+        HOST: '127.0.0.1',
+        TSX_TSCONFIG_PATH: resolve(repositoryRoot, 'backend/tsconfig.json'),
+      },
       stdio: 'ignore',
     });
     const [code, signal] = await new Promise<[number | null, NodeJS.Signals | null]>((resolveExit) => child.once('exit', (exitCode, exitSignal) => resolveExit([exitCode, exitSignal])));

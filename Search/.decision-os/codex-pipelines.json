@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "pipelines": [],
   "steps": [],
   "runs": [],
@@ -31,5 +31,6 @@
       "updatedAt": "2026-07-17T12:46:01.150Z"
     }
   ],
+  "authoredContent": [],
   "activeWorkspaceRun": null
 }

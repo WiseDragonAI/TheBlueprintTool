@@ -37,6 +37,7 @@ class FakeElement {
   disabled = false;
   hidden = false;
   open = false;
+  isConnected = true;
   draggable = false;
   readOnly = false;
   spellcheck = true;
@@ -193,10 +194,14 @@ const {
   setCardProcessTab,
 } = processModalModule;
 const {
+  closeSkillLibraryEditor,
+  openSkillLibraryCreator,
   openSkillLibraryEditor,
+  reloadSkillLibraryDraft,
   renderSkillLibraryEditorModal,
   saveSkillLibraryDraft,
   saveSkillLibraryTag,
+  selectSkillRevision,
   skillLibraryEditorState,
 } = await import('../../src/runtime/codex/effect/render-skill-library-editor-modal.js');
 const {
@@ -223,31 +228,41 @@ const catalog = [
   {
     name: 'analysis', description: 'Analyze evidence.', source: 'workspace' as const, editable: true, readOnlyReason: null,
     revision: 'analysis-a', defaultCodexModel: 'gpt-5.5' as const, defaultCodexEffort: 'high' as const,
-    effectiveCodexModel: 'gpt-5.5', effectiveCodexEffort: 'high'
+    effectiveCodexModel: 'gpt-5.5', effectiveCodexEffort: 'high',
+    contentKind: 'workspace-skill' as const, executionVisibility: 'agent' as const
   },
   {
     name: 'executor-implement', description: 'Implement the plan.', source: 'system' as const, editable: false,
     readOnlyReason: 'System skills are managed by Codex.', revision: 'executor-a', defaultCodexModel: null,
-    defaultCodexEffort: null, effectiveCodexModel: 'gpt-5.4', effectiveCodexEffort: 'xhigh'
+    defaultCodexEffort: null, effectiveCodexModel: 'gpt-5.4', effectiveCodexEffort: 'xhigh',
+    contentKind: 'federated-skill' as const, executionVisibility: 'agent' as const
   },
   {
     name: 'ui-audit', description: 'Audit the result.', source: 'plugin' as const, editable: false,
     readOnlyReason: 'Plugin skills are read-only.', revision: 'audit-a', defaultCodexModel: null,
-    defaultCodexEffort: null, effectiveCodexModel: 'gpt-5.3-codex', effectiveCodexEffort: 'medium'
+    defaultCodexEffort: null, effectiveCodexModel: 'gpt-5.3-codex', effectiveCodexEffort: 'medium',
+    contentKind: 'federated-skill' as const, executionVisibility: 'agent' as const
   }
 ];
+
+const pipelinePrompt = {
+  name: 'pipeline-outline', description: 'Write the pipeline-only outline.', source: 'pipeline-prompt' as const,
+  editable: true, readOnlyReason: null, revision: 'prompt-a', defaultCodexModel: null, defaultCodexEffort: null,
+  effectiveCodexModel: 'gpt-5.5', effectiveCodexEffort: 'high',
+  contentKind: 'pipeline-prompt' as const, executionVisibility: 'pipeline-only' as const
+};
 
 const steps = [
   {
     id: 'step-analyze', name: 'Analyze', purpose: 'Read the source.', createdAt: timestamp, updatedAt: timestamp,
     skills: [
-      { id: 'skill-analysis', skillName: 'analysis', codexModel: null, codexEffort: null },
-      { id: 'skill-audit', skillName: 'ui-audit', codexModel: 'gpt-5.3-codex' as const, codexEffort: 'medium' as const }
+      { id: 'skill-analysis', skillName: 'analysis', contentKind: 'workspace-skill' as const, codexModel: null, codexEffort: null },
+      { id: 'skill-audit', skillName: 'ui-audit', contentKind: 'federated-skill' as const, codexModel: 'gpt-5.3-codex' as const, codexEffort: 'medium' as const }
     ]
   },
   {
     id: 'step-build', name: 'Build', purpose: 'Implement the result.', createdAt: timestamp, updatedAt: timestamp,
-    skills: [{ id: 'skill-build', skillName: 'executor-implement', codexModel: 'gpt-5.4' as const, codexEffort: 'xhigh' as const }]
+    skills: [{ id: 'skill-build', skillName: 'executor-implement', contentKind: 'federated-skill' as const, codexModel: 'gpt-5.4' as const, codexEffort: 'xhigh' as const }]
   }
 ];
 
@@ -268,6 +283,7 @@ test('dedicated pipeline skill picker keeps a large catalog in intrinsic non-shr
     stepName: 'Analyze',
     stepSkillNames: [],
     skills: largeCatalog,
+    requestProjectId: 'project-a',
     onInsert: () => {},
   });
 
@@ -337,6 +353,7 @@ test('pipeline editor preserves step and skill order, insertion position, and nu
   assert.deepEqual(request.steps[1].skills[1], {
     id: request.steps[1].skills[1].id,
     skillName: 'executor-implement',
+    contentKind: 'federated-skill',
     codexModel: null,
     codexEffort: null
   });
@@ -344,6 +361,26 @@ test('pipeline editor preserves step and skill order, insertion position, and nu
   removePipelineStep('step-build');
   assert.deepEqual(pipelineEditorState.steps.map((step) => step.id), ['step-analyze']);
   assert.match(pipelineEditorState.notice, /reusable step record remains available/);
+});
+
+test('pipeline picker preserves a pipeline-only prompt discriminator through the save payload', async () => {
+  await openPipelineEditor({ pipeline, steps, skills: [...catalog, pipelinePrompt] });
+  pipelineEditorState.openStepId = 'step-analyze';
+  const addSkill = findByText(fakeDocument.pipelineEditorModal, 'Add skill');
+  assert.equal(addSkill.length, 1);
+  addSkill[0].trigger('click');
+  const prompt = fakeDocument.pipelineSkillPickerModal.querySelector('[data-codex-focus-key="picker-skill:pipeline-outline"]');
+  assert.ok(prompt);
+  prompt.trigger('click');
+  const confirmAdd = findByText(fakeDocument.pipelineSkillPickerModal, 'Add skill');
+  assert.equal(confirmAdd.length, 1);
+  confirmAdd[0].trigger('click');
+
+  const inserted = pipelineEditorState.steps[0].skills.at(-1);
+  assert.equal(inserted?.skillName, 'pipeline-outline');
+  assert.equal(inserted?.contentKind, 'pipeline-prompt');
+  const request = buildPipelineSaveRequest();
+  assert.equal(request.steps[0].skills.at(-1)?.contentKind, 'pipeline-prompt');
 });
 
 test('pipeline editor save submits exact inherited and explicit values and applies server warnings', async () => {
@@ -357,8 +394,8 @@ test('pipeline editor save submits exact inherited and explicit values and appli
       assert.equal(init?.method, 'PUT');
       const body = JSON.parse(String(init?.body));
       assert.deepEqual(body.pipeline.stepIds, ['step-analyze', 'step-build']);
-      assert.deepEqual(body.steps[0].skills[0], { id: 'skill-analysis', skillName: 'analysis', codexModel: null, codexEffort: null });
-      assert.deepEqual(body.steps[0].skills[1], { id: 'skill-audit', skillName: 'ui-audit', codexModel: 'gpt-5.3-codex', codexEffort: 'medium' });
+      assert.deepEqual(body.steps[0].skills[0], { id: 'skill-analysis', skillName: 'analysis', contentKind: 'workspace-skill', codexModel: null, codexEffort: null });
+      assert.deepEqual(body.steps[0].skills[1], { id: 'skill-audit', skillName: 'ui-audit', contentKind: 'federated-skill', codexModel: 'gpt-5.3-codex', codexEffort: 'medium' });
       return new Response(JSON.stringify({
         ok: true,
         pipeline,
@@ -392,7 +429,7 @@ test('Process card derives source content, reloads skill defaults on reopen, and
     state.activeLedger.cards[0].comment.what = 'Source content';
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
       if (url === '/api/codex/pipelines') {
-        return new Response(JSON.stringify({ ok: true, pipelines: [pipeline], steps, invalidReferences: [], issues: [] }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true, pipelines: [pipeline], steps, availableContent: catalog, invalidReferences: [], issues: [] }), { status: 200 });
       }
       if (url === '/api/codex/skills') {
         catalogVersion += 1;
@@ -585,14 +622,14 @@ test('successful direct skill launches return to the canonical Control Room Exec
   }
 });
 
-test('skill-catalog failures render actionable errors instead of empty or invalid pipeline states', async () => {
+test('direct skill-catalog failures do not hide pipeline-owned content', async () => {
   const previousFetch = globalThis.fetch;
   const previousLedger = state.activeLedger;
   try {
     state.activeLedger = { cards: [{ id: 'card-source', comment: { what: 'Source content' } }] };
     globalThis.fetch = (async (url: string) => {
       if (url === '/api/codex/pipelines') {
-        return new Response(JSON.stringify({ ok: true, pipelines: [pipeline], steps, invalidReferences: [], issues: [] }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true, pipelines: [pipeline], steps, availableContent: catalog, invalidReferences: [], issues: [] }), { status: 200 });
       }
       assert.equal(url, '/api/codex/skills');
       return new Response(JSON.stringify({ ok: false, error: 'Skill catalog unavailable.' }), { status: 503 });
@@ -602,12 +639,11 @@ test('skill-catalog failures render actionable errors instead of empty or invali
     assert.match(fakeDocument.processModal.textContent, /Skill catalog unavailable\./);
     const runButtons = findByText(fakeDocument.processModal, 'Run pipeline');
     assert.equal(runButtons.length, 1);
-    assert.equal(runButtons[0].disabled, true);
+    assert.equal(runButtons[0].disabled, false);
 
     await openPipelineEditor({ pipeline, steps });
-    assert.equal(pipelineEditorState.skillCatalogError, 'Skill catalog unavailable.');
-    assert.match(fakeDocument.pipelineEditorModal.textContent, /Skill catalog unavailable\./);
-    assert.equal(findByText(fakeDocument.pipelineEditorModal, 'Retry skill catalog').length, 1);
+    assert.equal(pipelineEditorState.skillCatalogError, '');
+    assert.deepEqual(pipelineEditorState.skills.map((skill) => skill.name), catalog.map((skill) => skill.name));
   } finally {
     globalThis.fetch = previousFetch;
     state.activeLedger = previousLedger;
@@ -665,15 +701,15 @@ test('late run and save responses cannot overwrite a newly opened modal session'
     const analysisDetail = { ...catalog[0], markdown: 'analysis body' };
     const executorDetail = { ...catalog[1], markdown: 'executor body' };
     globalThis.fetch = (async () => new Response(JSON.stringify({ ok: true, skill: analysisDetail }), { status: 200 })) as typeof fetch;
-    await openSkillLibraryEditor({ skillName: 'analysis' });
+    await openSkillLibraryEditor({ skillName: 'analysis', requestProjectId: 'project-a' });
     const skillSaveResponse = deferred<Response>();
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
       if (init?.method === 'PUT') return skillSaveResponse.promise;
-      assert.equal(url, '/api/codex/skill-library/executor-implement');
+      assert.equal(url, '/p/project-a/api/codex/skill-library/executor-implement');
       return new Response(JSON.stringify({ ok: true, skill: executorDetail }), { status: 200 });
     }) as typeof fetch;
     const pendingSkillSave = saveSkillLibraryDraft();
-    await openSkillLibraryEditor({ skillName: 'executor-implement' });
+    await openSkillLibraryEditor({ skillName: 'executor-implement', requestProjectId: 'project-a' });
     skillSaveResponse.resolve(new Response(JSON.stringify({ ok: true, skill: { ...analysisDetail, revision: 'analysis-new' } }), { status: 200 }));
     assert.equal(await pendingSkillSave, false);
     assert.equal(skillLibraryEditorState.skillName, 'executor-implement');
@@ -685,15 +721,20 @@ test('late run and save responses cannot overwrite a newly opened modal session'
   }
 });
 
-test('skill editor retains a conflicting draft and protected skills remain unsaveable', async () => {
+test('skill editor reconciles a conflicting draft and protected skills remain unsaveable', async () => {
   const previousFetch = globalThis.fetch;
   const editableDetail = { ...catalog[0], markdown: '---\nname: analysis\ndescription: Analyze evidence.\n---\n' };
   let saveRequestCount = 0;
   let savedCallbackCount = 0;
   try {
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
-      assert.equal(url, '/api/codex/skill-library/analysis');
-      if (!init) return new Response(JSON.stringify({ ok: true, skill: editableDetail }), { status: 200 });
+      assert.equal(url, '/p/project-a/api/codex/skill-library/analysis');
+      if (!init) {
+        const current = saveRequestCount
+          ? { ...editableDetail, markdown: `${editableDetail.markdown}\nServer revision.`, revision: 'analysis-b' }
+          : editableDetail;
+        return new Response(JSON.stringify({ ok: true, skill: current }), { status: 200 });
+      }
       assert.equal(init.method, 'PUT');
       saveRequestCount += 1;
       if (saveRequestCount === 1) {
@@ -702,14 +743,19 @@ test('skill editor retains a conflicting draft and protected skills remain unsav
       const body = JSON.parse(String(init.body));
       return new Response(JSON.stringify({ ok: true, skill: { ...editableDetail, ...body, revision: 'analysis-b' } }), { status: 200 });
     }) as typeof fetch;
-    await openSkillLibraryEditor({ skillName: 'analysis', onSaved: () => { savedCallbackCount += 1; } });
+    await openSkillLibraryEditor({ skillName: 'analysis', requestProjectId: 'project-a', onSaved: () => { savedCallbackCount += 1; } });
     skillLibraryEditorState.markdown = `${editableDetail.markdown}\nChanged locally.`;
     assert.equal(await saveSkillLibraryDraft(), false);
     assert.match(skillLibraryEditorState.error, /changed after it was opened/i);
     assert.match(skillLibraryEditorState.markdown, /Changed locally/);
+    assert.equal(skillLibraryEditorState.conflictRevision, 'analysis-b');
+    assert.equal(skillLibraryEditorState.detail?.revision, 'analysis-a');
+    await reloadSkillLibraryDraft();
+    assert.match(skillLibraryEditorState.markdown, /Server revision/);
+    assert.equal(skillLibraryEditorState.detail?.revision, 'analysis-b');
     assert.equal(await saveSkillLibraryDraft(), true);
     assert.equal(skillLibraryEditorState.detail?.revision, 'analysis-b');
-    assert.equal(skillLibraryEditorState.notice, 'Skill saved. Inherited run settings have been refreshed.');
+    assert.equal(skillLibraryEditorState.notice, 'Saved as a new Git revision.');
     assert.equal(savedCallbackCount, 1);
 
     Object.assign(skillLibraryEditorState, {
@@ -719,13 +765,76 @@ test('skill editor retains a conflicting draft and protected skills remain unsav
     });
     renderSkillLibraryEditorModal();
     assert.match(fakeDocument.skillLibraryEditorModal.textContent, /System skills are managed by Codex\./);
-    const saveButtons = findByText(fakeDocument.skillLibraryEditorModal, 'Save skill');
+    const saveButtons = findByText(fakeDocument.skillLibraryEditorModal, 'Save new revision');
     assert.equal(saveButtons.length, 1);
     assert.equal(saveButtons[0].disabled, true);
     assert.equal(await saveSkillLibraryDraft(), false);
     assert.equal(skillLibraryEditorState.detail?.readOnlyReason, 'System skills are managed by Codex.');
   } finally {
     globalThis.fetch = previousFetch;
+  }
+});
+
+test('skill editor guards dirty close, returns focus, and navigates adjacent Git revisions', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousConfirm = globalThis.confirm;
+  const opener = new FakeElement('button');
+  opener.focus();
+  let confirmResult = false;
+  globalThis.confirm = () => confirmResult;
+  try {
+    openSkillLibraryCreator({ requestProjectId: 'project-a' });
+    skillLibraryEditorState.skillName = 'draft-skill';
+    closeSkillLibraryEditor();
+    assert.equal(fakeDocument.skillLibraryEditorModal.open, true);
+    confirmResult = true;
+    closeSkillLibraryEditor();
+    assert.equal(fakeDocument.skillLibraryEditorModal.open, false);
+    assert.equal(fakeDocument.activeElement, opener);
+
+    const detail = {
+      ...catalog[0],
+      markdown: 'current',
+      history: [
+        { commit: 'commit-new', authoredAt: '2026-07-27T10:00:00.000Z', subject: 'Newest' },
+        { commit: 'commit-old', authoredAt: '2026-07-27T09:00:00.000Z', subject: 'Older' },
+      ],
+    };
+    globalThis.fetch = (async (url: string) => {
+      if (url === '/p/project-a/api/codex/skill-library/analysis') {
+        return new Response(JSON.stringify({ ok: true, skill: detail }), { status: 200 });
+      }
+      if (url.startsWith('/p/project-a/api/codex/skill-library/analysis/revisions?')) {
+        return new Response(JSON.stringify({ ok: true, history: detail.history, nextCursor: null }), { status: 200 });
+      }
+      const commit = url.endsWith('commit-new') ? 'commit-new' : 'commit-old';
+      return new Response(JSON.stringify({
+        ok: true,
+        revision: {
+          commit,
+          authoredAt: commit === 'commit-new' ? detail.history[0].authoredAt : detail.history[1].authoredAt,
+          subject: commit === 'commit-new' ? 'Newest' : 'Older',
+          markdown: commit === 'commit-new' ? 'current' : 'old',
+          patch: '@@ -1 +1 @@\n-old\n+current',
+        },
+      }), { status: 200 });
+    }) as typeof fetch;
+    await openSkillLibraryEditor({ skillName: 'analysis', requestProjectId: 'project-a' });
+    skillLibraryEditorState.historyInitialized = true;
+    findByText(fakeDocument.skillLibraryEditorModal, 'Revisions (2)')[0].trigger('click');
+    await selectSkillRevision(0);
+    assert.equal(skillLibraryEditorState.revisionDetail?.commit, 'commit-new');
+    const newer = findByText(fakeDocument.skillLibraryEditorModal, 'Newer')[0];
+    const older = findByText(fakeDocument.skillLibraryEditorModal, 'Older')[0];
+    assert.equal(newer.disabled, true);
+    assert.equal(older.disabled, false);
+    assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-revision-viewport')?.getAttribute('role'), 'region');
+    await selectSkillRevision(1);
+    assert.equal(skillLibraryEditorState.revisionDetail?.commit, 'commit-old');
+    assert.match(skillLibraryEditorState.revisionDetail?.patch ?? '', /^@@/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.confirm = previousConfirm;
   }
 });
 
@@ -742,7 +851,7 @@ test('skill tag buttons save one value immediately and roll back a rejected opti
       if (saveCount === 1) return firstSave.promise;
       return new Response(JSON.stringify({ ok: false, error: 'Rejected tag.' }), { status: 403 });
     }) as typeof fetch;
-    await openSkillLibraryEditor({ skillName: 'analysis' });
+    await openSkillLibraryEditor({ skillName: 'analysis', requestProjectId: 'project-a' });
     const pending = saveSkillLibraryTag('Research');
     assert.deepEqual(skillLibraryEditorState.detail?.tags, ['Research']);
     assert.equal(skillLibraryEditorState.tagsSaving, true);

@@ -7,9 +7,9 @@ import { saveCodexSkillLibrary } from '../helper/codex-skill-library.js';
 
 type AnyRecord = Record<string, unknown>;
 
-export function saveCodexSkillLibraryController(
+export async function saveCodexSkillLibraryController(
   input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {},
-): AnyRecord {
+): Promise<AnyRecord> {
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
@@ -17,5 +17,5 @@ export function saveCodexSkillLibraryController(
   if (!skillName) return { ok: false, statusCode: 400, error: 'Skill name is required.' };
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
   const { skillName: _skillName, ...savePayload } = payload;
-  return saveCodexSkillLibrary({ decisionOsRoot, runtime, skillName, payload: savePayload });
+  return await saveCodexSkillLibrary({ decisionOsRoot, runtime, skillName, payload: savePayload });
 }

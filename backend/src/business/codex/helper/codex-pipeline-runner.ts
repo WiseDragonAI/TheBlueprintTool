@@ -14,8 +14,9 @@ import type {
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
 import { codexRunExecutionFinishedMarker } from './codex-run-segment-marker.js';
-import { readCodexPipelineStore } from './codex-pipeline-store.js';
+import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './codex-pipeline-store.js';
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
+import { assertPipelineRunSkillPromptEvidence } from './pipeline-prompt-snapshot.js';
 import { resolveCodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 import { resolveServerSkillContext } from './server-skill-context.js';
@@ -246,6 +247,7 @@ export function reassessPipelineAfterSkill(input: {
   finishedAt?: string;
 }): CodexPipelineRun | null {
   const before = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  assertCodexPipelineStoreAvailable(before);
   const prior = before.store.runs.find((run) => run.id === input.pipelineRunId);
   if (!prior) return null;
   const replicated = replicatedPipelineRun(prior, input.runtime);
@@ -359,8 +361,17 @@ export async function spawnPipelineSkillProcess(input: {
     codexModel: input.skill.codexModel,
     codexEffort: input.skill.codexEffort,
   });
+  assertPipelineRunSkillPromptEvidence(input.skill);
+  const contentKind = input.skill.contentKind;
+  if (!contentKind) throw new Error('pipeline_prompt_snapshot_kind_mismatch');
   const prompt = buildPipelineSkillPrompt({
     skillName: input.skill.skillName,
+    contentKind,
+    ...(contentKind === 'pipeline-prompt' ? {
+      contentRevision: input.skill.contentRevision,
+      contentCommit: input.skill.contentCommit,
+      promptSnapshot: input.skill.promptSnapshot,
+    } : {}),
     ledgerFile: context.ledgerPath,
     pipelineRunId: input.pipelineRun.id,
     pipelineName: input.pipelineRun.pipelineName,
@@ -374,7 +385,9 @@ export async function spawnPipelineSkillProcess(input: {
     outputCardId: input.step.outputCardId,
     outputSubtaskPosition: input.step.outputSubtaskPosition,
     outputMarkdownFile: outputFile,
-    serverSkill: resolveServerSkillContext({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, skillName: input.skill.skillName }),
+    serverSkill: contentKind === 'pipeline-prompt'
+      ? null
+      : resolveServerSkillContext({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, skillName: input.skill.skillName }),
   });
 
   mkdirSync(dirname(input.skill.stdoutFile), { recursive: true });
@@ -537,7 +550,9 @@ export async function runPipelineExecution(input: {
   if (execution.lifecycle.phase !== 'starting') {
     return { ok: false, statusCode: 409, error: 'Pipeline execution was not claimed.', executionId: input.executionId };
   }
-  const manifest = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs
+  const normalized = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  assertCodexPipelineStoreAvailable(normalized);
+  const manifest = normalized.store.runs
     .find((run) => run.id === execution.metadata.pipelineRunId);
   const located = manifest?.steps.flatMap((step) => step.skills.map((skill) => ({ step, skill })))
     .find((entry) => entry.skill.executionId === input.executionId);

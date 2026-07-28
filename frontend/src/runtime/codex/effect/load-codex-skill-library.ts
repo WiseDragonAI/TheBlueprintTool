@@ -3,10 +3,13 @@
  * WHY: Skill editors must address skills by name and keep filesystem resolution on the backend.
  */
 import type { CodexSkillSummary } from './load-codex-skills.js';
+import type { CodexSkillGitRevision } from './load-codex-skill-revision.js';
+import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
 
 export type CodexSkillLibraryDetail = CodexSkillSummary & {
   markdown: string;
   references: Array<{ name: string; markdown: string }>;
+  history: CodexSkillGitRevision[];
 };
 
 export type CodexSkillLibraryLoadResult = {
@@ -21,8 +24,9 @@ type SkillLibraryResponse = Partial<CodexSkillLibraryLoadResult> & {
   skill?: CodexSkillLibraryDetail;
 };
 
-export async function loadCodexSkillLibrary(skillName: string): Promise<CodexSkillLibraryLoadResult> {
-  const response = await fetch(`/api/codex/skill-library/${encodeURIComponent(skillName)}`).catch(() => undefined);
+export async function loadCodexSkillLibrary(skillName: string, requestProjectId: string): Promise<CodexSkillLibraryLoadResult> {
+  const path = projectScopedRequestPath(`/api/codex/skill-library/${encodeURIComponent(skillName)}`, requestProjectId);
+  const response = await fetch(path).catch(() => undefined);
   if (!response) return { ok: false, statusCode: 0, availableTags: [], error: 'Request failed.' };
   const body = await response.json().catch(() => null) as SkillLibraryResponse | null;
   if (!body) return { ok: false, statusCode: response.status, availableTags: [], error: 'Invalid response.' };

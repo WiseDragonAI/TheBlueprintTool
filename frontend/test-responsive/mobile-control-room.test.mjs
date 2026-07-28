@@ -283,10 +283,11 @@ test('creates projects from the projects catalog with the shared creation contro
   assert.match(mobile, /create-project-button'\)\.addEventListener\('click', \(\) => openCreationModal\('project'\)\)/);
 });
 
-test('derives resource request scope exclusively from canonical URLs', () => {
+test('derives ordinary resource request scope from canonical URLs', () => {
   assert.match(mobile, /installProjectRequestScope\(\)/);
-  assert.match(mobile, /const scope = parseProjectScope\(location\.pathname\)/);
-  assert.doesNotMatch(mobile, /setProjectRequestProjectId|activeProjectId|selectProject/);
+  assert.match(mobile, /const routeParts = \(\) => parseProjectScope\(location\.pathname\)\?\.segments \?\? \[\]/);
+  assert.match(mobile, /captureRouteSnapshot\(location, parseProjectScope\)/);
+  assert.match(mobile, /projectScopedRequestPath\(url, projectId\)/);
   assert.doesNotMatch(mobile, /document\.cookie/);
   assert.match(mobile, /cardPathForProject\(task\.projectId, task\.ledgerId/);
 });

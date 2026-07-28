@@ -41,6 +41,10 @@ import {
 type Env = {
   FEDERATIONS: DurableObjectNamespace<FederationRelay>;
   ADMIN_SECRET: string;
+  DECISION_OS_RELEASE_SHA: string;
+  FEDERATIONS_NAMESPACE: string;
+  RELAY_ENVIRONMENT: 'production' | 'dev';
+  RELAY_WORKER_NAME: string;
 };
 
 type SocketIdentity = { nodeId: string };
@@ -89,7 +93,23 @@ function routeParts(url: URL): RelayRoute | null {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === '/health') return json({ ok: true, service: 'decision-os-federation-relay', protocolVersion, stateProtocol, stateSchema, baselineEpoch: stateBaselineEpoch });
+    if (url.pathname === '/health') {
+      return json({
+        ok: true,
+        status: 'ready',
+        service: 'decision-os-federation-relay',
+        observedAt: new Date().toISOString(),
+        releaseSha: env.DECISION_OS_RELEASE_SHA,
+        deliveryProtocol: 1,
+        protocolVersion,
+        stateProtocol,
+        stateSchema,
+        baselineEpoch: stateBaselineEpoch,
+        environment: env.RELAY_ENVIRONMENT,
+        workerName: env.RELAY_WORKER_NAME,
+        durableObjectNamespace: env.FEDERATIONS_NAMESPACE,
+      });
+    }
     const route = routeParts(url);
     if (!route) return json({ ok: false, error: 'not_found' }, 404);
     const stub = env.FEDERATIONS.getByName(route.federationId, { locationHint: 'apac' });

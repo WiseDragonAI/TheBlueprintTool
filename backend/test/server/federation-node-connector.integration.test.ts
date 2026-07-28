@@ -56,6 +56,17 @@ function federatedLibraryFixture(home: string, suffix: string): void {
       runs: [], skillLibrary: [], activeWorkspaceRun: null,
     },
   });
+  try {
+    execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: home, stdio: 'ignore' });
+  } catch {
+    execFileSync('git', ['init', '-q'], { cwd: home });
+  }
+  execFileSync('git', ['add', '--', '.skills', '.decision-os/codex-pipelines.json'], { cwd: home });
+  execFileSync('git', [
+    '-c', 'user.name=Decision OS Test',
+    '-c', 'user.email=test@decision-os.invalid',
+    'commit', '-q', '-m', `commit ${suffix} federated library`,
+  ], { cwd: home });
 }
 
 async function waitFor<T>(read: () => Promise<T | null>): Promise<T> {

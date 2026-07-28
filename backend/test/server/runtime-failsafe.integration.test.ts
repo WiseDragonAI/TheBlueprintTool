@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -11,6 +11,60 @@ import { createRuntimeIncidentLedger } from '@backend/business/server/helper/run
 import { runtimeIncidentReviewCardId, runtimeIncidentReviewProjectId } from '@backend/business/server/helper/synchronize-runtime-incident-review-task.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import { createTaskExecutionLaunchRequest, type TaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
+
+test('normal health reports the active release identity', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'decision-os-release-health-'));
+  const decisionOsRoot = join(home, '.decision-os');
+  const releaseSha = 'a'.repeat(40);
+  const releaseRoot = join(decisionOsRoot, 'delivery');
+  const releasePath = join(releaseRoot, 'releases', releaseSha);
+  const currentPointer = join(releaseRoot, 'current');
+  mkdirSync(releasePath, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'release-health' }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [], annotations: [], relationships: [], notes: {}, threadFiles: {},
+  }));
+  writeFileSync(join(releasePath, '.decision-os-release.json'), JSON.stringify({
+    protocol: 1,
+    releaseSha,
+    launcher: 'bin/decision-os-server.mjs',
+  }));
+  symlinkSync(`releases/${releaseSha}`, currentPointer);
+
+  const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({
+    action_payload: {
+      port: 0,
+      host: '127.0.0.1',
+      cwd: home,
+      decisionOsFrontendRoot: join(repositoryRoot, 'frontend'),
+    },
+    runtime_state: runtime,
+  });
+  runtime.decisionOsSettings = {
+    deliveryProtocol: 1,
+    deliveryReleaseRoot: releaseRoot,
+    deliveryCurrentPointer: currentPointer,
+  };
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  try {
+    const health = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/health`)
+      .then((response) => response.json()) as Record<string, unknown>;
+    assert.equal(health.status, 'ready');
+    assert.equal(health.releaseSha, releaseSha);
+    assert.equal(health.deliveryProtocol, 1);
+    assert.equal(health.activeReleasePointer, `current:${releaseSha}`);
+    assert.equal(Number.isFinite(Date.parse(String(health.processStartedAt))), true);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(home, { recursive: true, force: true });
+  }
+});
 
 async function waitUntil(assertion: () => boolean | Promise<boolean>, timeoutMs = 2_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;

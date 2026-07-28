@@ -3,6 +3,12 @@ account_id = "c99e5dd424bb8368244a4c9fcf5f6bae"
 main = "src/index.ts"
 compatibility_date = "2026-07-16"
 
+[vars]
+DECISION_OS_RELEASE_SHA = ""
+FEDERATIONS_NAMESPACE = "decision-os-federations-production"
+RELAY_ENVIRONMENT = "production"
+RELAY_WORKER_NAME = "decision-os-federation-relay"
+
 [[durable_objects.bindings]]
 name = "FEDERATIONS"
 class_name = "FederationRelay"
@@ -23,6 +29,12 @@ mode = "smart"
 
 [env.dev]
 name = "decision-os-federation-relay-dev"
+
+[env.dev.vars]
+DECISION_OS_RELEASE_SHA = ""
+FEDERATIONS_NAMESPACE = "decision-os-federations-dev"
+RELAY_ENVIRONMENT = "dev"
+RELAY_WORKER_NAME = "decision-os-federation-relay-dev"
 
 [[env.dev.durable_objects.bindings]]
 name = "FEDERATIONS"

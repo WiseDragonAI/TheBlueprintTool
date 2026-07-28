@@ -2,8 +2,18 @@
  * WHAT: Builds the deterministic prompt for one skill inside a durable pipeline run.
  * WHY: Every isolated Codex process needs explicit source, stage input, and output ownership.
  */
+import type { CodexContentKind } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import {
+  assertPipelinePromptRunSkillSnapshot,
+  assertPipelineRunSkillPromptEvidence,
+} from './pipeline-prompt-snapshot.js';
+
 export function buildPipelineSkillPrompt(input: {
   skillName: string;
+  contentKind: CodexContentKind;
+  contentRevision?: string;
+  contentCommit?: string;
+  promptSnapshot?: string;
   ledgerFile: string;
   pipelineRunId: string;
   pipelineName: string;
@@ -19,6 +29,12 @@ export function buildPipelineSkillPrompt(input: {
   outputMarkdownFile: string;
   serverSkill?: { markdown: string; packageRoot: string } | null;
 }): string {
+  assertPipelineRunSkillPromptEvidence(input);
+  let promptSnapshot: string | null = null;
+  if (input.contentKind === 'pipeline-prompt') {
+    assertPipelinePromptRunSkillSnapshot(input);
+    promptSnapshot = input.promptSnapshot;
+  }
   const serverSkill = input.serverSkill ? [
     '',
     `Decision OS server skill package: ${input.serverSkill.packageRoot}`,
@@ -27,9 +43,16 @@ export function buildPipelineSkillPrompt(input: {
     input.serverSkill.markdown,
     '```',
   ] : [];
-  return [
-    `$${input.skillName}`,
+  const pipelinePrompt = promptSnapshot !== null ? [
+    'Decision OS pipeline-only prompt:',
+    'Apply the following exact injected instructions. This prompt is intentionally unavailable to natural Codex skill discovery.',
+    '```markdown',
+    promptSnapshot,
+    '```',
     '',
+  ] : [];
+  return [
+    ...(input.contentKind === 'pipeline-prompt' ? [] : [`$${input.skillName}`, '']),
     'ledger-cli is on PATH; use $DECISION_OS_LEDGER_FILE and do not locate the CLI.',
     'You are processing one stage of a decision-os card pipeline from the active workspace.',
     '',
@@ -48,6 +71,7 @@ export function buildPipelineSkillPrompt(input: {
     `Output card role: linked subtask of ${input.outputParentCardId}`,
     ...serverSkill,
     '',
+    ...pipelinePrompt,
     'Input card content:',
     '```markdown',
     input.stepInputCardContent,

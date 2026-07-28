@@ -541,8 +541,10 @@
 }
 
 .skill-library-editor-modal {
-  width: min(920px, calc(100vw - 48px));
-  max-width: min(920px, calc(100vw - 48px));
+  width: 80vw;
+  max-width: 80vw;
+  height: 95vh;
+  max-height: 95vh;
 }
 
 .codex-modal-head,
@@ -1234,7 +1236,7 @@
 
 .skill-library-editor-body {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
   overflow: hidden;
@@ -1292,15 +1294,166 @@
 }
 
 .skill-markdown-field {
+  display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
 }
 
-.codex-field .skill-markdown-editor {
+.skill-create-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1fr);
+  gap: 12px;
+}
+
+.skill-create-form > .codex-inline-warning {
+  grid-column: 1 / -1;
+}
+
+.skill-editor-owner-controls,
+.skill-editor-pane,
+.skill-history-pane {
   min-height: 0;
-  resize: none;
-  line-height: 1.5;
-  tab-size: 2;
+}
+
+.skill-editor-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skill-editor-view-tabs,
+.skill-editor-toolbox,
+.text-file-editor-toolbar,
+.text-file-editor-actions,
+.skill-revision-navigation,
+.skill-revision-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skill-editor-view-tabs {
+  border-bottom: 1px solid var(--line);
+}
+
+.skill-editor-view-tabs .process-mode-tab {
+  margin-bottom: -1px;
+}
+
+.skill-editor-toolbox {
+  justify-content: flex-end;
+}
+
+.text-file-editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.text-file-editor-toolbar {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 7px;
+}
+
+.text-file-editor-identity {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-file-editor-actions {
+  justify-content: flex-end;
+}
+
+.text-file-editor-surface {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.skill-codemirror-host {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+}
+
+.skill-revision-browser {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.skill-revision-navigation {
+  justify-content: space-between;
+}
+
+.skill-revision-navigation > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  text-align: center;
+}
+
+.skill-revision-navigation small {
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.skill-revision-key {
+  justify-content: flex-end;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.skill-revision-key .is-removal {
+  color: #ff5f6d;
+}
+
+.skill-revision-key .is-addition {
+  color: #4d9cff;
+}
+
+.skill-revision-viewport {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: #0b0d11;
+}
+
+.authored-revision-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  gap: 10px;
+}
+
+.authored-revision-preview {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: #0b0d11;
+}
+
+.authored-revision-preview .text-file-editor {
+  height: 100%;
+}
+
+.skill-revision-pierre {
+  --diffs-addition-color: #4d9cff;
+  --diffs-deletion-color: #ff5f6d;
+  min-width: 0;
 }
 
 @media (max-width: 760px) {
@@ -1315,6 +1468,23 @@
   .codex-modal-head,
   .codex-modal-actions {
     flex-wrap: wrap;
+  }
+  .skill-library-editor-modal {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    height: calc(100vh - 24px);
+    max-height: calc(100vh - 24px);
+  }
+  .skill-create-form {
+    grid-template-columns: 1fr;
+  }
+  .skill-create-form > .codex-inline-warning {
+    grid-column: auto;
+  }
+  .authored-revision-content {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(180px, 1fr) minmax(180px, 1fr);
+    overflow: auto;
   }
   .process-skill-row,
   .pipeline-library-summary,

@@ -4,7 +4,7 @@
  */
 const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
-const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], serverSkills: [], skillDetails: new Map(), selectedReference: '', availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '', pickerQuery: '', pickerProjectFilter: 'All', pickerTagFilter: 'All', pickerSelectedSkillName: '', pickerInsertionIndex: 0, pickerSynchronizing: false };
+const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], pipelineContent: [], skillDetails: new Map(), selectedReference: '', availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '', pickerQuery: '', pickerProjectFilter: 'All', pickerTagFilter: 'All', pickerSelectedSkillName: '', pickerInsertionIndex: 0, pickerSynchronizing: false };
 let processDetailGeneration = 0;
 let processActionGeneration = 0;
 const el = (selector) => document.querySelector(selector);
@@ -26,13 +26,14 @@ async function loadLibraries(projectId = state.projectId) {
   ]);
   const project = state.projects.find((entry) => entry.id === projectId);
   state.skills = (Array.isArray(skills.skills) ? skills.skills : []).map((skill) => ({ ...skill, projects: project ? [project] : [] }));
+  state.pipelineContent = (Array.isArray(pipelines.availableContent) ? pipelines.availableContent : []).map((content) => ({ ...content, projects: project ? [project] : [] }));
   state.availableTags = Array.isArray(skills.availableTags) && skills.availableTags.length ? skills.availableTags : [...skillCategories];
   state.pipelines = (Array.isArray(pipelines.pipelines) ? pipelines.pipelines : []).map((pipeline) => ({ ...pipeline, projectId, projectName: project?.name || '', projectColor: project?.color || '#20242b' }));
   state.steps = (Array.isArray(pipelines.steps) ? pipelines.steps : []).map((step) => ({ ...step, projectId }));
   return pipelines;
 }
 function skillTags(skill) { return tagsForSkill(skill); }
-function pipelineTags(pipeline) { return [...new Set(pipelineSteps(pipeline).flatMap((step) => step.skills.flatMap((skill) => skillTags(state.skills.find((item) => item.name === skill.skillName) || { name: skill.skillName }))))]; }
+function pipelineTags(pipeline) { return [...new Set(pipelineSteps(pipeline).flatMap((step) => step.skills.flatMap((skill) => skillTags(state.pipelineContent.find((item) => item.name === skill.skillName) || { name: skill.skillName }))))]; }
 function recordProjects(record) { return Array.isArray(record.projects) ? record.projects : state.projects.filter((project) => project.id === record.projectId); }
 function recordTags(record) { return state.processTab === 'skills' ? skillTags(record) : pipelineTags(record); }
 function serverSkillPath(skillName) { return `/api/codex/server-skills/${encodeURIComponent(skillName)}`; }
@@ -46,7 +47,7 @@ async function loadGlobalLibraries() {
   state.availableTags = [...new Set(serverSkills.availableTags || [])];
   if (!state.availableTags.length) state.availableTags = [...skillCategories];
   state.skills = (serverSkills.skills || []).map((skill) => ({ ...skill, projects: state.projects }));
-  state.serverSkills = Array.isArray(serverSkills.skills) ? serverSkills.skills : [];
+  state.pipelineContent = (serverPipelines.availableContent || []).map((content) => ({ ...content, projects: state.projects }));
   state.pipelines = (serverPipelines.pipelines || []).map((pipeline) => ({ ...pipeline, scope: 'server', projectId: '', projectName: 'Server', projectColor: '#38d9e8', projects: state.projects }));
   state.steps = (serverPipelines.steps || []).map((step) => ({ ...step, scope: 'server', projectId: '' }));
   return { issues: serverPipelines.issues || [], failedProjects: 0 };
@@ -120,11 +121,15 @@ function renderSkillTagChoices(record) {
   fieldset.append(legend, choices);
   return fieldset;
 }
-function renderSkillDocument(skill) {
-  const section = document.createElement('section'); section.className = 'skill-markdown-section';
-  const heading = document.createElement('h4'); heading.textContent = 'SKILL.md';
-  section.append(heading, renderLedgerCardMarkdown(skillInstructionMarkdown(skill.markdown)));
-  return section;
+function renderSkillDocument(skill, record) {
+  return renderEditableSkillDocument({
+    filename: skill.contentKind === 'pipeline-prompt' ? `${skill.name}.md` : 'SKILL.md',
+    markdown: skillInstructionMarkdown(skill.markdown),
+    editable: record.editable === true,
+    readOnlyReason: record.readOnlyReason,
+    renderMarkdown: renderLedgerCardMarkdown,
+    onEdit: () => editGlobalSkill(record),
+  });
 }
 function renderSkillReferences(references) {
   const section = document.createElement('section'); section.className = 'skill-reference-map';
@@ -153,9 +158,42 @@ function renderLoadedSkillDetail(container, skill) {
   container.querySelector('.skill-markdown-section')?.remove();
   container.querySelector('.skill-reference-map')?.remove();
   const controls = container.querySelector('.skill-tags-field');
-  const documentSection = renderSkillDocument(skill);
+  const documentSection = renderSkillDocument(skill, state.selected);
   container.insertBefore(documentSection, controls);
   if (skill.references?.length) container.insertBefore(renderSkillReferences(skill.references), controls);
+}
+async function refreshGlobalSkillAuthoring(savedSkill) {
+  state.skillDetails.clear();
+  await loadGlobalLibraries();
+  const refreshed = state.skills.find((skill) => skill.name === savedSkill.name) || savedSkill;
+  state.selected = refreshed;
+  renderProcessList();
+  if (!el('.process-detail').hidden) await renderProcessDetail(refreshed);
+}
+function createGlobalSkill() {
+  if (state.projectFilter === 'All') {
+    message('.process-message', 'Select a project context before creating authored content.', true);
+    return;
+  }
+  openSkillLibraryCreator({
+    requestProjectId: state.projectFilter,
+    projects: state.projects.map((project) => ({ id: project.id, name: project.name })),
+    onSaved: async (savedSkill) => { await refreshGlobalSkillAuthoring(savedSkill); },
+    onSaveError: (error) => { message('.process-message', error, true); },
+  });
+}
+function editGlobalSkill(record) {
+  if (!record.editable) return;
+  if (state.projectFilter === 'All') {
+    message('.process-detail-message', 'Select a project context before editing authored content.', true);
+    return;
+  }
+  void openSkillLibraryEditor({
+    skillName: record.name,
+    requestProjectId: state.projectFilter,
+    onSaved: async (savedSkill) => { await refreshGlobalSkillAuthoring(savedSkill); },
+    onSaveError: (error) => { message('.process-detail-message', error, true); },
+  });
 }
 async function hydrateGlobalSkillDetail(record, container, generation) {
   const key = `${record.source || ''}:${record.name}:${record.revision || ''}`;
@@ -347,6 +385,7 @@ async function openProcess() {
   if (!state.ledgerId || !state.cardId) return;
   state.libraryScope = 'project'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';
   el('.process-resynchronize').hidden = true;
+  el('.skill-new').hidden = true;
   el('.process-modal').showModal(); setMobileCodexView(document, 'library', { global: false, libraryTitle: 'Process card' }); message('.process-message', 'Loading libraries…');
   try { const result = await loadLibraries(); message('.process-message', result.issues?.map((issue) => issue.message).join(' ') || ''); renderProcessList(); }
   catch (error) { message('.process-message', error.message, true); el('.process-library').replaceChildren(); }
@@ -355,6 +394,7 @@ async function openSkills() {
   state.processTab = 'skills';
   state.libraryScope = 'global'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';
   el('.process-resynchronize').hidden = false;
+  el('.skill-new').hidden = false;
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.processTab === 'skills')));
   el('.process-modal').showModal(); setMobileCodexView(document, 'library', { global: true, libraryTitle: 'Skill library' });
   message('.process-message', 'Loading skill library…');
@@ -436,9 +476,11 @@ function renderStepSkill(step, skill, index) {
   const controls = document.createElement('span'); const up = button('↑', 'codex-icon', () => { move(step.skills, index, -1); renderEditor(); }); up.disabled = index === 0; up.setAttribute('aria-label', 'Move skill earlier'); const down = button('↓', 'codex-icon', () => { move(step.skills, index, 1); renderEditor(); }); down.disabled = index === step.skills.length - 1; down.setAttribute('aria-label', 'Move skill later'); const remove = button('×', 'codex-icon', () => { step.skills.splice(index, 1); renderEditor(); }); remove.setAttribute('aria-label', 'Remove skill'); controls.append(up, down, remove); node.append(title, model, effort, controls); return node;
 }
 function pickerSkills() {
-  const skills = state.editor.scope === 'server'
-    ? state.serverSkills.map((skill) => ({ ...skill, projects: state.projects }))
-    : state.skills.filter((skill) => !skill.projects?.length || skill.projects.some((project) => project.id === state.projectId));
+  const skills = state.pipelineContent.filter((content) => (
+    state.editor.scope === 'server'
+      || !content.projects?.length
+      || content.projects.some((project) => project.id === state.projectId)
+  ));
   return skills.map((skill) => catalogRecord(skill, 'skills'));
 }
 function renderSkillPicker() {
@@ -497,8 +539,13 @@ function openSkillPicker(stepId) {
 }
 function confirmPicker() {
   const step = state.editor.steps.find((item) => item.id === state.pickerStepId);
-  if (!step || !state.pickerSelectedSkillName) return;
-  step.skills.splice(state.pickerInsertionIndex, 0, { id: uid('codex-pipeline-skill'), skillName: state.pickerSelectedSkillName, codexModel: null, codexEffort: null });
+  const selected = pickerSkills().find((item) => item.name === state.pickerSelectedSkillName);
+  if (!step || !selected) return;
+  if (!['federated-skill', 'workspace-skill', 'pipeline-prompt'].includes(selected.contentKind)) {
+    message('.skill-picker-message', 'The selected pipeline content has no supported content kind.', true);
+    return;
+  }
+  step.skills.splice(state.pickerInsertionIndex, 0, { id: uid('codex-pipeline-skill'), skillName: selected.name, contentKind: selected.contentKind, codexModel: null, codexEffort: null });
   closePicker();
 }
 function closePicker() { el('.skill-picker-modal').close(); el('.pipeline-editor-modal').showModal(); renderEditor(); }
@@ -543,6 +590,7 @@ export function initializeMobileCodex() {
     processActionGeneration += 1;
   }); el('.pipelines-close').addEventListener('click', () => el('.pipelines-modal').close());
   el('.process-resynchronize').addEventListener('click', (event) => { void resynchronizeGlobalLibraries(event.currentTarget, '.process-message', renderProcessList); });
+  el('.skill-new').addEventListener('click', createGlobalSkill);
   el('.pipelines-resynchronize').addEventListener('click', (event) => { void resynchronizeGlobalLibraries(event.currentTarget, '.pipelines-message', renderPipelineLibrary); });
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.addEventListener('click', () => { state.processTab = tab.dataset.processTab; state.query = ''; state.tagFilter = 'All'; document.querySelectorAll('[data-process-tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); setMobileCodexView(document, 'library', { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines' }); message('.process-message', ''); renderProcessList(); }));
   el('.process-search').addEventListener('input', (event) => { state.query = event.target.value; renderProcessList(); event.target.focus(); });
@@ -560,7 +608,9 @@ import { projectScopedRequestPath } from '/src/runtime/project/helper/project-re
 import { colorForSkillTag, decorateSkillCategoryLabel, skillInstructionMarkdown, sortSkillsByFavorite, tagsForSkill } from '/src/runtime/codex/helper/skill-library-presentation.js';
 import { skillCategories } from '/src/runtime/codex/helper/skill-category.js';
 import { renderSkillLibraryItemContent } from '/src/runtime/codex/component/render-skill-library-item-content.js';
+import { renderEditableSkillDocument } from '/src/runtime/codex/component/render-editable-skill-document.js';
 import { renderCodexLibrary } from '/src/runtime/codex/component/render-codex-library.js';
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { setMobileCodexView } from './codex-view.js';
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
+import { openSkillLibraryCreator, openSkillLibraryEditor } from '/src/runtime/codex/effect/render-skill-library-editor-modal.js';

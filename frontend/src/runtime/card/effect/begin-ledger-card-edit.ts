@@ -4,8 +4,8 @@
  */
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { runOptimisticActiveLedgerMutation } from '../../ledger/effect/run-optimistic-active-ledger-mutation.js';
-import { ledgerCardBody } from '../../ledger/helper/ledger-card-body.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
+import { openLedgerCardEditor } from '../../content-authoring/controller/ledger-card-editor.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -52,48 +52,26 @@ export function beginLedgerCardTitleEdit(cardElement: HTMLElement): void {
 
 export function beginLedgerCardDescriptionEdit(cardElement: HTMLElement): void {
   const cardId = cardElement.dataset.cardId;
-  const body = cardElement.querySelector('.ledger-card-body') as HTMLElement | null;
-  if (!cardId || !body) return;
+  if (!cardId) return;
   const card = activeLedgerCard(cardId);
-  const bodyHeight = Math.max(120, Math.ceil(body.offsetHeight || body.getBoundingClientRect().height));
-  const textarea = document.createElement('textarea');
-  textarea.className = 'ledger-card-description-editor';
-  textarea.value = card ? ledgerCardBody(card) : body.textContent?.trim() ?? '';
-  textarea.rows = 7;
-  textarea.style.minHeight = `${bodyHeight}px`;
-  textarea.style.height = `${bodyHeight}px`;
-  body.replaceChildren(textarea);
-  textarea.focus();
-  textarea.select();
-  textarea.addEventListener('keydown', (event) => {
-    if ((event as KeyboardEvent).key === 'Escape') {
-      event.preventDefault();
-      textarea.blur();
-    }
-    if ((event as KeyboardEvent).key === 'Enter' && ((event as KeyboardEvent).ctrlKey || (event as KeyboardEvent).metaKey)) {
-      event.preventDefault();
-      textarea.blur();
-    }
+  if (!card || !state.projectId || !state.activeLedgerId) return;
+  const returnFocusTo = document.activeElement instanceof HTMLElement ? document.activeElement : cardElement;
+  // WHAT: Terminate editor-open failures at the card interaction boundary.
+  // WHY: A synchronous gesture entrypoint cannot leave its asynchronous modal request unobserved.
+  void openLedgerCardEditor({
+    projectId: state.projectId,
+    ledgerId: state.activeLedgerId,
+    cardId,
+    card,
+    returnFocusTo,
+    onSaved: (saved) => {
+      const current = activeLedgerCard(cardId);
+      if (!current) return;
+      Object.assign(current, saved);
+      renderCanvasSurface({ renderThreadPanel: false });
+    },
+  }).catch((error: unknown) => {
+    console.error('Card Markdown editor could not open.', error);
   });
-  textarea.addEventListener('wheel', (event) => {
-    event.stopPropagation();
-  });
-  textarea.addEventListener('blur', () => {
-    if (state.activeLedger) {
-      const description = textarea.value.trimEnd();
-      if (state.canvasMode === 'ledger') {
-        void runOptimisticActiveLedgerMutation({
-          mutation: { action: 'patch-card', cardPatch: { id: cardId, description } },
-          apply: (ledger) => {
-            const current = (ledger.cards ?? []).find((entry: Record<string, any>) => String(entry.id ?? '') === cardId);
-            if (!current) return;
-            const comment = current.comment && typeof current.comment === 'object' ? current.comment : (current.comment = {});
-            comment.what = description;
-          },
-          render: () => renderCanvasSurface({ renderThreadPanel: false }),
-        });
-      } else void commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: cardId, description } }, { render: true });
-    }
-  }, { once: true });
   telemetry('open-card-description-edit', { cardId });
 }

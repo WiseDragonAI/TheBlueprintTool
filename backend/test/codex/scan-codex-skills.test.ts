@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { scanCodexSkills } from '@backend/business/codex/helper/scan-codex-skills.js';
 import { resolveServerSkillContext } from '@backend/business/codex/helper/server-skill-context.js';
 import { buildPipelineSkillPrompt } from '@backend/business/codex/helper/build-pipeline-skill-prompt.js';
+import { sha256AuthoredBytes } from '@backend/business/content-authoring/helper/authored-file-git-revisions.js';
 
 function skillMarkdown(name: string, description: string, body = '# Instructions\n\nDo the work.'): string {
   return ['---', `name: ${name}`, `description: ${description}`, '---', '', body, ''].join('\n');
@@ -57,11 +58,11 @@ test('scanCodexSkills classifies sources, preserves precedence, and returns stab
     assert.equal(duplicate?.source, 'workspace');
     assert.equal(duplicate?.editable, true);
     assert.equal(duplicate?.readOnlyReason, null);
-    assert.equal(sameRootSkills.find((skill) => skill.name === 'duplicate-skill')?.source, 'workspace');
+    assert.equal(sameRootSkills.find((skill) => skill.name === 'duplicate-skill')?.source, 'server');
     assert.match(duplicate?.revision ?? '', /^[a-f0-9]{64}$/);
     assert.equal(user?.source, 'user');
-    assert.equal(user?.editable, true);
-    assert.equal(user?.readOnlyReason, null);
+    assert.equal(user?.editable, false);
+    assert.equal(user?.readOnlyReason, 'User skills are read-only.');
     assert.equal(system?.source, 'system');
     assert.equal(system?.editable, false);
     assert.equal(system?.readOnlyReason, 'System skills are read-only.');
@@ -99,13 +100,13 @@ test('one server skill wins in every managed project and supplies exact run inst
     assert.equal(first?.source, 'server');
     assert.equal(second?.source, 'server');
     assert.equal(first?.description, 'Server-wide instructions');
-    assert.equal(first?.editable, false);
+    assert.equal(first?.editable, true);
     const context = resolveServerSkillContext({
       decisionOsRoot: join(secondProject, '.decision-os'), runtime: { serverRoot }, skillName: 'shared-skill',
     });
     assert.deepEqual(context, { markdown, packageRoot: join(serverRoot, '.skills', 'shared-skill') });
     const prompt = buildPipelineSkillPrompt({
-      skillName: 'shared-skill', ledgerFile: '/ledger.json', pipelineRunId: 'run', pipelineName: 'Pipeline',
+      skillName: 'shared-skill', contentKind: 'federated-skill', ledgerFile: '/ledger.json', pipelineRunId: 'run', pipelineName: 'Pipeline',
       sourceCardId: 'source', sourceCardTitle: 'Source', stepId: 'step', stepTitle: 'Step',
       stepInputCardId: 'input', stepInputCardContent: 'Input', outputParentCardId: 'master',
       outputCardId: 'output', outputSubtaskPosition: 4, outputMarkdownFile: '/output.md', serverSkill: context,
@@ -119,6 +120,19 @@ test('one server skill wins in every managed project and supplies exact run inst
     assert.match(prompt, /Use letter-prefixed H2 sections, --- between sections, numbered list items\./);
     assert.doesNotMatch(prompt, /Do not edit the source card or any other pipeline step card\./);
     assert.doesNotMatch(prompt, /When finished, ensure the output Markdown file contains/);
+    const promptSnapshot = '# Injected pipeline instructions';
+    const injected = buildPipelineSkillPrompt({
+      skillName: 'pipeline-only', contentKind: 'pipeline-prompt',
+      contentRevision: sha256AuthoredBytes(promptSnapshot),
+      contentCommit: 'a'.repeat(40),
+      promptSnapshot,
+      ledgerFile: '/ledger.json', pipelineRunId: 'run', pipelineName: 'Pipeline',
+      sourceCardId: 'source', sourceCardTitle: 'Source', stepId: 'step', stepTitle: 'Step',
+      stepInputCardId: 'input', stepInputCardContent: 'Input', outputCardId: 'output', outputMarkdownFile: '/output.md',
+    });
+    assert.equal(injected.startsWith('$pipeline-only'), false);
+    assert.match(injected, /intentionally unavailable to natural Codex skill discovery/);
+    assert.match(injected, /# Injected pipeline instructions/);
   } finally {
     rmSync(serverRoot, { recursive: true, force: true });
   }

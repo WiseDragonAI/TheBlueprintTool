@@ -4,7 +4,7 @@
  */
 import type { CodexEffort, CodexModel } from '../helper/codex-run-options.js';
 
-export type CodexSkillSource = 'server' | 'workspace' | 'user' | 'system' | 'plugin';
+export type CodexSkillSource = 'server' | 'workspace' | 'user' | 'system' | 'plugin' | 'pipeline-prompt';
 
 export type CodexSkillSummary = {
   name: string;
@@ -19,6 +19,9 @@ export type CodexSkillSummary = {
   defaultCodexEffort: CodexEffort | null;
   effectiveCodexModel: string;
   effectiveCodexEffort: string;
+  contentKind?: 'federated-skill' | 'workspace-skill' | 'pipeline-prompt' | 'external-skill';
+  executionVisibility?: 'agent' | 'pipeline-only';
+  gitRevision?: { commit: string; authoredAt: string; subject: string } | null;
 };
 
 export type CodexSkillCatalogResult = {

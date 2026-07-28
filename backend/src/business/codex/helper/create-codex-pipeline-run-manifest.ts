@@ -6,12 +6,17 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type {
   CodexPipelineRun,
+  CodexPipelineRunSkill,
   CodexPipelineRunStep,
   CodexPipelineStep,
   CodexPipelineStore,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { resolveCodexPipelineRunDirectory } from './resolve-codex-pipeline-run-directory.js';
 import { resolveSkillRunOptions } from './resolve-codex-command.js';
+import {
+  assertPipelinePromptRunSkillSnapshot,
+  type AdmittedPipelinePromptSnapshot,
+} from './pipeline-prompt-snapshot.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -38,6 +43,7 @@ export function createCodexPipelineRunManifest(input: {
   restartOfPipelineRunId?: string | null;
   reservedRunId?: string;
   reservedFirstExecutionId?: string;
+  admittedPromptSnapshots?: ReadonlyMap<string, AdmittedPipelinePromptSnapshot>;
 }): CodexPipelineRun {
   // WHAT: Preserve the legacy skill-run identifier for one-step temporary pipelines.
   // WHY: Existing direct-skill status and cancellation routes address that identifier.
@@ -82,21 +88,35 @@ export function createCodexPipelineRunManifest(input: {
           defaultCodexModel: defaults?.defaultCodexModel,
           defaultCodexEffort: defaults?.defaultCodexEffort,
         });
-        return {
+        const base = {
           id: `${runId}-step-${stepIndex + 1}-skill-${skillIndex + 1}`,
           pipelineSkillId: skill.id,
           skillName: skill.skillName,
           runId: skillRunId,
           executionId,
-          status: 'pending',
+          status: 'pending' as const,
           codexModel: resolved.codexModel,
           codexEffort: resolved.codexEffort,
           stdoutFile: resolve(directory, `${skillRunId}.jsonl`),
           stderrFile: resolve(directory, `${skillRunId}.log`),
-          startedAt: null,
-          finishedAt: null,
+          startedAt: null as null,
+          finishedAt: null as null,
           error: '',
         };
+        if (skill.contentKind === 'pipeline-prompt') {
+          const snapshot = input.admittedPromptSnapshots?.get(skill.skillName);
+          if (!snapshot) throw new Error('pipeline_prompt_snapshot_missing');
+          const admitted: CodexPipelineRunSkill = {
+            ...base,
+            ...snapshot,
+          };
+          assertPipelinePromptRunSkillSnapshot(admitted);
+          return admitted;
+        }
+        return {
+          ...base,
+          contentKind: skill.contentKind,
+        } satisfies CodexPipelineRunSkill;
       }),
       startedAt: null,
       finishedAt: null,

@@ -6,11 +6,12 @@ import { pipelineSkillPickerModal } from '../../dom.js';
 import { renderCodexLibrary } from '../component/render-codex-library.js';
 import { renderSkillLibraryItemContent } from '../component/render-skill-library-item-content.js';
 import { colorForSkillTag, tagsForSkill } from '../helper/skill-library-presentation.js';
-import type { CodexSkillSummary } from './load-codex-skills.js';
-import { openSkillLibraryEditor } from './render-skill-library-editor-modal.js';
+import type { CodexPipelineContentSummary } from './load-codex-pipelines.js';
+import { openSkillLibraryCreator, openSkillLibraryEditor } from './render-skill-library-editor-modal.js';
 
 export type PipelineSkillPickerSelection = {
   skillName: string;
+  contentKind: CodexPipelineContentSummary['contentKind'];
   insertionIndex: number;
 };
 
@@ -18,13 +19,14 @@ type PipelineSkillPickerState = {
   stepId: string;
   stepName: string;
   stepSkillNames: string[];
-  skills: CodexSkillSummary[];
+  skills: CodexPipelineContentSummary[];
   selectedSkillName: string;
   query: string;
   selectedCategory: string;
   insertionIndex: number;
+  requestProjectId: string;
   onInsert?: (selection: PipelineSkillPickerSelection) => void;
-  reloadSkills?: () => Promise<readonly CodexSkillSummary[]>;
+  reloadSkills?: () => Promise<readonly CodexPipelineContentSummary[]>;
 };
 
 export const pipelineSkillPickerState: PipelineSkillPickerState = {
@@ -36,6 +38,7 @@ export const pipelineSkillPickerState: PipelineSkillPickerState = {
   query: '',
   selectedCategory: 'All',
   insertionIndex: 0,
+  requestProjectId: '',
 };
 
 let pickerGeneration = 0;
@@ -50,11 +53,11 @@ function makeButton(label: string, onClick: () => void, className = 'ghost-butto
   return button;
 }
 
-function selectedSkill(): CodexSkillSummary | undefined {
+function selectedSkill(): CodexPipelineContentSummary | undefined {
   return pipelineSkillPickerState.skills.find((skill) => skill.name === pipelineSkillPickerState.selectedSkillName);
 }
 
-function renderSkillResult(skill: CodexSkillSummary): HTMLButtonElement {
+function renderSkillResult(skill: CodexPipelineContentSummary): HTMLButtonElement {
   const selected = skill.name === pipelineSkillPickerState.selectedSkillName;
   const category = tagsForSkill(skill)[0];
   const result = makeButton('', () => selectPipelineSkillPickerSkill(skill.name), `pipeline-picker-result${selected ? ' is-selected' : ''}`, `picker-skill:${skill.name}`);
@@ -92,8 +95,11 @@ function editSelectedSkill(): void {
   if (!skill?.editable) return;
   const generation = pickerGeneration;
   const stepId = pipelineSkillPickerState.stepId;
+  // WHAT: Terminate editor-open failures at the picker event boundary.
+  // WHY: A detached modal request must not create an unhandled browser rejection.
   void openSkillLibraryEditor({
     skillName: skill.name,
+    requestProjectId: pipelineSkillPickerState.requestProjectId,
     onSaved: async () => {
       const skills = await pipelineSkillPickerState.reloadSkills?.();
       if (generation !== pickerGeneration || stepId !== pipelineSkillPickerState.stepId || !skills) return;
@@ -101,6 +107,8 @@ function editSelectedSkill(): void {
       if (!selectedSkill()) pipelineSkillPickerState.selectedSkillName = pipelineSkillPickerState.skills[0]?.name ?? '';
       renderPipelineSkillPickerModal();
     },
+  }).catch((error: unknown) => {
+    console.error('Pipeline skill editor could not open.', error);
   });
 }
 
@@ -112,7 +120,30 @@ function renderActions(): HTMLElement {
   selectedName.className = 'skill-selected-name';
   selectedName.textContent = selected?.name ?? 'Choose a skill';
   actions.append(selectedName, renderPositionField());
-  if (selected?.editable) actions.append(makeButton('Edit skill', editSelectedSkill, 'ghost-button', 'picker-edit-skill'));
+  const createPrompt = makeButton('Create pipeline prompt', () => {
+    const generation = pickerGeneration;
+    const stepId = pipelineSkillPickerState.stepId;
+    openSkillLibraryCreator({
+      contentKind: 'pipeline-prompt',
+      requestProjectId: pipelineSkillPickerState.requestProjectId,
+      onSaved: async (created) => {
+        const skills = await pipelineSkillPickerState.reloadSkills?.();
+        if (generation !== pickerGeneration || stepId !== pipelineSkillPickerState.stepId || !skills) return;
+        pipelineSkillPickerState.skills = [...skills];
+        pipelineSkillPickerState.selectedSkillName = created.name;
+        renderPipelineSkillPickerModal();
+      },
+    });
+  }, 'ghost-button', 'picker-create-prompt');
+  createPrompt.disabled = !pipelineSkillPickerState.requestProjectId;
+  if (createPrompt.disabled) createPrompt.title = 'Select a project context before creating authored content.';
+  actions.append(createPrompt);
+  if (selected?.editable) {
+    const edit = makeButton('Edit skill', editSelectedSkill, 'ghost-button', 'picker-edit-skill');
+    edit.disabled = !pipelineSkillPickerState.requestProjectId;
+    if (edit.disabled) edit.title = 'Select a project context before editing authored content.';
+    actions.append(edit);
+  }
   else if (selected?.readOnlyReason) {
     const reason = document.createElement('span');
     reason.className = 'codex-readonly-reason';
@@ -180,10 +211,11 @@ export function openPipelineSkillPicker(input: {
   stepId: string;
   stepName: string;
   stepSkillNames: readonly string[];
-  skills: readonly CodexSkillSummary[];
+  skills: readonly CodexPipelineContentSummary[];
   insertionIndex?: number;
+  requestProjectId: string;
   onInsert: (selection: PipelineSkillPickerSelection) => void;
-  reloadSkills?: () => Promise<readonly CodexSkillSummary[]>;
+  reloadSkills?: () => Promise<readonly CodexPipelineContentSummary[]>;
 }): void {
   pickerGeneration += 1;
   Object.assign(pipelineSkillPickerState, {
@@ -195,6 +227,7 @@ export function openPipelineSkillPicker(input: {
     query: '',
     selectedCategory: 'All',
     insertionIndex: Math.min(input.insertionIndex ?? input.stepSkillNames.length, input.stepSkillNames.length),
+    requestProjectId: input.requestProjectId,
     onInsert: input.onInsert,
     reloadSkills: input.reloadSkills,
   });
@@ -211,12 +244,12 @@ export function selectPipelineSkillPickerSkill(skillName: string): void {
 }
 
 export function confirmPipelineSkillPickerSelection(): void {
-  const skillName = pipelineSkillPickerState.selectedSkillName;
-  if (!skillName) return;
+  const selected = selectedSkill();
+  if (!selected) return;
   const onInsert = pipelineSkillPickerState.onInsert;
   const insertionIndex = pipelineSkillPickerState.insertionIndex;
   closePipelineSkillPicker();
-  onInsert?.({ skillName, insertionIndex });
+  onInsert?.({ skillName: selected.name, contentKind: selected.contentKind, insertionIndex });
 }
 
 export function closePipelineSkillPicker(): void {

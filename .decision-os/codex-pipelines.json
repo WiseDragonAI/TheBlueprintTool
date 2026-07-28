@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "pipelines": [
     {
       "id": "project-synchronization",
@@ -23,6 +23,7 @@
         {
           "id": "project-synchronization-source-publish-skill",
           "skillName": "project-sync-source-publisher",
+          "contentKind": "federated-skill",
           "codexModel": null,
           "codexEffort": null
         }
@@ -38,6 +39,7 @@
         {
           "id": "project-synchronization-initiator-reconcile-skill",
           "skillName": "project-sync-initiator-reconciler",
+          "contentKind": "federated-skill",
           "codexModel": null,
           "codexEffort": null
         }
@@ -53,6 +55,7 @@
         {
           "id": "project-synchronization-source-finalize-skill",
           "skillName": "project-sync-source-finalizer",
+          "contentKind": "federated-skill",
           "codexModel": null,
           "codexEffort": null
         }
@@ -90,5 +93,6 @@
       "updatedAt": "2026-07-17T04:51:46.105Z"
     }
   ],
+  "authoredContent": [],
   "activeWorkspaceRun": null
 }

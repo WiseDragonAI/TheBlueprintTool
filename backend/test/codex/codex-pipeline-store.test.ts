@@ -1,15 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  mutateCodexPipelineStore,
   normalizeCodexPipelineStore,
   pipelineStoreFile,
   readCodexPipelineStore,
   writeCodexPipelineStore,
 } from '../../src/business/codex/helper/codex-pipeline-store.js';
 import { ensureServerPipelines, migrateLegacyProjectPipelines, readScopedCodexPipelineStores } from '../../src/business/codex/helper/server-pipeline-catalog.js';
+import {
+  exportFederatedPipelineSnapshot,
+  importFederatedPipelineSnapshot,
+} from '../../src/business/federation/helper/federated-library-cache.js';
 
 function pipelineFixture(id: string, stepId: string, name = id): Record<string, unknown> {
   return {
@@ -27,11 +32,12 @@ test('pipeline store starts empty and preserves ordered reusable definitions acr
   try {
     const empty = readCodexPipelineStore({ decisionOsRoot, availableSkillNames: ['analysis'] });
     assert.deepEqual(empty.store, {
-      version: 1,
+      version: 2,
       pipelines: [],
       steps: [],
       runs: [],
       skillLibrary: [],
+      authoredContent: [],
       activeWorkspaceRun: null,
     });
     assert.equal(existsSync(pipelineStoreFile(decisionOsRoot)), false);
@@ -89,6 +95,156 @@ test('pipeline store starts empty and preserves ordered reusable definitions acr
     assert.deepEqual(loaded.store.skillLibrary[0].tags, ['Research']);
     assert.equal(loaded.invalidReferences.length, 0);
     assert.equal(readFileSync(pipelineStoreFile(decisionOsRoot), 'utf8').includes(workspace), false);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('pipeline content kinds and prompt file references normalize into one contained durable contract', () => {
+  const normalized = normalizeCodexPipelineStore({
+    steps: [{
+      id: 'prompt-step',
+      name: 'Prompt',
+      skills: [{ id: 'prompt-content', skillName: 'review-output', codexModel: null, codexEffort: null }],
+    }],
+    authoredContent: [{
+      id: 'review-output',
+      kind: 'pipeline-prompt',
+      description: 'Review output',
+      contentFile: 'pipeline-prompts/review-output.md',
+      createdAt: '2026-07-27T00:00:00.000Z',
+      updatedAt: '2026-07-27T00:00:00.000Z',
+    }],
+  }, {
+    availableSkillNames: ['review-output'],
+    availableContentKinds: [['review-output', 'pipeline-prompt']],
+  });
+  assert.equal(normalized.store.steps[0].skills[0].contentKind, 'pipeline-prompt');
+  assert.deepEqual(normalized.store.authoredContent, [{
+    id: 'review-output',
+    kind: 'pipeline-prompt',
+    description: 'Review output',
+    contentFile: 'pipeline-prompts/review-output.md',
+    createdAt: '2026-07-27T00:00:00.000Z',
+    updatedAt: '2026-07-27T00:00:00.000Z',
+  }]);
+  assert.equal(normalized.issues.length, 0);
+
+  const rejected = normalizeCodexPipelineStore({
+    steps: [{
+      id: 'prompt-step',
+      name: 'Prompt',
+      skills: [{
+        id: 'prompt-content',
+        skillName: 'review-output',
+        contentKind: 'workspace-skill',
+        codexModel: null,
+        codexEffort: null,
+      }],
+    }],
+    authoredContent: [{
+      id: 'review-output',
+      kind: 'pipeline-prompt',
+      description: 'Review output',
+      contentFile: '../review-output.md',
+    }],
+  }, {
+    availableSkillNames: ['review-output'],
+    availableContentKinds: [['review-output', 'pipeline-prompt']],
+  });
+  assert.equal(rejected.issues.some((entry) => entry.code === 'pipeline-content-kind-mismatch'), true);
+  assert.equal(rejected.issues.some((entry) => entry.code === 'invalid-authored-content-file'), true);
+  assert.deepEqual(rejected.store.authoredContent, []);
+});
+
+test('valid version-1 stores migrate atomically once while invalid and future bytes remain unchanged', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-pipeline-store-v2-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const file = pipelineStoreFile(decisionOsRoot);
+  try {
+    mkdirSync(decisionOsRoot, { recursive: true });
+    writeFileSync(file, `${JSON.stringify({
+      version: 1,
+      ...pipelineFixture('legacy', 'legacy-step'),
+    }, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+    const migrated = readCodexPipelineStore({ decisionOsRoot });
+    assert.equal(migrated.store.version, 2);
+    assert.equal(migrated.store.pipelines[0].id, 'legacy');
+    const migratedBytes = readFileSync(file, 'utf8');
+    assert.equal((JSON.parse(migratedBytes) as Record<string, unknown>).version, 2);
+    readCodexPipelineStore({ decisionOsRoot });
+    assert.equal(readFileSync(file, 'utf8'), migratedBytes);
+
+    const invalidV1 = `${JSON.stringify({
+      version: 1,
+      pipelines: [
+        { id: 'duplicate', name: 'One', stepIds: [] },
+        { id: 'duplicate', name: 'Two', stepIds: [] },
+      ],
+    })}\n`;
+    writeFileSync(file, invalidV1);
+    const invalid = readCodexPipelineStore({ decisionOsRoot });
+    assert.equal(invalid.availability, 'unavailable');
+    assert.equal(invalid.issues.some((entry) => entry.code === 'duplicate-pipeline-id'), true);
+    assert.equal(readFileSync(file, 'utf8'), invalidV1);
+
+    const future = '{"version":99,"pipelines":[]}\n';
+    writeFileSync(file, future);
+    const rejected = readCodexPipelineStore({ decisionOsRoot });
+    assert.equal(rejected.availability, 'unavailable');
+    assert.equal(rejected.unavailableCode, 'codex_pipeline_store_unsupported_version');
+    assert.match(rejected.incidentId, /^incident-/);
+    assert.equal(rejected.issues.some((entry) => entry.code === 'unsupported-store-version'), true);
+    assert.throws(() => mutateCodexPipelineStore({
+      decisionOsRoot,
+      mutate: (store) => store,
+    }), (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'codex_pipeline_store_corrupt');
+      return true;
+    });
+    assert.equal(readFileSync(file, 'utf8'), future);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('serialized pipeline and prompt mutations retain both updates without stale-store replacement', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-pipeline-store-mutation-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  try {
+    const stale = readCodexPipelineStore({ decisionOsRoot }).store;
+    mutateCodexPipelineStore({
+      decisionOsRoot,
+      mutate: (store) => ({
+        ...store,
+        pipelines: [{
+          id: 'pipeline-writer',
+          name: 'Pipeline writer',
+          purpose: '',
+          stepIds: [],
+          createdAt: 'one',
+          updatedAt: 'one',
+        }],
+      }),
+    });
+    mutateCodexPipelineStore({
+      decisionOsRoot,
+      mutate: (store) => ({
+        ...store,
+        authoredContent: [{
+          id: 'prompt-writer',
+          kind: 'pipeline-prompt',
+          description: 'Prompt writer',
+          contentFile: 'pipeline-prompts/prompt-writer.md',
+          createdAt: 'two',
+          updatedAt: 'two',
+        }],
+      }),
+    });
+    assert.deepEqual(stale.pipelines, []);
+    const reloaded = readCodexPipelineStore({ decisionOsRoot }).store;
+    assert.deepEqual(reloaded.pipelines.map((pipeline) => pipeline.id), ['pipeline-writer']);
+    assert.deepEqual(reloaded.authoredContent.map((record) => record.id), ['prompt-writer']);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -167,7 +323,7 @@ test('pipeline store normalization is deterministic and reports duplicate, stale
   assert.equal(codes.includes('empty-skill-library-name'), true);
 });
 
-test('an invalid store file is reported without corrupting or rewriting it', () => {
+test('an invalid store pauses only its catalog scope, records an incident, blocks export and overwrite, then recovers explicitly', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-invalid-pipeline-store-'));
   const decisionOsRoot = join(workspace, '.decision-os');
   try {
@@ -175,13 +331,59 @@ test('an invalid store file is reported without corrupting or rewriting it', () 
     const file = pipelineStoreFile(decisionOsRoot);
     writeFileSync(file, '{invalid-json', 'utf8');
     const loaded = readCodexPipelineStore({ decisionOsRoot });
-    assert.deepEqual(loaded.store.pipelines, []);
+    assert.equal(loaded.availability, 'unavailable');
+    assert.equal(loaded.unavailableCode, 'codex_pipeline_store_corrupt');
+    assert.match(loaded.incidentId, /^incident-/);
     assert.equal(loaded.issues.some((entry) => entry.code === 'invalid-store'), true);
+    assert.throws(() => loaded.store, (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'runtime_scope_paused');
+      assert.equal((error as { scope?: string }).scope, loaded.scope);
+      return true;
+    });
+    assert.throws(() => readScopedCodexPipelineStores({
+      decisionOsRoot,
+      runtime: { serverRoot: workspace },
+    }), (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'runtime_scope_paused');
+      return true;
+    });
+    assert.throws(() => exportFederatedPipelineSnapshot(decisionOsRoot), (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'runtime_scope_paused');
+      return true;
+    });
+    assert.throws(() => importFederatedPipelineSnapshot({
+      decisionOsRoot,
+      snapshot: { version: 1, pipelines: [] },
+    }), (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'runtime_scope_paused');
+      return true;
+    });
     assert.throws(() => writeCodexPipelineStore({ decisionOsRoot, store: {} }), (error: unknown) => {
       assert.equal((error as { code?: string }).code, 'codex_pipeline_store_corrupt');
       return true;
     });
     assert.equal(readFileSync(file, 'utf8'), '{invalid-json');
+    const incidentFile = join(decisionOsRoot, 'runtime-incidents.json');
+    const incidentDocument = JSON.parse(readFileSync(incidentFile, 'utf8')) as Record<string, any>;
+    const active = incidentDocument.incidents.find((entry: Record<string, any>) => entry.scope === loaded.scope);
+    assert.equal(active.status, 'paused');
+    assert.equal(active.code, 'codex_pipeline_store_corrupt');
+    assert.equal(active.context.file, file);
+
+    const recoveredBytes = `${JSON.stringify({
+      version: 2,
+      ...pipelineFixture('recovered', 'recovered-step'),
+      authoredContent: [],
+    }, null, 2)}\n`;
+    writeFileSync(file, recoveredBytes);
+    const recovered = readCodexPipelineStore({ decisionOsRoot });
+    assert.equal(recovered.availability, 'available');
+    assert.equal(recovered.store.pipelines[0].id, 'recovered');
+    const resolvedDocument = JSON.parse(readFileSync(incidentFile, 'utf8')) as Record<string, any>;
+    assert.equal(
+      resolvedDocument.incidents.find((entry: Record<string, any>) => entry.scope === loaded.scope).status,
+      'resolved',
+    );
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

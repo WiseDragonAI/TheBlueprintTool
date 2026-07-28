@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,6 +30,8 @@ test('dispatches ordered federated skills through durable per-step executors', a
       relationships: [],
     }));
     const roles = ['source-publisher', 'initiator-reconciler', 'source-finalizer'];
+    const promptSnapshot = '# Immutable reconciler prompt\n\nUse only this transported snapshot.';
+    const promptRevision = createHash('sha256').update(promptSnapshot).digest('hex');
     const run: CodexPipelineRun = {
       id: 'pipeline-run', pipelineId: 'project-synchronization', pipelineName: 'Project synchronization', temporary: false,
       executionMode: 'federated', ledgerId: 'specs', sourceCardId: 'master', sourceCardTitle: 'Synchronize', outputParentCardId: 'master', status: 'pending',
@@ -37,7 +40,16 @@ test('dispatches ordered federated skills through durable per-step executors', a
         id: `run-step-${index + 1}`, stepId: `step-${index + 1}`, name: role, purpose: role,
         outputCardId: outputCards[index], outputSubtaskPosition: index, status: 'pending', startedAt: null, finishedAt: null, error: '',
         skills: [{
-          id: `skill-${index + 1}`, pipelineSkillId: `pipeline-skill-${index + 1}`, skillName: `project-sync-${role}`,
+          id: `skill-${index + 1}`, pipelineSkillId: `pipeline-skill-${index + 1}`,
+          skillName: index === 1 ? 'immutable-reconciler-prompt' : `project-sync-${role}`,
+          ...(index === 1 ? {
+            contentKind: 'pipeline-prompt' as const,
+            contentRevision: promptRevision,
+            contentCommit: 'a'.repeat(40),
+            promptSnapshot,
+          } : {
+            contentKind: 'federated-skill' as const,
+          }),
           runId: `skill-run-${index + 1}`, executionId: `execution-${index + 1}`, status: 'pending', codexModel: 'gpt-5.6-sol', codexEffort: 'medium',
           stdoutFile: join(logsRoot, `skill-${index + 1}.jsonl`), stderrFile: join(logsRoot, `skill-${index + 1}.log`),
           startedAt: null, finishedAt: null, error: '',
@@ -95,6 +107,7 @@ test('dispatches ordered federated skills through durable per-step executors', a
     };
     runtime.scheduleCodexProcesses = () => scheduleCodexProcesses({ decisionOsRoot, runtime });
     const dispatched: string[] = [];
+    const receivedPromptSnapshots: string[] = [];
     for (const [index, role] of roles.entries()) {
       const nodeId = index === 1 ? 'initiator-node' : 'source-node';
       runtime.taskExecutionNodeId = nodeId;
@@ -105,6 +118,8 @@ test('dispatches ordered federated skills through durable per-step executors', a
         executor: { kind: 'federated', nodeId, projectId: index === 1 ? 'initiator-project' : 'source-project', role },
         execute: async (skill) => {
           dispatched.push(`${skill.executor?.nodeId}:${skill.executor?.role}`);
+          if (skill.contentKind === 'pipeline-prompt') receivedPromptSnapshots.push(skill.promptSnapshot);
+          else assert.equal('promptSnapshot' in skill, false);
           return { executorNodeId: skill.executor?.nodeId, status: 'complete', headSha: `sha-${index}`, originSha: `sha-${index}` };
         },
       });
@@ -114,6 +129,7 @@ test('dispatches ordered federated skills through durable per-step executors', a
       'initiator-node:initiator-reconciler',
       'source-node:source-finalizer',
     ]);
+    assert.deepEqual(receivedPromptSnapshots, [promptSnapshot]);
     const persisted = readCodexPipelineStore({ decisionOsRoot }).store.runs[0];
     assert.equal(persisted.status, 'pending');
     assert.deepEqual(persisted.steps.map((step) => step.skills[0].executor?.nodeId), ['source-node', 'initiator-node', 'source-node']);
