@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:editor-vendors": "node scripts/build-editor-vendors.mjs",
+    "build:codemirror-vendor": "node scripts/build-editor-vendors.mjs",
     "test": "TSX_TSCONFIG_PATH=tsconfig.json node --test --import tsx \"test/**/*.test.ts\" \"test-responsive/*.test.mjs\"",
     "test:integration": "find test -path \"*/unit/*\" -prune -o -name \"*.test.ts\" -print | xargs env TSX_TSCONFIG_PATH=tsconfig.json node --test --import tsx",
     "test:unit": "find test/unit -name \"*.test.ts\" -print | xargs env TSX_TSCONFIG_PATH=tsconfig.json node --test --import tsx",
+    "test:content-authoring": "TSX_TSCONFIG_PATH=tsconfig.json node --test --import tsx test/runtime/content-authoring-editor.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
@@ -15,8 +18,10 @@
     "typescript": "^5.8.0"
   },
   "dependencies": {
+    "@codemirror/lang-markdown": "6.5.1",
     "@panzoom/panzoom": "4.6.2",
     "@pierre/diffs": "1.2.12",
+    "codemirror": "6.0.2",
     "highlight.js": "^11.11.1"
   }
 }
