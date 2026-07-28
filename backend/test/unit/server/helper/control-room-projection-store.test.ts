@@ -84,6 +84,46 @@ test('epoch-4 execution entity places its task in Exec without card execution in
   assert.equal(projection.exec[0].execution.revision, 4);
 });
 
+test('several active source executions keep one valid deterministic Control Room task', (context) => {
+  const { project } = fixture(context);
+  const ledger = {
+    cards: [
+      {
+        id: 'master', title: 'Master', labels: ['master-task'], createdAt: '2026-07-23T01:00:00.000Z',
+        lifecycle: lifecycle('todo', '2026-07-23T01:00:00.000Z'),
+        assignment: { nodeId: 'phone', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
+      },
+      { id: 'child', title: 'Child', labels: ['subtask'], lifecycle: lifecycle('todo', '2026-07-23T01:00:00.000Z') },
+    ],
+    annotations: [],
+    relationships: [{ id: 'relationship-child', from: 'master', to: 'child', label: 'subtask', position: 0 }],
+  };
+  const execution = (executionId: string, sourceCardId: string): ReplicatedTaskExecutionRecord => ({
+    metadata: {
+      executionId, requestId: `request-${executionId}`, sessionId: `session-${executionId}`, projectId: 'project-a', ledgerId: 'tasks',
+      taskId: 'master', sourceCardId, ownerCardId: sourceCardId, kind: 'thread', requestedAt: '2026-07-23T01:01:00.000Z',
+      model: null, effort: null, pipelineRunId: null, pipelineStepId: null, pipelineSkillRunId: null,
+      predecessorExecutionId: null, restartOfExecutionId: null,
+    },
+    lifecycle: {
+      phase: 'running', phaseSince: '2026-07-23T01:02:00.000Z', startedAt: '2026-07-23T01:02:00.000Z', finishedAt: null,
+      executorNodeId: 'phone', providerSessionId: null, result: null, error: null, revision: 4,
+    },
+    artifacts: { jsonl: null, stderr: null, telemetry: null, result: null, changedAt: '2026-07-23T01:01:00.000Z', revision: 1 },
+  });
+
+  const projection = controlRoomProjectionFromTaskLedger({
+    project,
+    ledger,
+    executions: [execution('execution-child', 'child'), execution('execution-master', 'master')],
+  }) as Record<string, any>;
+
+  assert.equal(projection.exec.length, 1);
+  assert.equal(projection.exec[0].valid, true);
+  assert.deepEqual(projection.exec[0].diagnostics, []);
+  assert.equal(projection.exec[0].execution.executionId, 'execution-master');
+});
+
 test('epoch-4 execution conflicts invalidate the owning task without selecting a candidate', (context) => {
   const { project } = fixture(context);
   const ledger = {

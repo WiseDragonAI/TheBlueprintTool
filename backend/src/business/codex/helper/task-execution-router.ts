@@ -332,6 +332,7 @@ export function createTaskExecutionRouter(input: {
         ? state.executions.byTaskId(resolved.taskId).filter((record) => (
           record.metadata.executionId !== request.executionId
           && activePhases.has(record.lifecycle.phase)
+          && record.metadata.sourceCardId === request.sourceCardId
           && !(request.kind === 'pipeline-skill'
             && record.metadata.kind === 'pipeline-skill'
             && record.metadata.pipelineRunId === request.pipelineRunId)
@@ -413,6 +414,7 @@ export function createTaskExecutionRouter(input: {
     }
     const executionIds = new Set(requests.map((request) => request.executionId));
     const requestIds = new Set(requests.map((request) => request.requestId));
+    const sourceCardIds = new Set(requests.map((request) => request.sourceCardId));
     if (executionIds.size !== requests.length) throw new TaskExecutionAdmissionError('task_execution_topology_execution_duplicate', 400);
     if (requestIds.size !== requests.length) throw new TaskExecutionAdmissionError('task_execution_topology_request_duplicate', 400);
     const state = input.state();
@@ -462,6 +464,7 @@ export function createTaskExecutionRouter(input: {
       ? state.executions.byTaskId(resolved[0].taskId).filter((record) => (
         !executionIds.has(record.metadata.executionId)
         && activePhases.has(record.lifecycle.phase)
+        && sourceCardIds.has(record.metadata.sourceCardId)
         && !(record.metadata.kind === 'pipeline-skill' && record.metadata.pipelineRunId === pipelineRunId)
       ))
       : [];

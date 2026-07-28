@@ -231,8 +231,49 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .task-labels { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .task-label { display: inline-flex; min-height: 24px; align-items: center; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--accent), transparent 52%); border-radius: 999px; color: color-mix(in srgb, var(--accent), white 28%); background: color-mix(in srgb, var(--accent), transparent 90%); font-size: 11px; font-weight: 750; line-height: 1; }
 .project-sync-retry { width: calc(100% - 32px); min-height: 42px; margin: 0 16px 16px; border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 92%); }
-.subtask-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px; margin-bottom: 6px; padding: 8px 12px; text-align: left; }
+.subtask-row { position: relative; display: flex; align-items: center; justify-content: space-between; isolation: isolate; gap: 12px; width: 100%; min-height: 48px; margin-bottom: 6px; padding: 8px 12px; text-align: left; }
 .subtask-row small { flex: 0 0 auto; color: var(--accent); text-transform: capitalize; }
+.subtask-row[data-run-status="running"] { color: #f3f6fb; }
+.subtask-row[data-run-status="running"]::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: -2px;
+  padding: 2px;
+  border-radius: 4px;
+  background: conic-gradient(from var(--subtask-codex-log-angle), #18f0ff, #2684ff, #7559ff, #c13cff, #ff3b73, #ff8a24, #ffe24a, #18f0ff);
+  filter: drop-shadow(0 0 3px rgba(24, 240, 255, 0.9)) drop-shadow(0 0 5px rgba(193, 60, 255, 0.58));
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: subtask-codex-log-running 1.65s linear infinite;
+}
+.subtask-row[data-run-status="pending"] { color: #f1c879; }
+.subtask-row[data-run-status="pending"]::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border: 1px dashed rgba(232, 179, 92, 0.88);
+  border-radius: 4px;
+  pointer-events: none;
+  animation: subtask-codex-log-queued 1.8s ease-in-out infinite;
+}
+@property --subtask-codex-log-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes subtask-codex-log-running { to { --subtask-codex-log-angle: 360deg; } }
+@keyframes subtask-codex-log-queued {
+  0%, 100% { opacity: .38; box-shadow: 0 0 0 rgba(232, 179, 92, 0); }
+  50% { opacity: 1; box-shadow: 0 0 7px rgba(232, 179, 92, .52); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .subtask-row[data-run-status="running"]::before,
+  .subtask-row[data-run-status="pending"]::before { animation: none; }
+}
 .task-actions { display: flex; gap: 8px; padding-top: 12px; overflow-x: auto; }
 .task-actions button { flex: 0 0 auto; min-height: 44px; padding: 0 12px; }
 .task-actions button:first-child { border-color: var(--accent); }

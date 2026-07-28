@@ -77,6 +77,7 @@ test('projects several sessions and preserves every valid active pipeline execut
   ]);
   assert.deepEqual(summary.activeExecutionIds, ['execution-2', 'execution-3']);
   assert.equal(summary.defaultExecutionId, 'execution-3');
+  assert.equal(summary.sessions[0].executions[0].sourceCardId, 'task-a');
   assert.deepEqual(summary.sessions[0].executions[0].artifacts, {
     jsonl: false,
     stderr: false,

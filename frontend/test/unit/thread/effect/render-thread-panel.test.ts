@@ -222,12 +222,14 @@ function executionState(input: {
   sessionId: string;
   phase?: string;
   kind?: string;
+  sourceCardId?: string;
   queuePosition?: number | null;
   requestedAt?: string;
 }) {
   return {
     executionId: input.executionId,
     sessionId: input.sessionId,
+    sourceCardId: input.sourceCardId ?? '',
     kind: input.kind ?? 'thread',
     phase: input.phase ?? 'succeeded',
     requestedAt: input.requestedAt ?? '2026-07-25T01:00:00.000Z',
@@ -256,6 +258,10 @@ function taskExecutionSummary(
     sessions: sessions.map((session) => ({
       ...session,
       requestedAt: session.executions[0]?.requestedAt ?? '',
+      executions: session.executions.map((execution) => ({
+        ...execution,
+        sourceCardId: execution.sourceCardId || taskId,
+      })),
     })),
   };
 }

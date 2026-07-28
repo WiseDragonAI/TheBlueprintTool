@@ -314,15 +314,23 @@ test('server admits local assigned execution while its configured relay is unrea
     ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
   }));
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
-    cards: [{
-      id: 'master',
-      title: 'Local task',
-      status: 'todo',
-      labels: ['master-task'],
-      assignment: { nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
-    }],
+    cards: [
+      {
+        id: 'master',
+        title: 'Local task',
+        status: 'todo',
+        labels: ['master-task'],
+        assignment: { nodeId: 'workstation', changedAt: '2026-07-23T01:00:00.000Z', revision: 1 },
+      },
+      {
+        id: 'child',
+        title: 'Local subtask',
+        status: 'todo',
+        labels: ['subtask'],
+      },
+    ],
     annotations: [],
-    relationships: [],
+    relationships: [{ id: 'relationship-child', from: 'master', to: 'child', label: 'subtask', position: 0 }],
     notes: {},
   }));
   const migratedState = createProjectTaskState({
@@ -388,7 +396,7 @@ test('server admits local assigned execution while its configured relay is unrea
       projectId: 'project-a',
       ledgerId: 'tasks',
       sessionId: 'session-local',
-      sourceCardId: 'master',
+      sourceCardId: 'child',
       requestedAt: '2026-07-23T01:01:00.000Z',
     }));
     assert.equal(admitted.phase, 'queued');
@@ -396,9 +404,10 @@ test('server admits local assigned execution while its configured relay is unrea
     const admittedEvents = await readExecutionRevision(2);
     assert.match(admittedEvents, /event: codex-execution-change/);
     assert.match(admittedEvents, /"taskId":"master"/);
+    assert.match(admittedEvents, /"sourceCardId":"child"/);
     assert.match(admittedEvents, /"phase":"preparing"/);
     assert.match(admittedEvents, /"phase":"queued"/);
-    const taskSummaryResponse = await fetch(`${baseUrl}/p/project-a/api/tasks/master/execution-state`);
+    const taskSummaryResponse = await fetch(`${baseUrl}/p/project-a/api/tasks/child/execution-state`);
     assert.equal(taskSummaryResponse.status, 200);
     const taskSummary = await taskSummaryResponse.json() as {
       taskId: string;
@@ -415,6 +424,7 @@ test('server admits local assigned execution while its configured relay is unrea
       executions: [{
         executionId: 'execution-local',
         sessionId: 'session-local',
+        sourceCardId: 'child',
         kind: 'thread',
         phase: 'queued',
         queuePosition: 1,
@@ -441,7 +451,7 @@ test('server admits local assigned execution while its configured relay is unrea
     const cancelled = await fetch(`${baseUrl}/p/project-a/api/codex/skills/runs/session-local/cancel`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ledgerId: 'tasks', cardId: 'master', executionId: 'execution-local' }),
+      body: JSON.stringify({ ledgerId: 'tasks', cardId: 'child', executionId: 'execution-local' }),
     });
     const cancelledBody = await cancelled.json() as { ok: boolean; phase: string; executorNodeId: string };
     assert.equal(cancelled.status, 202);

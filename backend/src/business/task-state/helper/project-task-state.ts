@@ -347,6 +347,12 @@ export function createProjectTaskState(input: {
       if (waitingAt !== undefined && currentStatus !== 'todo') {
         return { changed: false, deltas: [], localChanges: [], ledger: before };
       }
+      if (waitingAt !== undefined) {
+        const currentWaitingAt = Date.parse(String(lifecycle.waitingAt ?? ''));
+        if (Number.isFinite(currentWaitingAt) && currentWaitingAt >= Date.parse(waitingAt)) {
+          return { changed: false, deltas: [], localChanges: [], ledger: before };
+        }
+      }
       card.status = status;
       if (waitingAt !== undefined) {
         const changedAt = new Date(waitingAt).toISOString();

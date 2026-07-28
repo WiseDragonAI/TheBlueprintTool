@@ -63,3 +63,13 @@ export function optimisticExecutionConfirmed(intent, serverTask) {
   const revision = Number(execution.revision ?? 0);
   return Number.isSafeInteger(revision) && revision >= intent.revision;
 }
+
+export function removeAcknowledgedExecutionIntent(intents, detail) {
+  const clientRequestId = String(detail?.clientRequestId ?? detail?.requestId ?? '');
+  for (const [identity, intent] of intents) {
+    if (intent.requestId !== clientRequestId) continue;
+    intents.delete(identity);
+    return true;
+  }
+  return false;
+}
