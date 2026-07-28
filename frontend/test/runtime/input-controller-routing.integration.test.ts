@@ -311,6 +311,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(processModal, /className = 'skill-run-controls process-run-controls'/);
   assert.match(cardDetailRenderer, /renderCardSkillRunWidget\(card\)/);
   assert.match(cardDetailSkillRunWidget, /cardCodexRunId\(card\)/);
+  assert.match(cardDetailSkillRunWidget, /pipelineRunId && \/\^codex-skill-/);
   assert.match(cardDetailSkillRunWidget, /body\.className = 'codex-run-body'/);
   assert.match(cardDetailSkillRunWidget, /cancel\.className = 'codex-run-stop terminal-button terminal-button--stop'/);
   assert.doesNotMatch(cardDetailSkillRunWidget, /codex-run-stop[^'\n]*terminal-button--compact/);

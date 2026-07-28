@@ -261,9 +261,11 @@ async function renderProcessDetail(record) {
 }
 async function toggleGlobalSkillFavorite(record) {
   const favorite = !record.favorite;
+  const priorRecordFavorite = record.favorite === true;
   const identity = (skill) => skill.name === record.name && skill.source === record.source && skill.revision === record.revision;
   const prior = state.skills.filter(identity).map((skill) => ({ skill, favorite: skill.favorite === true }));
   prior.forEach(({ skill }) => { skill.favorite = favorite; });
+  record.favorite = favorite;
   renderProcessList();
   renderProcessDetail(record);
   const submit = el('.skill-favorite-toggle');
@@ -280,7 +282,10 @@ async function toggleGlobalSkillFavorite(record) {
     message('.process-detail-message', favorite ? 'Added to favorites.' : 'Removed from favorites.');
   } catch (error) {
     try { await loadGlobalLibraries(); }
-    catch { prior.forEach(({ skill, favorite: priorFavorite }) => { skill.favorite = priorFavorite; }); }
+    catch {
+      prior.forEach(({ skill, favorite: priorFavorite }) => { skill.favorite = priorFavorite; });
+      record.favorite = priorRecordFavorite;
+    }
     const current = state.skills.find(identity) || record;
     renderProcessList();
     renderProcessDetail(current);
@@ -290,10 +295,12 @@ async function toggleGlobalSkillFavorite(record) {
 async function saveGlobalSkillTag(record, tag) {
   if (state.tagSaving || !state.availableTags.includes(tag) || record.tags?.[0] === tag) return;
   const tags = [tag];
+  const priorRecordTags = [...(record.tags || [])];
   const identity = (skill) => skill.name === record.name && skill.source === record.source && skill.revision === record.revision;
   const prior = state.skills.filter(identity).map((skill) => ({ skill, tags: [...(skill.tags || [])] }));
   state.tagSaving = true;
   prior.forEach(({ skill }) => { skill.tags = tags; });
+  record.tags = tags;
   renderProcessList();
   renderProcessDetail(record);
   message('.process-detail-message', `Saving ${tag}…`);
@@ -310,7 +317,10 @@ async function saveGlobalSkillTag(record, tag) {
     message('.process-detail-message', `${tag} saved.`);
   } catch (error) {
     try { await loadGlobalLibraries(); }
-    catch { prior.forEach(({ skill, tags: priorTags }) => { skill.tags = priorTags; }); }
+    catch {
+      prior.forEach(({ skill, tags: priorTags }) => { skill.tags = priorTags; });
+      record.tags = priorRecordTags;
+    }
     state.tagSaving = false;
     const current = state.skills.find(identity) || record;
     renderProcessList();

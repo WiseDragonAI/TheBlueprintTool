@@ -49,8 +49,11 @@ function selectionMetric(label: string, key: string, options: readonly string[],
 export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLElement | null {
   const cardId = String(card.id ?? '');
   const ledgerId = String(state.activeTab ?? '').trim();
-  const runId = cardCodexRunId(card);
   const pipelineRunId = String(card.codexPipelineRunId ?? '').trim();
+  const pipelineSkillRunId = String(card.codexRunId ?? '').trim();
+  const runId = pipelineRunId && /^codex-skill-[^\s]+$/.test(pipelineSkillRunId)
+    ? pipelineSkillRunId
+    : cardCodexRunId(card);
   const pipelineStepId = String(card.codexPipelineStepId ?? '').trim();
   if (!cardId || !ledgerId || !runId) return null;
 
