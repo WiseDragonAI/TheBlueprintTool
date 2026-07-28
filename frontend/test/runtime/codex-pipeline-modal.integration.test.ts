@@ -429,11 +429,11 @@ test('Process card derives source content, reloads skill defaults on reopen, and
     state.activeLedger.cards[0].comment.what = 'Source content';
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
       if (url === '/api/codex/pipelines') {
-        return new Response(JSON.stringify({ ok: true, pipelines: [pipeline], steps, availableContent: catalog, invalidReferences: [], issues: [] }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true, pipelines: [pipeline], steps, availableContent: [...catalog, pipelinePrompt], invalidReferences: [], issues: [] }), { status: 200 });
       }
       if (url === '/api/codex/skills') {
         catalogVersion += 1;
-        const skills = [...catalog, pipelinePrompt].map((skill, index) => index === 0
+        const skills = catalog.map((skill, index) => index === 0
           ? { ...skill, effectiveCodexModel: catalogVersion === 1 ? 'gpt-5.5' : 'gpt-5.6-sol', effectiveCodexEffort: catalogVersion === 1 ? 'high' : 'ultra' }
           : skill);
         return new Response(JSON.stringify({ ok: true, skills }), { status: 200 });

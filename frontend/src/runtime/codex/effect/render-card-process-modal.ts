@@ -142,6 +142,17 @@ function directContentKind(skill: CodexSkillSummary): CodexContentKind {
   return 'federated-skill';
 }
 
+function cardProcessContent(
+  skills: readonly CodexSkillSummary[],
+  pipelineContent: readonly CodexPipelineContentSummary[],
+): CodexSkillSummary[] {
+  const merged = new Map(skills.map((skill) => [skill.name, skill]));
+  for (const content of pipelineContent) {
+    if (content.contentKind === 'pipeline-prompt' && !merged.has(content.name)) merged.set(content.name, content);
+  }
+  return [...merged.values()];
+}
+
 function pipelineReferences(pipelineId: string): readonly CodexPipelineInvalidReference[] {
   return processModalState.invalidReferences.filter((reference) => reference.pipelineId === pipelineId);
 }
@@ -561,8 +572,8 @@ export async function openCardProcessModal(cardId: string, initialMode: ProcessM
   if (generation !== processLoadGeneration || processModalState.cardId !== normalizedCardId) return;
   processModalState.loadingPipelines = false;
   processModalState.loadingSkills = false;
-  processModalState.skills = skillCatalog.skills;
   processModalState.pipelineContent = [...library.availableContent];
+  processModalState.skills = cardProcessContent(skillCatalog.skills, library.availableContent);
   processModalState.skillCatalogError = skillCatalog.ok ? '' : skillCatalog.error || 'Could not load Codex skills.';
   if (library.ok) {
     processModalState.pipelines = library.pipelines;
@@ -573,7 +584,7 @@ export async function openCardProcessModal(cardId: string, initialMode: ProcessM
   } else {
     processModalState.metadataError = library.error || 'Could not load saved pipelines.';
   }
-  const firstDirectSkill = skillCatalog.skills[0];
+  const firstDirectSkill = processModalState.skills[0];
   if (firstDirectSkill) selectProcessSkill(firstDirectSkill.name, false);
   renderCardProcessModal();
   processModal?.querySelector<HTMLInputElement>('.process-search')?.focus();
@@ -639,8 +650,8 @@ export async function resynchronizeProcessLibraries(): Promise<boolean> {
   processModalState.synchronizingLibraries = false;
   processModalState.loadingPipelines = false;
   processModalState.loadingSkills = false;
-  processModalState.skills = skillCatalog.skills;
   processModalState.pipelineContent = [...library.availableContent];
+  processModalState.skills = cardProcessContent(skillCatalog.skills, library.availableContent);
   processModalState.skillCatalogError = skillCatalog.ok ? '' : skillCatalog.error || 'Could not load Codex skills.';
   processModalState.pipelines = library.pipelines;
   processModalState.steps = library.steps;
@@ -651,7 +662,7 @@ export async function resynchronizeProcessLibraries(): Promise<boolean> {
     ?? library.pipelines.find(pipelineCanRun)?.id
     ?? library.pipelines[0]?.id
     ?? '';
-  const nextSkill = skillCatalog.skills.find((skill) => skill.name === selectedSkillName) ?? skillCatalog.skills[0];
+  const nextSkill = processModalState.skills.find((skill) => skill.name === selectedSkillName) ?? processModalState.skills[0];
   if (nextSkill) selectProcessSkill(nextSkill.name, false);
   const peers = synchronization.synchronizedPeerCount;
   processModalState.synchronizationMessage = `Skills and pipelines synchronized with ${peers} online ${peers === 1 ? 'node' : 'nodes'}.`;
@@ -756,11 +767,11 @@ export async function reloadProcessSkills(): Promise<void> {
   const [result, library] = await Promise.all([loadCodexSkillsResult(), loadCodexPipelines()]);
   if (generation !== processLoadGeneration || cardId !== processModalState.cardId) return;
   const selectedName = processModalState.selectedSkillName;
-  processModalState.skills = result.skills;
   if (library.ok) processModalState.pipelineContent = [...library.availableContent];
+  processModalState.skills = cardProcessContent(result.skills, library.ok ? library.availableContent : processModalState.pipelineContent);
   processModalState.skillCatalogError = result.ok ? '' : result.error || 'Could not load Codex skills.';
   processModalState.loadingSkills = false;
-  const nextSelection = result.skills.find((skill) => skill.name === selectedName) ?? result.skills[0];
+  const nextSelection = processModalState.skills.find((skill) => skill.name === selectedName) ?? processModalState.skills[0];
   if (nextSelection) selectProcessSkill(nextSelection.name, false);
   renderCardProcessModal();
 }
