@@ -1483,9 +1483,9 @@ function taskRow(task, tab, index) {
   const executing = tab === 'exec';
   summary.innerHTML = `<span class="task-copy"><strong></strong><span class="task-meta"></span>${task.nextSubtask || executing ? '<span class="task-next"></span>' : ''}</span>`;
   summary.querySelector('strong').textContent = task.title;
+  const execution = executionPresentation(task);
   if (executing) {
     const runtimeStatus = summary.querySelector('.task-next');
-    const execution = executionPresentation(task);
     if (task.projectSyncFailed) {
       runtimeStatus.textContent = 'Failed';
     } else if (task.projectSync) {
@@ -1507,7 +1507,6 @@ function taskRow(task, tab, index) {
   const completedLabel = Number.isFinite(completedTime)
     ? `Completed ${new Date(completedTime).toLocaleString()}`
     : 'Completion date unavailable';
-  const execution = executionPresentation(task);
   const age = task.status === 'task-backlog'
     ? 'backlog'
     : task.status === 'task-complete'
@@ -1522,7 +1521,14 @@ function taskRow(task, tab, index) {
     ? task.executionNodeLabel || task.executionNodeId || task.assignedNodeLabel || task.assignedNodeId || 'This server'
     : task.assignedNodeLabel || task.assignedNodeId || 'Unassigned';
   if (summary.querySelector('.task-meta')) {
-    summary.querySelector('.task-meta').textContent = `${task.projectName} · ${taskOwner} · ${task.ledger} · ${age}${process}`;
+    const taskMeta = summary.querySelector('.task-meta');
+    taskMeta.textContent = `${task.projectName} · ${taskOwner} · ${task.ledger} · ${age}${process}`;
+    if (task.status === 'task-execution' && execution.since) {
+      taskMeta.dataset.executionSince = execution.since;
+      taskMeta.dataset.executionPhase = execution.phase;
+      taskMeta.dataset.executionPrefix = `${task.projectName} · ${taskOwner} · ${task.ledger} · `;
+      taskMeta.dataset.executionSuffix = process;
+    }
   }
   if (task.remote || task.replica) {
     const replica = document.createElement('span');
@@ -3144,8 +3150,17 @@ window.matchMedia('(min-width: 760px)').addEventListener('change', () => {
 initializeMobileThread();
 initializeMobileCodex();
 window.setInterval(() => {
+  const now = Date.now();
   document.querySelectorAll('.task-stopwatch[data-execution-since]').forEach((stopwatch) => {
-    stopwatch.textContent = executionPresentation({ executionStatus: stopwatch.dataset.executionPhase, executionSince: stopwatch.dataset.executionSince }).text;
+    const execution = executionPresentation({
+      executionStatus: stopwatch.dataset.executionPhase,
+      executionSince: stopwatch.dataset.executionSince
+    }, now);
+    stopwatch.textContent = execution.text;
+    const taskMeta = stopwatch.closest('.control-task')?.querySelector('.task-meta[data-execution-since]');
+    if (taskMeta) {
+      taskMeta.textContent = `${taskMeta.dataset.executionPrefix || ''}${execution.elapsed} ${execution.phase}${taskMeta.dataset.executionSuffix || ''}`;
+    }
   });
 }, 1000);
 void loadRoute();
