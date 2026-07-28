@@ -171,7 +171,8 @@ test('mobile thread launch resumes the card session whenever it owns a run id', 
   assert.match(source, /queuePosition: Number\.isInteger\(queuePosition\) \? queuePosition : null/);
   assert.match(source, /const executionId = String\(result\.run\?\.executionId \?\? ''\)/);
   assert.match(source, /expectedExecutionId: executionId \|\| undefined, expectedStatus: status, forceRevalidate: true/);
-  assert.match(source, /bindThreadCodexActiveRunLog\(identity\)/);
+  assert.match(source, /bindThreadCodexRunLog\(identity\)/);
+  assert.doesNotMatch(source, /bindThreadCodexActiveRunLog\(identity\)/);
   assert.match(source, /hydrateThreadRun\(runId, startedAt, status, result\.queuePosition\);[\s\S]*await refreshThreadLedger\(runId\)/);
 });
 

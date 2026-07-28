@@ -15,7 +15,7 @@ import { readRepositorySyncStatus } from '@backend/business/project-sync/helper/
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import type { CodexPipelineRun } from '../../../shared/schemas/codex-pipeline-types.js';
 
-type Frame = { type: string; requestId?: string; to?: string; projects?: unknown[] };
+type Frame = { type: string; requestId?: string; to?: string; projects?: unknown[]; path?: string };
 
 async function projectHome(name: string): Promise<string> {
   const home = mkdtempSync(join(tmpdir(), `decision-os-federation-${name}-`));
@@ -90,6 +90,88 @@ test('retains configured node identity while relay transport is not configured',
     });
   } finally {
     connector.stop();
+  }
+});
+
+test('loads the retained remote project catalog as offline discovery state', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-retained-federation-catalog-'));
+  const catalogFile = join(workspace, 'federation-project-catalog.json');
+  writeFileSync(catalogFile, JSON.stringify({
+    version: 1,
+    federationId: 'proof',
+    nodes: [{
+      nodeId: 'node-b',
+      nodeLabel: 'Node B',
+      projects: [{
+        id: 'project-b',
+        name: 'Project B',
+        description: '',
+        color: '#123456',
+        ledgers: [],
+        originFingerprint: 'origin-b',
+      }],
+    }],
+  }));
+  const connector = createFederationNodeConnector({
+    settings: {
+      federationRelayUrl: 'http://127.0.0.1:1',
+      federationId: 'proof',
+      federationNodeId: 'node-a',
+      federationNodeCredential: 'credential',
+    },
+    catalogFile,
+    localProjects: () => [],
+    localServerUrl: () => 'http://127.0.0.1:1',
+  });
+  try {
+    assert.deepEqual(connector.nodes(), [{
+      nodeId: 'node-b',
+      nodeLabel: 'Node B',
+      online: false,
+      projectCount: 1,
+    }]);
+    assert.deepEqual(connector.remoteProjects().map((project) => ({
+      id: project.id,
+      localProjectId: project.localProjectId,
+      ownerNodeId: project.ownerNodeId,
+      online: project.online,
+    })), [{
+      id: 'node-b:project-b',
+      localProjectId: 'project-b',
+      ownerNodeId: 'node-b',
+      online: false,
+    }]);
+  } finally {
+    connector.stop();
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('preserves invalid retained project catalog bytes and reports the owning scope', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-invalid-federation-catalog-'));
+  const catalogFile = join(workspace, 'federation-project-catalog.json');
+  const invalid = '{"version":1,"nodes":';
+  const operations: string[] = [];
+  writeFileSync(catalogFile, invalid);
+  const connector = createFederationNodeConnector({
+    settings: {
+      federationRelayUrl: 'http://127.0.0.1:1',
+      federationId: 'proof',
+      federationNodeId: 'node-a',
+      federationNodeCredential: 'credential',
+    },
+    catalogFile,
+    localProjects: () => [],
+    localServerUrl: () => 'http://127.0.0.1:1',
+    onError: (_error, context) => operations.push(context.operation),
+  });
+  try {
+    assert.deepEqual(connector.remoteProjects(), []);
+    assert.equal(readFileSync(catalogFile, 'utf8'), invalid);
+    assert.deepEqual(operations, ['read-retained-project-catalog']);
+  } finally {
+    connector.stop();
+    rmSync(workspace, { recursive: true, force: true });
   }
 });
 
@@ -380,6 +462,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
   const sockets = new Map<string, WebSocket>();
   const manifests = new Map<string, unknown[]>();
   const streams = new Map<string, { requester: string; owner: string }>();
+  const proxiedPaths: string[] = [];
 
   relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
     const nodeId = new URL(request.url ?? '/', 'http://relay.test').pathname.split('/').at(-1)!;
@@ -406,12 +489,19 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
         webSocket.send(JSON.stringify({ ...frame, from: 'relay' }));
         return;
       }
+      if (frame.type === 'state-execution-observation' && !frame.to) {
+        for (const [targetId, target] of sockets) {
+          if (targetId !== nodeId) target.send(JSON.stringify({ ...frame, from: nodeId }));
+        }
+        return;
+      }
       if (frame.type === 'state-subscribe') return;
       if (frame.type.startsWith('state-') && frame.to) {
         sockets.get(frame.to)?.send(JSON.stringify({ ...frame, from: nodeId }));
         return;
       }
       if (frame.type === 'request-open' && frame.requestId && frame.to) {
+        proxiedPaths.push(String(frame.path ?? ''));
         streams.set(frame.requestId, { requester: nodeId, owner: frame.to });
         sockets.get(frame.to)?.send(JSON.stringify({ ...frame, to: undefined }));
         return;
@@ -668,6 +758,22 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     assert.equal(selectedNodePipeline.run.status, 'complete');
     assert.equal(selectedNodePipeline.run.steps[0].skills[0].status, 'complete');
     assert.equal(selectedNodePipeline.run.steps[0].skills[0].executor.nodeId, 'node-b');
+    const proxyCountBeforeRemotePipelinePoll = proxiedPaths.length;
+    const remoteAlphaPipeline = await waitFor(async () => {
+      const response = await fetch(
+        `${baseB}/p/${encodeURIComponent(alphaProjectId)}/api/codex/pipelines/runs/${pipelineRunId}`,
+        { headers: { 'x-decision-os-replica-node': 'node-a' } },
+      );
+      if (response.status !== 200) return null;
+      const body = await response.json() as Record<string, any>;
+      return body.run?.status === 'complete' ? body : null;
+    });
+    assert.equal(remoteAlphaPipeline.run.steps[0].skills[0].status, 'complete');
+    assert.equal(
+      proxiedPaths.slice(proxyCountBeforeRemotePipelinePoll).some((path) => path === `/api/codex/pipelines/runs/${pipelineRunId}`),
+      false,
+      'remote pipeline polling must not open a relay HTTP request',
+    );
     assert.ok(existsSync(join(betaRoot, '.decision-os', 'runs', 'codex-skills', 'tasks', `${pipelineSkillRunId}.jsonl`)));
     assert.equal(execFileSync('git', ['-C', betaRoot, 'status', '--porcelain=v1'], { encoding: 'utf8' }).trim(), '');
     const cancellationPipelineRunId = 'federated-cancellation-proof';
@@ -742,12 +848,26 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     } catch {
       throw new Error(`Remote cancellation execution did not reach running: ${JSON.stringify(lastCancellationStatus)}`);
     }
+    const proxyCountBeforeFrontendPolls = proxiedPaths.length;
+    const remoteTaskState = await fetch(
+      `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/tasks/alpha-card/execution-state`,
+    ).then((response) => response.json()) as Record<string, any>;
+    const remotePresentationResponse = await fetch(
+      `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/task-executions/${cancellationExecutionId}`,
+    );
+    const remotePresentation = await remotePresentationResponse.json() as Record<string, any>;
     const remoteLiveDetail = await fetch(
       `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/skills/runs/${cancellationSkillRunId}?ledgerId=tasks&cardId=alpha-card`,
     ).then((response) => response.json()) as Record<string, any>;
-    assert.equal(remoteLiveDetail.ok, true, JSON.stringify(remoteLiveDetail));
-    assert.equal(remoteLiveDetail.phase, 'running');
-    assert.equal(remoteLiveDetail.executorNodeId, 'node-b');
+    const concurrentFrontendPolls = await Promise.all(Array.from({ length: 10 }, async () => {
+      const [taskStateResponse, presentationResponse, pipelineResponse] = await Promise.all([
+        fetch(`${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/tasks/alpha-card/execution-state`),
+        fetch(`${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/task-executions/${cancellationExecutionId}`),
+        fetch(`${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/pipelines/runs/${cancellationPipelineRunId}`),
+      ]);
+      return [taskStateResponse.status, presentationResponse.status, pipelineResponse.status];
+    }));
+    const frontendPollRelayPaths = proxiedPaths.slice(proxyCountBeforeFrontendPolls);
     const remoteCancellation = await fetch(
       `${baseA}/p/${encodeURIComponent(alphaProjectId)}/api/codex/pipelines/runs/${cancellationPipelineRunId}/cancel`,
       {
@@ -760,6 +880,23 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     assert.equal(remoteCancellation.status, 202, JSON.stringify(remoteCancellationBody));
     assert.equal(remoteCancellationBody.cancellationRequested, true);
     assert.equal(remoteCancellationBody.executorNodeId, 'node-b');
+    assert.ok(remoteTaskState.activeExecutionIds.includes(cancellationExecutionId), JSON.stringify(remoteTaskState));
+    assert.equal(remotePresentationResponse.status, 200, JSON.stringify(remotePresentation));
+    assert.equal(remotePresentation.execution.executionId, cancellationExecutionId);
+    assert.equal(remoteLiveDetail.ok, true, JSON.stringify(remoteLiveDetail));
+    assert.equal(remoteLiveDetail.phase, 'running');
+    assert.equal(remoteLiveDetail.executorNodeId, 'node-b');
+    assert.deepEqual(
+      concurrentFrontendPolls,
+      Array.from({ length: 10 }, () => [200, 200, 200]),
+      JSON.stringify(concurrentFrontendPolls),
+    );
+    assert.equal(
+      frontendPollRelayPaths.some((path) => path.includes(`/api/internal/task-executions/${cancellationExecutionId}/presentation`)
+        || path.includes(`/api/internal/task-executions/${cancellationExecutionId}/status`)),
+      false,
+      `frontend polling opened execution relay requests: ${JSON.stringify(frontendPollRelayPaths)}`,
+    );
     const heldRoleResult = await heldRoleRequest;
     assert.equal(heldRoleResult.status, 409);
     try {
@@ -843,7 +980,13 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       lastControlRoomA = body;
       return body.allTasks.some((task) => task.title === 'beta card' && task.ownerOnline) ? body : null;
     }).catch((error) => {
-      throw new Error(`${error instanceof Error ? error.message : error}\nLast Control Room projection: ${JSON.stringify(lastControlRoomA)}`);
+      throw new Error([
+        error instanceof Error ? error.message : error,
+        `Last Control Room projection: ${JSON.stringify(lastControlRoomA)}`,
+        `Node A federation: ${JSON.stringify((runtimeA.federationNodeConnector as { status(): unknown }).status())}`,
+        `Node B federation: ${JSON.stringify((runtimeB.federationNodeConnector as { status(): unknown }).status())}`,
+        `Relay sockets: ${JSON.stringify([...sockets.keys()])}`,
+      ].join('\n'));
     });
     assert.deepEqual(controlRoomA.federation, { nodeCount: 2, remoteNodeCount: 1 });
     assert.ok(controlRoomA.projects.some((project) => project.id === remoteBeta.id && project.ownerNodeId === 'node-b'));

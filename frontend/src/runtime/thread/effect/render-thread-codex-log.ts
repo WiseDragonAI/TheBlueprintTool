@@ -277,6 +277,13 @@ export function renderThreadCodexLog(): void {
   }
   const taskSummary = (recordState('threadTaskExecutionStateByThreadId')[threadId] as TaskExecutionStateSummary | undefined) ?? null;
   const entries = historyEntries(taskSummary);
+  if (taskSummary && entries.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'codex-log-empty';
+    empty.textContent = 'No Codex run for this thread.';
+    root.append(empty);
+    return;
+  }
   const requestedExecutionId = String(recordState('threadSelectedExecutionIdByThreadId')[threadId] ?? '');
   const selectedExecutionId = findTaskExecution(taskSummary, requestedExecutionId)
     ? requestedExecutionId

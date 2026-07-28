@@ -717,6 +717,34 @@ test('Codex Log run arrows default to the newest retained run and select the pre
   }
 });
 
+test('Codex Log renders the settled empty state when the local task replica has no executions', async () => {
+  const { codexLog } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadCodexLog } = await import('../../../../src/runtime/thread/effect/render-thread-codex-log.js');
+  const threadId = 'thread-card-empty';
+  try {
+    state.activeLedger = {
+      cards: [{ id: 'card-empty', title: 'No executions' }],
+      annotations: [],
+      relationships: [],
+      notes: { [threadId]: [] },
+    };
+    state.threadId = threadId;
+    state.threadTaskExecutionStateByThreadId = {
+      [threadId]: taskExecutionSummary('card-empty', [], []),
+    };
+
+    renderThreadCodexLog();
+
+    assert.equal(codexLog.querySelector('.codex-log-empty')?.textContent, 'No Codex run for this thread.');
+    assert.equal(codexLog.querySelector('.codex-log-waiting'), null);
+  } finally {
+    state.threadId = '';
+    state.activeLedger = null;
+    state.threadTaskExecutionStateByThreadId = {};
+  }
+});
+
 test('Codex Log counts continuations as separate runs with execution-scoped metrics and events', async () => {
   const { codexLog } = installDom();
   const { state } = await import('../../../../src/runtime/state.js');

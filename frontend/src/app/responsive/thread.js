@@ -21,7 +21,7 @@ import { uploadThreadFileController } from '/src/runtime/thread/controller/uploa
 import { pasteThreadImageController } from '/src/runtime/thread/controller/paste-thread-image-controller.js';
 import { requestThreadCodexProcess } from '/src/runtime/codex/effect/request-thread-codex-process.js';
 import { requestCardSkillRunContinue } from '/src/runtime/codex/effect/request-card-skill-run-continue.js';
-import { bindThreadCodexActiveRunLog, bindThreadCodexRunLog, unbindThreadCodexActiveRunLog, unbindThreadCodexRunLog } from '/src/runtime/codex/effect/bind-thread-codex-run-log.js';
+import { bindThreadCodexRunLog, unbindThreadCodexActiveRunLog, unbindThreadCodexRunLog } from '/src/runtime/codex/effect/bind-thread-codex-run-log.js';
 import { cardCodexThreadRunId } from '/src/runtime/codex/helper/card-codex-thread-run-id.js';
 import { syncThreadCodexRunControls } from '/src/runtime/thread/effect/sync-thread-codex-run-controls.js';
 import { stopThreadCodexRunController } from '/src/runtime/codex/controller/stop-thread-codex-run-controller.js';
@@ -455,7 +455,6 @@ async function startCodex(button) {
   if (runId) {
     const identity = { projectId: currentProjectId, replicaNodeId: currentReplicaNodeId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status, forceRevalidate: true };
     bindThreadCodexRunLog(identity);
-    bindThreadCodexActiveRunLog(identity);
   }
   hydrateThreadRun(runId, startedAt, status, result.queuePosition);
   await onCodexStarted({

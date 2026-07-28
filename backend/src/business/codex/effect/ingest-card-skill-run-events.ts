@@ -10,6 +10,8 @@ import {
   type CardSkillRunEventIngestor,
   type NormalizedRunEvent
 } from '../helper/card-skill-run-event-types.js';
+import type { TaskExecutionPresentationEvent } from '../../../../../shared/schemas/task-execution-presentation-types.js';
+import { taskExecutionPresentationEvents } from '../helper/task-execution-presentation-events.js';
 import { persistCardSkillRunEvents } from './persist-card-skill-run-events.js';
 import { reportCodexBackgroundFailure } from '../helper/codex-runtime-run-store.js';
 
@@ -21,20 +23,30 @@ export function createCardSkillRunEventIngestor(input: {
   ledgerPath: string;
   cardId: string;
   runId: string;
+  executionId: string;
   startLine?: number;
   batchDelayMs?: number;
+  presentationBatchDelayMs?: number;
   telemetryFile?: string;
   projectId?: string;
   runtime?: AnyRecord;
   onTerminalEvent?: (event: NormalizedRunEvent) => void;
   onTurnStarted?: (event: NormalizedRunEvent, observedAt: string) => void;
+  onPresentationEvents?: (input: {
+    projectId: string;
+    executionId: string;
+    events: TaskExecutionPresentationEvent[];
+  }) => void;
 }): CardSkillRunEventIngestor {
   const decoder = new StringDecoder('utf8');
   const pendingEvents = new Map<number, NormalizedRunEvent>();
+  const pendingPresentationEvents = new Map<number, NormalizedRunEvent>();
   const batchDelayMs = Math.max(0, Number(input.batchDelayMs ?? 25));
+  const presentationBatchDelayMs = Math.max(batchDelayMs, Number(input.presentationBatchDelayMs ?? 500));
   let nextLine = Math.max(0, Number(input.startLine ?? 0)) + 1;
   let remainder = '';
   let timer: NodeJS.Timeout | undefined;
+  let presentationTimer: NodeJS.Timeout | undefined;
   let turnSequence = 0;
   let turnId = `${input.runId}:turn-${Math.max(0, Number(input.startLine ?? 0)) + 1}-0`;
   const startedTools = new Map<string, { startedAt: string; startedNs: bigint; tool: string; command: string; timingSource: 'producer' | 'observer' }>();
@@ -102,6 +114,7 @@ export function createCardSkillRunEventIngestor(input: {
       if (event.kind === 'run_status' && (event.status === 'complete' || event.status === 'failed' || event.status === 'cancelled')) {
         input.onTerminalEvent?.(event);
       }
+      pendingPresentationEvents.set(event.line, event);
       // WHAT: Queue only events that have a durable thread representation.
       // WHY: Empty informational records remain available in the JSONL source without creating blank notes.
       if (event.persist) pendingEvents.set(event.line, event);
@@ -109,6 +122,19 @@ export function createCardSkillRunEventIngestor(input: {
       // WHAT: Leave malformed stdout exclusively in the JSONL artifact.
       // WHY: One incomplete producer line must not stop ingestion of later valid events.
     }
+  };
+
+  const publishPendingPresentation = (): void => {
+    if (pendingPresentationEvents.size === 0) return;
+    const events = taskExecutionPresentationEvents(
+      [...pendingPresentationEvents.values()].sort((left, right) => left.line - right.line),
+    );
+    pendingPresentationEvents.clear();
+    if (events.length === 0) return;
+    const update = { projectId: input.projectId ?? '', executionId: input.executionId, events };
+    input.onPresentationEvents?.(update);
+    const publish = input.runtime?.publishTaskExecutionPresentationEvents;
+    if (typeof publish === 'function') publish(update);
   };
 
   const persistPending = (): number => {
@@ -147,6 +173,24 @@ export function createCardSkillRunEventIngestor(input: {
     }, batchDelayMs);
   };
 
+  const schedulePresentation = (): void => {
+    if (presentationTimer || pendingPresentationEvents.size === 0) return;
+    presentationTimer = setTimeout(() => {
+      presentationTimer = undefined;
+      try {
+        publishPendingPresentation();
+      } catch (error) {
+        reportCodexBackgroundFailure(input.runtime ?? {}, 'publish-codex-presentation-events', error, {
+          ledgerId: input.ledgerId ?? '',
+          cardId: input.cardId,
+          runId: input.runId,
+          executionId: input.executionId,
+        });
+      }
+    }, presentationBatchDelayMs);
+    presentationTimer.unref?.();
+  };
+
   return {
     ingest(chunk) {
       remainder += typeof chunk === 'string' ? chunk : decoder.write(chunk);
@@ -154,6 +198,7 @@ export function createCardSkillRunEventIngestor(input: {
       remainder = lines.pop() ?? '';
       for (const line of lines) enqueueLine(line);
       schedulePersist();
+      schedulePresentation();
     },
     flush() {
       // WHAT: Cancel the deferred batch before performing the settlement flush.
@@ -161,6 +206,10 @@ export function createCardSkillRunEventIngestor(input: {
       if (timer) {
         clearTimeout(timer);
         timer = undefined;
+      }
+      if (presentationTimer) {
+        clearTimeout(presentationTimer);
+        presentationTimer = undefined;
       }
       remainder += decoder.end();
       // WHAT: Treat the final unterminated fragment as one physical JSONL line.
@@ -178,7 +227,9 @@ export function createCardSkillRunEventIngestor(input: {
         }
         startedTools.clear();
       }
-      return persistPending();
+      const changed = persistPending();
+      publishPendingPresentation();
+      return changed;
     },
   };
 }

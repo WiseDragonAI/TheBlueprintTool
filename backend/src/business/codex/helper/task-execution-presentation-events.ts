@@ -2,6 +2,7 @@
  * WHAT: Converts normalized run events into the lightweight execution presentation schema.
  * WHY: Event shaping, lifecycle coalescing, and payload exclusion form one reusable presentation boundary.
  */
+import { createHash } from 'node:crypto';
 import type {
   TaskExecutionFileEvent,
   TaskExecutionPresentationEvent,
@@ -39,15 +40,17 @@ function fileItems(event: NormalizedRunEvent): TaskExecutionFileEvent['files'] {
   });
 }
 
-function presentationId(event: NormalizedRunEvent, index: number): string {
+function presentationId(event: NormalizedRunEvent): string {
   // WHAT: Generate a stable logical identity without exposing physical line positions.
-  // WHY: Full snapshot replacement needs DOM keys, not artifact cursors.
-  return event.itemId ? `${event.kind}:${event.itemId}` : `${event.kind}:event-${index + 1}`;
+  // WHY: Full snapshots and incremental batches must merge to the same DOM key.
+  if (event.itemId) return `${event.kind}:${event.itemId}`;
+  const digest = createHash('sha256').update(`${event.kind}\0${event.line}`).digest('hex').slice(0, 16);
+  return `${event.kind}:event-${digest}`;
 }
 
-function presentationEvent(event: NormalizedRunEvent, index: number): TaskExecutionPresentationEvent | null {
+function presentationEvent(event: NormalizedRunEvent): TaskExecutionPresentationEvent | null {
   const base = {
-    id: presentationId(event, index),
+    id: presentationId(event),
     title: event.title,
     status: event.status,
     severity: event.severity,
@@ -82,8 +85,8 @@ function presentationEvent(event: NormalizedRunEvent, index: number): TaskExecut
 export function taskExecutionPresentationEvents(events: NormalizedRunEvent[]): TaskExecutionPresentationEvent[] {
   const presented: TaskExecutionPresentationEvent[] = [];
   const lifecycleIndexes = new Map<string, number>();
-  for (const [index, event] of events.entries()) {
-    const item = presentationEvent(event, index);
+  for (const event of events) {
+    const item = presentationEvent(event);
     if (!item) continue;
     const lifecycleKey = event.itemId && (item.kind === 'tool_call' || item.kind === 'file_change' || item.kind === 'todo_list')
       ? `${item.kind}:${event.itemId}`
