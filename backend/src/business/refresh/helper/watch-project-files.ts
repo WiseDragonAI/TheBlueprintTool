@@ -60,12 +60,24 @@ export function watchProjectFiles(input: {
   const reportError = (error: unknown, operation: string, file: string): void => {
     try { input.onError?.(error, { operation, file }); } catch { /* Error reporting must not escape a watcher callback. */ }
   };
-  const publishProjectChange = (change: ProjectFileChange): void => {
-    try {
-      Promise.resolve(input.onProjectChange(change)).catch((error: unknown) => reportError(error, 'publish-project-change', change.file));
-    } catch (error) {
-      reportError(error, 'publish-project-change', change.file);
+  const pendingPublications = new Set<Promise<void>>();
+  let closed = false;
+  const publishProjectChange = async (change: ProjectFileChange): Promise<void> => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await input.onProjectChange(change);
+        return;
+      } catch (error) {
+        lastError = error;
+      }
     }
+    reportError(lastError, 'publish-project-change', change.file);
+  };
+  const trackProjectChange = (change: ProjectFileChange): void => {
+    const publication = publishProjectChange(change);
+    pendingPublications.add(publication);
+    void publication.finally(() => pendingPublications.delete(publication));
   };
   const contentWatcher = watchCardContentFiles({
     decisionOsRoot: input.decisionOsRoot,
@@ -73,7 +85,7 @@ export function watchProjectFiles(input: {
     onError: input.onError,
     taskProjection: input.taskProjection,
   });
-  const pending = new Map<string, NodeJS.Timeout>();
+  const pending = new Map<string, { timer: NodeJS.Timeout; deliver: () => void }>();
   const ignoredWrites = new Set<string>();
   let ledgers = ledgerFiles(input.decisionOsRoot);
   let signatures = new Map<string, string>();
@@ -93,6 +105,7 @@ export function watchProjectFiles(input: {
   };
 
   const emit = (change: ProjectFileChange): void => {
+    if (closed) return;
     const file = resolve(change.file);
     // WHAT: Consume a marked server-owned write without publishing a duplicate external event.
     // WHY: HTTP mutations already advance revisions and must not be counted twice by their filesystem echo.
@@ -103,8 +116,8 @@ export function watchProjectFiles(input: {
     const existing = pending.get(file);
     // WHAT: Coalesce editor write bursts by dependency path.
     // WHY: One durable filesystem edit should commit one reconstruction revision.
-    if (existing) clearTimeout(existing);
-    pending.set(file, setTimeout(() => {
+    if (existing) clearTimeout(existing.timer);
+    const deliver = (): void => {
       pending.delete(file);
       // WHAT: Rebuild ledger watcher ownership after state membership changes.
       // WHY: `state.json` is the canonical list of ledger dependencies for this project.
@@ -113,8 +126,9 @@ export function watchProjectFiles(input: {
         contentWatcher.refreshOwnership();
       }
       signatures.set(file, signatureKey(fileSignature(file)));
-      publishProjectChange(change);
-    }, 50));
+      trackProjectChange(change);
+    };
+    pending.set(file, { timer: setTimeout(deliver, 50), deliver });
   };
 
   refreshSignatures();
@@ -150,14 +164,37 @@ export function watchProjectFiles(input: {
   }, input.auditIntervalMs ?? 30_000);
   audit.unref();
 
+  const flushProjectChanges = async (timeoutMs: number): Promise<void> => {
+    for (const entry of [...pending.values()]) {
+      clearTimeout(entry.timer);
+      entry.deliver();
+    }
+    if (pendingPublications.size === 0) return;
+    let timeout: NodeJS.Timeout | undefined;
+    await Promise.race([
+      Promise.allSettled([...pendingPublications]),
+      new Promise<void>((resolve) => {
+        timeout = setTimeout(() => {
+          reportError(new Error(`Project watcher flush exceeded ${timeoutMs}ms.`), 'flush-project-changes', input.decisionOsRoot);
+          resolve();
+        }, timeoutMs);
+      }),
+    ]);
+    if (timeout) clearTimeout(timeout);
+  };
+  const flush = async (timeoutMs = 1_000): Promise<void> => {
+    await Promise.all([flushProjectChanges(timeoutMs), contentWatcher.flush(timeoutMs)]);
+  };
+
   return {
-    close(): void {
+    async close(timeoutMs = 1_000): Promise<void> {
+      if (closed) return flush(timeoutMs);
+      closed = true;
       clearInterval(audit);
-      for (const timer of pending.values()) clearTimeout(timer);
-      pending.clear();
       rootWatcher.close();
-      contentWatcher.close();
+      await Promise.all([flushProjectChanges(timeoutMs), contentWatcher.close(timeoutMs)]);
     },
+    flush,
     refreshOwnership(): void {
       ledgers = ledgerFiles(input.decisionOsRoot);
       contentWatcher.refreshOwnership();

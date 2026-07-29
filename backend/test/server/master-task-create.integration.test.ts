@@ -155,6 +155,18 @@ test('master-task creation persists the complete graph and returns absolute Mark
   );
   const imageDirectory = join(decisionOsRoot, 'thread-images', 'thread-card-master');
   const installedImageFiles = readdirSync(imageDirectory).sort();
+  const missingOwnerDirectory = join(decisionOsRoot, 'thread-images', 'thread-missing-card');
+  const missingOwnerUpload = await fetch(`${baseUrl}/p/${projectId}/api/thread-image-upload`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'image/png',
+      'x-ledger-id': 'tasks',
+      'x-thread-id': 'thread-missing-card',
+    },
+    body: originalImage,
+  });
+  assert.equal(missingOwnerUpload.status, 404);
+  assert.equal(existsSync(missingOwnerDirectory), false);
   const invalidImageUpload = await fetch(`${baseUrl}/p/${projectId}/api/thread-image-upload`, {
     method: 'POST',
     headers: {

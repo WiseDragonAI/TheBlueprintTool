@@ -94,6 +94,7 @@ export function createRuntimeIncidentLedger(input: {
   file?: string;
   maxIncidents?: number;
   now?: () => Date;
+  protectedScopes?: () => Iterable<string>;
 }) {
   const file = resolve(input.file ?? resolve(input.decisionOsRoot, 'runtime-incidents.json'));
   const maxIncidents = Math.max(10, input.maxIncidents ?? 500);
@@ -218,9 +219,16 @@ export function createRuntimeIncidentLedger(input: {
     incident.occurrences += 1;
     incident.context = boundedContext({ ...incident.context, ...incidentInput.context });
     if (!existing) document.incidents.push(incident);
-    document.incidents = document.incidents
-      .sort((left, right) => left.lastObservedAt.localeCompare(right.lastObservedAt))
-      .slice(-maxIncidents);
+    const protectedScopes = new Set(input.protectedScopes?.() ?? []);
+    const ordered = document.incidents.sort((left, right) => left.lastObservedAt.localeCompare(right.lastObservedAt));
+    const protectedIncidents = ordered.filter((entry) => entry.status === 'paused' && protectedScopes.has(entry.scope));
+    const remainingCapacity = Math.max(0, maxIncidents - protectedIncidents.length);
+    const unprotectedHistory = ordered.filter((entry) => !protectedIncidents.includes(entry));
+    const retainedHistory = remainingCapacity > 0 ? unprotectedHistory.slice(-remainingCapacity) : [];
+    // WHAT: Retain every incident that owns live admission before bounded diagnostic history.
+    // WHY: Evicting active evidence can make recovery impossible while the in-memory scope remains paused.
+    document.incidents = [...protectedIncidents, ...retainedHistory]
+      .sort((left, right) => left.lastObservedAt.localeCompare(right.lastObservedAt));
     document.updatedAt = observedAt;
     try {
       persist(document);

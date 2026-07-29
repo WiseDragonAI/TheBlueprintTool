@@ -422,11 +422,11 @@ test('card skill process route creates a linked output card and launches codex',
     };
     assert.equal(completed.runKind, 'card');
     assert.equal(completed.status, 'complete');
-    assert.equal(completed.lineCount, 4);
+    assert.equal(completed.lineCount, 5);
     assert.equal(completed.persistedEventCount, 0);
     assert.equal(completed.toolCallCount, 1);
-    assert.deepEqual(completed.events.map((event) => event.type), ['thread.started', 'item.started', 'item.completed', 'turn.completed']);
-    assert.deepEqual(completed.events.filter((event) => event.itemId === 'ordinary-tool').map((event) => event.line), [2, 3]);
+    assert.deepEqual(completed.events.map((event) => event.type), ['decision_os.user_prompt', 'thread.started', 'item.started', 'item.completed', 'turn.completed']);
+    assert.deepEqual(completed.events.filter((event) => event.itemId === 'ordinary-tool').map((event) => event.line), [3, 4]);
 
     const threadFile = join(workspace, '.decision-os', 'threads', 'specs', `thread-${body.run.outputCardId}.md`);
     const thread = existsSync(threadFile) ? readFileSync(threadFile, 'utf8') : '';
@@ -683,7 +683,7 @@ test('thread codex process route anchors the run widget on the source card and s
       assert.equal(status.thinkingCount, 1);
       assert.equal(status.warningCount, 2);
       assert.equal(status.transportStatus, 'degraded');
-      assert.deepEqual(status.events.map((event) => event.kind), ['run_status', 'run_status', 'thinking', 'agent_message', 'tool_call', 'tool_call', 'tool_call', 'warning', 'transport', 'run_status']);
+      assert.deepEqual(status.events.map((event) => event.kind), ['diagnostic', 'run_status', 'run_status', 'thinking', 'agent_message', 'tool_call', 'tool_call', 'tool_call', 'warning', 'transport', 'run_status']);
       assert.deepEqual(status.diagnostics.map((event) => event.kind), ['warning', 'transport']);
       assert.equal(status.metadata.codexModel, 'gpt-5.4');
       assert.equal(status.metadata.codexEffort, 'medium');
@@ -1220,7 +1220,7 @@ test('card skill run continue route resumes the captured session after its card 
     assert.equal(resumedStatusResponse.status, 200);
     const resumedStatus = await resumedStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };
     assert.equal(resumedStatus.persistedEventCount, 0);
-    assert.deepEqual(resumedStatus.events.map((event) => event.type), ['thread.started', 'turn.completed', 'turn.started', 'item.completed', 'turn.completed']);
+    assert.deepEqual(resumedStatus.events.map((event) => event.type), ['thread.started', 'turn.completed', 'decision_os.user_prompt', 'turn.started', 'item.completed', 'turn.completed']);
     assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeResume);
 
     const threadBeforeOverride = `${threadBeforeResume.trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-resume","timestamp":"2026-07-07T17:16:00.000Z"} -->\n\nResume the previous session context.\n`;

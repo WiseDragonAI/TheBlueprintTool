@@ -69,6 +69,7 @@ test('a failure after the second project swap restores every project and sidecar
 test('an interrupted commit is recovered from its durable journal and a verified rerun is idempotent', async (context) => {
   const value = fixture('decision-os-transaction-interruption-', 'project-a');
   const backupRoot = `${value.root}-backup`;
+  const admissionMarker = resolve(value.root, 'runtime', 'epoch-4-migration-admission.json');
   context.after(() => [value.root, backupRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
   const prepared = await plan(value, 'project-a');
 
@@ -76,11 +77,13 @@ test('an interrupted commit is recovered from its durable journal and a verified
     backupRoot,
     plans: [prepared],
     build: buildTaskCurrentStateMigrationShadow,
+    admissionMarker,
     checkpoint: ({ phase }) => {
       if (phase === 'sidecar-applied') throw new TaskCurrentStateMigrationInterruption();
     },
   }), TaskCurrentStateMigrationInterruption);
   assert.equal(JSON.parse(readFileSync(value.formatFile, 'utf8')).stateSchema, 4);
+  assert.deepEqual(JSON.parse(readFileSync(admissionMarker, 'utf8')).projectIds, ['project-a']);
 
   assert.equal(await recoverTaskCurrentStateMigrationTransaction(backupRoot), 'rolled-back');
   assert.equal(JSON.parse(readFileSync(value.formatFile, 'utf8')).stateSchema, 3);

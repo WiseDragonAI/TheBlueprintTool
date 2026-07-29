@@ -139,7 +139,15 @@ export function startLauncherEmergencyServer(input) {
       operation: 'run-server-child',
       code: input.code,
       error: input.error,
-      context: { cwd: input.cwd, host: input.host, port: input.port, childExitCode: input.childExitCode ?? null, childSignal: input.childSignal ?? '' },
+      context: {
+        cwd: input.cwd,
+        host: input.host,
+        port: input.port,
+        childExitCode: input.childExitCode ?? null,
+        childSignal: input.childSignal ?? '',
+        restartAttempts: input.restartAttempts ?? 0,
+        restartDelaysMs: input.restartDelaysMs ?? [],
+      },
     });
   } catch (error) {
     incidentPersistenceError = error instanceof Error ? error.message : String(error);
