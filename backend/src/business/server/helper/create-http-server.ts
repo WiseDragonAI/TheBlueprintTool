@@ -153,6 +153,7 @@ import { federatedProjectCatalog } from './federated-project-catalog.js';
 import { ensureServerPipelines, migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
 import { applyCodexSkillMetadataOwner, migrateCodexSkillMetadataOwner } from '../../codex/helper/codex-skill-metadata-owner.js';
 import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
+import { availablePipelineContent } from '../../codex/helper/available-pipeline-content.js';
 import { createProjectSyncStore } from '../../project-sync/helper/project-sync-store.js';
 import { isNetworkGitOrigin, readRepositoryOriginIdentity, readRepositorySyncStatus } from '../../project-sync/helper/repository-sync-status.js';
 import { createProjectSyncController } from '../../project-sync/controller/start-project-sync.js';
@@ -1805,8 +1806,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   };
   const initializePipelineCatalog = (): void => {
     invalidateFederatedSkillExportIndex();
-    availableServerSkillNames = readCodexSkillCatalog({ decisionOsRoot: masterDecisionOsRoot, runtime }).skills.map((skill) => skill.name);
-    ensureServerPipelines({ serverDecisionOsRoot: masterDecisionOsRoot, availableSkillNames: availableServerSkillNames });
+    const available = availablePipelineContent({ decisionOsRoot: masterDecisionOsRoot, runtime });
+    availableServerSkillNames = available.names;
+    ensureServerPipelines({
+      serverDecisionOsRoot: masterDecisionOsRoot,
+      availableSkillNames: availableServerSkillNames,
+      availableContentKinds: available.kinds,
+    });
     migrateCodexSkillMetadataOwner({
       ownerDecisionOsRoot: masterDecisionOsRoot,
       sourceDecisionOsRoots: localDecisionOsRoots(),
