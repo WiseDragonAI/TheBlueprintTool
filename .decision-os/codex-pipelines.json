@@ -248,6 +248,14 @@
       "updatedAt": "2026-07-29T02:02:39.672Z",
       "kind": "pipeline-prompt",
       "contentFile": "pipeline-prompts/psychoqwak.md"
+    },
+    {
+      "id": "CLI_TOOLS",
+      "description": "Decision OS commands available to a pipeline gate for task inspection, operator replies, dynamic skill continuation, progress, output handoff, and authorized completion.",
+      "createdAt": "2026-07-29T02:38:19.859Z",
+      "updatedAt": "2026-07-29T02:38:19.859Z",
+      "kind": "pipeline-prompt",
+      "contentFile": "pipeline-prompts/CLI_TOOLS.md"
     }
   ],
   "activeWorkspaceRun": null
