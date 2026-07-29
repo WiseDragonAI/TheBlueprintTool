@@ -122,7 +122,8 @@
 ### Server Restart Ownership
 
 - **Do not restart or stop the server unless the operator explicitly asks.**
-- **Standing canary authorization:** agents may restart the Decision OS canary on port `50151` when work is explicitly scoped to the `dev` canary. This authorization does not apply to port `50150` or any production server.
+- **Standing canary authorization:** agents may restart the Decision OS canary on port `50151` at any time without additional operator approval. This authorization does not apply to port `50150` or any production server.
+- **On this workstation, when MultiTerm is available, use the server registered and launched there; do not launch an additional server.**
 - **Never attach a temporary verification server to the production federation.** A connected server performs automatic peer library synchronization and can saturate production even when the intended check concerns one card or thread.
 - **Use gentle federation verification.** Read the registered server log and exact durable resource first. Exercise cross-node transport with the isolated two-node integration fixture. A new live node is prohibited until it has an isolated relay, unique node and project identities, disabled automatic library synchronization, and bounded single-flight requests.
 - **Incident reference:** [Temporary federation verification node production saturation](documentation/postmortem/temporary-federation-verification-node-production-saturation-2026-07-29.md).
