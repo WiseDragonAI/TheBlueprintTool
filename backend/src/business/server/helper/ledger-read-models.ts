@@ -3,6 +3,7 @@
  * WHY: Each surface should receive only the bodies it renders while ledger JSON and Markdown remain authoritative.
  */
 import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { hydrateLedgerCardContent, readCardDescription } from '../../ledger/helper/card-content-file.js';
 import { parseThreadMarkdown, resolveThreadContentFile } from '../../ledger/helper/thread-content-file.js';
@@ -70,7 +71,15 @@ export function ledgerCardProjection(input: { decisionOsRoot: string; ledgerId: 
   if (!source) return null;
   const card = records(source.ledger.cards).find((entry) => String(entry.id) === input.cardId);
   if (!card) return null;
-  return { ...card, comment: { ...(card.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {}), what: readCardDescription({ decisionOsRoot: input.decisionOsRoot, card }) } };
+  const markdown = readCardDescription({ decisionOsRoot: input.decisionOsRoot, card });
+  return {
+    ...card,
+    contentRevision: createHash('sha256').update(markdown).digest('hex'),
+    comment: {
+      ...(card.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {}),
+      what: markdown,
+    },
+  };
 }
 
 export function ledgerThreadProjection(input: { decisionOsRoot: string; ledgerId: string; threadId: string; ledger?: AnyRecord }): AnyRecord | null {

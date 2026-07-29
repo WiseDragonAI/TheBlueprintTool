@@ -16,6 +16,7 @@ import { renderVoiceStatus } from '../../voice/effect/render-voice-status.js';
 import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.js';
 import { activeThreadPanelTab } from '../helper/active-thread-panel-tab.js';
 import { threadPanelTabState } from '../helper/thread-panel-tab-state.js';
+import { applyThreadPanelFullscreen } from './apply-thread-panel-fullscreen.js';
 import { applyThreadAccent } from './apply-thread-accent.js';
 import { requestThreadViewportEntry } from './request-thread-viewport-entry.js';
 import { applyThreadViewportState } from './apply-thread-viewport-state.js';
@@ -260,6 +261,7 @@ export function renderThreadPanel(): void {
   inspector.hidden = !shouldOpenThread;
   panel.hidden = !shouldOpenThread;
   shell.classList.toggle('has-inspector', shouldOpenThread);
+  applyThreadPanelFullscreen();
 
   const target = document.querySelector('.thread-target') as HTMLElement | null;
   if (target) {

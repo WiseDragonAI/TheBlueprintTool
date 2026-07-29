@@ -17,8 +17,17 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { CodexPipeline, CodexPipelineStep } from '../../../../../shared/schemas/codex-pipeline-types.js';
-import { readCodexPipelineStore, writeCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
-import { parseSkillFrontmatter, scanCodexSkills } from '../../codex/helper/scan-codex-skills.js';
+import {
+  assertCodexPipelineStoreAvailable,
+  mutateCodexPipelineStore,
+  readCodexPipelineStore,
+} from '../../codex/helper/codex-pipeline-store.js';
+import {
+  importedFederatedSkillMarker,
+  parseSkillFrontmatter,
+  scanCodexSkills,
+} from '../../codex/helper/scan-codex-skills.js';
+import { runBoundedProcess } from '../../process/helper/run-bounded-process.js';
 
 const snapshotVersion = 1 as const;
 // Base64 expands the package by one third; leave room inside the connector's 25 MiB JSON frame.
@@ -58,6 +67,7 @@ function safeRelativePath(value: string): string {
 function collectPackageFiles(root: string, directory = root): FederatedSkillFile[] {
   const files: FederatedSkillFile[] = [];
   for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+    if (entry.name === importedFederatedSkillMarker) continue;
     const file = resolve(directory, entry.name);
     if (entry.isSymbolicLink() || lstatSync(file).isSymbolicLink()) continue;
     if (entry.isDirectory()) files.push(...collectPackageFiles(root, file));
@@ -88,6 +98,7 @@ function packageRevision(files: readonly FederatedSkillFile[]): string {
 function packageUpdatedAt(directory: string): Date {
   let latest = new Date(0);
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name === importedFederatedSkillMarker) continue;
     const path = resolve(directory, entry.name);
     if (entry.isSymbolicLink() || lstatSync(path).isSymbolicLink()) continue;
     const updatedAt = entry.isDirectory() ? packageUpdatedAt(path) : statSync(path).mtime;
@@ -100,24 +111,79 @@ function compareRevision(left: { updatedAt: string; revision: string }, right: {
   return left.updatedAt.localeCompare(right.updatedAt) || left.revision.localeCompare(right.revision);
 }
 
-function exportableSkills(serverRoot: string, workspaceRoots: readonly string[]): ReturnType<typeof scanCodexSkills> {
-  const byName = new Map<string, ReturnType<typeof scanCodexSkills>[number]>();
-  for (const workspaceRoot of workspaceRoots) {
-    for (const skill of scanCodexSkills({ workspaceRoot, serverRoot })) {
-      const prior = byName.get(skill.name);
-      if (!prior || compareRevision(
-        { revision: prior.revision, updatedAt: statSync(prior.skillFile).mtime.toISOString() },
-        { revision: skill.revision, updatedAt: statSync(skill.skillFile).mtime.toISOString() },
-      ) < 0) byName.set(skill.name, skill);
-    }
-  }
-  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name));
+async function isCommittedPackage(skillFile: string): Promise<boolean> {
+  const packageRoot = dirname(skillFile);
+  const rootResult = await runBoundedProcess({
+    command: 'git',
+    args: ['rev-parse', '--show-toplevel'],
+    cwd: packageRoot,
+    deadlineMs: 20_000,
+    maximumOutputBytes: 1024 * 1024,
+    context: { component: 'federated-library-cache', operation: 'resolve-export-repository' },
+  });
+  if (!rootResult.ok) return false;
+  const repositoryRoot = resolve(rootResult.stdout.trim());
+  const packagePath = relative(repositoryRoot, packageRoot).split('\\').join('/');
+  const skillPath = relative(repositoryRoot, skillFile).split('\\').join('/');
+  if (!packagePath || packagePath.startsWith('..') || skillPath.startsWith('..')) return false;
+  const status = await runBoundedProcess({
+    command: 'git',
+    args: ['status', '--porcelain=v1', '--untracked-files=all', '--', packagePath],
+    cwd: repositoryRoot,
+    deadlineMs: 20_000,
+    maximumOutputBytes: 1024 * 1024,
+    context: { component: 'federated-library-cache', operation: 'inspect-export-package' },
+  });
+  if (!status.ok || status.stdout.trim()) return false;
+  const tracked = await runBoundedProcess({
+    command: 'git',
+    args: ['ls-files', '--error-unmatch', '--', skillPath],
+    cwd: repositoryRoot,
+    deadlineMs: 20_000,
+    maximumOutputBytes: 1024 * 1024,
+    context: { component: 'federated-library-cache', operation: 'verify-export-skill-tracked' },
+  });
+  return tracked.ok;
 }
 
-export function exportFederatedSkillManifest(serverRoot: string, workspaceRoots: readonly string[] = [serverRoot]): FederatedSkillManifest {
+export async function exportableSkills(serverRoot: string): Promise<ReturnType<typeof scanCodexSkills>> {
+  const canonicalServerRoot = resolve(serverRoot);
+  const skillsRoot = resolve(canonicalServerRoot, '.skills');
+  const skills = scanCodexSkills({ workspaceRoot: canonicalServerRoot, serverRoot: canonicalServerRoot });
+  const exportable: ReturnType<typeof scanCodexSkills> = [];
+  for (const skill of skills) {
+    const packageRoot = dirname(skill.skillFile);
+    const packagePath = relative(skillsRoot, packageRoot);
+    if (skill.source !== 'server' || !skill.editable) continue;
+    if (!packagePath || packagePath.startsWith('..') || isAbsolute(packagePath)) continue;
+    if (existsSync(resolve(packageRoot, importedFederatedSkillMarker))) continue;
+    if (!await isCommittedPackage(skill.skillFile)) continue;
+    exportable.push(skill);
+  }
+  return exportable.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function localSkillManifest(serverRoot: string): FederatedSkillManifest {
   return {
     version: snapshotVersion,
-    skills: exportableSkills(serverRoot, workspaceRoots).map((skill) => {
+    skills: scanCodexSkills({ workspaceRoot: serverRoot, serverRoot })
+      .filter((skill) => skill.source === 'server')
+      .map((skill) => {
+        const packageRoot = dirname(skill.skillFile);
+        const files = collectPackageFiles(packageRoot);
+        return {
+          name: skill.name,
+          revision: packageRevision(files),
+          updatedAt: packageUpdatedAt(packageRoot).toISOString(),
+        };
+      }),
+  };
+}
+
+export async function exportFederatedSkillManifest(serverRoot: string, workspaceRoots: readonly string[] = [serverRoot]): Promise<FederatedSkillManifest> {
+  return {
+    version: snapshotVersion,
+    skills: (await exportableSkills(serverRoot)).map((skill) => {
       const packageRoot = dirname(skill.skillFile);
       const files = collectPackageFiles(packageRoot);
       return {
@@ -129,8 +195,8 @@ export function exportFederatedSkillManifest(serverRoot: string, workspaceRoots:
   };
 }
 
-export function createFederatedSkillExportIndex(serverRoot: string, workspaceRoots: readonly string[] = [serverRoot]): FederatedSkillExportIndex {
-  const packages = exportableSkills(serverRoot, workspaceRoots).map((skill): FederatedSkillPackage => {
+export async function createFederatedSkillExportIndex(serverRoot: string, workspaceRoots: readonly string[] = [serverRoot]): Promise<FederatedSkillExportIndex> {
+  const packages = (await exportableSkills(serverRoot)).map((skill): FederatedSkillPackage => {
     const packageRoot = dirname(skill.skillFile);
     const files = collectPackageFiles(packageRoot);
     if (decodedBytes(files) > maximumSnapshotBytes) throw new Error(`Federated skill package exceeds 18 MiB: ${skill.name}.`);
@@ -153,8 +219,8 @@ export function createFederatedSkillExportIndex(serverRoot: string, workspaceRoo
   };
 }
 
-export function exportFederatedSkillSnapshot(serverRoot: string, skillNames?: ReadonlySet<string>, workspaceRoots: readonly string[] = [serverRoot]): FederatedSkillSnapshot {
-  const skills = exportableSkills(serverRoot, workspaceRoots)
+export async function exportFederatedSkillSnapshot(serverRoot: string, skillNames?: ReadonlySet<string>, workspaceRoots: readonly string[] = [serverRoot]): Promise<FederatedSkillSnapshot> {
+  const skills = (await exportableSkills(serverRoot))
     .filter((skill) => !skillNames || skillNames.has(skill.name))
     .map((skill) => {
     const packageRoot = dirname(skill.skillFile);
@@ -212,6 +278,12 @@ function replaceSkillDirectory(input: { serverRoot: string; skill: FederatedSkil
       writeFileSync(destination, file.bytes, { flag: 'wx', mode: file.mode });
       utimesSync(destination, input.updatedAt, input.updatedAt);
     }
+    writeFileSync(resolve(staging, importedFederatedSkillMarker), JSON.stringify({
+      version: 1,
+      source: 'federation',
+      revision: input.skill.revision,
+      importedAt: new Date().toISOString(),
+    }, null, 2));
     if (existsSync(target)) {
       renameSync(target, backup);
       backedUp = true;
@@ -230,7 +302,7 @@ export function importFederatedSkillSnapshot(input: { serverRoot: string; snapsh
   const packages = [...input.snapshot.skills]
     .sort((left, right) => left.name.localeCompare(right.name))
     .map((skill) => ({ skill, validated: validateSkillPackage(skill) }));
-  const current = new Map(exportFederatedSkillManifest(input.serverRoot).skills.map((skill) => [skill.name, skill]));
+  const current = new Map(localSkillManifest(input.serverRoot).skills.map((skill) => [skill.name, skill]));
   const imported: string[] = [];
   for (const { skill, validated } of packages) {
     const existing = current.get(skill.name);
@@ -246,7 +318,9 @@ export function exportFederatedPipelineSnapshot(decisionOsRoots: string | readon
   const roots = typeof decisionOsRoots === 'string' ? [decisionOsRoots] : decisionOsRoots;
   const definitions = new Map<string, FederatedPipelineDefinition>();
   for (const decisionOsRoot of roots) {
-    const store = readCodexPipelineStore({ decisionOsRoot }).store;
+    const normalized = readCodexPipelineStore({ decisionOsRoot });
+    assertCodexPipelineStoreAvailable(normalized);
+    const store = normalized.store;
     const steps = new Map(store.steps.map((step) => [step.id, step]));
     for (const pipeline of store.pipelines) {
       const definition = { pipeline, steps: pipeline.stepIds.map((stepId) => steps.get(stepId)).filter((step): step is CodexPipelineStep => Boolean(step)) };
@@ -269,6 +343,7 @@ function pipelineWinner(left: CodexPipeline, right: CodexPipeline): CodexPipelin
 export function importFederatedPipelineSnapshot(input: { decisionOsRoot: string; snapshot: FederatedPipelineSnapshot }): { imported: string[] } {
   if (input.snapshot?.version !== snapshotVersion || !Array.isArray(input.snapshot.pipelines)) throw new Error('Federated pipeline snapshot is invalid.');
   const before = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  assertCodexPipelineStoreAvailable(before);
   const pipelines = new Map(before.store.pipelines.map((pipeline) => [pipeline.id, pipeline]));
   const steps = new Map(before.store.steps.map((step) => [step.id, step]));
   const imported: string[] = [];
@@ -284,9 +359,22 @@ export function importFederatedPipelineSnapshot(input: { decisionOsRoot: string;
     imported.push(pipeline.id);
   }
   if (imported.length > 0) {
-    writeCodexPipelineStore({
+    const candidates = input.snapshot.pipelines.filter((definition) => imported.includes(definition.pipeline.id));
+    imported.length = 0;
+    mutateCodexPipelineStore({
       decisionOsRoot: input.decisionOsRoot,
-      store: { ...before.store, pipelines: [...pipelines.values()], steps: [...steps.values()] },
+      mutate: (store) => {
+        const currentPipelines = new Map(store.pipelines.map((pipeline) => [pipeline.id, pipeline]));
+        const currentSteps = new Map(store.steps.map((step) => [step.id, step]));
+        for (const definition of candidates) {
+          const existing = currentPipelines.get(definition.pipeline.id);
+          if (existing && pipelineWinner(existing, definition.pipeline) === existing) continue;
+          currentPipelines.set(definition.pipeline.id, definition.pipeline);
+          for (const step of definition.steps) currentSteps.set(step.id, step);
+          imported.push(definition.pipeline.id);
+        }
+        return { ...store, pipelines: [...currentPipelines.values()], steps: [...currentSteps.values()] };
+      },
     });
   }
   return { imported };

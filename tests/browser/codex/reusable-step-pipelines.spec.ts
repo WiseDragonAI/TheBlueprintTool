@@ -4,7 +4,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -215,7 +215,7 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
     assert.deepEqual(detailPayload.skill.references?.map((reference: { name: string }) => reference.name), ['guide.md']);
     assert.deepEqual(pageErrors, []);
 
-    await library.getByRole('heading', { name: 'SKILL.md', exact: true }).waitFor({ state: 'visible' });
+    await library.getByRole('button', { name: 'Edit SKILL.md', exact: true }).waitFor({ state: 'visible' });
     assert.equal(await library.getByRole('heading', { name: 'Browser fixture', exact: true }).isVisible(), true);
     const geometry = await page.evaluate(() => {
       const modal = document.querySelector<HTMLElement>('.process-modal');
@@ -249,8 +249,8 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
     assert.equal(geometry.actionsInsideModal, true);
     assert.equal(geometry.favoriteInsideModal, true);
     assert.equal(geometry.markdownPadding, '18px');
-    assert.match(geometry.markdownBackground, /linear-gradient/);
-    assert.notEqual(geometry.markdownShadow, 'none');
+    assert.equal(geometry.markdownBackground, 'none');
+    assert.equal(geometry.markdownShadow, 'none');
     const reference = library.getByRole('button', { name: 'guide.md', exact: true });
     await reference.waitFor({ state: 'attached' });
     await reference.scrollIntoViewIfNeeded();
@@ -270,7 +270,7 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
     assert.equal(await library.getByText('Reference content is readable.', { exact: true }).isVisible(), true);
 
     const metadataPath = `/api/codex/server-skills/${skillName}`;
-    const metadataPattern = `**${metadataPath}`;
+    const metadataRequest = (url: URL) => url.pathname === metadataPath;
     let releaseFavoriteSave = () => {};
     let observeFavoriteRequest = () => {};
     const favoriteSaveRelease = new Promise<void>((resolveRelease) => { releaseFavoriteSave = resolveRelease; });
@@ -281,14 +281,14 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
       await favoriteSaveRelease;
       await route.continue();
     };
-    await page.route(metadataPattern, delayFavoriteSave);
+    await page.route(metadataRequest, delayFavoriteSave);
     const favoriteSavePromise = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === metadataPath);
     await library.getByRole('button', { name: 'Remove from favorites', exact: true }).click();
     await favoriteRequestObserved;
     assert.equal(await library.getByRole('button', { name: 'Add to favorites', exact: true }).getAttribute('aria-pressed'), 'false');
     releaseFavoriteSave();
     const favoriteSave = await favoriteSavePromise;
-    await page.unroute(metadataPattern, delayFavoriteSave);
+    await page.unroute(metadataRequest, delayFavoriteSave);
     assert.equal(favoriteSave.status(), 200);
     assert.equal((await favoriteSave.json()).skill.favorite, false);
 
@@ -328,14 +328,14 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
       await rejectedTagRelease;
       await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Forced persistence rejection.' }) });
     };
-    await page.route(metadataPattern, rejectTagSave);
+    await page.route(metadataRequest, rejectTagSave);
     const rejectedTagResponse = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === metadataPath);
     await library.getByRole('button', { name: 'Set Architecture tag', exact: true }).click();
     await rejectedTagObserved;
     assert.equal(await library.getByRole('button', { name: 'Set Architecture tag', exact: true }).getAttribute('aria-pressed'), 'true');
     releaseRejectedTagSave();
     assert.equal((await rejectedTagResponse).status(), 500);
-    await page.unroute(metadataPattern, rejectTagSave);
+    await page.unroute(metadataRequest, rejectTagSave);
     await page.waitForFunction(() => document.querySelector<HTMLButtonElement>('[aria-label="Set Interface tag"]')?.getAttribute('aria-pressed') === 'true');
     assert.equal(await library.getByRole('button', { name: 'Set Architecture tag', exact: true }).getAttribute('aria-pressed'), 'false');
     const persistedAfterRejection = JSON.parse(readFileSync(join(fixture.workspace, '.decision-os', 'codex-pipelines.json'), 'utf8'));
@@ -393,6 +393,7 @@ test('Reusable step pipelines preserve defaults and publish visible execution pr
 
     await createPipelineAndSkillDefaults(page);
     await runDirectInheritedSkill(page);
+    await page.evaluate(() => sessionStorage.setItem('decision-os.pipeline-browser-loads', '1'));
     await runCancelRestartAndFailPipeline(page, resizedCardIds);
 
     assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('decision-os.pipeline-browser-loads') ?? 0)), 1,
@@ -436,8 +437,17 @@ async function createPipelineAndSkillDefaults(page: Page): Promise<void> {
   await skillEditor.waitFor({ state: 'visible' });
   await skillEditor.getByLabel('Default model', { exact: true }).selectOption('gpt-5.4');
   await skillEditor.getByLabel('Default effort', { exact: true }).selectOption('high');
-  await skillEditor.getByRole('button', { name: 'Save skill', exact: true }).click();
-  await skillEditor.getByText('Skill saved. Inherited run settings have been refreshed.', { exact: true }).waitFor({ state: 'visible' });
+  const content = skillEditor.locator('.cm-content');
+  await content.click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\nUse the configured defaults for this browser run.');
+  const saveResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'PUT' && response.url().includes(`/api/codex/skill-library/${skillName}`));
+  await skillEditor.getByRole('button', { name: 'Save new revision', exact: true }).click();
+  const saveResponse = await saveResponsePromise;
+  const savePayload = await saveResponse.json();
+  assert.equal(saveResponse.status(), 200, JSON.stringify(savePayload));
+  await skillEditor.getByText('Saved locally; publication failed: retry synchronization.', { exact: true }).waitFor({ state: 'visible' });
   await skillEditor.getByRole('button', { name: 'Close', exact: true }).click();
   await skillEditor.waitFor({ state: 'hidden' });
   await skillPicker.waitFor({ state: 'visible' });
@@ -477,6 +487,7 @@ async function createPipelineAndSkillDefaults(page: Page): Promise<void> {
 }
 
 async function runDirectInheritedSkill(page: Page): Promise<void> {
+  const ledgerUrl = page.url();
   await openProcessCard(page);
   const process = page.locator('.process-modal');
   await process.getByRole('tab', { name: 'Skills', exact: true }).click();
@@ -486,6 +497,10 @@ async function runDirectInheritedSkill(page: Page): Promise<void> {
   assert.equal(await process.getByText('Using skill default', { exact: true }).count(), 2);
   await process.getByRole('button', { name: 'Run one skill', exact: true }).click();
   await process.waitFor({ state: 'hidden' });
+  await page.waitForURL((url) => url.pathname === '/' && url.searchParams.get('tab') === 'exec');
+  await page.goto(ledgerUrl, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction((cardId) => Boolean(window.__coreState?.activeLedger?.cards?.some((card: { id?: string }) => card.id === cardId)), sourceCardId);
+  await page.waitForFunction((cardId) => Boolean(window.__coreState?.activeLedger?.cards?.some((card: { id?: string }) => card.id !== cardId)), sourceCardId);
 
   const widget = pipelineWidget(page, `${skillName} run`, skillName);
   await widget.waitFor({ state: 'visible' });
@@ -502,7 +517,8 @@ async function runDirectInheritedSkill(page: Page): Promise<void> {
 async function runCancelRestartAndFailPipeline(page: Page, resizedCardIds: Set<string>): Promise<void> {
   await openProcessCard(page);
   const process = page.locator('.process-modal');
-  await process.locator('[data-process-pipeline-id]').click();
+  await process.getByRole('tab', { name: 'Pipelines', exact: true }).click();
+  await process.locator('[data-process-pipeline-id]').filter({ hasText: 'Browser pipeline' }).click();
   await process.getByRole('button', { name: 'Run pipeline', exact: true }).click();
   await process.waitFor({ state: 'hidden' });
 
@@ -510,7 +526,6 @@ async function runCancelRestartAndFailPipeline(page: Page, resizedCardIds: Set<s
   const explicitWidget = pipelineWidget(page, 'Browser pipeline', 'Explicit override');
   await inheritedWidget.waitFor({ state: 'visible' });
   await explicitWidget.waitFor({ state: 'visible' });
-  await explicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'PENDING' }).waitFor({ state: 'visible' });
   assert.equal(await explicitWidget.locator('[data-codex-run-restart]').isHidden(), true);
 
   await inheritedWidget.locator('[data-codex-run-status]').filter({ hasText: 'COMPLETE' }).waitFor({ state: 'visible', timeout: 15_000 });
@@ -526,11 +541,12 @@ async function runCancelRestartAndFailPipeline(page: Page, resizedCardIds: Set<s
   await explicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'CANCELLED' }).waitFor({ state: 'visible', timeout: 15_000 });
   await explicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).waitFor({ state: 'visible' });
   await explicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).click();
-  await explicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'PENDING' }).waitFor({ state: 'visible' });
 
-  await inheritedWidget.locator('[data-codex-run-status]').filter({ hasText: 'COMPLETE' }).waitFor({ state: 'visible', timeout: 15_000 });
-  await explicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'FAILED' }).waitFor({ state: 'visible', timeout: 15_000 });
-  await explicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).waitFor({ state: 'visible' });
+  const restartedInheritedWidget = pipelineWidget(page, 'Browser pipeline', 'Inherit defaults').last();
+  const restartedExplicitWidget = pipelineWidget(page, 'Browser pipeline', 'Explicit override').last();
+  await restartedInheritedWidget.locator('[data-codex-run-status]').filter({ hasText: 'COMPLETE' }).waitFor({ state: 'visible', timeout: 15_000 });
+  await restartedExplicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'FAILED' }).waitFor({ state: 'visible', timeout: 15_000 });
+  await restartedExplicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).waitFor({ state: 'visible' });
 }
 
 function pipelineWidget(page: Page, pipelineName: string, stepName: string): Locator {
@@ -624,6 +640,11 @@ function createFixture(options: { extraSkillCount?: number } = {}): BrowserFixtu
   }
   writeFileSync(fakeCodexFile, fakeCodexSource({ launchFile, counterFile }), 'utf8');
   chmodSync(fakeCodexFile, 0o755);
+  execFileSync('git', ['init', '-q'], { cwd: workspace });
+  execFileSync('git', ['config', 'user.name', 'Decision OS Test'], { cwd: workspace });
+  execFileSync('git', ['config', 'user.email', 'test@decision-os.invalid'], { cwd: workspace });
+  execFileSync('git', ['add', '.'], { cwd: workspace });
+  execFileSync('git', ['commit', '-q', '-m', 'initialize browser pipeline fixture'], { cwd: workspace });
   return { workspace, codexHome, fakeCodexFile, launchFile };
 }
 

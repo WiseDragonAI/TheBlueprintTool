@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyTaskExecutionPresentationUpdate,
+  isTaskExecutionPresentationEvent,
   isTaskExecutionPresentationUpdate,
   replicatedTaskExecutionPresentation,
 } from '@backend/business/codex/helper/replicated-task-execution-presentation.js';
@@ -30,6 +31,16 @@ const toolStarted = {
   exitCode: '',
 };
 const toolCompleted = { ...toolStarted, status: 'completed', exitCode: '0' };
+const subagent = {
+  id: 'subagent:tool-b',
+  kind: 'subagent' as const,
+  title: 'Subagent · product-analysis',
+  status: 'completed',
+  severity: 'info' as const,
+  skillName: 'product-analysis',
+  model: 'gpt-5.6-luna',
+  effort: 'low',
+};
 
 test('merges replayed presentation batches by stable event identity', () => {
   const initial = applyTaskExecutionPresentationUpdate([], {
@@ -52,7 +63,8 @@ test('rejects oversized presentation batches and projects replicated counts', ()
     reset: false,
     events: Array.from({ length: 257 }, () => message),
   }), false);
-  assert.equal(isTaskExecutionPresentationUpdate({ reset: false, events: [message, toolCompleted] }), true);
+  assert.equal(isTaskExecutionPresentationUpdate({ reset: false, events: [message, toolCompleted, subagent] }), true);
+  assert.equal(Array.from({ length: 257 }, () => message).every(isTaskExecutionPresentationEvent), true);
   const record = {
     metadata: {
       executionId: 'execution-a',

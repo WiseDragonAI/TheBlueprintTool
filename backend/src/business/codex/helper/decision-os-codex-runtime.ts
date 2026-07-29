@@ -37,7 +37,12 @@ function serverUrl(runtime: AnyRecord): string {
   return port > 0 ? `http://127.0.0.1:${port}` : '';
 }
 
-export function decisionOsCodexEnvironment(input: { runtime: AnyRecord; decisionOsRoot: string; ledgerFile: string }): NodeJS.ProcessEnv {
+export function decisionOsCodexEnvironment(input: {
+  runtime: AnyRecord;
+  decisionOsRoot: string;
+  ledgerFile: string;
+  executionId?: string;
+}): NodeJS.ProcessEnv {
   const shimDirectory = String(input.runtime.ledgerCliShimDirectory ?? '').trim();
   return {
     ...process.env,
@@ -47,6 +52,7 @@ export function decisionOsCodexEnvironment(input: { runtime: AnyRecord; decision
     DECISION_OS_LEDGER_FILE: resolve(input.ledgerFile),
     DECISION_OS_SERVER_URL: serverUrl(input.runtime),
     DECISION_OS_MASTER_ROOT: String(input.runtime.serverRoot ?? dirname(resolve(input.decisionOsRoot))),
+    ...(input.executionId ? { DECISION_OS_EXECUTION_ID: input.executionId } : {}),
   };
 }
 

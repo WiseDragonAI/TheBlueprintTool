@@ -7,6 +7,7 @@ import type {
   TaskExecutionPresentationEvent,
   TaskExecutionStateItem,
   TaskExecutionStateSummary,
+  TaskExecutionSubagentEvent,
   TaskExecutionTodoEvent,
   TaskExecutionToolEvent,
 } from '../../../../../shared/schemas/task-execution-presentation-types.js';
@@ -19,11 +20,13 @@ import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 import { state } from '../../state.js';
 import { renderThreadCodexLogStatus, type CodexLogStatusSummary } from '../component/render-thread-codex-log-status.js';
 import { renderTaskExecutionTodoOverlay } from '../component/render-task-execution-todo-overlay.js';
+import { renderTaskExecutionSubagentOverlay } from '../component/render-task-execution-subagent-overlay.js';
 import { threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
 import { threadCodexSessionDeletionState } from '../../codex/controller/delete-thread-codex-session-controller.js';
 
 type HistoryEntry = { sessionId: string; executionId: string };
 type DisclosureByThread = Record<string, Record<string, boolean>>;
+type DisclosureSnapshot = Map<string, boolean>;
 
 function recordState(name: string): Record<string, any> {
   // WHAT: Repair presentation state maps when restoring a pre-cutover browser session.
@@ -36,6 +39,28 @@ function disclosureState(name: string, threadId: string): Record<string, boolean
   const byThread = recordState(name) as DisclosureByThread;
   if (!byThread[threadId] || typeof byThread[threadId] !== 'object') byThread[threadId] = {};
   return byThread[threadId];
+}
+
+function disclosureKey(details: HTMLDetailsElement): string {
+  if (details.dataset.eventKey) return `event:${details.dataset.eventKey}`;
+  if (details.dataset.toolGroupKey) return `tool-group:${details.dataset.toolGroupKey}`;
+  if (details.dataset.toolEventKey) return `tool:${details.dataset.toolEventKey}`;
+  return '';
+}
+
+function captureDisclosureSnapshot(root: HTMLElement): DisclosureSnapshot {
+  return new Map(
+    [...root.querySelectorAll<HTMLDetailsElement>('details')]
+      .map((details) => [disclosureKey(details), details.open] as const)
+      .filter(([key]) => Boolean(key)),
+  );
+}
+
+function restoreDisclosureSnapshot(root: HTMLElement, snapshot: DisclosureSnapshot): void {
+  for (const details of root.querySelectorAll<HTMLDetailsElement>('details')) {
+    const key = disclosureKey(details);
+    if (key && snapshot.has(key)) details.open = Boolean(snapshot.get(key));
+  }
 }
 
 function selectedThreadCard(threadId: string): Record<string, unknown> | null {
@@ -152,6 +177,7 @@ function renderTool(event: TaskExecutionToolEvent, threadId: string): HTMLElemen
   const rows = disclosureState('threadToolRowDisclosureByThreadId', threadId);
   const details = document.createElement('details');
   details.className = 'codex-tool-call';
+  details.dataset.toolEventKey = event.id;
   details.dataset.runStatus = event.status || 'pending';
   details.open = Boolean(rows[event.id]);
   details.addEventListener('toggle', () => { rows[event.id] = details.open; });
@@ -201,17 +227,26 @@ function renderToolGroup(input: {
   return details;
 }
 
-function renderPresentationEvent(event: Exclude<TaskExecutionPresentationEvent, TaskExecutionToolEvent>): HTMLElement {
-  const article = document.createElement('article');
+function renderPresentationEvent(
+  event: Exclude<TaskExecutionPresentationEvent, TaskExecutionToolEvent>,
+  subagentExecution: TaskExecutionStateItem | null = null,
+): HTMLElement {
+  const startDisclosure = event.kind === 'run_status'
+    && (event.title === 'User prompt' || event.title === 'Thread started' || event.title === 'Turn started');
+  const article = document.createElement(startDisclosure ? 'details' : 'article');
   article.className = `codex-log-event is-${event.kind} is-${event.severity}`;
+  if (startDisclosure) article.classList.add('is-start-disclosure');
   article.dataset.eventKey = event.id;
-  const heading = document.createElement('div');
+  const heading = document.createElement(startDisclosure ? 'summary' : 'div');
   heading.className = 'codex-log-event-heading';
   const title = document.createElement('strong');
   title.textContent = event.title || event.kind;
   const status = document.createElement('span');
-  status.textContent = event.status;
-  status.hidden = !event.status;
+  const displayStatus = event.kind === 'subagent' && subagentExecution
+    ? taskExecutionDisplayStatus(subagentExecution.phase)
+    : event.status;
+  status.textContent = displayStatus;
+  status.hidden = !displayStatus;
   heading.append(title, status);
   article.append(heading);
   if (event.kind === 'file_change') {
@@ -223,6 +258,15 @@ function renderPresentationEvent(event: Exclude<TaskExecutionPresentationEvent, 
       list.append(item);
     }
     article.append(list);
+  } else if (event.kind === 'subagent') {
+    const body = document.createElement('div');
+    body.className = 'codex-log-event-body codex-subagent-event-body';
+    const skill = document.createElement('strong');
+    skill.textContent = event.skillName;
+    const configuration = document.createElement('span');
+    configuration.textContent = [event.model, event.effort].filter(Boolean).join(' · ');
+    body.append(skill, configuration);
+    article.append(body);
   } else if (event.kind !== 'todo_list' && event.text) {
     const body = renderLedgerCardMarkdown(event.text);
     body.classList.add('codex-log-event-body');
@@ -265,6 +309,7 @@ function renderQueuedWaiting(queuePosition: number | null): HTMLElement {
 export function renderThreadCodexLog(): void {
   const root = document.querySelector('.thread-codex-log') as HTMLElement | null;
   if (!root) return;
+  const disclosureSnapshot = captureDisclosureSnapshot(root);
   const threadId = String(state.threadId ?? '');
   const card = selectedThreadCard(threadId);
   root.replaceChildren();
@@ -303,7 +348,9 @@ export function renderThreadCodexLog(): void {
     card,
   });
   const navigator = renderRunNavigator({ entries, selectedExecutionId, card, threadId });
-  root.append(...[
+  const stickyHeader = document.createElement('div');
+  stickyHeader.className = 'codex-log-sticky-header';
+  stickyHeader.append(...[
     navigator,
     renderThreadCodexLogStatus({
       summary: selectedStatus,
@@ -335,7 +382,24 @@ export function renderThreadCodexLog(): void {
   }
   const todo = [...(selectedPresentation?.events ?? [])].reverse()
     .find((event): event is TaskExecutionTodoEvent => event.kind === 'todo_list');
-  if (todo) root.append(renderTaskExecutionTodoOverlay(todo));
+  const subagentEvents = (selectedPresentation?.events ?? [])
+    .filter((event): event is TaskExecutionSubagentEvent => event.kind === 'subagent');
+  const childExecutions = taskSummary?.sessions
+    .flatMap((session) => session.executions)
+    .filter((execution) => execution.predecessorExecutionId === selectedExecutionId)
+    .sort((left, right) => left.requestedAt.localeCompare(right.requestedAt)) ?? [];
+  const subagentExecutionByEventId = new Map(subagentEvents.map((event, index) => [
+    event.id,
+    childExecutions[index] ?? null,
+  ]));
+  if (subagentEvents.length > 0) {
+    stickyHeader.append(renderTaskExecutionSubagentOverlay(subagentEvents.map((event, index) => ({
+      event,
+      execution: childExecutions[index] ?? null,
+    }))));
+  }
+  if (todo) stickyHeader.append(renderTaskExecutionTodoOverlay(todo));
+  root.prepend(stickyHeader);
   const stream = document.createElement('div');
   stream.className = 'codex-log-stream';
   for (const block of groupTaskExecutionPresentationEvents(
@@ -343,7 +407,10 @@ export function renderThreadCodexLog(): void {
   )) {
     stream.append(block.kind === 'tool-group'
       ? renderToolGroup({ id: block.id, tools: block.tools, threadId })
-      : renderPresentationEvent(block.event as Exclude<TaskExecutionPresentationEvent, TaskExecutionToolEvent>));
+      : renderPresentationEvent(
+        block.event as Exclude<TaskExecutionPresentationEvent, TaskExecutionToolEvent>,
+        block.event.kind === 'subagent' ? subagentExecutionByEventId.get(block.event.id) ?? null : null,
+      ));
   }
   if (selectedExecution?.phase === 'queued'
     && (!selectedPresentation || selectedPresentation.events.length === 0)) {
@@ -369,4 +436,5 @@ export function renderThreadCodexLog(): void {
       threadId,
     }));
   }
+  restoreDisclosureSnapshot(root, disclosureSnapshot);
 }

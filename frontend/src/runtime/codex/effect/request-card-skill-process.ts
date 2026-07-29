@@ -2,10 +2,13 @@
  * WHAT: Starts a backend Codex skill process for one card.
  * WHY: The UI should delegate output card creation and process ownership to the server.
  */
+import type { CodexContentKind } from '../../../../../shared/schemas/codex-pipeline-types.js';
+
 export type CardSkillProcessRequest = {
   ledgerId: string;
   cardId: string;
   skillName: string;
+  contentKind?: CodexContentKind;
   requestId?: string;
   codexModel?: string;
   codexEffort?: string;

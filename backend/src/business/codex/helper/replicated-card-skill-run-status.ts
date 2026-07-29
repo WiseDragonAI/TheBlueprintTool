@@ -17,6 +17,7 @@ function presentationText(event: TaskExecutionPresentationEvent): string {
   if (event.kind === 'tool_call') return event.command;
   if (event.kind === 'file_change') return event.files.map((file) => `${file.path}: ${file.action}`).join('\n');
   if (event.kind === 'todo_list') return event.items.map((item) => `${item.completed ? '[x]' : '[ ]'} ${item.text}`).join('\n');
+  if (event.kind === 'subagent') return [event.skillName, event.model, event.effort].filter(Boolean).join(' · ');
   return event.text;
 }
 

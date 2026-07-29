@@ -23,13 +23,13 @@ export function parseProjectRoute(pathname) {
 
 export function isProjectCardPath(pathname) {
   const scope = parseProjectScope(pathname);
-  const [section, ledgerId, zoneMarker, zoneId, cardMarker, cardId] = scope?.segments ?? [];
-  return section === 'ledgers'
-    && Boolean(ledgerId)
-    && zoneMarker === 'zones'
-    && Boolean(zoneId)
-    && cardMarker === 'cards'
-    && Boolean(cardId);
+  const segments = scope?.segments ?? [];
+  return segments[0] === 'ledgers'
+    && Boolean(segments[1])
+    && (
+      (segments[2] === 'cards' && Boolean(segments[3]))
+      || (segments[2] === 'zones' && Boolean(segments[3]) && segments[4] === 'cards' && Boolean(segments[5]))
+    );
 }
 
 export function projectBasePath(projectId) {
@@ -51,5 +51,6 @@ export function zonePathForProject(projectId, ledgerId, zoneId) {
 }
 
 export function cardPathForProject(projectId, ledgerId, zoneId, cardId) {
-  return `${zonePathForProject(projectId, ledgerId, zoneId)}/cards/${encodeURIComponent(cardId)}`;
+  const resolvedCardId = cardId ?? zoneId;
+  return `${ledgerPathForProject(projectId, ledgerId)}/cards/${encodeURIComponent(resolvedCardId)}`;
 }

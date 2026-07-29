@@ -4,8 +4,13 @@
  */
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { CodexPipeline, CodexPipelineStep, CodexPipelineStoreNormalization } from '../../../../../shared/schemas/codex-pipeline-types.js';
-import { pipelineStoreFile, readCodexPipelineStore, writeCodexPipelineStore } from './codex-pipeline-store.js';
+import type { CodexContentKind, CodexPipeline, CodexPipelineStep, CodexPipelineStoreNormalization } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import {
+  assertCodexPipelineStoreAvailable,
+  mutateCodexPipelineStore,
+  pipelineStoreFile,
+  readCodexPipelineStore,
+} from './codex-pipeline-store.js';
 import { runtimeServerRoot } from './server-skill-context.js';
 import { projectSynchronizationPipelineDefinition } from '../../project-sync/helper/project-sync-pipeline-definition.js';
 
@@ -24,6 +29,7 @@ export function readScopedCodexPipelineStores(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
   availableSkillNames?: Iterable<string>;
+  availableContentKinds?: Iterable<readonly [string, CodexContentKind]>;
 }): {
   server: CodexPipelineStoreNormalization;
   project: CodexPipelineStoreNormalization | null;
@@ -31,11 +37,16 @@ export function readScopedCodexPipelineStores(input: {
   steps: ScopedCodexPipelineStep[];
 } {
   const serverDecisionOsRoot = serverPipelineDecisionOsRoot(input.runtime, input.decisionOsRoot);
-  const options = { availableSkillNames: input.availableSkillNames };
+  const options = {
+    availableSkillNames: input.availableSkillNames,
+    availableContentKinds: input.availableContentKinds,
+  };
   const server = readCodexPipelineStore({ decisionOsRoot: serverDecisionOsRoot, ...options });
   const project = resolve(input.decisionOsRoot) === serverDecisionOsRoot
     ? null
     : readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, ...options });
+  assertCodexPipelineStoreAvailable(server);
+  if (project) assertCodexPipelineStoreAvailable(project);
   const serverPipelineIds = new Set(server.store.pipelines.map((pipeline) => pipeline.id));
   return {
     server,
@@ -65,6 +76,7 @@ export function migrateLegacyProjectPipelines(input: {
     decisionOsRoot: input.serverDecisionOsRoot,
     availableSkillNames: input.availableSkillNames,
   });
+  assertCodexPipelineStoreAvailable(server);
   const pipelines = [...server.store.pipelines];
   const steps = [...server.store.steps];
   const pipelineIds = new Set(pipelines.map((pipeline) => pipeline.id));
@@ -77,6 +89,7 @@ export function migrateLegacyProjectPipelines(input: {
     const projectFile = pipelineStoreFile(projectDecisionOsRoot);
     if (!existsSync(projectFile)) continue;
     const project = readCodexPipelineStore({ decisionOsRoot: projectDecisionOsRoot });
+    assertCodexPipelineStoreAvailable(project);
     const projectStepsById = new Map(project.store.steps.map((step) => [step.id, step]));
     const migratedFromProject = project.store.pipelines.filter((pipeline) => {
       if (pipelineIds.has(pipeline.id) || pipeline.stepIds.some((stepId) => stepIds.has(stepId) || !projectStepsById.has(stepId))) {
@@ -96,22 +109,32 @@ export function migrateLegacyProjectPipelines(input: {
       steps.push(step);
     }
     if (!migratedIds.size) continue;
-    const remainingPipelines = project.store.pipelines.filter((pipeline) => !migratedIds.has(pipeline.id));
-    const remainingStepIds = new Set(remainingPipelines.flatMap((pipeline) => pipeline.stepIds));
-    writeCodexPipelineStore({
+    mutateCodexPipelineStore({
       decisionOsRoot: projectDecisionOsRoot,
-      store: {
-        ...project.store,
-        pipelines: remainingPipelines,
-        steps: project.store.steps.filter((step) => remainingStepIds.has(step.id)),
+      mutate: (store) => {
+        const currentPipelines = store.pipelines.filter((pipeline) => !migratedIds.has(pipeline.id));
+        const currentStepIds = new Set(currentPipelines.flatMap((pipeline) => pipeline.stepIds));
+        return {
+          ...store,
+          pipelines: currentPipelines,
+          steps: store.steps.filter((step) => currentStepIds.has(step.id)),
+        };
       },
     });
   }
 
-  writeCodexPipelineStore({
+  mutateCodexPipelineStore({
     decisionOsRoot: input.serverDecisionOsRoot,
     availableSkillNames: input.availableSkillNames,
-    store: { ...server.store, pipelines, steps },
+    mutate: (store) => {
+      const currentPipelineIds = new Set(store.pipelines.map((pipeline) => pipeline.id));
+      const currentStepIds = new Set(store.steps.map((step) => step.id));
+      return {
+        ...store,
+        pipelines: [...store.pipelines, ...pipelines.filter((pipeline) => !currentPipelineIds.has(pipeline.id))],
+        steps: [...store.steps, ...steps.filter((step) => !currentStepIds.has(step.id))],
+      };
+    },
   });
   return { migratedPipelineIds, retainedCollisionIds };
 }
@@ -124,19 +147,25 @@ export function ensureServerPipelines(input: {
     decisionOsRoot: input.serverDecisionOsRoot,
     availableSkillNames: input.availableSkillNames,
   });
+  assertCodexPipelineStoreAvailable(normalized);
   const builtIn = projectSynchronizationPipelineDefinition();
   if (normalized.store.pipelines.some((pipeline) => pipeline.id === builtIn.pipeline.id)) {
     return { createdPipelineIds: [] };
   }
-  const existingStepIds = new Set(normalized.store.steps.map((step) => step.id));
-  writeCodexPipelineStore({
+  let created = false;
+  mutateCodexPipelineStore({
     decisionOsRoot: input.serverDecisionOsRoot,
     availableSkillNames: input.availableSkillNames,
-    store: {
-      ...normalized.store,
-      pipelines: [...normalized.store.pipelines, builtIn.pipeline],
-      steps: [...normalized.store.steps, ...builtIn.steps.filter((step) => !existingStepIds.has(step.id))],
+    mutate: (store) => {
+      if (store.pipelines.some((pipeline) => pipeline.id === builtIn.pipeline.id)) return store;
+      created = true;
+      const currentStepIds = new Set(store.steps.map((step) => step.id));
+      return {
+        ...store,
+        pipelines: [...store.pipelines, builtIn.pipeline],
+        steps: [...store.steps, ...builtIn.steps.filter((step) => !currentStepIds.has(step.id))],
+      };
     },
   });
-  return { createdPipelineIds: [builtIn.pipeline.id] };
+  return { createdPipelineIds: created ? [builtIn.pipeline.id] : [] };
 }

@@ -21,7 +21,7 @@ import { projectCardCodexRun } from '../helper/project-card-codex-run.js';
 import { codexProcessIdentity } from '../helper/codex-process-identity.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
-import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
+import { hasLedgerProjectionSource, readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-process.js';
 import {
@@ -167,7 +167,9 @@ export async function startThreadCodexProcessController(input: { action_payload?
 
   const ledgerFile = String(tab.ledgerFile ?? '').replace(/^\.decision-os\//, '');
   const ledgerPath = resolve(decisionOsRoot, ledgerFile);
-  if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.', ledgerId };
+  if (!isInside(decisionOsRoot, ledgerPath) || !hasLedgerProjectionSource({ ledgerId, ledgerPath, runtime })) {
+    return { ok: false, statusCode: 404, error: 'Ledger source not found.', ledgerId };
+  }
 
   const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime }) as AnyRecord & { cards?: AnyRecord[] };
   const source = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);

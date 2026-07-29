@@ -87,19 +87,20 @@ test('card height normalization command backs up and migrates legacy natural-hei
   assert.match(script, /await writeFile\(absoluteLedgerPath, `\$\{JSON\.stringify\(ledger, null, 2\)\}\\n`, 'utf8'\)/);
 });
 
-test('description editor preserves rendered body size and lets textarea own wheel scroll', () => {
+test('description editing opens the shared CodeMirror modal and keeps wheel events inside its scroller', () => {
   const specs = source('documentation/specs.json');
   const editorRuntime = source('frontend/src/runtime/card/effect/begin-ledger-card-edit.ts');
+  const modalRuntime = source('frontend/src/runtime/content-authoring/controller/ledger-card-editor.ts');
+  const codeMirrorRuntime = source('frontend/src/runtime/codex/component/codemirror-file-editor.ts');
   const wheelRuntime = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
-  const css = source('frontend/assets/canvas/objects.css');
 
   assert.match(specs, /9a7d3c5e/);
-  assert.match(editorRuntime, /body\.offsetHeight \|\| body\.getBoundingClientRect\(\)\.height/);
-  assert.match(editorRuntime, /textarea\.style\.minHeight = `\$\{bodyHeight\}px`;/);
-  assert.match(editorRuntime, /textarea\.style\.height = `\$\{bodyHeight\}px`;/);
-  assert.match(editorRuntime, /addEventListener\('wheel', \(event\) => \{\s*event\.stopPropagation\(\);/s);
+  assert.match(editorRuntime, /void openLedgerCardEditor\(\{/);
+  assert.match(modalRuntime, /dialog\.className = 'ledger-card-editor-modal skill-library-editor-modal codex-editor-modal'/);
+  assert.match(modalRuntime, /session = await createTextFileEditorSession\(\{/);
+  assert.match(modalRuntime, /filename: `card-\$\{openInput\.cardId\}\.md`/);
   assert.match(wheelRuntime, /if \(shouldCaptureWheelTarget\(event\)\) return;/);
-  assert.match(css, /\.ledger-card-description-editor\s*{[^}]*overflow:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
+  assert.match(codeMirrorRuntime, /'\.cm-scroller': \{[\s\S]*overflow: 'auto'/);
 });
 
 test('local app and asset routes are served without browser cache ambiguity', () => {

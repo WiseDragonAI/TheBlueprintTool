@@ -10,9 +10,9 @@
     "recover:node-task-current-state": "tsx src/cli/recover-node-task-current-state-migration.ts",
     "verify:node-task-current-state": "tsx src/cli/verify-node-task-current-state-migration.ts",
     "start": "node --import tsx src/server.ts",
-    "test": "node --test --import tsx \"test/**/*.test.ts\"",
-    "test:integration": "find test -path \"*/unit/*\" -prune -o -name \"*.test.ts\" -print | xargs node --test --import tsx",
-    "test:unit": "find test/unit -name \"*.test.ts\" -print | xargs node --test --import tsx",
+    "test": "TSX_TSCONFIG_PATH=\"$PWD/tsconfig.json\" node --test --import tsx \"test/**/*.test.ts\"",
+    "test:integration": "find test -path \"*/unit/*\" -prune -o -name \"*.test.ts\" -print | xargs env TSX_TSCONFIG_PATH=\"$PWD/tsconfig.json\" node --test --import tsx",
+    "test:unit": "find test/unit -name \"*.test.ts\" -print | xargs env TSX_TSCONFIG_PATH=\"$PWD/tsconfig.json\" node --test --import tsx",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -3,7 +3,10 @@
 export function captureRouteSnapshot(locationLike, parseScope) {
   const pathname = String(locationLike.pathname || '/');
   const scope = parseScope(pathname);
-  const [section = '', ledgerId = '', zoneMarker = '', zoneId = '', cardMarker = '', cardId = ''] = scope?.segments ?? [];
+  const [section = '', ledgerId = '', marker = '', third = '', cardMarker = '', legacyCardId = ''] = scope?.segments ?? [];
+  const canonicalCard = marker === 'cards' ? third : '';
+  const zoneId = marker === 'zones' ? third : '';
+  const cardId = canonicalCard || (cardMarker === 'cards' ? legacyCardId : '');
   const search = String(locationLike.search || '');
   return Object.freeze({
     pathname,
@@ -13,8 +16,8 @@ export function captureRouteSnapshot(locationLike, parseScope) {
     replicaNodeId: new URLSearchParams(search).get('replica')?.trim() || '',
     section,
     ledgerId,
-    zoneId: zoneMarker === 'zones' ? zoneId : '',
-    cardId: cardMarker === 'cards' ? cardId : '',
+    zoneId,
+    cardId,
   });
 }
 
@@ -25,7 +28,7 @@ export function sameRouteSnapshot(left, right) {
 
 export function cardPresentationIdentity(snapshot) {
   if (!snapshot?.projectId || !snapshot?.ledgerId || !snapshot?.cardId) return '';
-  return [snapshot.projectId, snapshot.ledgerId, snapshot.zoneId, snapshot.cardId].join(':');
+  return [snapshot.projectId, snapshot.ledgerId, snapshot.cardId].join(':');
 }
 
 export function federationEventOwnsCard(payload, snapshot) {

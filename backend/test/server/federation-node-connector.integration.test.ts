@@ -56,6 +56,17 @@ function federatedLibraryFixture(home: string, suffix: string): void {
       runs: [], skillLibrary: [], activeWorkspaceRun: null,
     },
   });
+  try {
+    execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: home, stdio: 'ignore' });
+  } catch {
+    execFileSync('git', ['init', '-q'], { cwd: home });
+  }
+  execFileSync('git', ['add', '--', '.skills', '.decision-os/codex-pipelines.json'], { cwd: home });
+  execFileSync('git', [
+    '-c', 'user.name=Decision OS Test',
+    '-c', 'user.email=test@decision-os.invalid',
+    'commit', '-q', '-m', `commit ${suffix} federated library`,
+  ], { cwd: home });
 }
 
 async function waitFor<T>(read: () => Promise<T | null>): Promise<T> {
@@ -892,10 +903,14 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       JSON.stringify(concurrentFrontendPolls),
     );
     assert.equal(
-      frontendPollRelayPaths.some((path) => path.includes(`/api/internal/task-executions/${cancellationExecutionId}/presentation`)
-        || path.includes(`/api/internal/task-executions/${cancellationExecutionId}/status`)),
+      frontendPollRelayPaths.filter((path) => path.includes(`/api/internal/task-executions/${cancellationExecutionId}/presentation`)).length,
+      1,
+      `the selected log was not hydrated exactly once: ${JSON.stringify(frontendPollRelayPaths)}`,
+    );
+    assert.equal(
+      frontendPollRelayPaths.some((path) => path.includes(`/api/internal/task-executions/${cancellationExecutionId}/status`)),
       false,
-      `frontend polling opened execution relay requests: ${JSON.stringify(frontendPollRelayPaths)}`,
+      `frontend polling opened execution status relay requests: ${JSON.stringify(frontendPollRelayPaths)}`,
     );
     const heldRoleResult = await heldRoleRequest;
     assert.equal(heldRoleResult.status, 409);

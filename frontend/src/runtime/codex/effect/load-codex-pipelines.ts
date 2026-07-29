@@ -3,11 +3,13 @@
  * WHY: Pipeline screens need definitions and invalid-reference diagnostics from one typed request.
  */
 import type {
+  CodexContentKind,
   CodexPipeline,
   CodexPipelineInvalidReference,
   CodexPipelineStep,
   CodexPipelineStoreIssue,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import type { CodexSkillSummary } from './load-codex-skills.js';
 
 export type {
   CodexPipeline,
@@ -17,11 +19,22 @@ export type {
   CodexPipelineStoreIssue,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 
+export type CodexPipelineContentSummary =
+  | (Omit<CodexSkillSummary, 'contentKind' | 'executionVisibility'> & {
+      contentKind: Exclude<CodexContentKind, 'pipeline-prompt'>;
+      executionVisibility: 'agent';
+    })
+  | (Omit<CodexSkillSummary, 'contentKind' | 'executionVisibility'> & {
+      contentKind: 'pipeline-prompt';
+      executionVisibility: 'pipeline-only';
+    });
+
 export type CodexPipelineLibraryResult = {
   ok: boolean;
   statusCode: number;
   pipelines: readonly CodexPipeline[];
   steps: readonly CodexPipelineStep[];
+  availableContent: readonly CodexPipelineContentSummary[];
   empty: boolean;
   hasInvalidReferences: boolean;
   invalidReferences: readonly CodexPipelineInvalidReference[];
@@ -32,6 +45,7 @@ export type CodexPipelineLibraryResult = {
 type PipelineLibraryResponse = Partial<CodexPipelineLibraryResult> & {
   pipelines?: CodexPipeline[];
   steps?: CodexPipelineStep[];
+  availableContent?: CodexPipelineContentSummary[];
   invalidReferences?: CodexPipelineInvalidReference[];
   issues?: CodexPipelineStoreIssue[];
 };
@@ -42,6 +56,7 @@ function unavailableLibrary(error: string, statusCode = 0): CodexPipelineLibrary
     statusCode,
     pipelines: [],
     steps: [],
+    availableContent: [],
     empty: true,
     hasInvalidReferences: false,
     invalidReferences: [],
@@ -57,6 +72,7 @@ export async function loadCodexPipelines(): Promise<CodexPipelineLibraryResult> 
   if (!body) return unavailableLibrary('Invalid response.', response.status);
   const pipelines = Array.isArray(body.pipelines) ? body.pipelines : [];
   const steps = Array.isArray(body.steps) ? body.steps : [];
+  const availableContent = Array.isArray(body.availableContent) ? body.availableContent : [];
   const invalidReferences = Array.isArray(body.invalidReferences) ? body.invalidReferences : [];
   const issues = Array.isArray(body.issues) ? body.issues : [];
   const ok = response.ok && body.ok !== false;
@@ -65,6 +81,7 @@ export async function loadCodexPipelines(): Promise<CodexPipelineLibraryResult> 
     statusCode: response.status,
     pipelines,
     steps,
+    availableContent,
     empty: typeof body.empty === 'boolean' ? body.empty : pipelines.length === 0,
     hasInvalidReferences: typeof body.hasInvalidReferences === 'boolean'
       ? body.hasInvalidReferences

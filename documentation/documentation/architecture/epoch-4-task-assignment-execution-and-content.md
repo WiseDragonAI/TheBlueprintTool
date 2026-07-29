@@ -32,6 +32,7 @@
 5. **Unavailable assignment:** An unreachable assigned node returns `assigned_node_unreachable` and creates no substitute execution on the requesting node.
 6. **Restart recovery:** Startup reads locally assigned active executions. It adopts a child only when both PID and process-start identity match; stale active state becomes `interrupted` after available artifacts are captured.
 7. **Projection rule:** Replicated lifecycle owns the visible phase. Missing process observation does not relabel a durable `starting` or `running` execution as `interrupted`.
+8. **Scheduler failure containment:** Global capacity remains available when one project pipeline store cannot be inspected. Queue inspection pauses only that project's `codex-runtime` scope, records the project and store path, and continues selecting healthy project work. Explicit project-runtime recovery re-reads the durable store before restoring that project to scheduling.
 
 ---
 
@@ -63,6 +64,12 @@
 12. **Remote active reads:** A non-executor node proxies an active presentation read to the authenticated executor endpoint `/api/internal/task-executions/:executionId/presentation`.
 13. **Remote terminal reads:** A non-executor node fetches only the selected execution's immutable JSONL and stderr objects by exact hash, then builds the same presentation locally. Telemetry and result objects are not fetched for log display.
 14. **Frontend replacement rule:** Each refresh installs one complete task summary and one complete selected-execution presentation. The browser does not merge line ranges, retain opaque cursors, parse JSONL, or reconstruct session ownership.
+15. **Dynamic gate command:** A running pipeline skill can execute `ledger-cli queue-skill --skill <name> --model <model> --effort <effort>`. The CLI derives the project and calling execution from its injected environment and posts to `/p/:projectId/api/codex/executions/:executionId/queue-skill`.
+16. **Immutable successor segment:** The server resolves the selected content kind, persists a temporary two-step run containing the selected skill followed by the exact calling skill, and links its first execution to the active caller. It does not mutate the caller's admitted run.
+17. **Single-successor admission:** One calling execution owns at most one dynamic successor run. An exact retry returns the existing run; a different retry returns `dynamic_skill_already_queued`.
+18. **Fresh gate context:** Each pipeline-prompt execution receives the canonical master-task Markdown, the complete latest non-deleted operator conversation, and the direct result Markdown of the immediately preceding skill. The returning gate is a new execution with a new Codex context.
+19. **Operator reply boundary:** The gate prompt receives the canonical thread identity and uses `ledger-cli answer` for its operator-facing response. Its output card remains the direct handoff for the next queued skill.
+20. **Failure propagation:** Dynamic successor executions retain the external predecessor identity in durable topology. Failure, cancellation, interruption, and restart recovery cancel every queued descendant across the originating and successor runs.
 
 ---
 

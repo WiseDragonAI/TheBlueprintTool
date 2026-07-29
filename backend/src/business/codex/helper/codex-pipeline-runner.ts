@@ -13,13 +13,18 @@ import type {
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
+import { formatThreadMarkdown, hydrateLedgerThreadNotesFor } from '@backend/business/ledger/helper/thread-content-file.js';
+import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { codexRunExecutionFinishedMarker } from './codex-run-segment-marker.js';
-import { readCodexPipelineStore } from './codex-pipeline-store.js';
+import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './codex-pipeline-store.js';
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
+import { buildCardLaunchContext } from './build-card-launch-context.js';
+import { isCodexThreadArtifactNote } from './is-codex-thread-artifact-note.js';
+import { assertPipelineRunSkillPromptEvidence } from './pipeline-prompt-snapshot.js';
 import { resolveCodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 import { resolveServerSkillContext } from './server-skill-context.js';
-import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
+import { hasLedgerProjectionSource, readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { codexProcessIdentity } from './codex-process-identity.js';
 import { launchCodexExecutionProcess } from './launch-codex-execution-process.js';
 import {
@@ -124,7 +129,7 @@ export function resolvePipelineLedgerContext(input: {
   if (!tab) return null;
   const ledgerFile = String(tab.ledgerFile ?? '').replace(/^\.decision-os\//, '');
   const ledgerPath = resolve(input.decisionOsRoot, ledgerFile);
-  if (!isInside(input.decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return null;
+  if (!isInside(input.decisionOsRoot, ledgerPath) || !hasLedgerProjectionSource({ ledgerId: input.ledgerId, ledgerPath, runtime: input.runtime })) return null;
   return {
     ledgerId: input.ledgerId,
     ledgerPath,
@@ -141,6 +146,39 @@ function cardContent(input: { context: PipelineLedgerContext; decisionOsRoot: st
   const card = (hydrated.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
   return String(comment.what ?? comment.body ?? comment.description ?? '');
+}
+
+function pipelinePromptConversationContext(input: {
+  context: PipelineLedgerContext;
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+  taskCardId: string;
+}): { threadId: string; context: AnyRecord } {
+  const ledger = JSON.parse(JSON.stringify(input.context.ledger)) as AnyRecord;
+  const threadId = `thread-${input.taskCardId}`;
+  hydrateLedgerThreadNotesFor(ledger, input.decisionOsRoot, threadId);
+  const deletedByThread = ledger.deletedNoteIds && typeof ledger.deletedNoteIds === 'object' && !Array.isArray(ledger.deletedNoteIds)
+    ? ledger.deletedNoteIds as Record<string, unknown>
+    : {};
+  const deleted = new Set(Array.isArray(deletedByThread[threadId]) ? (deletedByThread[threadId] as unknown[]).map(String) : []);
+  const notes = (normalizeLedgerNotes(ledger)[threadId] ?? [])
+    .filter((note) => !deleted.has(String(note.id ?? '')) && !isCodexThreadArtifactNote(note));
+  return {
+    threadId,
+    context: buildCardLaunchContext({
+      projectId: String(input.runtime.projectId ?? ''),
+      ledgerId: input.context.ledgerId,
+      cardId: input.taskCardId,
+      threadId,
+      ledger,
+      cardMarkdown: cardContent({
+        context: { ...input.context, ledger },
+        decisionOsRoot: input.decisionOsRoot,
+        cardId: input.taskCardId,
+      }),
+      threadMarkdown: notes.length > 0 ? formatThreadMarkdown(notes) : '',
+    }),
+  };
 }
 
 export function outputFileForPipelineCard(context: PipelineLedgerContext, decisionOsRoot: string, cardId: string): string {
@@ -246,6 +284,7 @@ export function reassessPipelineAfterSkill(input: {
   finishedAt?: string;
 }): CodexPipelineRun | null {
   const before = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  assertCodexPipelineStoreAvailable(before);
   const prior = before.store.runs.find((run) => run.id === input.pipelineRunId);
   if (!prior) return null;
   const replicated = replicatedPipelineRun(prior, input.runtime);
@@ -280,9 +319,10 @@ function priorInput(input: {
   const flattened = input.run.steps.flatMap((step) => step.skills.map((skill) => ({ step, skill })));
   const index = flattened.findIndex((entry) => entry.skill.runId === input.skill.runId);
   if (index <= 0) {
+    const cardId = input.run.initialInputCardId ?? input.run.sourceCardId;
     return {
-      cardId: input.run.sourceCardId,
-      content: cardContent({ context: input.context, decisionOsRoot: input.decisionOsRoot, cardId: input.run.sourceCardId }),
+      cardId,
+      content: cardContent({ context: input.context, decisionOsRoot: input.decisionOsRoot, cardId }),
     };
   }
   const prior = flattened[index - 1];
@@ -299,7 +339,9 @@ export async function cancelPipelineDependents(input: {
 }): Promise<void> {
   const state = taskExecutionState(input.runtime);
   if (!state) return;
-  const records = state.executions.byPipelineRunId(input.pipelineRunId);
+  // WHAT: Follow the replicated predecessor graph across immutable run boundaries.
+  // WHY: A dynamically queued successor is a separate run but must still settle with its failed ancestor.
+  const records = state.executions.all();
   const dependentIds = new Set<string>();
   let changed = true;
   while (changed) {
@@ -359,8 +401,25 @@ export async function spawnPipelineSkillProcess(input: {
     codexModel: input.skill.codexModel,
     codexEffort: input.skill.codexEffort,
   });
+  assertPipelineRunSkillPromptEvidence(input.skill);
+  const contentKind = input.skill.contentKind;
+  if (!contentKind) throw new Error('pipeline_prompt_snapshot_kind_mismatch');
+  const taskConversation = contentKind === 'pipeline-prompt'
+    ? pipelinePromptConversationContext({
+        context,
+        decisionOsRoot: input.decisionOsRoot,
+        runtime: input.runtime,
+        taskCardId: input.pipelineRun.outputParentCardId,
+      })
+    : null;
   const prompt = buildPipelineSkillPrompt({
     skillName: input.skill.skillName,
+    contentKind,
+    ...(contentKind === 'pipeline-prompt' ? {
+      contentRevision: input.skill.contentRevision,
+      contentCommit: input.skill.contentCommit,
+      promptSnapshot: input.skill.promptSnapshot,
+    } : {}),
     ledgerFile: context.ledgerPath,
     pipelineRunId: input.pipelineRun.id,
     pipelineName: input.pipelineRun.pipelineName,
@@ -374,7 +433,16 @@ export async function spawnPipelineSkillProcess(input: {
     outputCardId: input.step.outputCardId,
     outputSubtaskPosition: input.step.outputSubtaskPosition,
     outputMarkdownFile: outputFile,
-    serverSkill: resolveServerSkillContext({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, skillName: input.skill.skillName }),
+    projectId: String(input.runtime.projectId ?? ''),
+    ledgerId: input.pipelineRun.ledgerId,
+    executionId: input.skill.executionId,
+    ...(taskConversation ? {
+      taskThreadId: taskConversation.threadId,
+      taskConversationContext: taskConversation.context,
+    } : {}),
+    serverSkill: contentKind === 'pipeline-prompt'
+      ? null
+      : resolveServerSkillContext({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, skillName: input.skill.skillName }),
   });
 
   mkdirSync(dirname(input.skill.stdoutFile), { recursive: true });
@@ -390,7 +458,12 @@ export async function spawnPipelineSkillProcess(input: {
     runId: input.skill.runId,
     executionId: input.skill.executionId,
     command,
-    env: decisionOsCodexEnvironment({ runtime: input.runtime, decisionOsRoot: input.decisionOsRoot, ledgerFile: context.ledgerPath }),
+    env: decisionOsCodexEnvironment({
+      runtime: input.runtime,
+      decisionOsRoot: input.decisionOsRoot,
+      ledgerFile: context.ledgerPath,
+      executionId: input.skill.executionId,
+    }),
     prompt,
     stdoutFile: input.skill.stdoutFile,
     stderrFile: input.skill.stderrFile,
@@ -537,7 +610,9 @@ export async function runPipelineExecution(input: {
   if (execution.lifecycle.phase !== 'starting') {
     return { ok: false, statusCode: 409, error: 'Pipeline execution was not claimed.', executionId: input.executionId };
   }
-  const manifest = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs
+  const normalized = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  assertCodexPipelineStoreAvailable(normalized);
+  const manifest = normalized.store.runs
     .find((run) => run.id === execution.metadata.pipelineRunId);
   const located = manifest?.steps.flatMap((step) => step.skills.map((skill) => ({ step, skill })))
     .find((entry) => entry.skill.executionId === input.executionId);

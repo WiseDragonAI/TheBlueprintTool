@@ -6,6 +6,7 @@
   "bin": {
     "decision-os-verify": "./bin/decision-os-verify.mjs",
     "decision-os-workload-status": "./bin/decision-os-workload-status.mjs",
+    "decision-os-delivery": "./bin/decision-os-delivery.mjs",
     "decision-os-server": "./bin/decision-os-server.mjs",
     "decision-os-projects-migrate": "./bin/decision-os-projects-migrate.mjs",
     "decision-os-migrate-node": "./bin/decision-os-migrate-node.mjs",

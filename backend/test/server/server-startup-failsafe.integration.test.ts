@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
 
+const releaseSha = 'a'.repeat(40);
+
 async function freePort(): Promise<number> {
   const server = createServer();
   await new Promise<void>((resolveListen, reject) => {
@@ -37,6 +39,10 @@ test('malformed startup settings keep an emergency diagnostics server online', a
       HOST: '127.0.0.1',
       TSX_TSCONFIG_PATH: resolve(repositoryRoot, 'backend/tsconfig.json'),
       DECISION_OS_REPOSITORY_SETTINGS_FILE: settingsFile,
+      DECISION_OS_RELEASE_SHA: releaseSha,
+      DECISION_OS_PROCESS_STARTED_AT: '2026-07-28T00:00:00.000Z',
+      DECISION_OS_DELIVERY_PROTOCOL: '1',
+      DECISION_OS_ACTIVE_RELEASE_POINTER: `current:${releaseSha}`,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -67,6 +73,10 @@ test('malformed startup settings keep an emergency diagnostics server online', a
   const diagnostics = await response.json() as Record<string, unknown>;
   assert.equal(diagnostics.status, 'degraded');
   assert.equal(diagnostics.startupPaused, true);
+  assert.equal(diagnostics.releaseSha, releaseSha);
+  assert.equal(diagnostics.processStartedAt, '2026-07-28T00:00:00.000Z');
+  assert.equal(diagnostics.deliveryProtocol, 1);
+  assert.equal(diagnostics.activeReleasePointer, `current:${releaseSha}`);
   const incidents = diagnostics.incidents as Array<Record<string, unknown>>;
   assert.equal(incidents[0]?.scope, 'server-startup');
   assert.match(String(incidents[0]?.message), /JSON/);

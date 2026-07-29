@@ -64,3 +64,35 @@ test('read-decision-os-settings inherits repository defaults and preserves works
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('protocol-1 settings require the ignored local dispatch capability before server admission', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-delivery-settings-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const releaseRoot = join(workspace, 'releases');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  const settingsFile = join(decisionOsRoot, '.settings.json');
+  const settings = {
+    deliveryProtocol: 1,
+    deliveryNodeId: 'workstation',
+    deliveryRepositoryRoot: workspace,
+    deliveryReleaseRoot: releaseRoot,
+    deliveryCurrentPointer: join(releaseRoot, 'current'),
+    deliveryDecisionOsRoot: decisionOsRoot,
+    deliverySupervisorProfile: 'multiterm-workstation-v1',
+    deliverySupervisorAdopted: true,
+    deliverySupervisedExit: true,
+    deliveryEmergencyHealth: true,
+  };
+  try {
+    writeFileSync(settingsFile, JSON.stringify(settings));
+    assert.throws(
+      () => readDecisionOsSettings({ action_payload: { cwd: workspace, repositorySettingsFile: settingsFile }, runtime_state: {} }),
+      /deliveryLocalDispatchToken/,
+    );
+    writeFileSync(settingsFile, JSON.stringify({ ...settings, deliveryLocalDispatchToken: 'a'.repeat(43) }));
+    const result = readDecisionOsSettings({ action_payload: { cwd: workspace, repositorySettingsFile: settingsFile }, runtime_state: {} });
+    assert.equal((result.settings as Record<string, unknown>).deliveryLocalDispatchToken, 'a'.repeat(43));
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

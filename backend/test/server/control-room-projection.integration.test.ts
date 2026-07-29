@@ -110,6 +110,7 @@ test('canvas and thread read models exclude each other while preserving card bod
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [{ id: 'card-a', title: 'A', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } }], annotations: [], relationships: [], notes: {}, threadFiles: { 'thread-card-a': '.decision-os/threads/tasks/thread-card-a.md' } }));
   writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'scoped-ledger-project' }));
   await migrateTaskCurrentState({ decisionOsRoot, projectId: 'scoped-ledger-project', nodeId: 'workstation', tasksLedgerFile: join(decisionOsRoot, 'tasks.json') });
+  rmSync(join(decisionOsRoot, 'tasks.json'));
   const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
   const runtime: Record<string, unknown> = {};
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
@@ -130,6 +131,16 @@ test('canvas and thread read models exclude each other while preserving card bod
     const thread = await fetch(`${baseUrl}/api/ledgers/tasks/threads/thread-card-a`).then((response) => response.json()) as Record<string, any>;
     assert.equal(thread.notes['thread-card-a'][0].message, 'Thread body.');
     assert.equal(thread.cards, undefined);
+    const noteResponse = await fetch(`${baseUrl}/p/scoped-ledger-project/decision-os/tasks`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'append-note', note: { id: 'n2', threadId: 'thread-card-a', body: 'Projection-backed note.' } }),
+    });
+    const noteResult = await noteResponse.json() as Record<string, any>;
+    assert.equal(noteResponse.status, 200, JSON.stringify(noteResult));
+    assert.equal(noteResult.ok, true);
+    const updatedThread = await fetch(`${baseUrl}/api/ledgers/tasks/threads/thread-card-a`).then((response) => response.json()) as Record<string, any>;
+    assert.equal(updatedThread.notes['thread-card-a'].at(-1).message, 'Projection-backed note.');
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     rmSync(home, { recursive: true, force: true });

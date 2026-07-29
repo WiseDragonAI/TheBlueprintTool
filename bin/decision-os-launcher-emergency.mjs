@@ -113,6 +113,22 @@ function recordIncident(file, input) {
   return incident;
 }
 
+export function launcherEmergencyHealthPayload(input) {
+  return {
+    ok: true,
+    status: 'degraded',
+    startupPaused: true,
+    launcherEmergency: true,
+    releaseSha: String(input.releaseIdentity?.releaseSha ?? ''),
+    processStartedAt: String(input.releaseIdentity?.processStartedAt ?? new Date().toISOString()),
+    deliveryProtocol: Number(input.releaseIdentity?.deliveryProtocol ?? 0),
+    activeReleasePointer: String(input.releaseIdentity?.activeReleasePointer ?? 'unbootstrapped'),
+    incidentLedger: input.incidentLedger,
+    incidentPersistenceError: input.incidentPersistenceError,
+    activeIncidentCount: input.activeIncidentCount,
+  };
+}
+
 export function startLauncherEmergencyServer(input) {
   const decisionOsRoot = decisionOsRootFrom(input.cwd);
   const incidentFile = resolve(decisionOsRoot, 'runtime-incidents.json');
@@ -155,13 +171,12 @@ export function startLauncherEmergencyServer(input) {
       try { document = readLedger(incidentFile); }
       catch { document = { version: 1, updatedAt: incident.lastObservedAt, incidents: [incident] }; }
       response.end(JSON.stringify({
-        ok: true,
-        status: 'degraded',
-        startupPaused: true,
-        launcherEmergency: true,
-        incidentLedger: incidentFile,
-        incidentPersistenceError,
-        activeIncidentCount: document.incidents.filter((entry) => entry.status === 'paused').length,
+        ...launcherEmergencyHealthPayload({
+          releaseIdentity: input.releaseIdentity,
+          incidentLedger: incidentFile,
+          incidentPersistenceError,
+          activeIncidentCount: document.incidents.filter((entry) => entry.status === 'paused').length,
+        }),
         ...(path === '/api/diagnostics/incidents' ? { incidents: document.incidents } : {}),
       }));
       return;

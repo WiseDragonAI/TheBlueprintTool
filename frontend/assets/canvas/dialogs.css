@@ -541,8 +541,10 @@
 }
 
 .skill-library-editor-modal {
-  width: min(920px, calc(100vw - 48px));
-  max-width: min(920px, calc(100vw - 48px));
+  width: min(900px, calc(100vw - 48px));
+  max-width: min(900px, calc(100vw - 48px));
+  height: 95vh;
+  max-height: 95vh;
 }
 
 .codex-modal-head,
@@ -1234,10 +1236,10 @@
 
 .skill-library-editor-body {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: max-content max-content minmax(280px, 1fr);
   gap: 12px;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
   padding-top: 14px;
 }
 
@@ -1258,23 +1260,24 @@
   gap: 7px;
 }
 
-.skill-editor-tag-choice {
+.codex-editor-modal .skill-editor-tag-choice {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 32px;
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--control-radius);
-  color: var(--text);
-  background: var(--panel);
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--skill-category-color), white 24%);
+  border-radius: 7px;
+  color: color-mix(in srgb, var(--skill-category-color), white 38%);
+  background: color-mix(in srgb, var(--skill-category-color), transparent 82%);
+  font-size: 12px;
+  font-weight: 800;
   text-transform: none;
 }
 
-.skill-editor-tag-choice[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent), transparent 88%);
+.codex-editor-modal .skill-editor-tag-choice[aria-pressed="true"] {
+  color: white;
+  background: var(--skill-category-color);
+  box-shadow: inset 0 1px 0 #ffffff2e, 0 3px 10px color-mix(in srgb, var(--skill-category-color), transparent 65%);
 }
 
 .skill-library-metadata {
@@ -1289,18 +1292,191 @@
 
 .skill-library-defaults {
   grid-template-columns: 1fr 1fr;
+  margin-top: 14px;
 }
 
 .skill-markdown-field {
+  display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
 }
 
-.codex-field .skill-markdown-editor {
+.skill-create-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1fr);
+  gap: 12px;
+}
+
+.skill-create-form > .codex-inline-warning {
+  grid-column: 1 / -1;
+}
+
+.skill-editor-owner-controls {
+  min-height: max-content;
+}
+
+.skill-editor-pane,
+.skill-history-pane {
   min-height: 0;
-  resize: none;
-  line-height: 1.5;
-  tab-size: 2;
+}
+
+.skill-editor-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.skill-editor-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skill-editor-toolbox,
+.text-file-editor-toolbar,
+.text-file-editor-actions,
+.skill-revision-navigation,
+.skill-revision-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skill-editor-toolbox {
+  justify-content: flex-end;
+}
+
+.text-file-editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.text-file-editor-toolbar {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 7px;
+}
+
+.text-file-editor-identity {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-file-editor-actions {
+  justify-content: flex-end;
+}
+
+.text-file-editor-surface {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.skill-codemirror-host {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+}
+
+.skill-revision-browser {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 280px;
+  overflow: visible;
+}
+
+.skill-revision-navigation {
+  justify-content: space-between;
+}
+
+.skill-revision-navigation > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  text-align: center;
+}
+
+.skill-editor-timeline-navigation {
+  min-height: 34px;
+}
+
+.skill-revision-navigation small {
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.skill-revision-key {
+  justify-content: flex-end;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.skill-revision-mode-toggle {
+  margin-right: auto;
+}
+
+.skill-revision-key .is-removal {
+  color: #ff5f6d;
+}
+
+.skill-revision-key .is-addition {
+  color: #4d9cff;
+}
+
+.skill-revision-viewport {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: #0b0d11;
+  font-weight: 400;
+  text-transform: none;
+}
+
+.authored-revision-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  gap: 10px;
+}
+
+.authored-revision-content.is-single-column {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.authored-revision-preview {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: #0b0d11;
+}
+
+.authored-revision-preview .text-file-editor {
+  height: 100%;
+}
+
+.skill-revision-pierre {
+  --diffs-addition-color: #38d9e8;
+  --diffs-addition-color-override: #38d9e8;
+  --diffs-fg-number-addition-override: #38d9e8;
+  --diffs-deletion-color: #ff5f6d;
+  --diffs-font-family: var(--mono);
+  --diffs-font-size: 12px;
+  --diffs-line-height: 18px;
+  min-width: 0;
+  font-weight: 400;
+  text-transform: none;
 }
 
 @media (max-width: 760px) {
@@ -1315,6 +1491,23 @@
   .codex-modal-head,
   .codex-modal-actions {
     flex-wrap: wrap;
+  }
+  .skill-library-editor-modal {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    height: calc(100vh - 24px);
+    max-height: calc(100vh - 24px);
+  }
+  .skill-create-form {
+    grid-template-columns: 1fr;
+  }
+  .skill-create-form > .codex-inline-warning {
+    grid-column: auto;
+  }
+  .authored-revision-content {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(180px, 1fr) minmax(180px, 1fr);
+    overflow: auto;
   }
   .process-skill-row,
   .pipeline-library-summary,

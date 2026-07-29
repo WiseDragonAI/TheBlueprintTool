@@ -13,7 +13,7 @@ import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
 import { readVoiceTranscriptionStatusController, startVoiceRetryOrchestrationController, startVoiceUploadOrchestrationController } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
 import { resolveDecisionOsRoot } from './resolve-decision-os-root.js';
-import { readDecisionOsSettings } from './read-decision-os-settings.js';
+import { decisionOsReleaseHealthIdentity, readDecisionOsSettings } from './read-decision-os-settings.js';
 import { normalizedConcurrentCodexProcesses, saveCodexProcessSettings } from './save-codex-process-settings.js';
 import { saveFederationSettings } from './save-federation-settings.js';
 import { readRequestBuffer } from './read-request-buffer.js';
@@ -42,11 +42,18 @@ import { listCodexPipelinesController } from '../../codex/controller/list-codex-
 import { saveCodexPipelineController } from '../../codex/controller/save-codex-pipeline-controller.js';
 import { readCodexSkillLibraryController } from '../../codex/controller/read-codex-skill-library-controller.js';
 import { saveCodexSkillLibraryController } from '../../codex/controller/save-codex-skill-library-controller.js';
+import { createCodexSkillLibraryController } from '../../codex/controller/create-codex-skill-library-controller.js';
+import { retryCodexSkillRevisionController } from '../../codex/controller/retry-codex-skill-revision-controller.js';
+import {
+  readCodexSkillRevisionContentController,
+  readCodexSkillRevisionHistoryController,
+} from '../../codex/controller/read-codex-skill-revision-controller.js';
 import { codexSkillTags, readCodexSkillCatalog } from '../../codex/helper/codex-skill-library.js';
 import { startCodexPipelineRunController } from '../../codex/controller/start-codex-pipeline-run-controller.js';
 import { readCodexPipelineRunController } from '../../codex/controller/read-codex-pipeline-run-controller.js';
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
+import { queueCodexSkillAfterExecutionController } from '../../codex/controller/queue-codex-skill-after-execution-controller.js';
 import { recoverTaskExecutions } from '../../codex/helper/recover-task-executions.js';
 import { stopAdoptedTaskExecutionMonitors } from '../../codex/helper/monitor-adopted-task-execution.js';
 import {
@@ -69,6 +76,7 @@ import { buildTaskExecutionPresentation } from '../../codex/helper/task-executio
 import { taskExecutionPresentationHttpResult } from '../../codex/helper/task-execution-presentation-http-result.js';
 import {
   applyTaskExecutionPresentationUpdate,
+  isTaskExecutionPresentationEvent,
   isTaskExecutionPresentationUpdate,
   replicatedTaskExecutionPresentation,
 } from '../../codex/helper/replicated-task-execution-presentation.js';
@@ -77,7 +85,8 @@ import { executeFederatedPipelineSkill } from '../../codex/helper/codex-pipeline
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { TaskExecutionPresentation, TaskExecutionPresentationEvent } from '../../../../../shared/schemas/task-execution-presentation-types.js';
 import type { TaskEntityChange, TaskExecutionMetadata } from '../../task-state/helper/task-current-state-types.js';
-import { resolveCatalogProject, tasksLedgerForProject, type DecisionOsProject } from './project-catalog.js';
+import { hasLedgerProjectionSource } from '../../task-state/helper/read-ledger-projection.js';
+import { resolveCatalogProject, tasksLedgerForProject, tasksLedgerId, type DecisionOsProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
@@ -92,8 +101,20 @@ import { resolveVerifiedManifestResourceFile, type FederationContentManifest } f
 import { createFederationContentReplicaStore } from '../../federation/helper/federation-content-replica-store.js';
 import { createFederationContentScheduler } from '../../federation/helper/federation-content-scheduler.js';
 import { readTaskContentOnDemand } from '../../federation/helper/read-task-content-on-demand.js';
+import { executeDeliveryNodeCommand, DeliveryNodeCommandError } from '../../delivery/controller/delivery-node-command-controller.js';
+import { createDeliveryNodeReceiptStore } from '../../delivery/helper/delivery-node-receipt-store.js';
+import { createNodeReleaseStore, NodeReleaseError } from '../../delivery/helper/node-release-store.js';
+import { parseDeliveryNodeCommand } from '../../../../../shared/schemas/decision-os-delivery-types.js';
+import {
+  authorizeLocalDeliveryDispatch,
+  createDeliveryHttpRequestScope,
+  DeliveryHttpBoundaryError,
+  readDeliveryRequestJson,
+} from '../../delivery/helper/delivery-http-boundary.js';
+import { deliveryBlockingIncidents } from '../../delivery/helper/delivery-incident-boundary.js';
 import { materializeTaskMutationInputs, materializeTaskResources, TaskContentMaterializationError } from '../../federation/helper/materialize-task-mutation-inputs.js';
 import { createProjectTaskState, type ProjectTaskState } from '../../task-state/helper/project-task-state.js';
+import { commitTaskContentMutation, taskContentAutoCommitEnabled } from '../../task-state/helper/commit-task-content-mutation.js';
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import type { TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import { createTaskExecutionRepository } from '../../task-state/helper/task-execution-repository.js';
@@ -102,6 +123,17 @@ import type { TaskProjectionCommand } from '../../task-state/helper/task-mutatio
 import { createRuntimeIncidentLedger, RuntimeScopePausedError, type RuntimeIncident } from './runtime-incident-ledger.js';
 import { createRuntimeIncidentReviewScheduler } from './create-runtime-incident-review-scheduler.js';
 import { runtimeIncidentReviewProjectId } from './synchronize-runtime-incident-review-task.js';
+import {
+  MarkdownEditorTargetError,
+  markdownEditorTargetLocation,
+  resolveMarkdownEditorTarget,
+} from '../../content-authoring/helper/resolve-markdown-editor-target.js';
+import { saveLedgerCardContentController } from '../../ledger/controller/save-ledger-card-content-controller.js';
+import {
+  readLedgerCardRevisionContentController,
+  readLedgerCardRevisionHistoryController,
+} from '../../ledger/controller/read-ledger-card-revisions-controller.js';
+import { retryLedgerCardRevisionController } from '../../ledger/controller/retry-ledger-card-revision-controller.js';
 import {
   exportFederatedPipelineSnapshot,
   createFederatedSkillExportIndex,
@@ -328,7 +360,30 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   type ExecutionState = Pick<ProjectTaskState, 'executions' | 'finalizeExecutionArtifacts'>;
   const federatedExecutionStates = new Map<string, ExecutionState>();
   const federatedExecutionObservations = new Map<string, TaskExecutionObservation>();
-  const federatedExecutionPresentations = new Map<string, TaskExecutionPresentationEvent[]>();
+  type ExecutionPresentationProjection = {
+    events: readonly TaskExecutionPresentationEvent[];
+    hydrated: boolean;
+  };
+  const executionPresentations = new Map<string, ExecutionPresentationProjection>();
+  const executionPresentationKey = (projectId: string, executionId: string, executorNodeId: string): string => (
+    `${projectId}\0${executionId}\0${executorNodeId}`
+  );
+  const applyExecutionPresentationEvents = (input: {
+    projectId: string;
+    executionId: string;
+    executorNodeId: string;
+    update: { reset: boolean; events: readonly TaskExecutionPresentationEvent[] };
+    hydrated?: boolean;
+  }): ExecutionPresentationProjection => {
+    const key = executionPresentationKey(input.projectId, input.executionId, input.executorNodeId);
+    const current = executionPresentations.get(key);
+    const projection = {
+      events: applyTaskExecutionPresentationUpdate(current?.events ?? [], input.update),
+      hydrated: input.hydrated ?? current?.hydrated ?? input.update.reset,
+    };
+    executionPresentations.set(key, projection);
+    return projection;
+  };
   const federatedPipelinePresentations = new Map<string, AnyRecord>();
   const terminalArtifactHydrations = new Map<string, Promise<void>>();
   const pausedTaskProjects = new Map<string, RuntimeIncident>();
@@ -343,11 +398,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   let globalRuntimeIncident: RuntimeIncident | null = null;
   let projectSyncController: ReturnType<typeof createProjectSyncController> | null = null;
   let resumeProjectSyncRuntime: (() => void) | null = null;
-  let publishExecutionPresentationSnapshot = (
-    _projectId: string,
-    _executionId: string,
-    _record: ReturnType<ProjectTaskState['executions']['find']>,
-  ): void => {};
   let publishPipelineRunSnapshot = (
     _projectId: string,
     _pipelineRunId: string,
@@ -492,9 +542,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         // A disconnected event client cannot fail the committed execution transition.
       }
     }
-    if (input.record && input.record.lifecycle.executorNodeId === (federation?.localOwner().ownerNodeId ?? 'local')) {
-      publishExecutionPresentationSnapshot(input.projectId, input.executionId, input.record);
-    }
     if (input.record?.metadata.pipelineRunId) {
       publishPipelineRunSnapshot(input.projectId, input.record.metadata.pipelineRunId, input.executionId);
     }
@@ -506,7 +553,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     events: readonly TaskExecutionPresentationEvent[];
     reset?: boolean;
   }): void => {
-    if (!input.projectId || !input.executionId || !federation) return;
+    if (!input.projectId || !input.executionId) return;
+    const executorNodeId = federation?.localOwner().ownerNodeId ?? 'local';
+    applyExecutionPresentationEvents({
+      projectId: input.projectId,
+      executionId: input.executionId,
+      executorNodeId,
+      update: {
+        reset: input.reset === true,
+        events: input.events,
+      },
+    });
+    if (!federation) return;
     const chunks = Array.from(
       { length: Math.max(1, Math.ceil(input.events.length / 128)) },
       (_, index) => input.events.slice(index * 128, (index + 1) * 128),
@@ -541,6 +599,73 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       runtime: artifactRuntime,
     });
     return 'presentation' in result ? result.presentation : null;
+  };
+  const requestRemoteExecutionPresentation = async (input: {
+    projectId: string;
+    execution: NonNullable<ReturnType<ProjectTaskState['executions']['find']>>;
+    request: IncomingMessage;
+    response: ServerResponse;
+  }): Promise<
+    | { ok: true; presentation: TaskExecutionPresentation }
+    | { ok: false; statusCode: number; body: string }
+  > => {
+    const executionId = input.execution.metadata.executionId;
+    const executorNodeId = input.execution.lifecycle.executorNodeId;
+    if (!federation) {
+      return {
+        ok: false,
+        statusCode: 503,
+        body: JSON.stringify({ ok: false, error: 'assigned_node_unreachable', executionId, executorNodeId }),
+      };
+    }
+    const requestScope = createDeliveryHttpRequestScope({
+      request: input.request,
+      response: input.response,
+      timeoutMs: 10_000,
+    });
+    try {
+      const remote = await federation.request(
+        executorNodeId,
+        `/api/internal/task-executions/${encodeURIComponent(executionId)}/presentation?projectId=${encodeURIComponent(input.projectId)}`,
+        { timeoutMs: 10_000, signal: requestScope.signal },
+      );
+      if (remote.status < 200 || remote.status >= 300) {
+        return { ok: false, statusCode: remote.status || 502, body: remote.body.toString('utf8') };
+      }
+      const presentation = JSON.parse(remote.body.toString('utf8') || '{}') as TaskExecutionPresentation;
+      if (presentation.execution?.executionId !== executionId
+        || !Array.isArray(presentation.events)
+        || !presentation.events.every(isTaskExecutionPresentationEvent)) {
+        return {
+          ok: false,
+          statusCode: 502,
+          body: JSON.stringify({ ok: false, error: 'task_execution_remote_response_invalid', executionId }),
+        };
+      }
+      const key = executionPresentationKey(input.projectId, executionId, executorNodeId);
+      const events = applyTaskExecutionPresentationUpdate(presentation.events, {
+        reset: false,
+        events: executionPresentations.get(key)?.events ?? [],
+      });
+      executionPresentations.set(key, { events, hydrated: true });
+      return {
+        ok: true,
+        presentation: { ...presentation, events },
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        statusCode: requestScope.signal.aborted ? 504 : 502,
+        body: JSON.stringify({
+          ok: false,
+          error: requestScope.signal.aborted ? 'task_execution_read_timeout' : 'task_execution_remote_request_failed',
+          executionId,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      };
+    } finally {
+      requestScope.dispose();
+    }
   };
 
   const scheduleTaskContentHeadRepair = (projectId: string, state: ProjectTaskState): void => {
@@ -598,6 +723,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const document = JSON.parse(readFileSync(tasksLedgerFile, 'utf8')) as AnyRecord;
         initialize = ['cards', 'annotations', 'relationships'].every((key) => !Array.isArray(document[key]) || document[key].length === 0);
       }
+      const settingsRuntime = project.decisionOsRoot === masterDecisionOsRoot ? runtime : {};
+      const projectSettings = readDecisionOsSettings({
+        action_payload: { decisionOsRoot: project.decisionOsRoot },
+        runtime_state: settingsRuntime,
+      }).settings;
       const value = createProjectTaskState({
         projectId: project.id,
         writerId: federation?.localOwner().ownerNodeId ?? String((runtime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId ?? 'local'),
@@ -605,6 +735,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         tasksLedgerFile,
         publish: (delta) => federationTaskStateReplicator?.publishDelta(delta),
         publishContent: () => federation?.publishContentChange(),
+        commitContent: ({ mutation, changedContentFiles }) => commitTaskContentMutation({
+          enabled: taskContentAutoCommitEnabled(projectSettings),
+          projectId: project.id,
+          projectRoot: project.root,
+          decisionOsRoot: project.decisionOsRoot,
+          mutation,
+          changedContentFiles,
+          signal: serverCloseAbort.signal,
+        }),
         onExecutionChange: ({ executionId, record }) => publishExecutionChange({
           projectId: project.id,
           nodeId: federation?.localOwner().ownerNodeId ?? 'local',
@@ -918,9 +1057,50 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     externalRunningCount: scheduledCodexRunningProcessCount,
   });
   const globalCodexRunningProcessCount = (): number => scheduledCodexRunningProcessCount() + sharedCodexCapacitySlots.reservedCount();
+  type CodexSchedulerContext = { root: string; runtime: AnyRecord };
+  const codexSchedulerContexts = (): CodexSchedulerContext[] => [
+    ...[...projectContexts.entries()].map(([root, context]) => ({ root, runtime: context.runtime })),
+    ...federatedSchedulerContexts.values(),
+  ];
+  const inspectCodexSchedulerContext = <Value>(
+    candidate: CodexSchedulerContext,
+    operation: string,
+    inspect: () => Value,
+  ): Value | null => {
+    if (candidate.runtime.codexRuntimePaused === true) return null;
+    try {
+      return inspect();
+    } catch (error) {
+      // WHAT: Contain queue-inspection failures to the project runtime that owns the unreadable state.
+      // WHY: A repaired pipeline store resolves its own incident, while a derived global scheduler
+      // pause survives and starves every healthy project despite available process capacity.
+      const report = candidate.runtime.onCodexBackgroundError;
+      if (typeof report === 'function') {
+        try {
+          report({
+            operation,
+            error,
+            context: {
+              projectId: String(candidate.runtime.projectId ?? ''),
+              decisionOsRoot: candidate.root,
+              ...(error instanceof RuntimeScopePausedError ? { upstreamScope: error.scope } : {}),
+            },
+          });
+        } catch {
+          // Diagnostics must not convert a contained inspection failure into a global scheduler failure.
+        }
+      }
+      return null;
+    }
+  };
   const globalCodexQueuePosition = (id: string): number => {
-    const pending = [...projectContexts.entries()].flatMap(([root, context], rootOrder) => pendingCodexProcessEntries(root, context.runtime)
-      .map((entry) => ({ ...entry, order: rootOrder * 2_000_000 + entry.order })))
+    const pending = codexSchedulerContexts().flatMap((candidate, rootOrder) => (
+      inspectCodexSchedulerContext(
+        candidate,
+        'inspect-project-codex-queue-position',
+        () => pendingCodexProcessEntries(candidate.root, candidate.runtime),
+      ) ?? []
+    ).map((entry) => ({ ...entry, order: rootOrder * 2_000_000 + entry.order })))
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.order - right.order);
     const index = pending.findIndex((entry) => entry.id === id);
     return index < 0 ? 1 : index + 1;
@@ -938,17 +1118,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         await Promise.resolve();
         capacity = globalCodexProcessCapacity();
         while (globalCodexRunningProcessCount() < capacity) {
-          const candidate = [...projectContexts.entries()]
-            .map(([root, context]) => ({ root, context, createdAt: nextPendingCodexProcessCreatedAt(root, context.runtime) }))
-            .concat([...federatedSchedulerContexts.values()].map(({ root, runtime: scopedRuntime }) => ({
-              root,
-              context: { runtime: scopedRuntime } as ProjectContext,
-              createdAt: nextPendingCodexProcessCreatedAt(root, scopedRuntime),
-            })))
-            .filter((entry): entry is { root: string; context: ProjectContext; createdAt: string } => entry.context.runtime.codexRuntimePaused !== true && Boolean(entry.createdAt))
+          const candidate = codexSchedulerContexts()
+            .map((entry) => ({
+              ...entry,
+              createdAt: inspectCodexSchedulerContext(
+                entry,
+                'inspect-project-codex-queue',
+                () => nextPendingCodexProcessCreatedAt(entry.root, entry.runtime),
+              ),
+            }))
+            .filter((entry): entry is CodexSchedulerContext & { createdAt: string } => Boolean(entry.createdAt))
             .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
           if (!candidate) break;
-          const result = await scheduleCodexProcesses({ decisionOsRoot: candidate.root, runtime: candidate.context.runtime, launchLimit: 1 });
+          const result = await scheduleCodexProcesses({ decisionOsRoot: candidate.root, runtime: candidate.runtime, launchLimit: 1 });
           const localLaunches = Array.isArray(result.launched) ? result.launched as AnyRecord[] : [];
           launched.push(...localLaunches);
           if (localLaunches.length === 0 || result.ok === false) break;
@@ -1334,35 +1516,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     startupProjectTasks.push(startupTask);
     return context;
   };
-  publishExecutionPresentationSnapshot = (projectId, executionId, record): void => {
-    if (!record || record.lifecycle.executorNodeId !== (federation?.localOwner().ownerNodeId ?? 'local')) return;
-    const localProject = projectCatalogStore.projects().find((project) => project.id === projectId);
-    const executionRuntime = federatedSchedulerContexts.get(executionId)?.runtime
-      ?? (localProject ? projectContexts.get(localProject.decisionOsRoot)?.runtime : null);
-    const state = executionStateForProject(projectId, record.lifecycle.executorNodeId);
-    if (!executionRuntime || !state) return;
-    queueMicrotask(() => {
-      try {
-        const result = buildTaskExecutionPresentation({ executionId, state, runtime: executionRuntime });
-        if ('presentation' in result) {
-          publishTaskExecutionPresentationEvents({
-            projectId,
-            executionId,
-            events: result.presentation.events,
-            reset: true,
-          });
-        }
-      } catch (error) {
-        recordStoppedOperation({
-          scope: `task-execution-presentation-publish:${projectId}:${executionId}`,
-          component: 'task-execution-presentation',
-          operation: 'publish-execution-presentation-snapshot',
-          error,
-          context: { projectId, executionId },
-        });
-      }
-    });
-  };
   publishPipelineRunSnapshot = (projectId, pipelineRunId, executionId): void => {
     const localProject = projectCatalogStore.projects().find((project) => project.id === projectId && project.available);
     const pipelineRuntime = localProject ? projectContexts.get(localProject.decisionOsRoot)?.runtime : null;
@@ -1432,10 +1585,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   ];
   let availableServerSkillNames: string[] = [];
   let federatedSkillExportIndex: FederatedSkillExportIndex | null = null;
-  const invalidateFederatedSkillExportIndex = (): void => { federatedSkillExportIndex = null; };
-  const readFederatedSkillExportIndex = (): FederatedSkillExportIndex => {
-    federatedSkillExportIndex ??= createFederatedSkillExportIndex(masterRoot, localWorkspaceRoots());
-    return federatedSkillExportIndex;
+  let federatedSkillExportIndexPromise: Promise<FederatedSkillExportIndex> | null = null;
+  let federatedSkillExportIndexGeneration = 0;
+  const invalidateFederatedSkillExportIndex = (): void => {
+    federatedSkillExportIndexGeneration += 1;
+    federatedSkillExportIndex = null;
+    federatedSkillExportIndexPromise = null;
+  };
+  const readFederatedSkillExportIndex = async (): Promise<FederatedSkillExportIndex> => {
+    if (federatedSkillExportIndex) return federatedSkillExportIndex;
+    if (federatedSkillExportIndexPromise) return await federatedSkillExportIndexPromise;
+    const generation = federatedSkillExportIndexGeneration;
+    const pending = createFederatedSkillExportIndex(masterRoot, localWorkspaceRoots());
+    federatedSkillExportIndexPromise = pending;
+    try {
+      const index = await pending;
+      if (generation === federatedSkillExportIndexGeneration) federatedSkillExportIndex = index;
+      return index;
+    } finally {
+      if (federatedSkillExportIndexPromise === pending) federatedSkillExportIndexPromise = null;
+    }
   };
   const initializePipelineCatalog = (): void => {
     invalidateFederatedSkillExportIndex();
@@ -1529,7 +1698,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     for (const peer of peers) {
       const manifestPath = forceRefresh ? '/api/federation/skills-manifest?refresh=1' : '/api/federation/skills-manifest';
       const manifest = await requestFederatedLibrary<FederatedSkillManifest>(peer, manifestPath);
-      const local = new Map(readFederatedSkillExportIndex().manifest.skills.map((skill) => [skill.name, skill.revision]));
+      const local = new Map((await readFederatedSkillExportIndex()).manifest.skills.map((skill) => [skill.name, skill.revision]));
       for (const skill of manifest.skills) {
         if (local.get(skill.name) === skill.revision) continue;
         const path = `/api/federation/skills-snapshot?name=${encodeURIComponent(skill.name)}`;
@@ -1619,9 +1788,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const pipelineRuns = new Map<string, { projectId: string; executionId: string }>();
     for (const [projectId, state] of [...projectTaskStates, ...federatedExecutionStates]) {
       for (const record of state.executions.all()) {
-        if (record.lifecycle.executorNodeId === localNodeId) {
-          publishExecutionPresentationSnapshot(projectId, record.metadata.executionId, record);
-        } else {
+        if (record.lifecycle.executorNodeId !== localNodeId) {
           scheduleTerminalArtifactHydration(projectId, record.lifecycle.executorNodeId, record);
         }
         if (record.metadata.pipelineRunId) {
@@ -1631,6 +1798,41 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     for (const [pipelineRunId, identity] of pipelineRuns) {
       publishPipelineRunSnapshot(identity.projectId, pipelineRunId, identity.executionId);
+    }
+  };
+  const publishAuthoredFederatedSkill = async (skillName: string, operation: 'create' | 'save' | 'retry'): Promise<AnyRecord> => {
+    invalidateFederatedSkillExportIndex();
+    federation?.publishManifest();
+    const failed = (error: unknown): AnyRecord => {
+      const incident = recordIncident({
+        severity: 'warning',
+        scope: `federated-skill-publication:${skillName}`,
+        component: 'federated-library-sync',
+        operation: 'publish-authored-federated-skill',
+        code: 'federated_skill_publication_failed',
+        error,
+        context: { skillName, operation },
+      });
+      return {
+        status: 'failed',
+        retryable: true,
+        retryPath: '/api/federation/libraries/synchronize',
+        incidentId: incident.id,
+      };
+    };
+    if (!federation || federation.status().phase !== 'connected') {
+      return failed(new Error('The federation relay is not connected.'));
+    }
+    try {
+      await synchronizeFederatedLibraries(true);
+      const status = runtime.federatedLibrarySyncStatus as AnyRecord | undefined;
+      if (status?.phase !== 'synchronized') {
+        return failed(new Error('Federated library synchronization did not reach synchronized state.'));
+      }
+      incidentLedger.resolveScope(`federated-skill-publication:${skillName}`, 'Federated skill publication succeeded.');
+      return { status: 'published' };
+    } catch (error) {
+      return failed(error);
     }
   };
   federation = createFederationNodeConnector({
@@ -1712,13 +1914,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (frame.payload?.presentation !== undefined) {
         if ((!record || record.lifecycle.executorNodeId === frame.from)
           && isTaskExecutionPresentationUpdate(frame.payload.presentation)) {
-          federatedExecutionPresentations.set(
-            key,
-            applyTaskExecutionPresentationUpdate(
-              federatedExecutionPresentations.get(key) ?? [],
-              frame.payload.presentation,
-            ),
-          );
+          applyExecutionPresentationEvents({
+            projectId: frame.projectId,
+            executionId,
+            executorNodeId: frame.from,
+            update: frame.payload.presentation,
+          });
           changed = true;
         } else {
           recordStoppedOperation({
@@ -2030,6 +2231,96 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       recordBackgroundFailure('runtime-incident-review', 'synchronize-decision-os-project-master-task', error, context);
     },
   });
+  let deliveryNodeContext: {
+    receiptStore: ReturnType<typeof createDeliveryNodeReceiptStore>;
+    releaseStore: ReturnType<typeof createNodeReleaseStore>;
+  } | null = null;
+  const requireDeliveryNodeContext = () => {
+    if (deliveryNodeContext) return deliveryNodeContext;
+    const settings = runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object'
+      ? runtime.decisionOsSettings as AnyRecord
+      : {};
+    if (settings.deliveryProtocol !== 1) {
+      throw new DeliveryNodeCommandError('delivery_node_not_bootstrapped', 'The local node has not adopted delivery protocol 1.', 503);
+    }
+    deliveryNodeContext = {
+      receiptStore: createDeliveryNodeReceiptStore({ decisionOsRoot: masterDecisionOsRoot, incidentLedger }),
+      releaseStore: createNodeReleaseStore({
+        repositoryRoot: String(settings.deliveryRepositoryRoot ?? ''),
+        releaseRoot: String(settings.deliveryReleaseRoot ?? ''),
+        settings,
+        decisionOsRoot: masterDecisionOsRoot,
+        incidentLedger,
+      }),
+    };
+    return deliveryNodeContext;
+  };
+  const runLocalDeliveryCommand = async (command: unknown, signal?: AbortSignal) => {
+    const context = requireDeliveryNodeContext();
+    const settings = runtime.decisionOsSettings as AnyRecord;
+    return await executeDeliveryNodeCommand({
+      command,
+      nodeId: federation!.localOwner().ownerNodeId,
+      settings,
+      receiptStore: context.receiptStore,
+      releaseStore: context.releaseStore,
+      signal,
+      readStatusEvidence: () => {
+        const projectIds = projectCatalog()
+          .filter((project) => project.available)
+          .map((project) => project.id)
+          .sort();
+        const blockingIncidents = deliveryBlockingIncidents(incidentLedger.snapshot().incidents);
+        const stateStatus = federationTaskStateReplicator?.diagnostics() ?? {
+          convergence: [],
+          runtimeDirty: [],
+          pendingDeliveryIds: [],
+        };
+        const contentStatus = federationContentStore.status();
+        const activePhases = new Set(['preparing', 'starting', 'running', 'cancelling']);
+        const pendingPhases = new Set(['queued']);
+        const localNodeId = federation!.localOwner().ownerNodeId;
+        const localExecutions = [...projectTaskStates.values()]
+          .flatMap((state) => state.executions.all())
+          .filter((execution) => execution.lifecycle.executorNodeId === localNodeId);
+        const pendingProcessQueueDepth = [
+          ...[...projectContexts.entries()].map(([root, context]) => ({ root, runtime: context.runtime })),
+          ...federatedSchedulerContexts.values(),
+        ].reduce((count, candidate) => count + pendingCodexProcessEntries(candidate.root, candidate.runtime).length, 0);
+        const release = decisionOsReleaseHealthIdentity(runtime.decisionOsSettings);
+        const convergedProjectIds = projectIds.filter((projectId) => stateStatus.convergence.some((entry) => (
+          entry.peerId === 'relay' && entry.projectId === projectId && entry.converged
+        )));
+        return [
+          { key: 'observedAt', value: new Date().toISOString() },
+          { key: 'ready', value: blockingIncidents.length === 0 },
+          { key: 'catalogReady', value: projectIds.length > 0 },
+          { key: 'projectCount', value: projectIds.length },
+          { key: 'projectIds', value: projectIds.join(',') },
+          { key: 'releaseSha', value: release.releaseSha },
+          { key: 'processStartedAt', value: release.processStartedAt },
+          { key: 'deliveryProtocol', value: release.deliveryProtocol },
+          { key: 'activeReleasePointer', value: release.activeReleasePointer },
+          { key: 'activeIncidentCount', value: blockingIncidents.length },
+          { key: 'federationPhase', value: federation!.status().phase },
+          { key: 'activeExecutionCount', value: localExecutions.filter((execution) => activePhases.has(execution.lifecycle.phase)).length },
+          { key: 'pendingExecutionCount', value: localExecutions.filter((execution) => pendingPhases.has(execution.lifecycle.phase)).length },
+          { key: 'pendingProcessQueueDepth', value: pendingProcessQueueDepth },
+          { key: 'pausedScopeCount', value: blockingIncidents.length },
+          { key: 'fatalIncidentCount', value: blockingIncidents.filter((incident) => incident.scope === 'server-runtime' && incident.severity === 'fatal').length },
+          { key: 'stateRuntimeDirtyCount', value: stateStatus.runtimeDirty.length },
+          { key: 'statePendingDeliveryCount', value: stateStatus.pendingDeliveryIds.length },
+          { key: 'contentQueueDepth', value: contentStatus.queueDepth },
+          { key: 'unavailableContentResourceCount', value: contentStatus.resources.filter((resource) => resource.state !== 'available').length },
+          { key: 'convergedProjectIds', value: convergedProjectIds.join(',') },
+          { key: 'converged', value: convergedProjectIds.length === projectIds.length },
+        ];
+      },
+      scheduleSupervisedExit: () => {
+        setImmediate(() => process.exit(0));
+      },
+    });
+  };
   const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
     const requestPath = requestUrl.pathname;
@@ -2134,6 +2425,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         ok: true,
         status: activeIncidents.length > 0 ? 'degraded' : 'ready',
         observedAt: new Date().toISOString(),
+        ...decisionOsReleaseHealthIdentity(runtime.decisionOsSettings),
         incidentLedger: incidentLedger.file,
         activeIncidentCount: activeIncidents.length,
         pausedTaskProjectIds: [...pausedTaskProjects.keys()].sort(),
@@ -2143,6 +2435,94 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         pausedProjectRuntimeIds: [...pausedProjectRuntimes].sort(),
         ...(requestPath === '/api/diagnostics/incidents' ? { incidents: incidentSnapshot.incidents } : {}),
       }));
+      return;
+    }
+    if (requestPath === '/api/delivery/admission-state' && request.method === 'GET') {
+      const localNodeId = federation.localOwner().ownerNodeId;
+      const projectIds = projectCatalog()
+        .filter((project) => project.available)
+        .map((project) => project.id)
+        .sort();
+      const activePhases = new Set(['preparing', 'starting', 'running', 'cancelling']);
+      const pendingPhases = new Set(['queued']);
+      const localExecutions = [...projectTaskStates.values()]
+        .flatMap((state) => state.executions.all())
+        .filter((execution) => execution.lifecycle.executorNodeId === localNodeId);
+      const pendingProcessQueueDepth = [
+        ...[...projectContexts.entries()].map(([root, context]) => ({ root, runtime: context.runtime })),
+        ...federatedSchedulerContexts.values(),
+      ].reduce((count, context) => count + pendingCodexProcessEntries(context.root, context.runtime).length, 0);
+      const incidentSnapshot = incidentLedger.snapshot();
+      const blockingIncidents = deliveryBlockingIncidents(incidentSnapshot.incidents);
+      const stateStatus = federationTaskStateReplicator?.diagnostics() ?? {
+        convergence: [],
+        runtimeDirty: [],
+        pendingDeliveryIds: [],
+      };
+      const contentStatus = federationContentStore.status();
+      const convergedProjectIds = projectIds.filter((projectId) => stateStatus.convergence.some((entry) => (
+        entry.peerId === 'relay' && entry.projectId === projectId && entry.converged
+      )));
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({
+        ok: true,
+        nodeId: localNodeId,
+        observedAt: new Date().toISOString(),
+        projectIds,
+        release: {
+          ok: true,
+          status: blockingIncidents.length > 0 ? 'degraded' : 'ready',
+          observedAt: new Date().toISOString(),
+          ...decisionOsReleaseHealthIdentity(runtime.decisionOsSettings),
+          activeIncidentCount: blockingIncidents.length,
+        },
+        federationPhase: federation.status().phase,
+        activeExecutionCount: localExecutions.filter((execution) => activePhases.has(execution.lifecycle.phase)).length,
+        pendingExecutionCount: localExecutions.filter((execution) => pendingPhases.has(execution.lifecycle.phase)).length,
+        pendingProcessQueueDepth,
+        pausedScopeCount: blockingIncidents.length,
+        fatalIncidentCount: blockingIncidents.filter((incident) => incident.scope === 'server-runtime' && incident.severity === 'fatal').length,
+        stateRuntimeDirtyCount: stateStatus.runtimeDirty.length,
+        statePendingDeliveryCount: stateStatus.pendingDeliveryIds.length,
+        contentQueueDepth: contentStatus.queueDepth,
+        unavailableContentResourceCount: contentStatus.resources.filter((resource) => resource.state !== 'available').length,
+        convergedProjectIds,
+      }));
+      return;
+    }
+    if (requestPath === '/api/internal/delivery' && request.method === 'POST') {
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      const requestScope = createDeliveryHttpRequestScope({ request, response });
+      const capability = String(request.headers['x-decision-os-delivery-capability'] ?? '');
+      const authority = capability ? federation.consumeDeliveryCapability(capability) : null;
+      if (!authority) {
+        requestScope.dispose();
+        response.statusCode = 403;
+        response.end(JSON.stringify({ ok: false, error: 'delivery_transport_capability_invalid' }));
+        return;
+      }
+      try {
+        const command = await readDeliveryRequestJson(request, requestScope.signal);
+        const receipt = await runLocalDeliveryCommand(command, requestScope.signal);
+        response.end(JSON.stringify({ ok: true, receipt }));
+      } catch (error) {
+        response.statusCode = error instanceof DeliveryHttpBoundaryError
+          ? error.statusCode
+          : error instanceof DeliveryNodeCommandError
+          ? error.statusCode
+          : error instanceof SyntaxError ? 400 : 500;
+        response.end(JSON.stringify({
+          ok: false,
+          error: error && typeof error === 'object' && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : error instanceof SyntaxError ? 'invalid_json' : 'delivery_node_action_failed',
+          message: error instanceof Error ? error.message : String(error),
+        }));
+      } finally {
+        requestScope.dispose();
+      }
       return;
     }
     if (globalRuntimeIncident) throw new RuntimeScopePausedError('server-runtime', globalRuntimeIncident.id);
@@ -2393,27 +2773,49 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
         if (execution.lifecycle.executorNodeId === localNodeId) {
           const executionRuntime = federatedSchedulerContexts.get(executionId)?.runtime;
-          const result = executionRuntime
-            ? buildTaskExecutionPresentation({ executionId, state, runtime: executionRuntime })
-            : { ok: false as const, statusCode: 202, error: 'task_execution_presentation_synchronizing' };
+          const key = executionPresentationKey(localProjectId, executionId, localNodeId);
+          const projection = executionPresentations.get(key);
+          const result = projection?.hydrated
+            ? { ok: true as const, presentation: replicatedTaskExecutionPresentation(execution, projection.events) }
+            : executionRuntime
+              ? buildTaskExecutionPresentation({ executionId, state, runtime: executionRuntime })
+              : { ok: false as const, statusCode: 202, error: 'task_execution_presentation_synchronizing' };
+          if ('presentation' in result && !projection?.hydrated) {
+            executionPresentations.set(key, { events: result.presentation.events, hydrated: true });
+          }
           const httpResult = taskExecutionPresentationHttpResult(executionId, result);
           response.statusCode = httpResult.statusCode;
           response.end(httpResult.body);
           return;
         }
-        const events = federatedExecutionPresentations.get(
-          `${localProjectId}\0${executionId}\0${execution.lifecycle.executorNodeId}`,
+        const projection = executionPresentations.get(
+          executionPresentationKey(localProjectId, executionId, execution.lifecycle.executorNodeId),
         );
-        if (!events) {
+        if (!projection?.hydrated) {
           const hydrated = locallyHydratedTaskExecutionPresentation(state, execution);
           if (hydrated) {
+            executionPresentations.set(
+              executionPresentationKey(localProjectId, executionId, execution.lifecycle.executorNodeId),
+              { events: hydrated.events, hydrated: true },
+            );
             response.end(JSON.stringify(hydrated));
             return;
           }
-          response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, [])));
+          const remote = await requestRemoteExecutionPresentation({
+            projectId: localProjectId,
+            execution,
+            request,
+            response,
+          });
+          if ('presentation' in remote) {
+            response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, remote.presentation.events)));
+          } else {
+            response.statusCode = remote.statusCode;
+            response.end(remote.body);
+          }
           return;
         }
-        response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, events)));
+        response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, projection.events)));
         return;
       }
       const remotePipelineRunRead = request.method === 'GET'
@@ -2454,9 +2856,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           response.end(JSON.stringify({ ok: false, error: 'Execution not found.', runId }));
           return;
         }
-        const events = federatedExecutionPresentations.get(
-          `${localProjectId}\0${execution.metadata.executionId}\0${execution.lifecycle.executorNodeId}`,
-        ) ?? locallyHydratedTaskExecutionPresentation(state, execution)?.events ?? [];
+        const events = executionPresentations.get(
+          executionPresentationKey(localProjectId, execution.metadata.executionId, execution.lifecycle.executorNodeId),
+        )?.events ?? locallyHydratedTaskExecutionPresentation(state, execution)?.events ?? [];
         response.end(JSON.stringify(replicatedCardSkillRunStatus({
           runId,
           ledgerId,
@@ -2697,6 +3099,51 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify({ ok: false, error: activeProject.diagnostic, projectId: activeProject.id }));
       return;
     }
+    if ((request.method === 'GET' || request.method === 'HEAD')) {
+      let decodedMarkdownPath = '';
+      try {
+        const candidate = decodeURIComponent(projectScope?.scopedPath ?? requestPath);
+        if (candidate.toLowerCase().endsWith('.md')) {
+          decodedMarkdownPath = projectScope && candidate.startsWith('/.decision-os/')
+            ? resolve(activeProject!.decisionOsRoot, candidate.slice('/.decision-os/'.length))
+            : candidate;
+        }
+      } catch {
+        decodedMarkdownPath = '';
+      }
+      if (decodedMarkdownPath) {
+        try {
+          const target = resolveMarkdownEditorTarget({
+            targetPath: decodedMarkdownPath,
+            projects: projectCatalogStore.projects(),
+            serverRoot: masterRoot,
+            projectId: projectScope?.projectId,
+            readLedger: (project, ledgerId, ledgerFile) => {
+              try {
+                if (ledgerId === tasksLedgerId) return structuredClone(taskStateForProject(project).projection().ledger);
+                const file = resolve(project.decisionOsRoot, ledgerFile.replace(/^\.decision-os\//, ''));
+                return JSON.parse(readFileSync(file, 'utf8')) as AnyRecord;
+              } catch {
+                return null;
+              }
+            },
+          });
+          response.statusCode = 302;
+          response.setHeader('cache-control', 'no-store');
+          response.setHeader('location', markdownEditorTargetLocation(target));
+          response.end();
+        } catch (error) {
+          const targetError = error instanceof MarkdownEditorTargetError
+            ? error
+            : new MarkdownEditorTargetError('markdown_editor_target_not_found', 404);
+          response.statusCode = targetError.statusCode;
+          response.setHeader('cache-control', 'no-store');
+          response.setHeader('content-type', 'application/json');
+          response.end(request.method === 'HEAD' ? undefined : JSON.stringify({ ok: false, error: targetError.code }));
+        }
+        return;
+      }
+    }
     if (projectScope
       && activeProject
       && (url === '/api/internal/task-executions/admit' || url === '/api/internal/task-executions/admit-batch')
@@ -2781,30 +3228,87 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       return;
     }
+    const deliveryDispatch = !projectScope && request.method === 'POST'
+      ? url.match(/^\/api\/federation\/nodes\/([^/]+)\/delivery$/)
+      : null;
+    if (deliveryDispatch) {
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      const targetNodeId = decodeRouteSegment(deliveryDispatch[1]);
+      const requestScope = createDeliveryHttpRequestScope({ request, response });
+      try {
+        authorizeLocalDeliveryDispatch({
+          authorization: Array.isArray(request.headers.authorization)
+            ? request.headers.authorization[0]
+            : request.headers.authorization,
+          settings: runtime.decisionOsSettings,
+        });
+        const command = parseDeliveryNodeCommand(await readDeliveryRequestJson(request, requestScope.signal));
+        const localNodeId = federation.localOwner().ownerNodeId;
+        if (targetNodeId === localNodeId) {
+          const receipt = await runLocalDeliveryCommand(command, requestScope.signal);
+          response.end(JSON.stringify({ ok: true, receipt }));
+          return;
+        }
+        const peer = federation.nodes().find((node) => node.nodeId === targetNodeId && node.online);
+        if (!peer) {
+          response.statusCode = 503;
+          response.end(JSON.stringify({ ok: false, error: 'delivery_node_offline', nodeId: targetNodeId }));
+          return;
+        }
+        const remote = await federation.requestDelivery(targetNodeId, command, { timeoutMs: 30_000, signal: requestScope.signal });
+        response.statusCode = remote.status;
+        response.end(remote.body);
+      } catch (error) {
+        response.statusCode = error instanceof DeliveryHttpBoundaryError
+          ? error.statusCode
+          : requestScope.signal.aborted
+            ? String(requestScope.signal.reason ?? '').includes('timeout') ? 504 : 499
+            : error instanceof DeliveryNodeCommandError ? error.statusCode
+              : error instanceof SyntaxError ? 400 : 422;
+        response.end(JSON.stringify({
+          ok: false,
+          error: error && typeof error === 'object' && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : error instanceof SyntaxError ? 'invalid_json' : 'delivery_node_command_invalid',
+          message: error instanceof Error ? error.message : String(error),
+        }));
+      } finally {
+        requestScope.dispose();
+      }
+      return;
+    }
     if (!projectScope && url === '/api/federation/nodes' && request.method === 'GET') {
       const localOwner = federation.localOwner();
-      const remoteProjects = federation.remoteProjects();
       const nodes = [
         {
           nodeId: localOwner.ownerNodeId,
           nodeLabel: localOwner.ownerNodeLabel,
           online: true,
           local: true,
-          projects: projects.map((project) => ({ projectId: project.id, name: project.name, available: project.available })),
+          projects: projects.filter((project) => project.available).map((project) => ({
+            projectId: project.id,
+            name: project.name,
+            available: project.available,
+            originFingerprint: project.originFingerprint,
+          })),
         },
-        ...federation.nodes().map((node) => ({
+        ...federation.topologyNodes().map((node) => ({
           nodeId: node.nodeId,
           nodeLabel: node.nodeLabel,
           online: node.online,
           local: false,
-          projects: remoteProjects
-            .filter((project) => project.ownerNodeId === node.nodeId)
-            .map((project) => ({ projectId: project.localProjectId, name: project.name, available: project.online })),
+          projects: node.projects.map((project) => ({
+            projectId: project.projectId,
+            name: project.projectId,
+            available: node.online,
+            originFingerprint: project.originFingerprint,
+          })),
         })),
       ];
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ ok: true, nodes }));
+      response.end(JSON.stringify({ ok: true, observedAt: new Date().toISOString(), nodes }));
       return;
     }
     if (!projectScope && url === '/api/federation/node-message-executions' && request.method === 'POST') {
@@ -3060,6 +3564,167 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const publishCardContentChange = context.publishCard;
     const publishLedgerContentChange = context.publishLedger;
     const localProject = activeProject ?? projectCatalog().find((project) => project.decisionOsRoot === decisionOsRoot);
+    const ledgerAuthoringDocument = (ledgerId: string): { ledger: AnyRecord; ledgerPath: string } | null => {
+      const registered = readCanonicalDecisionOsState({
+        action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json') },
+      }).ledgers.find((entry) => entry.id === ledgerId);
+      if (!registered) return null;
+      const ledgerPath = resolve(decisionOsRoot, registered.ledgerFile.replace(/^\.decision-os\//, ''));
+      if (ledgerId === tasksLedgerId && localProject) {
+        return { ledger: structuredClone(taskStateForProject(localProject).projection().ledger), ledgerPath };
+      }
+      if (!existsSync(ledgerPath)) return null;
+      return { ledger: JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord, ledgerPath };
+    };
+    const cardContentSaveRoute = url.match(/^\/api\/ledgers\/([^/]+)\/cards\/([^/]+)\/content$/);
+    const cardRevisionRetryRoute = url.match(/^\/api\/ledgers\/([^/]+)\/cards\/([^/]+)\/revisions\/retry$/);
+    const cardRevisionRoute = url.match(/^\/api\/ledgers\/([^/]+)\/cards\/([^/]+)\/revisions(?:\/([^/]+))?$/);
+    if (cardContentSaveRoute && request.method === 'PUT') {
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      if (!localProject) {
+        response.statusCode = 403;
+        response.end(JSON.stringify({ ok: false, code: 'content_read_only', error: 'The card is not locally owned.' }));
+        return;
+      }
+      const ledgerId = decodeRouteSegment(cardContentSaveRoute[1]);
+      const cardId = decodeRouteSegment(cardContentSaveRoute[2]);
+      const current = ledgerAuthoringDocument(ledgerId);
+      if (!current) {
+        response.statusCode = 404;
+        response.end(JSON.stringify({ ok: false, code: 'card_content_owner_not_found', error: 'The ledger was not found.' }));
+        return;
+      }
+      let payload: AnyRecord = {};
+      try { payload = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord; } catch {
+        // The controller returns the stable invalid payload response.
+      }
+      const result = await saveLedgerCardContentController({
+        projectId: localProject.id,
+        ledgerId,
+        cardId,
+        projectRoot: localProject.root,
+        decisionOsRoot,
+        ledger: current.ledger,
+        markdown: payload.markdown,
+        expectedContentRevision: payload.expectedContentRevision,
+        signal: serverCloseAbort.signal,
+        patchCard: async ({ markdown, mutationId }) => {
+          const latest = ledgerAuthoringDocument(ledgerId);
+          if (!latest) throw new Error('The ledger disappeared before the card mutation.');
+          const before = structuredClone(latest.ledger);
+          const after = structuredClone(latest.ledger);
+          const mutation: LedgerMutation = { action: 'patch-card', mutationId, cardPatch: { id: cardId, description: markdown } };
+          if (ledgerId === tasksLedgerId) {
+            await materializeTaskMutationInputs({
+              projectId: localProject.id,
+              decisionOsRoot,
+              ledger: before,
+              mutation,
+              store: taskStateForProject(localProject).store,
+              contentStore: federationContentStore,
+              drain: federationContentScheduler?.drain ?? null,
+            });
+          }
+          const applied = applyLedgerMutation({
+            decisionOsRoot,
+            ledgerPath: latest.ledgerPath,
+            ledger: after,
+            mutation,
+          });
+          if (applied.error) throw new Error(String(applied.error.body.error ?? 'The card mutation was rejected.'));
+          if (ledgerId === tasksLedgerId) {
+            const committed = await taskStateForProject(localProject).executeMutation(
+              mutation,
+              before,
+              after,
+              applied.changedContentFiles,
+            );
+            if (committed.changed) controlRoomProjectionStore?.invalidate(localProject.id, committed.localChanges);
+            const taskClock = taskStateForProject(localProject).store.clientClock();
+            return {
+              changedCard: ledgerCardProjection({ decisionOsRoot, ledgerId, ledger: committed.ledger, cardId }),
+              taskClock,
+              receipt: { mutationId, clock: taskClock, entities: committed.localChanges },
+            };
+          }
+          context.watcher.ignoreNext(latest.ledgerPath);
+          writeFileSync(latest.ledgerPath, JSON.stringify(after, null, 2));
+          context.watcher.refreshOwnership();
+          controlRoomProjectionStore?.invalidate(localProject.id);
+          federation?.publishContentChange();
+          ledgerRevisions.advance(ledgerId);
+          return { changedCard: ledgerCardProjection({ decisionOsRoot, ledgerId, ledger: after, cardId }) };
+        },
+        reloadLedger: () => {
+          const latest = ledgerAuthoringDocument(ledgerId);
+          if (!latest) throw new Error('The ledger disappeared after the card mutation.');
+          return latest.ledger;
+        },
+      });
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (cardRevisionRetryRoute && request.method === 'POST') {
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      if (!localProject) {
+        response.statusCode = 403;
+        response.end(JSON.stringify({ ok: false, code: 'content_read_only', error: 'The card is not locally owned.' }));
+        return;
+      }
+      const ledgerId = decodeRouteSegment(cardRevisionRetryRoute[1]);
+      const cardId = decodeRouteSegment(cardRevisionRetryRoute[2]);
+      const current = ledgerAuthoringDocument(ledgerId);
+      let payload: AnyRecord = {};
+      try { payload = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord; } catch {}
+      const result = current
+        ? await retryLedgerCardRevisionController({
+            projectId: localProject.id,
+            ledgerId,
+            cardId,
+            projectRoot: localProject.root,
+            decisionOsRoot,
+            ledger: current.ledger,
+            recoveryToken: payload.recoveryToken,
+            contentRevision: payload.contentRevision,
+            signal: serverCloseAbort.signal,
+          })
+        : { ok: false, statusCode: 404, code: 'card_content_owner_not_found', error: 'The ledger was not found.' };
+      response.statusCode = Number(result.statusCode);
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (cardRevisionRoute && request.method === 'GET') {
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      const ledgerId = decodeRouteSegment(cardRevisionRoute[1]);
+      const cardId = decodeRouteSegment(cardRevisionRoute[2]);
+      const commit = cardRevisionRoute[3] ? decodeRouteSegment(cardRevisionRoute[3]) : '';
+      const current = ledgerAuthoringDocument(ledgerId);
+      const result = !current
+        ? { ok: false, statusCode: 404, code: 'card_content_owner_not_found', error: 'The ledger was not found.' }
+        : commit
+          ? await readLedgerCardRevisionContentController({
+              decisionOsRoot,
+              ledger: current.ledger,
+              cardId,
+              commit,
+              signal: serverCloseAbort.signal,
+            })
+          : await readLedgerCardRevisionHistoryController({
+              decisionOsRoot,
+              ledger: current.ledger,
+              cardId,
+              cursor: requestUrl.searchParams.get('cursor'),
+              limit: Number(requestUrl.searchParams.get('limit') ?? '') || 50,
+              signal: serverCloseAbort.signal,
+            });
+      response.statusCode = Number(result.statusCode);
+      response.end(JSON.stringify(result));
+      return;
+    }
     const taskExecutionStateRead = request.method === 'GET'
       ? url.match(/^\/api\/tasks\/([^/]+)\/execution-state$/)
       : null;
@@ -3108,29 +3773,47 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const executorNodeId = execution.lifecycle.executorNodeId;
       const localExecutorNodeId = federation.localOwner().ownerNodeId;
       if (executorNodeId !== localExecutorNodeId) {
-        const events = federatedExecutionPresentations.get(
-          `${execution.metadata.projectId}\0${executionId}\0${executorNodeId}`,
-        );
-        if (!events) {
+        const key = executionPresentationKey(execution.metadata.projectId, executionId, executorNodeId);
+        const projection = executionPresentations.get(key);
+        if (!projection?.hydrated) {
           const hydrated = locallyHydratedTaskExecutionPresentation(executionState, execution);
           if (hydrated) {
+            executionPresentations.set(key, { events: hydrated.events, hydrated: true });
             response.end(JSON.stringify(hydrated));
             return;
           }
-          response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, [])));
+          const remote = await requestRemoteExecutionPresentation({
+            projectId: execution.metadata.projectId,
+            execution,
+            request,
+            response,
+          });
+          if ('presentation' in remote) {
+            response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, remote.presentation.events)));
+          } else {
+            response.statusCode = remote.statusCode;
+            response.end(remote.body);
+          }
           return;
         }
-        response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, events)));
+        response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, projection.events)));
         return;
       }
       // WHAT: Prefer the execution-scoped runtime used by federated pipeline work on this node.
       // WHY: Its live process registry can differ from the project page's ordinary request runtime.
       const presentationRuntime = federatedSchedulerContexts.get(executionId)?.runtime ?? requestRuntime;
-      const result = buildTaskExecutionPresentation({
-        executionId,
-        state: executionState,
-        runtime: presentationRuntime,
-      });
+      const key = executionPresentationKey(execution.metadata.projectId, executionId, localExecutorNodeId);
+      const projection = executionPresentations.get(key);
+      const result = projection?.hydrated
+        ? { ok: true as const, presentation: replicatedTaskExecutionPresentation(execution, projection.events) }
+        : buildTaskExecutionPresentation({
+          executionId,
+          state: executionState,
+          runtime: presentationRuntime,
+        });
+      if ('presentation' in result && !projection?.hydrated) {
+        executionPresentations.set(key, { events: result.presentation.events, hydrated: true });
+      }
       const httpResult = taskExecutionPresentationHttpResult(executionId, result);
       response.statusCode = httpResult.statusCode;
       response.end(httpResult.body);
@@ -3227,6 +3910,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             clock: taskClock,
             entities: taskCommit.localChanges,
           },
+          ...(taskCommit.contentGitRevision ? { gitRevision: taskCommit.contentGitRevision } : {}),
         } : {}),
         changedCard,
         changedThread,
@@ -3432,7 +4116,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (requestUrl.searchParams.get('refresh') === '1') invalidateFederatedSkillExportIndex();
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify(readFederatedSkillExportIndex().manifest));
+      response.end(JSON.stringify((await readFederatedSkillExportIndex()).manifest));
       return;
     }
     if (!projectScope && url === '/api/federation/skills-snapshot' && request.method === 'GET') {
@@ -3446,7 +4130,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify(readFederatedSkillExportIndex().snapshot(new Set([skillName]))));
+      response.end(JSON.stringify((await readFederatedSkillExportIndex()).snapshot(new Set([skillName]))));
       return;
     }
     if (!projectScope && url === '/api/federation/pipelines-snapshot' && request.method === 'GET') {
@@ -4034,6 +4718,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result));
       return;
     }
+    if (url.startsWith('/api/codex/executions/') && url.endsWith('/queue-skill') && request.method === 'POST') {
+      assertCodexRuntimeAvailable(requestRuntime);
+      const executionId = decodeRouteSegment(url.slice('/api/codex/executions/'.length, -'/queue-skill'.length));
+      const bodyBuffer = await readRequestBuffer(request);
+      const queuePayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const result = await queueCodexSkillAfterExecutionController({
+        action_payload: { ...queuePayload, executionId, onLedgerChange: publishLedgerContentChange },
+        runtime_state: requestRuntime,
+      });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify(result));
+      return;
+    }
     if (url.startsWith('/api/codex/pipelines/runs/') && url.endsWith('/cancel') && request.method === 'POST') {
       const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length, -'/cancel'.length));
       const bodyBuffer = await readRequestBuffer(request);
@@ -4107,10 +4811,89 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result));
       return;
     }
+    if (url === '/api/codex/skill-library' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      const createPayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const shared = createPayload.contentKind === 'federated-skill' || createPayload.contentKind === 'pipeline-prompt';
+      const createRuntime = shared
+        ? { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' }
+        : requestRuntime;
+      let result = applyOwnedSkillDetail(await createCodexSkillLibraryController({
+        action_payload: createPayload,
+        runtime_state: createRuntime,
+      }));
+      const skill = result.skill as AnyRecord | undefined;
+      if (result.ok === true && skill?.contentKind === 'federated-skill') {
+        result = { ...result, publication: await publishAuthoredFederatedSkill(String(skill.name ?? ''), 'create') };
+      }
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 201));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    const skillRevisionRetryRoute = url.match(/^\/api\/codex\/(skill-library|server-skills)\/([^/]+)\/revisions\/retry$/);
+    if (skillRevisionRetryRoute && request.method === 'POST') {
+      const serverOwned = skillRevisionRetryRoute[1] === 'server-skills';
+      const skillName = decodeRouteSegment(skillRevisionRetryRoute[2]);
+      const skillRuntime = serverOwned
+        ? { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' }
+        : requestRuntime;
+      const bodyBuffer = await readRequestBuffer(request);
+      const retryPayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      let result = applyOwnedSkillDetail(await retryCodexSkillRevisionController({
+        action_payload: { ...retryPayload, skillName },
+        runtime_state: skillRuntime,
+      }));
+      const skill = result.skill as AnyRecord | undefined;
+      if (result.ok === true && skill?.contentKind === 'federated-skill') {
+        result = { ...result, publication: await publishAuthoredFederatedSkill(skillName, 'retry') };
+      }
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    const skillRevisionRoute = url.match(/^\/api\/codex\/(skill-library|server-skills)\/([^/]+)\/revisions(?:\/([^/]+))?$/);
+    if (skillRevisionRoute && request.method === 'GET') {
+      const serverOwned = skillRevisionRoute[1] === 'server-skills';
+      const skillName = decodeRouteSegment(skillRevisionRoute[2]);
+      const commit = skillRevisionRoute[3] ? decodeRouteSegment(skillRevisionRoute[3]) : '';
+      const skillRuntime = serverOwned
+        ? { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' }
+        : requestRuntime;
+      const result = commit
+        ? await readCodexSkillRevisionContentController({ action_payload: { skillName, commit }, runtime_state: skillRuntime })
+        : await readCodexSkillRevisionHistoryController({
+            action_payload: {
+              skillName,
+              cursor: requestUrl.searchParams.get('cursor'),
+              limit: requestUrl.searchParams.get('limit'),
+            },
+            runtime_state: skillRuntime,
+          });
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
     if (url.startsWith('/api/codex/server-skills/') && request.method === 'GET') {
       const skillName = decodeRouteSegment(url.slice('/api/codex/server-skills/'.length));
       const skillRuntime = { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' };
-      const result = readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: skillRuntime });
+      const result = await readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: skillRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -4126,12 +4909,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           return {};
         }
       })();
-      const metadataOnly = Object.keys(savePayload).length > 0
-        && Object.keys(savePayload).every((key) => key === 'favorite' || key === 'tags');
       const skillRuntime = { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' };
-      const result = metadataOnly
-        ? saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: skillRuntime })
-        : { ok: false, statusCode: 400, error: 'Server skill updates accept only favorite and tags.', skillName };
+      let result = await saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: skillRuntime });
+      if (result.ok === false && result.recovery) {
+        recordIncident({
+          severity: 'warning',
+          scope: `content-authoring:${skillName}`,
+          component: 'codex-content-authoring',
+          operation: 'commit-authored-content',
+          error: String(result.error ?? 'Git revision failed.'),
+          context: { skillName, recovery: result.recovery },
+        });
+      }
+      if (result.ok === true && Object.prototype.hasOwnProperty.call(savePayload, 'markdown')) {
+        result = { ...result, publication: await publishAuthoredFederatedSkill(skillName, 'save') };
+      }
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -4139,7 +4931,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (url.startsWith('/api/codex/skill-library/') && request.method === 'GET') {
       const skillName = decodeRouteSegment(url.slice('/api/codex/skill-library/'.length));
-      const result = applyOwnedSkillDetail(readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: requestRuntime }));
+      const result = applyOwnedSkillDetail(await readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: requestRuntime }));
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -4160,8 +4952,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const saveRuntime = metadataOnly
         ? { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' }
         : requestRuntime;
-      const result = applyOwnedSkillDetail(saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: saveRuntime }));
-      if (result.ok === true && Object.prototype.hasOwnProperty.call(savePayload, 'markdown')) federation.publishManifest();
+      let result = applyOwnedSkillDetail(await saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: saveRuntime }));
+      const savedSkill = result.skill as AnyRecord | undefined;
+      if (result.ok === false && result.recovery) {
+        recordIncident({
+          severity: 'warning',
+          scope: `content-authoring:${skillName}`,
+          component: 'codex-content-authoring',
+          operation: 'commit-authored-content',
+          error: String(result.error ?? 'Git revision failed.'),
+          context: { skillName, recovery: result.recovery },
+        });
+      }
+      if (result.ok === true && Object.prototype.hasOwnProperty.call(savePayload, 'markdown') && savedSkill?.contentKind === 'federated-skill') {
+        result = { ...result, publication: await publishAuthoredFederatedSkill(skillName, 'save') };
+      }
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -4256,9 +5061,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           || right.metadata.executionId.localeCompare(left.metadata.executionId)
         ))[0] ?? null;
       if (replicatedExecution && replicatedExecution.lifecycle.executorNodeId !== federation.localOwner().ownerNodeId) {
-        const events = federatedExecutionPresentations.get(
-          `${replicatedExecution.metadata.projectId}\0${replicatedExecution.metadata.executionId}\0${replicatedExecution.lifecycle.executorNodeId}`,
-        ) ?? (replicatedState
+        const events = executionPresentations.get(
+          executionPresentationKey(
+            replicatedExecution.metadata.projectId,
+            replicatedExecution.metadata.executionId,
+            replicatedExecution.lifecycle.executorNodeId,
+          ),
+        )?.events ?? (replicatedState
           ? locallyHydratedTaskExecutionPresentation(replicatedState, replicatedExecution)?.events
           : undefined) ?? [];
         const result = replicatedCardSkillRunStatus({
@@ -4581,6 +5390,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           ? 'ledgers-canvas.json'
           : String(tab?.ledgerFile ?? '').replace(/^\.decision-os\//, '');
       const ledgerPath = resolve(decisionOsRoot, ledgerFile);
+      const hasLedgerSource = hasLedgerProjectionSource({ ledgerId: tabId, ledgerPath, runtime: requestRuntime });
       response.setHeader('content-type', 'application/json');
       if (!ledgerFile) {
         response.statusCode = 404;
@@ -4588,7 +5398,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         return;
       }
       if (isLedgersCanvas) ensureLedgersCanvasDocument({ decisionOsRoot });
-      if (tabId !== 'state' && request.method !== 'GET' && existsSync(ledgerPath)) {
+      if (tabId !== 'state' && request.method !== 'GET' && hasLedgerSource) {
         const bodyBuffer = await readRequestBuffer(request);
         const mutation = bodyBuffer.length > 0 ? JSON.parse(bodyBuffer.toString('utf8')) as LedgerMutation : {};
         const ledger = (tabId === 'tasks' && localProject
@@ -4678,7 +5488,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         await persistLedgerMutationAndRespond(tabId, ledgerPath, beforeLedger, ledger, mutation, mutationResult.changedContentFiles, response);
         return;
       }
-      if (existsSync(ledgerPath)) {
+      if (hasLedgerSource) {
         const ledger = isLedgersCanvas
           ? ensureLedgersCanvasDocument({ decisionOsRoot }).document
           : tabId === 'tasks' && localProject
@@ -4691,7 +5501,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           ? { projectId: activeProject?.id ?? '', projectName: projectNameForDecisionOsRoot(decisionOsRoot), projectColor: activeProject?.color ?? '#38d9e8', ledgers: stateRead.ledgers }
           : hydrateLedgerCardContent(ledger, decisionOsRoot)));
       } else {
-        response.end(JSON.stringify({ ok: false, missing: ledgerPath }));
+        response.statusCode = 404;
+        response.end(JSON.stringify({ ok: false, error: 'ledger_source_not_found', missing: ledgerPath }));
       }
       return;
     }

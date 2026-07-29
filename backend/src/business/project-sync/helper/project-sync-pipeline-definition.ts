@@ -1,3 +1,7 @@
+/**
+ * WHAT: Defines the immutable built-in project synchronization pipeline shape.
+ * WHY: Pipeline content discriminators must remain explicit when the server seeds this protocol workflow.
+ */
 import type { CodexPipeline, CodexPipelineStep } from '../../../../../shared/schemas/codex-pipeline-types.js';
 
 export const projectSynchronizationPipelineId = 'project-synchronization';
@@ -15,7 +19,13 @@ export function projectSynchronizationPipelineDefinition(now = new Date().toISOS
     id: `${projectSynchronizationPipelineId}-${suffix}`,
     name,
     purpose: `${name} through the authenticated project synchronization protocol.`,
-    skills: [{ id: `${projectSynchronizationPipelineId}-${suffix}-skill`, skillName, codexModel: null, codexEffort: null }],
+    skills: [{
+      id: `${projectSynchronizationPipelineId}-${suffix}-skill`,
+      skillName,
+      contentKind: 'federated-skill' as const,
+      codexModel: null,
+      codexEffort: null,
+    }],
     createdAt: now,
     updatedAt: now,
   }));

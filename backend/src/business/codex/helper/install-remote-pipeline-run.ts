@@ -10,12 +10,17 @@ import {
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { TaskExecutionLaunchRequest } from './task-execution-router.js';
 import {
+  assertCodexPipelineStoreAvailable,
   codexPipelineStoreWriteBlocker,
+  mutateCodexPipelineStore,
   readCodexPipelineStore,
-  writeCodexPipelineStore,
 } from './codex-pipeline-store.js';
 import { resolvePipelineLedgerContext } from './codex-pipeline-runner.js';
 import { resolveCodexPipelineRunDirectory } from './resolve-codex-pipeline-run-directory.js';
+import {
+  assertPipelinePromptRunSkillSnapshot,
+  assertPipelineRunSkillPromptEvidence,
+} from './pipeline-prompt-snapshot.js';
 import { scanCodexSkills } from './scan-codex-skills.js';
 import { runtimeServerRoot } from './server-skill-context.js';
 
@@ -31,6 +36,8 @@ function topology(run: CodexPipelineRun): string {
   return JSON.stringify({
     id: run.id,
     restartOfPipelineRunId: run.restartOfPipelineRunId ?? null,
+    queuedAfterExecutionId: run.queuedAfterExecutionId ?? null,
+    initialInputCardId: run.initialInputCardId ?? null,
     pipelineId: run.pipelineId,
     pipelineName: run.pipelineName,
     temporary: run.temporary,
@@ -51,6 +58,12 @@ function topology(run: CodexPipelineRun): string {
         id: skill.id,
         pipelineSkillId: skill.pipelineSkillId,
         skillName: skill.skillName,
+        contentKind: skill.contentKind,
+        ...(skill.contentKind === 'pipeline-prompt' ? {
+          contentRevision: skill.contentRevision,
+          contentCommit: skill.contentCommit,
+          promptSnapshot: skill.promptSnapshot,
+        } : {}),
         runId: skill.runId,
         executionId: skill.executionId,
         codexModel: skill.codexModel,
@@ -72,6 +85,7 @@ function assertPendingManifest(run: CodexPipelineRun, requests: TaskExecutionLau
   for (let index = 0; index < flattened.length; index += 1) {
     const { step, skill } = flattened[index];
     const request = requests[index];
+    assertPipelineRunSkillPromptEvidence(skill);
     if (step.status !== 'pending' || step.startedAt !== null || step.finishedAt !== null || step.error
       || skill.status !== 'pending' || skill.startedAt !== null || skill.finishedAt !== null || skill.error
       || request.pipelineRunId !== run.id
@@ -84,7 +98,9 @@ function assertPendingManifest(run: CodexPipelineRun, requests: TaskExecutionLau
       || request.ownerCardId !== step.outputCardId
       || request.model !== skill.codexModel
       || request.effort !== skill.codexEffort
-      || request.predecessorExecutionId !== (index === 0 ? null : flattened[index - 1].skill.executionId)) {
+      || request.predecessorExecutionId !== (index === 0
+        ? run.queuedAfterExecutionId ?? null
+        : flattened[index - 1].skill.executionId)) {
       throw new Error('task_execution_pipeline_manifest_topology_mismatch');
     }
   }
@@ -100,7 +116,9 @@ function assertExecutorCanRun(input: {
     serverRoot: runtimeServerRoot(input.runtime),
   }).map((skill) => skill.name));
   for (const skill of input.run.steps.flatMap((step) => step.skills)) {
-    if (!availableSkills.has(skill.skillName)) {
+    if (skill.contentKind === 'pipeline-prompt') {
+      assertPipelinePromptRunSkillSnapshot(skill);
+    } else if (!availableSkills.has(skill.skillName)) {
       throw new Error(`task_execution_pipeline_skill_unavailable:${skill.skillName}`);
     }
     if (!supportedModels.has(skill.codexModel)) {
@@ -120,6 +138,7 @@ export function installRemotePipelineRun(input: {
 }): { installed: boolean; run: CodexPipelineRun } {
   assertPendingManifest(input.run, input.requests);
   const normalized = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  assertCodexPipelineStoreAvailable(normalized);
   const corruption = codexPipelineStoreWriteBlocker(normalized);
   if (corruption) throw new Error(`task_execution_pipeline_store_unavailable:${corruption.message}`);
   const existing = normalized.store.runs.find((run) => run.id === input.run.id);
@@ -156,9 +175,12 @@ export function installRemotePipelineRun(input: {
       })),
     })),
   };
-  writeCodexPipelineStore({
+  mutateCodexPipelineStore({
     decisionOsRoot: input.decisionOsRoot,
-    store: { ...normalized.store, runs: [...normalized.store.runs, localRun] },
+    mutate: (store) => ({
+      ...store,
+      runs: store.runs.some((run) => run.id === localRun.id) ? store.runs : [...store.runs, localRun],
+    }),
   });
   return { installed: true, run: localRun };
 }
@@ -181,6 +203,7 @@ export function installFederatedPipelineRun(input: {
     throw new Error('task_execution_federated_pipeline_manifest_invalid');
   }
   const normalized = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  assertCodexPipelineStoreAvailable(normalized);
   const corruption = codexPipelineStoreWriteBlocker(normalized);
   if (corruption) throw new Error(`task_execution_pipeline_store_unavailable:${corruption.message}`);
   const existing = normalized.store.runs.find((run) => run.id === input.run.id);
@@ -203,9 +226,12 @@ export function installFederatedPipelineRun(input: {
       })),
     })),
   };
-  writeCodexPipelineStore({
+  mutateCodexPipelineStore({
     decisionOsRoot: input.decisionOsRoot,
-    store: { ...normalized.store, runs: [...normalized.store.runs, localRun] },
+    mutate: (store) => ({
+      ...store,
+      runs: store.runs.some((run) => run.id === localRun.id) ? store.runs : [...store.runs, localRun],
+    }),
   });
   return { installed: true, run: localRun };
 }
@@ -215,12 +241,10 @@ export function removeInstalledRemotePipelineRun(input: {
   runId: string;
 }): void {
   const normalized = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  assertCodexPipelineStoreAvailable(normalized);
   if (!normalized.store.runs.some((run) => run.id === input.runId)) return;
-  writeCodexPipelineStore({
+  mutateCodexPipelineStore({
     decisionOsRoot: input.decisionOsRoot,
-    store: {
-      ...normalized.store,
-      runs: normalized.store.runs.filter((run) => run.id !== input.runId),
-    },
+    mutate: (store) => ({ ...store, runs: store.runs.filter((run) => run.id !== input.runId) }),
   });
 }

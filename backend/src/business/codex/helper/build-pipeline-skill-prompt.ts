@@ -2,8 +2,19 @@
  * WHAT: Builds the deterministic prompt for one skill inside a durable pipeline run.
  * WHY: Every isolated Codex process needs explicit source, stage input, and output ownership.
  */
+import type { CodexContentKind } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import {
+  assertPipelinePromptRunSkillSnapshot,
+  assertPipelineRunSkillPromptEvidence,
+} from './pipeline-prompt-snapshot.js';
+import { renderPipelinePromptRuntimeVariables } from './pipeline-prompt-library.js';
+
 export function buildPipelineSkillPrompt(input: {
   skillName: string;
+  contentKind: CodexContentKind;
+  contentRevision?: string;
+  contentCommit?: string;
+  promptSnapshot?: string;
   ledgerFile: string;
   pipelineRunId: string;
   pipelineName: string;
@@ -17,8 +28,53 @@ export function buildPipelineSkillPrompt(input: {
   outputCardId: string;
   outputSubtaskPosition: number;
   outputMarkdownFile: string;
+  taskThreadId?: string;
+  taskConversationContext?: Record<string, unknown>;
+  projectId?: string;
+  ledgerId?: string;
+  executionId?: string;
   serverSkill?: { markdown: string; packageRoot: string } | null;
 }): string {
+  assertPipelineRunSkillPromptEvidence(input);
+  if (input.contentKind === 'pipeline-prompt') {
+    assertPipelinePromptRunSkillSnapshot(input);
+    const card = input.taskConversationContext?.card && typeof input.taskConversationContext.card === 'object'
+      ? input.taskConversationContext.card as Record<string, unknown>
+      : {};
+    const thread = input.taskConversationContext?.thread && typeof input.taskConversationContext.thread === 'object'
+      ? input.taskConversationContext.thread as Record<string, unknown>
+      : {};
+    const previousSkillResult = input.stepInputCardId === input.outputParentCardId
+      ? 'No preceding skill result exists; this gate was launched from the canonical task.'
+      : input.stepInputCardContent;
+    return renderPipelinePromptRuntimeVariables(input.promptSnapshot, {
+      MASTER_TASK: String(card.markdown ?? ''),
+      FULL_THREAD: String(thread.markdown ?? ''),
+      PREVIOUS_SKILL_RESULT: previousSkillResult,
+      EXECUTION_CONTEXT: JSON.stringify({
+        projectId: input.projectId ?? '',
+        ledgerId: input.ledgerId ?? '',
+        ledgerFile: input.ledgerFile,
+        masterTaskId: input.outputParentCardId,
+        masterTaskTitle: String(card.title ?? ''),
+        threadId: input.taskThreadId ?? String(thread.id ?? ''),
+        pipelineRunId: input.pipelineRunId,
+        pipelineName: input.pipelineName,
+        executionId: input.executionId ?? '',
+        sourceCardId: input.sourceCardId,
+        sourceCardTitle: input.sourceCardTitle,
+        stepId: input.stepId,
+        stepTitle: input.stepTitle,
+        inputCardId: input.stepInputCardId,
+        output: {
+          parentCardId: input.outputParentCardId,
+          cardId: input.outputCardId,
+          subtaskPosition: input.outputSubtaskPosition,
+          markdownFile: input.outputMarkdownFile,
+        },
+      }, null, 2),
+    });
+  }
   const serverSkill = input.serverSkill ? [
     '',
     `Decision OS server skill package: ${input.serverSkill.packageRoot}`,
@@ -27,6 +83,12 @@ export function buildPipelineSkillPrompt(input: {
     input.serverSkill.markdown,
     '```',
   ] : [];
+  const directInput = [
+    'Direct previous skill result:',
+    '```markdown',
+    input.stepInputCardContent,
+    '```',
+  ];
   return [
     `$${input.skillName}`,
     '',
@@ -48,10 +110,7 @@ export function buildPipelineSkillPrompt(input: {
     `Output card role: linked subtask of ${input.outputParentCardId}`,
     ...serverSkill,
     '',
-    'Input card content:',
-    '```markdown',
-    input.stepInputCardContent,
-    '```',
+    ...directInput,
     '',
     `Write the final result to this Markdown file: ${input.outputMarkdownFile}`,
     'Update the output subtask card title to a concise result-specific title by running:',

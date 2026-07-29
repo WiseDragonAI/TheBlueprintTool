@@ -138,6 +138,7 @@ export const state: any = {
   threadRunAnnouncementByThreadId: {},
   threadRunAnnouncedSequenceByThreadId: {},
   threadPanelOpen: false,
+  threadPanelFullscreen: false,
   ledgerContentRefresh: {
     inFlight: false,
     ledgerReasons: [],

@@ -14,7 +14,7 @@
 ## B. Runtime Entry
 
 1. `bin/decision-os-server.mjs` derives repository-owned runtime paths from its own location.
-2. The launcher sets `DECISION_OS_FRONTEND_ROOT`, `DECISION_OS_REPOSITORY_SETTINGS_FILE`, and `TSX_TSCONFIG_PATH`.
+2. The launcher unconditionally sets `DECISION_OS_FRONTEND_ROOT` to its own `repoRoot/frontend`, sets `DECISION_OS_REPOSITORY_SETTINGS_FILE`, and sets `TSX_TSCONFIG_PATH`; inherited frontend and tsconfig paths cannot select another checkout.
 3. The launcher starts `backend/src/server.ts` through the repository `tsx` loader.
 4. The server launch directory defines the master project catalog boundary.
 5. On this workstation, the decision-os workspace uses port `50150` under the server procedure in `AGENTS.md`.
@@ -57,5 +57,6 @@
 
 ## F. Detailed Architecture
 
-1. [Epoch-3 task state and federation](./epoch-3-task-state-and-federation.md) is the historical architecture and rollback reference for offline migration, structural entities, immutable content, durability, relay anti-entropy, derived remote stores, lazy content routing, and production diagnostics.
-2. [Epoch-4 task assignment, execution, and content](./epoch-4-task-assignment-execution-and-content.md) defines durable assignment, replicated execution, thread-note and Markdown consistency, immutable execution artifacts, in-place media references, and the recoverable node migration transaction.
+1. [Codex content authoring](./codex-content-authoring.md) defines owner-scoped skill, prompt, and Task-card Markdown APIs; direct Markdown routing; exact-byte Git recovery; cursor history; persistent CodeMirror sessions; immutable prompt snapshots; and federation publication.
+2. [Epoch-3 task state and federation](./epoch-3-task-state-and-federation.md) is the historical architecture and rollback reference for offline migration, structural entities, immutable content, durability, relay anti-entropy, derived remote stores, lazy content routing, and production diagnostics.
+3. [Epoch-4 task assignment, execution, and content](./epoch-4-task-assignment-execution-and-content.md) defines durable assignment, replicated execution, thread-note and Markdown consistency, immutable execution artifacts, in-place media references, and the recoverable node migration transaction.

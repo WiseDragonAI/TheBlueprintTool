@@ -5,7 +5,7 @@
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { startHttpServerController } from '@backend/business/server/controller/start-http-server-controller.js';
-import { readDecisionOsSettings } from '@backend/business/server/helper/read-decision-os-settings.js';
+import { decisionOsReleaseHealthIdentity, readDecisionOsSettings } from '@backend/business/server/helper/read-decision-os-settings.js';
 import { createRuntimeIncidentLedger } from '@backend/business/server/helper/runtime-incident-ledger.js';
 
 async function main(): Promise<void> {
@@ -44,6 +44,7 @@ async function main(): Promise<void> {
           ok: true,
           status: 'degraded',
           startupPaused: true,
+          ...decisionOsReleaseHealthIdentity(runtime_state.decisionOsSettings),
           incidentLedger: incidents.file,
           activeIncidentCount: snapshot.incidents.filter((entry) => entry.status === 'paused').length,
           ...(path === '/api/diagnostics/incidents' ? { incidents: snapshot.incidents } : {}),

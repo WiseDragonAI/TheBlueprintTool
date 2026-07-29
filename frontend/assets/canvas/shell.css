@@ -282,6 +282,11 @@ h2 { font-size: 18px; }
     -8px 0 24px rgba(0, 0, 0, 0.74);
 }
 
+.shell.has-inspector .panel.is-thread-fullscreen {
+  width: 100vw;
+  box-shadow: none;
+}
+
 .telemetry-panel[hidden],
 .thread-panel[hidden] {
   display: none;

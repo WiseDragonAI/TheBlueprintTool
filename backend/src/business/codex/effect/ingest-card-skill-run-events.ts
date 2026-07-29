@@ -41,10 +41,13 @@ export function createCardSkillRunEventIngestor(input: {
   const decoder = new StringDecoder('utf8');
   const pendingEvents = new Map<number, NormalizedRunEvent>();
   const pendingPresentationEvents = new Map<number, NormalizedRunEvent>();
+  let userPrompt = '';
+  let startPresentationQueued = false;
   const batchDelayMs = Math.max(0, Number(input.batchDelayMs ?? 25));
   const presentationBatchDelayMs = Math.max(batchDelayMs, Number(input.presentationBatchDelayMs ?? 500));
   let nextLine = Math.max(0, Number(input.startLine ?? 0)) + 1;
   let remainder = '';
+  let newlineSearchOffset = 0;
   let timer: NodeJS.Timeout | undefined;
   let presentationTimer: NodeJS.Timeout | undefined;
   let turnSequence = 0;
@@ -108,13 +111,21 @@ export function createCardSkillRunEventIngestor(input: {
       // WHAT: Accept only object-shaped Codex events.
       // WHY: Scalars and arrays have no lifecycle event contract to persist.
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
-      const event = normalizeCardSkillRunEvent({ line, event: parsed as AnyRecord });
+      let event = normalizeCardSkillRunEvent({ line, event: parsed as AnyRecord });
+      if (event.type === 'decision_os.user_prompt' || event.type === 'decision_os.developer_prompt') userPrompt = event.text;
+      else if (userPrompt && (event.type === 'thread.started' || event.type === 'turn.started')) {
+        event = { ...event, text: userPrompt };
+      }
       persistTelemetry(parsed as AnyRecord, event);
       if (event.type === 'turn.started') input.onTurnStarted?.(event, new Date().toISOString());
       if (event.kind === 'run_status' && (event.status === 'complete' || event.status === 'failed' || event.status === 'cancelled')) {
         input.onTerminalEvent?.(event);
       }
-      pendingPresentationEvents.set(event.line, event);
+      const start = event.type === 'thread.started' || event.type === 'turn.started';
+      if (!(start && (userPrompt || startPresentationQueued))) {
+        pendingPresentationEvents.set(event.line, event);
+        if (start) startPresentationQueued = true;
+      }
       // WHAT: Queue only events that have a durable thread representation.
       // WHY: Empty informational records remain available in the JSONL source without creating blank notes.
       if (event.persist) pendingEvents.set(event.line, event);
@@ -190,13 +201,27 @@ export function createCardSkillRunEventIngestor(input: {
     }, presentationBatchDelayMs);
     presentationTimer.unref?.();
   };
+  const ingestText = (text: string): void => {
+    const previousLength = remainder.length;
+    remainder += text;
+    let lineStart = 0;
+    let newline = remainder.indexOf('\n', Math.min(newlineSearchOffset, previousLength));
+    while (newline >= 0) {
+      enqueueLine(remainder.slice(lineStart, newline));
+      lineStart = newline + 1;
+      newline = remainder.indexOf('\n', lineStart);
+    }
+    if (lineStart > 0) {
+      remainder = remainder.slice(lineStart);
+      newlineSearchOffset = Math.max(0, remainder.length - 1);
+    } else {
+      newlineSearchOffset = Math.max(0, remainder.length - 1);
+    }
+  };
 
   return {
     ingest(chunk) {
-      remainder += typeof chunk === 'string' ? chunk : decoder.write(chunk);
-      const lines = remainder.split('\n');
-      remainder = lines.pop() ?? '';
-      for (const line of lines) enqueueLine(line);
+      ingestText(typeof chunk === 'string' ? chunk : decoder.write(chunk));
       schedulePersist();
       schedulePresentation();
     },
@@ -211,7 +236,7 @@ export function createCardSkillRunEventIngestor(input: {
         clearTimeout(presentationTimer);
         presentationTimer = undefined;
       }
-      remainder += decoder.end();
+      ingestText(decoder.end());
       // WHAT: Treat the final unterminated fragment as one physical JSONL line.
       // WHY: Codex may close stdout without a trailing newline.
       if (remainder) {

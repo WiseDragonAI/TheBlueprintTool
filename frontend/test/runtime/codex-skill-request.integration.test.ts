@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { loadCodexSkills, loadCodexSkillsResult } from '../../src/runtime/codex/effect/load-codex-skills.js';
 import { loadCodexPipelines } from '../../src/runtime/codex/effect/load-codex-pipelines.js';
 import { loadCodexSkillLibrary } from '../../src/runtime/codex/effect/load-codex-skill-library.js';
+import { loadCodexSkillRevision, loadCodexSkillRevisionHistory } from '../../src/runtime/codex/effect/load-codex-skill-revision.js';
 import { requestCardSkillProcess } from '../../src/runtime/codex/effect/request-card-skill-process.js';
 import { requestCardSkillRunCancel } from '../../src/runtime/codex/effect/request-card-skill-run-cancel.js';
 import { requestThreadCodexSessionDelete } from '../../src/runtime/codex/effect/request-thread-codex-session-delete.js';
@@ -16,9 +17,10 @@ import { requestThreadCodexProcess } from '../../src/runtime/codex/effect/reques
 import { requestCodexPipelineSave } from '../../src/runtime/codex/effect/request-codex-pipeline-save.js';
 import { requestCodexPipelineRun } from '../../src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { requestCodexPipelineRunCancel, requestCodexPipelineRunRestart, requestCodexPipelineRunStatus } from '../../src/runtime/codex/effect/request-codex-pipeline-run-status.js';
-import { requestCodexSkillLibrarySave } from '../../src/runtime/codex/effect/request-codex-skill-library-save.js';
+import { requestCodexSkillLibrarySave, requestCodexSkillRevisionRetry } from '../../src/runtime/codex/effect/request-codex-skill-library-save.js';
+import { requestCodexSkillLibraryCreate } from '../../src/runtime/codex/effect/request-codex-skill-library-create.js';
 import { requestCodexSkillFavoriteSave, requestCodexSkillMetadataSave } from '../../src/runtime/codex/effect/request-codex-skill-favorite-save.js';
-import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, bindPipelineStepRunWidget, pipelineLatestLabel, purgeCardSkillRunLog, resumeExternallyStartedCardSkillRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
+import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, bindPipelineStepRunWidget, pipelineLatestLabel, purgeCardSkillRunLog, resumeExternallyStartedCardSkillRun, resumeExternallyStartedPipelineRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
 import type { CardSkillRunEvent, CardSkillRunStatus, CardSkillRunSummary } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunId, cardCodexThreadRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
 import { groupSequentialToolCalls, mergeThreadRunEvents } from '../../src/runtime/codex/helper/thread-run-log.js';
@@ -152,6 +154,169 @@ test('loadCodexSkillsResult distinguishes catalog failure from a valid empty cat
   }
 });
 
+test('skill creation keeps shared content projectless and workspace content project-scoped', async () => {
+  const previousFetch = globalThis.fetch;
+  const kinds = ['federated-skill', 'workspace-skill', 'pipeline-prompt'] as const;
+  let index = 0;
+  try {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      const contentKind = kinds[index];
+      assert.equal(url, contentKind === 'workspace-skill'
+        ? '/p/project-a/api/codex/skill-library'
+        : '/api/codex/skill-library');
+      assert.equal(init?.method, 'POST');
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      assert.deepEqual(body, {
+        name: `content-${index}`,
+        description: `Description ${index}`,
+        instructions: `Instructions ${index}`,
+        contentKind: kinds[index],
+      });
+      assert.equal('path' in body, false);
+      index += 1;
+      return new Response(JSON.stringify({
+        ok: true,
+        skill: {
+          name: String(body.name),
+          description: String(body.description),
+          contentKind,
+          executionVisibility: contentKind === 'pipeline-prompt' ? 'pipeline-only' : 'agent',
+        },
+      }), { status: 201 });
+    }) as typeof fetch;
+    for (let requestIndex = 0; requestIndex < kinds.length; requestIndex += 1) {
+      const result = await requestCodexSkillLibraryCreate({
+        name: `content-${requestIndex}`,
+        description: `Description ${requestIndex}`,
+        instructions: `Instructions ${requestIndex}`,
+        contentKind: kinds[requestIndex],
+        requestProjectId: 'project-a',
+      });
+      assert.equal(result.ok, true);
+      assert.equal(result.skill?.contentKind, kinds[requestIndex]);
+      assert.equal(result.skill?.executionVisibility, kinds[requestIndex] === 'pipeline-prompt' ? 'pipeline-only' : 'agent');
+    }
+    assert.equal(index, kinds.length);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('server-owned skill authoring uses the projectless detail, revision, and metadata routes', async () => {
+  const previousFetch = globalThis.fetch;
+  const requests: Array<{ url: string; method: string }> = [];
+  try {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      requests.push({ url, method: init?.method ?? 'GET' });
+      if (url.endsWith('/revisions?limit=50')) {
+        return new Response(JSON.stringify({ ok: true, history: [], nextCursor: null }), { status: 200 });
+      }
+      if (url.endsWith('/revisions/commit-a')) {
+        return new Response(JSON.stringify({
+          ok: true,
+          revision: { commit: 'commit-a', authoredAt: '2026-07-28T00:00:00.000Z', subject: 'Revise', markdown: '# Skill', patch: '' },
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        ok: true,
+        skill: {
+          name: 'global-skill',
+          markdown: '# Skill',
+          references: [],
+          history: [],
+        },
+      }), { status: 200 });
+    }) as typeof fetch;
+
+    await loadCodexSkillLibrary('global-skill', '');
+    await requestCodexSkillLibrarySave({
+      skillName: 'global-skill',
+      markdown: '# Skill',
+      revision: 'revision-a',
+      defaultCodexModel: null,
+      defaultCodexEffort: null,
+      requestProjectId: '',
+    });
+    await requestCodexSkillMetadataSave('global-skill', { tags: ['Implementation'] }, '');
+    await loadCodexSkillRevisionHistory('global-skill', { requestProjectId: '' });
+    await loadCodexSkillRevision('global-skill', 'commit-a', '');
+    await requestCodexSkillRevisionRetry({
+      skillName: 'global-skill',
+      contentRevision: 'revision-a',
+      recoveryToken: 'retry-a',
+      requestProjectId: '',
+    });
+
+    assert.deepEqual(requests, [
+      { url: '/api/codex/server-skills/global-skill', method: 'GET' },
+      { url: '/api/codex/server-skills/global-skill', method: 'PUT' },
+      { url: '/api/codex/server-skills/global-skill', method: 'PUT' },
+      { url: '/api/codex/server-skills/global-skill/revisions?limit=50', method: 'GET' },
+      { url: '/api/codex/server-skills/global-skill/revisions/commit-a', method: 'GET' },
+      { url: '/api/codex/server-skills/global-skill/revisions/retry', method: 'POST' },
+    ]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('authored-content read, save, retry, and history requests retain one explicit project context', async () => {
+  const previousFetch = globalThis.fetch;
+  const requests: Array<{ url: string; method: string }> = [];
+  try {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      requests.push({ url, method: init?.method ?? 'GET' });
+      if (url.endsWith('/revisions?limit=50')) {
+        return new Response(JSON.stringify({ ok: true, history: [], nextCursor: null }), { status: 200 });
+      }
+      if (url.endsWith('/revisions/commit-a')) {
+        return new Response(JSON.stringify({
+          ok: true,
+          revision: { commit: 'commit-a', authoredAt: '2026-07-28T00:00:00.000Z', subject: 'Revise', markdown: '# Prompt', patch: '' },
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        ok: true,
+        skill: {
+          name: 'shared-prompt',
+          markdown: '# Prompt',
+          revision: 'revision-a',
+          contentKind: 'pipeline-prompt',
+          executionVisibility: 'pipeline-only',
+        },
+      }), { status: 200 });
+    }) as typeof fetch;
+
+    await loadCodexSkillLibrary('shared-prompt', 'project-a');
+    await requestCodexSkillLibrarySave({
+      skillName: 'shared-prompt',
+      markdown: '# Prompt',
+      revision: 'revision-a',
+      defaultCodexModel: null,
+      defaultCodexEffort: null,
+      requestProjectId: 'project-a',
+    });
+    await requestCodexSkillRevisionRetry({
+      skillName: 'shared-prompt',
+      contentRevision: 'revision-a',
+      recoveryToken: 'recovery-a',
+      requestProjectId: 'project-a',
+    });
+    await loadCodexSkillRevisionHistory('shared-prompt', { requestProjectId: 'project-a' });
+    await loadCodexSkillRevision('shared-prompt', 'commit-a', 'project-a');
+
+    assert.deepEqual(requests, [
+      { url: '/p/project-a/api/codex/skill-library/shared-prompt', method: 'GET' },
+      { url: '/p/project-a/api/codex/skill-library/shared-prompt', method: 'PUT' },
+      { url: '/p/project-a/api/codex/skill-library/shared-prompt/revisions/retry', method: 'POST' },
+      { url: '/p/project-a/api/codex/skill-library/shared-prompt/revisions?limit=50', method: 'GET' },
+      { url: '/p/project-a/api/codex/skill-library/shared-prompt/revisions/commit-a', method: 'GET' },
+    ]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test('pipeline clients preserve ordered reusable definitions and lifecycle request contracts', async () => {
   const previousFetch = globalThis.fetch;
   const pipeline = {
@@ -166,10 +331,24 @@ test('pipeline clients preserve ordered reusable definitions and lifecycle reque
     id: 'step-a',
     name: 'Analyze',
     purpose: 'Read the source.',
-    skills: [{ id: 'skill-a', skillName: 'analysis', codexModel: null, codexEffort: 'high' as const }],
+    skills: [{ id: 'skill-a', skillName: 'analysis', contentKind: 'workspace-skill' as const, codexModel: null, codexEffort: 'high' as const }],
     createdAt: '2026-07-10T00:00:00.000Z',
     updatedAt: '2026-07-10T00:00:00.000Z'
   };
+  const availableContent = [{
+    name: 'pipeline-outline',
+    description: 'Pipeline-only outline.',
+    source: 'pipeline-prompt',
+    editable: true,
+    readOnlyReason: null,
+    revision: 'prompt-a',
+    defaultCodexModel: null,
+    defaultCodexEffort: null,
+    effectiveCodexModel: '',
+    effectiveCodexEffort: '',
+    contentKind: 'pipeline-prompt',
+    executionVisibility: 'pipeline-only',
+  }];
   let requestIndex = 0;
   try {
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
@@ -177,7 +356,7 @@ test('pipeline clients preserve ordered reusable definitions and lifecycle reque
       if (requestIndex === 1) {
         assert.equal(url, '/api/codex/pipelines');
         assert.equal(init, undefined);
-        return new Response(JSON.stringify({ ok: true, pipelines: [pipeline], steps: [step], empty: false, invalidReferences: [], issues: [] }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true, pipelines: [pipeline], steps: [step], availableContent, empty: false, invalidReferences: [], issues: [] }), { status: 200 });
       }
       if (requestIndex === 2 || requestIndex === 3) {
         assert.equal(url, requestIndex === 2 ? '/api/codex/pipelines' : '/api/codex/pipelines/delivery%2Fpath');
@@ -214,6 +393,8 @@ test('pipeline clients preserve ordered reusable definitions and lifecycle reque
     assert.equal(library.ok, true);
     assert.deepEqual(library.pipelines[0].stepIds, ['step-a']);
     assert.equal(library.steps[0].skills[0].codexModel, null);
+    assert.equal(library.availableContent[0].contentKind, 'pipeline-prompt');
+    assert.equal(library.availableContent[0].executionVisibility, 'pipeline-only');
     const saveDraft = {
       pipeline: { id: pipeline.id, name: pipeline.name, purpose: pipeline.purpose, stepIds: ['step-a'] },
       steps: [{ id: step.id, name: step.name, purpose: step.purpose, skills: step.skills }]
@@ -237,6 +418,94 @@ test('queued pipeline labels expose the one-based FIFO position', () => {
   const step = { name: 'Analysis' } as any;
   const skill = { skillName: 'analyze' } as any;
   assert.equal(pipelineLatestLabel(result, step, skill, 'pending'), 'Queued · position 2');
+});
+
+test('pipeline cards poll lifecycle without querying execution presentations', async () => {
+  const previousDocument = (globalThis as unknown as { document?: unknown }).document;
+  const previousFetch = globalThis.fetch;
+  const previousWindow = (globalThis as unknown as { window?: unknown }).window;
+  const widget = fakeCodexRunWidget();
+  const requests: string[] = [];
+  let status: 'running' | 'complete' = 'running';
+  const skill = {
+    id: 'skill-run-a',
+    pipelineSkillId: 'skill-a',
+    skillName: 'analysis',
+    runId: 'run-a',
+    executionId: 'execution-a',
+    status: 'running',
+    codexModel: 'gpt-5.6-sol',
+    codexEffort: 'medium',
+    stdoutFile: 'run.jsonl',
+    stderrFile: 'run.log',
+    startedAt: '2026-07-29T00:00:00.000Z',
+    finishedAt: null,
+    error: '',
+    stdoutAvailable: true,
+    stderrAvailable: true,
+    logAvailable: true,
+    lastLogWriteAt: '2026-07-29T00:00:01.000Z',
+  };
+  const step = {
+    id: 'step-run-a',
+    stepId: 'step-a',
+    name: 'Analyze',
+    purpose: 'Analyze.',
+    outputCardId: 'output-a',
+    outputCard: { id: 'output-a', title: 'Output', contentAvailable: true, contentBytes: 10 },
+    status: 'running',
+    startedAt: '2026-07-29T00:00:00.000Z',
+    finishedAt: null,
+    error: '',
+    skills: [skill],
+  };
+  try {
+    (globalThis as unknown as { document: unknown }).document = { contains: () => true };
+    (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+    globalThis.fetch = (async (url: string) => {
+      requests.push(url);
+      const terminal = status === 'complete';
+      return new Response(JSON.stringify({
+        ok: true,
+        run: {
+          id: 'pipeline-run-a',
+          status,
+          steps: [{ ...step, status, skills: [{ ...skill, status }] }],
+        },
+        activeStep: terminal ? null : step,
+        activeSkill: terminal ? null : skill,
+        canCancel: !terminal,
+        canRestart: terminal,
+        canContinue: terminal,
+      }), { status: 200 });
+    }) as typeof fetch;
+
+    bindPipelineStepRunWidget({
+      ledgerId: 'tasks',
+      cardId: 'output-a',
+      runId: 'run-a',
+      pipelineRunId: 'pipeline-run-a',
+      pipelineStepId: 'step-a',
+      element: widget,
+    });
+    await waitFor(() => widget.dataset.runStatus === 'running');
+    status = 'complete';
+    assert.equal(resumeExternallyStartedPipelineRun({
+      ledgerId: 'tasks',
+      pipelineRunId: 'pipeline-run-a',
+      cardId: 'output-a',
+      runId: 'run-a',
+    }), true);
+    await waitFor(() => widget.dataset.runStatus === 'complete');
+
+    assert.equal(requests.length, 2);
+    assert.equal(requests.every((url) => url === '/api/codex/pipelines/runs/pipeline-run-a'), true);
+    assert.equal(requests.some((url) => url.includes('/api/task-executions/')), false);
+  } finally {
+    (globalThis as unknown as { document?: unknown }).document = previousDocument;
+    (globalThis as unknown as { window?: unknown }).window = previousWindow;
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test('pipeline-card continuation preserves pending status and cancels the accepted execution', async () => {
@@ -343,7 +612,7 @@ test('skill-library clients encode identity, exclude paths, and surface revision
   try {
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
       requestIndex += 1;
-      assert.equal(url, '/api/codex/skill-library/workspace%2Fskill');
+      assert.equal(url, '/p/project-a/api/codex/skill-library/workspace%2Fskill');
       if (requestIndex === 1) {
         assert.equal(init, undefined);
         return new Response(JSON.stringify({ ok: true, skill }), { status: 200 });
@@ -361,14 +630,15 @@ test('skill-library clients encode identity, exclude paths, and surface revision
       return new Response(JSON.stringify({ ok: false, error: 'Revision conflict.', currentRevision: 'revision-b' }), { status: 409 });
     }) as typeof fetch;
 
-    const detail = await loadCodexSkillLibrary(skill.name);
+    const detail = await loadCodexSkillLibrary(skill.name, 'project-a');
     assert.equal(detail.skill?.editable, true);
     const save = await requestCodexSkillLibrarySave({
       skillName: skill.name,
       markdown: skill.markdown,
       revision: skill.revision,
       defaultCodexModel: null,
-      defaultCodexEffort: 'high'
+      defaultCodexEffort: 'high',
+      requestProjectId: 'project-a',
     });
     assert.equal(save.ok, false);
     assert.equal(save.conflict, true);
@@ -382,12 +652,12 @@ test('skill favorite save sends only the favorite value and returns canonical de
   const previousFetch = globalThis.fetch;
   try {
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
-      assert.equal(url, '/api/codex/skill-library/system%2Fskill');
+      assert.equal(url, '/p/project-a/api/codex/skill-library/system%2Fskill');
       assert.equal(init?.method, 'PUT');
       assert.deepEqual(JSON.parse(String(init?.body)), { favorite: true });
       return new Response(JSON.stringify({ ok: true, skill: { name: 'system/skill', favorite: true } }), { status: 200 });
     }) as typeof fetch;
-    const result = await requestCodexSkillFavoriteSave('system/skill', true);
+    const result = await requestCodexSkillFavoriteSave('system/skill', true, 'project-a');
     assert.equal(result.ok, true);
     assert.equal(result.skill?.favorite, true);
   } finally {
@@ -399,12 +669,12 @@ test('skill tag save sends path-free metadata and returns canonical tags', async
   const previousFetch = globalThis.fetch;
   try {
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
-      assert.equal(url, '/api/codex/skill-library/system%2Fskill');
+      assert.equal(url, '/p/project-a/api/codex/skill-library/system%2Fskill');
       assert.equal(init?.method, 'PUT');
       assert.deepEqual(JSON.parse(String(init?.body)), { tags: ['Research'] });
       return new Response(JSON.stringify({ ok: true, skill: { name: 'system/skill', tags: ['Research'] } }), { status: 200 });
     }) as typeof fetch;
-    const result = await requestCodexSkillMetadataSave('system/skill', { tags: ['Research'] });
+    const result = await requestCodexSkillMetadataSave('system/skill', { tags: ['Research'] }, 'project-a');
     assert.deepEqual(result.skill?.tags, ['Research']);
   } finally {
     globalThis.fetch = previousFetch;

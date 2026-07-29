@@ -26,10 +26,12 @@ type FakeElement = {
   children: FakeElement[];
   classList: { toggle(name: string, force?: boolean): boolean; add(...names: string[]): void; remove(...names: string[]): void; contains(name: string): boolean };
   append(...nodes: FakeElement[]): void;
+  prepend(...nodes: FakeElement[]): void;
   appendChild(node: FakeElement): FakeElement;
   replaceChildren(...nodes: FakeElement[]): void;
   querySelector(selector: string): FakeElement | null;
   querySelectorAll(selector: string): FakeElement[];
+  closest(selector: string): FakeElement | null;
   setAttribute(name: string, value: string): void;
   addEventListener(type: string, listener: Listener): void;
   removeEventListener(type: string, listener: Listener): void;
@@ -119,6 +121,13 @@ function fakeElement(tagName = 'div', className = ''): FakeElement {
         element.children.push(node);
       }
     },
+    prepend(...nodes: FakeElement[]) {
+      for (const node of [...nodes].reverse()) {
+        if (node.parentElement) node.parentElement.children = node.parentElement.children.filter((child) => child !== node);
+        node.parentElement = element;
+        element.children.unshift(node);
+      }
+    },
     appendChild(node: FakeElement) {
       element.append(node);
       return node;
@@ -130,6 +139,14 @@ function fakeElement(tagName = 'div', className = ''): FakeElement {
     },
     querySelector(selector: string) { return queryAll(element, selector)[0] ?? null; },
     querySelectorAll(selector: string) { return queryAll(element, selector); },
+    closest(selector: string) {
+      let current: FakeElement | null = element;
+      while (current) {
+        if (matches(current, selector)) return current;
+        current = current.parentElement;
+      }
+      return null;
+    },
     setAttribute(name: string, value: string) {
       if (name.startsWith('data-')) {
         const key = name.slice(5).replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
@@ -162,6 +179,9 @@ function installDom(): { root: FakeElement; heading: FakeElement; codexLog: Fake
   const shell = fakeElement('main', 'shell');
   const target = fakeElement('div', 'thread-target');
   const heading = fakeElement('div', 'thread-heading');
+  const fullscreen = fakeElement('button', 'thread-fullscreen');
+  fullscreen.dataset.action = 'toggle-thread-fullscreen';
+  heading.append(fullscreen);
   const logPanel = fakeElement('section', 'thread-log-panel');
   const logScroll = fakeElement('div', 'thread-log-scroll');
   const codexLog = fakeElement('div', 'thread-codex-log');
@@ -169,6 +189,7 @@ function installDom(): { root: FakeElement; heading: FakeElement; codexLog: Fake
   logScroll.append(codexLog);
   logPanel.append(logScroll);
   root.append(panel, inspector, shell, target, heading, logPanel, telemetry);
+  inspector.append(heading);
   activeElement = null;
 
   (globalThis as unknown as { document: unknown }).document = {
@@ -424,6 +445,31 @@ test('thread selection persists the complete default pair and synchronizes a mou
     assert.equal(root.querySelector('.thread-panel')?.hidden, true);
   } finally {
     globalThis.fetch = previousFetch;
+  }
+});
+
+test('thread fullscreen toggles the inspector width without replacing the active log', async () => {
+  const { root, codexLog } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { toggleThreadPanelFullscreen } = await import('../../../../src/runtime/thread/effect/apply-thread-panel-fullscreen.js');
+  const panel = root.querySelector('.panel') as FakeElement;
+  const button = root.querySelector('[data-action="toggle-thread-fullscreen"]') as FakeElement;
+  try {
+    state.threadPanelFullscreen = false;
+
+    toggleThreadPanelFullscreen();
+
+    assert.equal(panel.classList.contains('is-thread-fullscreen'), true);
+    assert.equal(button.title, 'Restore thread panel');
+    assert.equal(root.querySelector('.thread-codex-log'), codexLog);
+
+    toggleThreadPanelFullscreen();
+
+    assert.equal(panel.classList.contains('is-thread-fullscreen'), false);
+    assert.equal(button.title, 'Expand thread panel');
+    assert.equal(root.querySelector('.thread-codex-log'), codexLog);
+  } finally {
+    state.threadPanelFullscreen = false;
   }
 });
 
@@ -821,6 +867,95 @@ test('Codex Log counts continuations as separate runs with execution-scoped metr
     state.activeLedger = null;
     state.threadSelectedRunIdByThreadId = {};
     state.threadSelectedExecutionIdByThreadId = {};
+    state.threadTaskExecutionStateByThreadId = {};
+    state.threadExecutionPresentationByThreadId = {};
+  }
+});
+
+test('live Codex Log events preserve the viewport and every disclosure state', async () => {
+  const { root, codexLog } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadCodexLog } = await import('../../../../src/runtime/thread/effect/render-thread-codex-log.js');
+  const { renderThreadCodexLogUpdate } = await import('../../../../src/runtime/thread/effect/render-thread-codex-log-update.js');
+  const threadId = 'thread-card-live-interaction';
+  const execution = executionState({
+    executionId: 'execution-live-interaction',
+    sessionId: 'codex-skill-live-interaction',
+    phase: 'running',
+  });
+  const prompt = {
+    id: 'prompt',
+    kind: 'run_status',
+    title: 'User prompt',
+    text: 'Inspect the current task.',
+    status: 'running',
+    severity: 'info',
+  };
+  const tool = {
+    id: 'tool-one',
+    kind: 'tool_call',
+    title: 'Inspect',
+    command: 'rg current task',
+    status: 'completed',
+    exitCode: '0',
+    severity: 'info',
+  };
+  try {
+    state.activeTab = 'specs';
+    state.activeLedger = {
+      cards: [{ id: 'card-live-interaction', title: 'Live interaction' }],
+      annotations: [],
+      relationships: [],
+      notes: { [threadId]: [] },
+    };
+    state.threadId = threadId;
+    state.threadPanelOpen = true;
+    state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
+    state.threadLogFollowBottomByThreadId = { [threadId]: false };
+    state.threadTaskExecutionStateByThreadId = {
+      [threadId]: taskExecutionSummary(
+        'card-live-interaction',
+        [{ sessionId: execution.sessionId, executions: [execution] }],
+        [execution.executionId],
+      ),
+    };
+    state.threadExecutionPresentationByThreadId = {
+      [threadId]: executionPresentation(execution, [prompt, tool]),
+    };
+
+    renderThreadCodexLog();
+    const promptDisclosure = codexLog.querySelector('[data-event-key="prompt"]') as FakeElement & { open: boolean };
+    const toolDisclosure = codexLog.querySelector('[data-tool-event-key="tool-one"]') as FakeElement & { open: boolean };
+    promptDisclosure.open = true;
+    toolDisclosure.open = true;
+    const viewport = root.querySelector('.thread-log-scroll') as FakeElement;
+    viewport.scrollTop = 240;
+    viewport.scrollHeight = 1_200;
+    viewport.clientHeight = 400;
+
+    state.threadExecutionPresentationByThreadId[threadId] = executionPresentation(execution, [
+      prompt,
+      tool,
+      {
+        id: 'message',
+        kind: 'agent_message',
+        title: 'Codex message',
+        text: 'A new event arrived.',
+        status: '',
+        severity: 'info',
+      },
+    ]);
+    renderThreadCodexLogUpdate();
+
+    assert.equal(viewport.scrollTop, 240);
+    assert.equal((codexLog.querySelector('[data-event-key="prompt"]') as FakeElement & { open: boolean }).open, true);
+    assert.equal((codexLog.querySelector('[data-tool-event-key="tool-one"]') as FakeElement & { open: boolean }).open, true);
+  } finally {
+    state.threadId = '';
+    state.activeLedger = null;
+    state.threadPanelOpen = false;
+    state.threadActiveTabByThreadId = {};
+    state.threadLogFollowBottomByThreadId = {};
     state.threadTaskExecutionStateByThreadId = {};
     state.threadExecutionPresentationByThreadId = {};
   }

@@ -29,6 +29,7 @@ function executionItem(record: ExecutionRecord, queuePosition: number | null): T
     finishedAt: record.lifecycle.finishedAt,
     model: record.metadata.model,
     effort: record.metadata.effort,
+    predecessorExecutionId: record.metadata.predecessorExecutionId,
     executorNodeId: record.lifecycle.executorNodeId,
     revision: record.lifecycle.revision,
     queuePosition,

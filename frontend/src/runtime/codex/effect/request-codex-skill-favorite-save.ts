@@ -3,6 +3,7 @@
  * WHY: Favorite toggles must not read or rewrite SKILL.md.
  */
 import type { CodexSkillLibraryDetail } from './load-codex-skill-library.js';
+import { codexSkillAuthoringPath } from '../helper/codex-skill-authoring-path.js';
 
 export type CodexSkillFavoriteSaveResult = {
   ok: boolean;
@@ -11,8 +12,12 @@ export type CodexSkillFavoriteSaveResult = {
   error?: string;
 };
 
-export async function requestCodexSkillMetadataSave(skillName: string, metadata: { favorite?: boolean; tags?: readonly string[] }): Promise<CodexSkillFavoriteSaveResult> {
-  const response = await fetch(`/api/codex/skill-library/${encodeURIComponent(skillName)}`, {
+export async function requestCodexSkillMetadataSave(
+  skillName: string,
+  metadata: { favorite?: boolean; tags?: readonly string[] },
+  requestProjectId: string,
+): Promise<CodexSkillFavoriteSaveResult> {
+  const response = await fetch(codexSkillAuthoringPath(`/${encodeURIComponent(skillName)}`, requestProjectId), {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(metadata),
@@ -24,6 +29,6 @@ export async function requestCodexSkillMetadataSave(skillName: string, metadata:
   return { ok, statusCode: response.status, skill: body.skill, error: ok ? undefined : String(body.error ?? `Request failed (${response.status}).`) };
 }
 
-export function requestCodexSkillFavoriteSave(skillName: string, favorite: boolean): Promise<CodexSkillFavoriteSaveResult> {
-  return requestCodexSkillMetadataSave(skillName, { favorite });
+export function requestCodexSkillFavoriteSave(skillName: string, favorite: boolean, requestProjectId: string): Promise<CodexSkillFavoriteSaveResult> {
+  return requestCodexSkillMetadataSave(skillName, { favorite }, requestProjectId);
 }

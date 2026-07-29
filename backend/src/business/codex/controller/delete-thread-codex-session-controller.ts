@@ -7,7 +7,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
-import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
+import { hasLedgerProjectionSource, readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
 import { taskExecutionState } from '../helper/task-execution-runtime.js';
 
@@ -49,7 +49,9 @@ export async function deleteThreadCodexSessionController(input: { action_payload
   if (!tab) return { ok: false, statusCode: 404, error: 'Ledger not found.', ledgerId };
   const ledgerFile = String(tab.ledgerFile ?? '').replace(/^\.decision-os\//, '');
   const ledgerPath = resolve(decisionOsRoot, ledgerFile);
-  if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.', ledgerId };
+  if (!isInside(decisionOsRoot, ledgerPath) || !hasLedgerProjectionSource({ ledgerId, ledgerPath, runtime })) {
+    return { ok: false, statusCode: 404, error: 'Ledger source not found.', ledgerId };
+  }
 
   const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime }) as AnyRecord & { cards?: AnyRecord[] };
   const ledgerText = JSON.stringify(ledger);

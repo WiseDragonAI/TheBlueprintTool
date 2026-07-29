@@ -14,6 +14,7 @@ test('project color owns zone creation and task hierarchy accents', () => {
   assert.match(mobile, /openMobileThread\(card, cardAccent\)/);
   assert.match(mobile, /elements\['card-view'\]\.style\.setProperty\('--zone-color', cardAccent\);\s*elements\['card-view'\]\.style\.setProperty\('--accent', cardAccent\);/);
   assert.match(mobile, /projectFetch\(`\/api\/ledgers\/\$\{encodeURIComponent\(ledgerId\)\}\/cards\/\$\{encodeURIComponent\(requestedCard\)\}`/);
-  assert.match(mobile, /if \(card\) \{[\s\S]*state\.activeZoneId = asText\(zone\.id\);\s*state\.activeZoneColor = asText\(zone\.color\);[\s\S]*renderCard\(card\);/);
+  assert.match(mobile, /if \(card\) \{[\s\S]*const cardZone = zone \?\? zones\.find/);
+  assert.match(mobile, /state\.activeZoneId = asText\(cardZone\?\.id \?\? 'ungrouped'\);\s*state\.activeZoneColor = asText\(cardZone\?\.color \?\? '#9ba3ad'\);[\s\S]*renderCard\(card\);/);
   assert.doesNotMatch(mobile, /color: '#38d9e8', label: 'New task intake'/);
 });

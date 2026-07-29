@@ -16,7 +16,9 @@ test('builds the complete encoded project route hierarchy', () => {
   assert.equal(projectPath('dev/project a'), '/projects/dev%2Fproject%20a');
   assert.equal(ledgerPathForProject('dev/project a', 'specs'), '/p/dev%2Fproject%20a/ledgers/specs');
   assert.equal(zonePathForProject('a', 'specs', 'zone 1'), '/p/a/ledgers/specs/zones/zone%201');
-  assert.equal(cardPathForProject('a', 'specs', 'zone 1', 'card/1'), '/p/a/ledgers/specs/zones/zone%201/cards/card%2F1');
+  assert.equal(cardPathForProject('a', 'specs', 'zone 1', 'card/1'), '/p/a/ledgers/specs/cards/card%2F1');
+  assert.equal(cardPathForProject('a', 'specs', 'card/1'), '/p/a/ledgers/specs/cards/card%2F1');
+  assert.equal(isProjectCardPath('/p/a/ledgers/specs/cards/card%2F1'), true);
   assert.equal(isProjectCardPath('/p/a/ledgers/specs/zones/zone%201/cards/card%2F1'), true);
   assert.equal(isProjectCardPath('/p/a/ledgers/specs'), false);
   assert.equal(isProjectCardPath('/projects'), false);

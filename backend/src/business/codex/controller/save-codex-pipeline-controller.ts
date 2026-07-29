@@ -3,10 +3,11 @@
  * WHY: The library API must persist ordered definitions while retaining stale references for operator repair.
  */
 import { dirname, resolve } from 'node:path';
-import type { CodexPipeline, CodexPipelineSkill, CodexPipelineStep } from '../../../../../shared/schemas/codex-pipeline-types.js';
-import { codexPipelineStoreWriteBlocker, readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
+import type { CodexContentKind, CodexPipeline, CodexPipelineSkill, CodexPipelineStep } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import { codexPipelineStoreWriteBlocker, mutateCodexPipelineStore, readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { isAllowedCodexEffort, isAllowedCodexModel } from '../helper/resolve-codex-command.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
+import { scanPipelinePrompts } from '../helper/pipeline-prompt-library.js';
 import { runtimeServerRoot } from '../helper/server-skill-context.js';
 import { serverPipelineDecisionOsRoot } from '../helper/server-pipeline-catalog.js';
 
@@ -36,10 +37,18 @@ function parseSkill(value: unknown, stepId: string): { skill?: CodexPipelineSkil
   if (input.codexEffort !== null && input.codexEffort !== undefined && !isAllowedCodexEffort(input.codexEffort)) {
     return { error: invalid('Unsupported pipeline skill Codex effort.', { stepId, skillId: id, skillName, codexEffort: input.codexEffort }) };
   }
+  const requestedKind = text(input.contentKind);
+  if (!requestedKind) {
+    return { error: invalid('Pipeline content kind is required.', { stepId, skillId: id, skillName }) };
+  }
+  if (requestedKind && requestedKind !== 'federated-skill' && requestedKind !== 'workspace-skill' && requestedKind !== 'pipeline-prompt') {
+    return { error: invalid('Unsupported pipeline content kind.', { stepId, skillId: id, skillName, contentKind: requestedKind }) };
+  }
   return {
     skill: {
       id,
       skillName,
+      contentKind: requestedKind as CodexContentKind,
       codexModel: input.codexModel === null || input.codexModel === undefined ? null : text(input.codexModel) as CodexPipelineSkill['codexModel'],
       codexEffort: input.codexEffort === null || input.codexEffort === undefined ? null : text(input.codexEffort) as CodexPipelineSkill['codexEffort'],
     },
@@ -106,8 +115,31 @@ export function saveCodexPipelineController(
   const timestamp = new Date().toISOString();
   const parsedSteps = parseSteps(payload.steps, timestamp);
   if (parsedSteps.error) return parsedSteps.error;
-  const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) }).map((skill) => skill.name);
-  const before = readCodexPipelineStore({ decisionOsRoot, availableSkillNames });
+  const availableSkills = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) });
+  const availablePrompts = scanPipelinePrompts(serverPipelineDecisionOsRoot(runtime, requestDecisionOsRoot));
+  const availableContentKinds = new Map<string, CodexContentKind>([
+    ...availableSkills.map((skill): [string, CodexContentKind] => [
+      skill.name,
+      skill.source === 'server' ? 'federated-skill' : 'workspace-skill',
+    ]),
+    ...availablePrompts.map((prompt): [string, CodexContentKind] => [prompt.name, 'pipeline-prompt']),
+  ]);
+  const availableSkillNames = [...availableContentKinds.keys()];
+  for (const step of parsedSteps.steps ?? []) {
+    for (const skill of step.skills) {
+      const availableKind = availableContentKinds.get(skill.skillName);
+      if (availableKind && skill.contentKind !== availableKind) {
+        return invalid('Pipeline content kind does not match the selected content identity.', {
+          stepId: step.id,
+          skillId: skill.id,
+          skillName: skill.skillName,
+          contentKind: skill.contentKind,
+          availableKind,
+        });
+      }
+    }
+  }
+  const before = readCodexPipelineStore({ decisionOsRoot, availableSkillNames, availableContentKinds });
   const corruption = codexPipelineStoreWriteBlocker(before);
   if (corruption) return { ok: false, statusCode: 503, error: 'The Codex pipeline store is invalid and has been preserved for recovery.', detail: corruption.message };
   const existing = before.store.pipelines.find((pipeline) => pipeline.id === id);
@@ -121,19 +153,37 @@ export function saveCodexPipelineController(
     createdAt: existing?.createdAt || text(pipelineInput.createdAt) || timestamp,
     updatedAt: timestamp,
   };
-  const stepsById = new Map(before.store.steps.map((step) => [step.id, step]));
-  for (const supplied of parsedSteps.steps ?? []) {
-    const prior = stepsById.get(supplied.id);
-    stepsById.set(supplied.id, { ...supplied, createdAt: prior?.createdAt || supplied.createdAt });
-  }
-  const pipelines = existing
-    ? before.store.pipelines.map((entry) => entry.id === id ? pipeline : entry)
-    : [...before.store.pipelines, pipeline];
   try {
-    const normalized = writeCodexPipelineStore({
+    const normalized = mutateCodexPipelineStore({
       decisionOsRoot,
       availableSkillNames,
-      store: { ...before.store, pipelines, steps: Array.from(stepsById.values()) },
+      availableContentKinds,
+      mutate: (store) => {
+        const current = store.pipelines.find((entry) => entry.id === id);
+        if (operation === 'create' && current) {
+          const error = new Error('A pipeline with this id already exists.');
+          Object.assign(error, { code: 'pipeline_identity_conflict' });
+          throw error;
+        }
+        if (operation === 'update' && !current) {
+          const error = new Error('Pipeline not found.');
+          Object.assign(error, { code: 'pipeline_not_found' });
+          throw error;
+        }
+        const currentPipeline = { ...pipeline, createdAt: current?.createdAt || pipeline.createdAt };
+        const stepsById = new Map(store.steps.map((step) => [step.id, step]));
+        for (const supplied of parsedSteps.steps ?? []) {
+          const prior = stepsById.get(supplied.id);
+          stepsById.set(supplied.id, { ...supplied, createdAt: prior?.createdAt || supplied.createdAt });
+        }
+        return {
+          ...store,
+          pipelines: current
+            ? store.pipelines.map((entry) => entry.id === id ? currentPipeline : entry)
+            : [...store.pipelines, currentPipeline],
+          steps: Array.from(stepsById.values()),
+        };
+      },
     });
     // WHAT: Scope save validation to the pipeline represented by this response.
     // WHY: Invalid references in an independent server pipeline must not make a successful project-pipeline save appear invalid.
@@ -149,6 +199,13 @@ export function saveCodexPipelineController(
       issues: normalized.issues,
     };
   } catch (error) {
+    const code = error && typeof error === 'object' ? String((error as AnyRecord).code ?? '') : '';
+    if (code === 'pipeline_identity_conflict') {
+      return { ok: false, statusCode: 409, error: 'A pipeline with this id already exists.', pipelineId: id };
+    }
+    if (code === 'pipeline_not_found') {
+      return { ok: false, statusCode: 404, error: 'Pipeline not found.', pipelineId: id };
+    }
     return {
       ok: false,
       statusCode: 500,

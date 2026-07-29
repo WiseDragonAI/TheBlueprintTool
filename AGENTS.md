@@ -122,6 +122,7 @@
 ### Server Restart Ownership
 
 - **Do not restart or stop the server unless the operator explicitly asks.**
+- **Standing canary authorization:** agents may restart the Decision OS canary on port `50151` when work is explicitly scoped to the `dev` canary. This authorization does not apply to port `50150` or any production server.
 
 decision-os serves every discovered `.decision-os` project below the server launch directory. The
 Control Room is always `/`, all projects remain simultaneously accessible, and project-owned resources

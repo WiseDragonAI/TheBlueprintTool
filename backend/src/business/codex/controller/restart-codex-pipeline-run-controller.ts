@@ -46,6 +46,7 @@ export async function restartCodexPipelineRunController(
     skills: step.skills.map((skill) => ({
       id: skill.pipelineSkillId,
       skillName: skill.skillName,
+      contentKind: skill.contentKind ?? 'federated-skill',
       codexModel: skill.codexModel as CodexPipelineStep['skills'][number]['codexModel'],
       codexEffort: skill.codexEffort as CodexPipelineStep['skills'][number]['codexEffort'],
     })),

@@ -33,6 +33,9 @@ export function routeScope(path: string): RouteScope {
   if (route[0] === 'p' && route[1] && route[2] === 'ledgers') {
     const base = { ...empty, projectId: route[1] };
     if (!route[3]) return { view: 'ledgers', ...base };
+    if (route[4] === 'cards' && route[5]) {
+      return { view: 'card', ...base, ledgerId: route[3], cardId: route[5] };
+    }
     if (route[4] === 'zones' && route[5] && route[6] === 'cards' && route[7]) {
       return { view: 'card', ...base, ledgerId: route[3], zoneId: route[5], cardId: route[7] };
     }

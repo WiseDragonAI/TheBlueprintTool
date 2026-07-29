@@ -225,11 +225,14 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(threadLogBinding, /renderThreadPanel/);
 
   const renderThreadPanel = source('frontend/src/runtime/thread/effect/render-thread-panel.ts');
+  const responsiveThread = source('frontend/src/app/responsive/thread.js');
   const processThreadCodex = source('frontend/src/runtime/codex/controller/process-thread-codex-controller.ts');
   const threadCss = source('frontend/assets/shared/thread.css');
   assert.match(renderThreadPanel, /renderThreadCodexSelect/);
   assert.match(renderThreadPanel, /button\.dataset\.codexModel = threadCodexModel/);
   assert.match(renderThreadPanel, /button\.dataset\.codexEffort = threadCodexEffort/);
+  assert.match(responsiveThread, /import \{ toggleThreadPanelFullscreen \} from '\/src\/runtime\/thread\/effect\/apply-thread-panel-fullscreen\.js'/);
+  assert.match(responsiveThread, /action === 'toggle-thread-fullscreen'\) toggleThreadPanelFullscreen\(\)/);
   assert.match(processThreadCodex, /existingRunId[\s\S]*requestCardSkillRunContinue\(\{ ledgerId, cardId, runId: existingRunId/);
   assert.match(processThreadCodex, /cardCodexThreadRunId\(card\)/);
   assert.match(processThreadCodex, /threadSelectedRunIdByThreadId\[threadId\] = runId/);
@@ -297,7 +300,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(pipelineEditor, /openPipelineSkillPicker\(\{/);
   assert.doesNotMatch(pipelineEditor, /function renderSkillPicker\(/);
   assert.match(pipelineEditor, /export function removePipelineStep/);
-  assert.match(skillLibraryEditor, /detail\.readOnlyReason \|\| 'This skill is read-only\.'/);
+  assert.match(skillLibraryEditor, /detail\.readOnlyReason \|\| 'This authored file is read-only\.'/);
   assert.match(indexHtml, /class="skill-modal process-modal"/);
   assert.match(indexHtml, /class="pipelines-modal codex-admin-modal"/);
   assert.match(indexHtml, /class="pipeline-editor-modal codex-editor-modal"/);
@@ -311,6 +314,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(processModal, /className = 'skill-run-controls process-run-controls'/);
   assert.match(cardDetailRenderer, /renderCardSkillRunWidget\(card\)/);
   assert.match(cardDetailSkillRunWidget, /cardCodexRunId\(card\)/);
+  assert.match(cardDetailSkillRunWidget, /pipelineRunId && \/\^codex-skill-/);
   assert.match(cardDetailSkillRunWidget, /body\.className = 'codex-run-body'/);
   assert.match(cardDetailSkillRunWidget, /cancel\.className = 'codex-run-stop terminal-button terminal-button--stop'/);
   assert.doesNotMatch(cardDetailSkillRunWidget, /codex-run-stop[^'\n]*terminal-button--compact/);

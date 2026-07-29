@@ -118,6 +118,7 @@
             <main class="chat">
               <header class="thread-heading">
                 <div class="thread-toolbar">
+                  <button class="thread-fullscreen terminal-button terminal-button--compact" type="button" data-action="toggle-thread-fullscreen" title="Expand thread panel" aria-label="Expand thread panel" aria-pressed="false"><span aria-hidden="true">⛶</span></button>
                   <p class="thread-target" title="No thread selected">No thread selected</p>
                   <div class="thread-tabs" role="tablist" aria-label="Thread views">
                     <button id="thread-tab-thread" class="thread-tab" type="button" role="tab" aria-selected="true" aria-controls="thread-panel-thread" tabindex="0">Thread</button>
@@ -489,7 +490,7 @@
                   <button class="process-card-button" type="button">Process card</button>
                   <button class="thread-open-button" type="button">Thread</button>
                 </div>
-                <h1 id="card-title"></h1>
+                <h1 id="card-title" tabindex="-1"></h1>
               </div>
               <div id="card-body" class="card-body" aria-live="polite"></div>
               <button class="quick-voice-comment-button terminal-button" type="button" aria-label="Record a voice comment" title="Record voice comment" hidden>
@@ -505,6 +506,7 @@
               <main class="chat">
                 <header class="thread-heading">
                   <div class="thread-toolbar">
+                    <button class="thread-fullscreen terminal-button terminal-button--compact" type="button" data-action="toggle-thread-fullscreen" title="Expand thread panel" aria-label="Expand thread panel" aria-pressed="false"><span aria-hidden="true">⛶</span></button>
                     <div class="thread-tabs" role="tablist" aria-label="Thread views">
                       <button id="thread-tab-thread" class="thread-tab" type="button" role="tab" aria-selected="true" aria-controls="thread-panel-thread" tabindex="0">Thread</button>
                       <button id="thread-tab-codex-log" class="thread-tab" type="button" role="tab" aria-selected="false" aria-controls="thread-panel-codex-log" tabindex="-1">Codex Log</button>
@@ -534,8 +536,8 @@
         </dialog>
 
         <dialog class="delete-master-task-modal mobile-confirm-modal" aria-labelledby="delete-master-task-title">
-          <h2 id="delete-master-task-title">Delete master task?</h2>
-          <p>This permanently removes the master task card. Its linked subtask cards are kept.</p>
+          <h2 id="delete-master-task-title" class="delete-task-card-title">Delete master task?</h2>
+          <p class="delete-task-card-message">This permanently removes the master task card. Its linked subtask cards are kept.</p>
           <button class="confirm-delete-master-task-button" type="button">Delete master task</button>
           <button class="cancel-delete-master-task-button" type="button">Cancel</button>
         </dialog>
@@ -656,7 +658,7 @@
 
         <dialog class="codex-modal process-modal" aria-labelledby="process-title">
           <section class="codex-sheet">
-            <header><button class="codex-back process-close" type="button" aria-label="Close card processing">×</button><div><p class="eyebrow">Card processing</p><h2 id="process-title">Process card</h2></div><button class="codex-secondary process-resynchronize" type="button" hidden>Resynchronize</button></header>
+            <header><button class="codex-back process-close" type="button" aria-label="Close card processing">×</button><div><p class="eyebrow">Card processing</p><h2 id="process-title">Process card</h2></div><div class="codex-header-actions"><button class="codex-secondary process-resynchronize" type="button" hidden>Resynchronize</button><button class="primary-button skill-new" type="button" hidden>New skill</button></div></header>
             <div class="codex-tabs" role="tablist" aria-label="Processing library"><button type="button" data-process-tab="skills" aria-selected="true">Skills</button><button type="button" data-process-tab="pipelines" aria-selected="false">Pipelines</button></div>
             <div class="codex-library-controls">
               <label class="codex-library-search"><span aria-hidden="true">⌕</span><input class="process-search" type="search" placeholder="Search library" aria-label="Search processing library"></label>
@@ -707,6 +709,7 @@
             </footer>
           </section>
         </dialog>
+        <dialog class="skill-library-editor-modal codex-editor-modal" aria-labelledby="skill-library-editor-modal-title"></dialog>
       </div>
     </template>
     <script src="/assets/vendor/highlight.min.js"></script>

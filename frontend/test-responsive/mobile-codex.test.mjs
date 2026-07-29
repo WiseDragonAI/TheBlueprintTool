@@ -20,12 +20,16 @@ test('mobile card detail exposes processing and both process libraries', () => {
   assert.match(html, /data-process-tab="pipelines"/);
   assert.match(mobile, /setMobileCodexContext\(\{ projectId: state\.resourceProjectId, ledgerId: state\.activeLedgerId, cardId: state\.activeCardId \}\)/);
   assert.match(script, /projectScopedRequestPath\(url, projectId\)/);
+  assert.match(script, /mergePipelinePromptsIntoSkillCatalog\(directSkills, state\.pipelineContent\)/);
+  assert.match(script, /mergePipelinePromptsIntoSkillCatalog\(serverSkillCatalog, state\.pipelineContent\)/);
   assert.match(script, /ledgerId: launch\.ledgerId, cardId: launch\.cardId, skillName: skill\.name/);
   assert.match(script, /ledgerId: launch\.ledgerId, sourceCardId: launch\.cardId, pipelineId: pipeline\.id/);
 });
 
 test('mobile card detail keeps its three navigation controls in one row before the title', () => {
   assert.match(html, /card-detail-actions[\s\S]*back-to-zone-button[\s\S]*process-card-button[\s\S]*thread-open-button[\s\S]*id="card-title"/);
+  assert.match(html, /id="card-title" tabindex="-1"/);
+  assert.match(mobile, /returnFocusTo: elements\['card-title'\]/);
   assert.match(styles, /\.card-detail-actions \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(styles, /\.card-detail-header h1 \{[^}]*width: 100%[^}]*font-size: clamp\(24px, 7vw, 34px\)/);
   assert.match(mobile, /backButton\.replaceChildren\(backIcon, backLabel\)/);
@@ -61,7 +65,9 @@ test('mobile pipeline editor supports ordered steps, ordered skills, inheritance
   assert.match(html, /class="codex-modal skill-picker-modal"/);
   assert.match(script, /move\(state\.editor\.steps, index, -1\)/);
   assert.match(script, /move\(step\.skills, index, -1\)/);
-  assert.match(script, /codexModel: null, codexEffort: null/);
+  assert.match(script, /contentKind: selected\.contentKind, codexModel: null, codexEffort: null/);
+  assert.match(script, /\['federated-skill', 'workspace-skill', 'pipeline-prompt'\]\.includes\(selected\.contentKind\)/);
+  assert.match(script, /The selected pipeline content has no supported content kind\./);
   assert.match(script, /method: editor\.existingId \? 'PUT' : 'POST'/);
   assert.match(script, /setBusy\(save, true\)/);
 });
@@ -100,7 +106,8 @@ test('global skills and pipelines read only the connection-synchronized local se
   assert.match(script, /jsonRequest\('\/api\/codex\/server-skills'\)/);
   assert.doesNotMatch(script, /Promise\.allSettled\(state\.projects\.map/);
   assert.match(script, /Library views must never fan out to remote projects/);
-  assert.match(script, /state\.skills = \(serverSkills\.skills \|\| \[\]\)/);
+  assert.match(script, /const serverSkillCatalog = \(serverSkills\.skills \|\| \[\]\)/);
+  assert.match(script, /mergePipelinePromptsIntoSkillCatalog\(serverSkillCatalog, state\.pipelineContent\)/);
   assert.match(script, /failedProjects: 0/);
   assert.doesNotMatch(script, /Choose the project whose (?:skill library|pipelines)/);
 });
@@ -168,7 +175,21 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /JSON\.stringify\(\{ favorite \}\)/);
   assert.match(script, /try \{ await loadGlobalLibraries\(\); \}/);
   assert.match(script, /Loading SKILL\.md/);
-  assert.match(script, /renderLedgerCardMarkdown\(skillInstructionMarkdown\(skill\.markdown\)\)/);
+  assert.match(script, /markdown: skillInstructionMarkdown\(skill\.markdown\)/);
+  assert.match(script, /renderMarkdown: renderLedgerCardMarkdown/);
+  assert.match(script, /renderEditableSkillDocument\(\{/);
+  assert.match(script, /onEdit: \(\) => editGlobalSkill\(record\)/);
+  assert.match(script, /codexSkillAuthoringProjectId\(record, state\.projectId\)/);
+  assert.match(script, /requestProjectId,[\s\S]*refreshProjectSkillAuthoring/);
+  assert.match(script, /const edit = button\(record\.contentKind === 'pipeline-prompt' \? 'Edit prompt' : 'Edit skill'/);
+  assert.match(script, /actions\.append\(tagsField, favorite, edit, status\)/);
+  assert.doesNotMatch(script, /card\.append\(node, renderSkillLibraryEditAction/);
+  assert.match(script, /openSkillLibraryEditor\(\{/);
+  assert.match(script, /openSkillLibraryCreator\(\{/);
+  assert.doesNotMatch(script, /Select a project context before creating authored content\./);
+  assert.match(script, /function createGlobalSkill\(\) \{[^]*requestProjectId: ''/);
+  assert.match(script, /function editGlobalSkill\(record\) \{[^]*requestProjectId: ''/);
+  assert.match(html, /class="primary-button skill-new"[^>]*>New skill<\/button>/);
   assert.match(script, /serverSkillPath\(record\.name\)/);
   assert.doesNotMatch(script, /Promise\.all\(recordProjects\(record\)\.map\(\(project\) => jsonRequest\(`\/api\/codex\/skill-library/);
   assert.match(script, /Related references/);
@@ -184,10 +205,12 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(styles, /\.skill-favorite-toggle\[aria-pressed="true"\] \{[^}]*color: #fbbf24/);
   assert.match(styles, /\.skill-tag-choice\[aria-pressed="true"\]/);
   assert.match(styles, /\.codex-list-card \{[^}]*box-shadow/);
+  assert.match(styles, /\.skill-detail-edit \{[^}]*justify-self: start/);
   assert.match(styles, /\.codex-list-item \{[^}]*background: transparent;[^}]*box-shadow: none/);
   assert.match(styles, /\.skill-picker-list\.codex-list \{[^}]*display: flex;[^}]*flex-direction: column;[^}]*overflow-y: auto/);
   assert.match(styles, /\.skill-picker-list > \.codex-list-card \{[^}]*flex: 0 0 auto/);
   assert.match(styles, /\.skill-reference-toggle \{[^}]*background: transparent;[^}]*box-shadow: none/);
+  assert.match(styles, /\.skill-document-edit \{[^}]*background: transparent;[^}]*box-shadow: none/);
   assert.match(styles, /\.process-modal \{ height: min\(80dvh, 860px\); \}/);
   assert.match(styles, /\.skill-detail-scroll \{[^}]*overflow-y: auto/);
   assert.doesNotMatch(styles, /\.skill-markdown-section \.ledger-card-body[^}]*background:/);

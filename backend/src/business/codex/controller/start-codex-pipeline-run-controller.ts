@@ -5,6 +5,7 @@
 import { existsSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type {
+  CodexContentKind,
   CodexEffort,
   CodexModel,
   CodexPipeline,
@@ -17,10 +18,16 @@ import {
   createCodexPipelineRunManifest,
   type PipelineDefinition,
 } from '../helper/create-codex-pipeline-run-manifest.js';
-import { codexPipelineStoreWriteBlocker, readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
+import {
+  assertCodexPipelineStoreAvailable,
+  codexPipelineStoreWriteBlocker,
+  mutateCodexPipelineStore,
+  readCodexPipelineStore,
+} from '../helper/codex-pipeline-store.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
+import { scanPipelinePrompts } from '../helper/pipeline-prompt-library.js';
 import { runtimeServerRoot } from '../helper/server-skill-context.js';
-import { readScopedCodexPipelineStores } from '../helper/server-pipeline-catalog.js';
+import { readScopedCodexPipelineStores, serverPipelineDecisionOsRoot } from '../helper/server-pipeline-catalog.js';
 import {
   maxConcurrentCodexProcesses,
   reassessPipelineAfterSkill,
@@ -29,6 +36,12 @@ import {
 } from '../helper/codex-pipeline-runner.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
+import {
+  admitPipelinePromptSnapshots,
+  assertPipelinePromptRunSkillSnapshot,
+  type AdmittedPipelinePromptSnapshot,
+  PipelinePromptAdmissionError,
+} from '../helper/pipeline-prompt-snapshot.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 import {
   createTaskExecutionLaunchRequest,
@@ -38,6 +51,25 @@ import { taskExecutionNodeId, taskExecutionRouter, taskExecutionState } from '..
 import { resolvePipelineOutputParent } from '../helper/resolve-pipeline-output-parent.js';
 
 type AnyRecord = Record<string, unknown>;
+
+export function availablePipelineContent(input: {
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+}): { names: string[]; kinds: Map<string, CodexContentKind> } {
+  const skills = scanCodexSkills({
+    workspaceRoot: dirname(input.decisionOsRoot),
+    serverRoot: runtimeServerRoot(input.runtime),
+  });
+  const prompts = scanPipelinePrompts(serverPipelineDecisionOsRoot(input.runtime, input.decisionOsRoot));
+  const kinds = new Map<string, CodexContentKind>([
+    ...skills.map((skill): [string, CodexContentKind] => [
+      skill.name,
+      skill.source === 'server' ? 'federated-skill' : 'workspace-skill',
+    ]),
+    ...prompts.map((prompt): [string, CodexContentKind] => [prompt.name, 'pipeline-prompt']),
+  ]);
+  return { names: [...kinds.keys()], kinds };
+}
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -94,6 +126,9 @@ export async function startPipelineRun(input: {
   reservedFirstExecutionId?: string;
   requestIdPrefix?: string;
   plannedExecutors?: readonly NonNullable<CodexPipelineRunSkill['executor']>[];
+  queuedAfterExecutionId?: string | null;
+  initialInputCardId?: string | null;
+  promptSnapshotOverrides?: ReadonlyMap<string, AdmittedPipelinePromptSnapshot>;
 }): Promise<AnyRecord> {
   if (!input.admissionLocked) {
     return withCardCodexAdmission(
@@ -102,15 +137,14 @@ export async function startPipelineRun(input: {
     );
   }
   const workspaceRoot = dirname(input.decisionOsRoot);
-  const availableSkills = scanCodexSkills({ workspaceRoot, serverRoot: runtimeServerRoot(input.runtime) });
-  const availableSkillNames = availableSkills.map((skill) => skill.name);
-  const normalized = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
-  const unavailableSkill = input.definition.steps
-    .flatMap((step) => step.skills)
-    .find((skill) => !availableSkillNames.includes(skill.skillName));
-  // WHAT: Reject definitions containing a skill that discovery cannot resolve.
-  // WHY: Persisting pending work that cannot launch would strand the pipeline.
-  if (unavailableSkill) return { ok: false, statusCode: 400, error: 'Pipeline references an unavailable skill.', skillName: unavailableSkill.skillName };
+  const available = availablePipelineContent(input);
+  const availableSkillNames = available.names;
+  const normalized = readCodexPipelineStore({
+    decisionOsRoot: input.decisionOsRoot,
+    availableSkillNames,
+    availableContentKinds: available.kinds,
+  });
+  assertCodexPipelineStoreAvailable(normalized);
   const invalidDefault = normalized.issues.find((issue) =>
     (issue.code === 'unsupported-default-model' || issue.code === 'unsupported-default-effort')
     && input.definition.steps.some((step) => step.skills.some((skill) => skill.skillName === issue.skillName))
@@ -120,6 +154,66 @@ export async function startPipelineRun(input: {
   if (invalidDefault) return { ok: false, statusCode: 400, error: invalidDefault.message, skillName: invalidDefault.skillName };
   const corruption = codexPipelineStoreWriteBlocker(normalized);
   if (corruption) return { ok: false, statusCode: 503, error: 'The Codex pipeline store contains data that cannot be rewritten safely and has been preserved for recovery.', detail: corruption.message };
+
+  // WHAT: Reject empty pipeline shapes before prompt admission and every durable side effect.
+  // WHY: A run with no executable stage cannot make progress or settle correctly.
+  if (input.definition.steps.length === 0) return { ok: false, statusCode: 400, error: 'A pipeline run requires at least one step.' };
+  // WHAT: Require at least one executable skill in every stage.
+  // WHY: An empty stage would leave the sequential runner without a next transition.
+  if (input.definition.steps.some((step) => step.skills.length === 0)) {
+    return { ok: false, statusCode: 400, error: 'Every pipeline step must contain at least one skill.' };
+  }
+
+  let admittedPromptSnapshots: Map<string, AdmittedPipelinePromptSnapshot>;
+  try {
+    const promptSnapshotOverrides = new Map(input.promptSnapshotOverrides ?? []);
+    for (const [skillName, snapshot] of promptSnapshotOverrides) {
+      const configured = input.definition.steps
+        .flatMap((step) => step.skills)
+        .some((skill) => skill.skillName === skillName && skill.contentKind === 'pipeline-prompt');
+      if (!configured) {
+        return { ok: false, statusCode: 400, error: 'Pipeline prompt snapshot override has no matching prompt.', skillName };
+      }
+      assertPipelinePromptRunSkillSnapshot(snapshot);
+    }
+    admittedPromptSnapshots = await admitPipelinePromptSnapshots({
+      ownerDecisionOsRoot: serverPipelineDecisionOsRoot(input.runtime, input.decisionOsRoot),
+      steps: input.definition.steps.map((step) => ({
+        ...step,
+        skills: step.skills.filter((skill) => (
+          skill.contentKind !== 'pipeline-prompt'
+          || !promptSnapshotOverrides.has(skill.skillName)
+        )),
+      })),
+    });
+    for (const [skillName, snapshot] of promptSnapshotOverrides) {
+      admittedPromptSnapshots.set(skillName, snapshot);
+    }
+  } catch (error) {
+    if (error instanceof PipelinePromptAdmissionError) {
+      return {
+        ok: false,
+        statusCode: error.statusCode,
+        code: error.code,
+        retryable: error.statusCode >= 500,
+        error: error.message,
+      };
+    }
+    return {
+      ok: false,
+      statusCode: 503,
+      code: 'pipeline_prompt_admission_failed',
+      retryable: true,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+  const unavailableSkill = input.definition.steps
+    .flatMap((step) => step.skills)
+    .find((skill) => !availableSkillNames.includes(skill.skillName)
+      || (skill.contentKind && available.kinds.get(skill.skillName) !== skill.contentKind));
+  // WHAT: Reject definitions containing content that discovery cannot resolve after prompt-specific admission.
+  // WHY: Prompt failures need their exact fail-closed state while ordinary missing skills retain the catalog error.
+  if (unavailableSkill) return { ok: false, statusCode: 400, error: 'Pipeline references an unavailable skill.', skillName: unavailableSkill.skillName };
 
   const context = resolvePipelineLedgerContext({
     decisionOsRoot: input.decisionOsRoot,
@@ -136,7 +230,7 @@ export async function startPipelineRun(input: {
   if (!replicatedState || !router) {
     return { ok: false, statusCode: 503, code: 'task_execution_state_unavailable', retryable: true, error: 'Replicated task execution state is unavailable.' };
   }
-  if (!input.restartOfRun && replicatedState) {
+  if (!input.restartOfRun && !input.queuedAfterExecutionId && replicatedState) {
     const requestedSkillName = input.definition.steps[0]?.skills[0]?.skillName ?? '';
     const existing = normalized.store.runs.find((candidate) => (
       candidate.temporary === input.definition.temporary
@@ -177,14 +271,6 @@ export async function startPipelineRun(input: {
       };
     }
   }
-  // WHAT: Reject empty pipeline shapes at the runtime boundary.
-  // WHY: A run with no executable stage cannot make progress or settle correctly.
-  if (input.definition.steps.length === 0) return { ok: false, statusCode: 400, error: 'A pipeline run requires at least one step.' };
-  // WHAT: Require at least one executable skill in every stage.
-  // WHY: An empty stage would leave the sequential runner without a next transition.
-  if (input.definition.steps.some((step) => step.skills.length === 0)) {
-    return { ok: false, statusCode: 400, error: 'Every pipeline step must contain at least one skill.' };
-  }
   let outputParent: ReturnType<typeof resolvePipelineOutputParent>;
   try {
     outputParent = resolvePipelineOutputParent({
@@ -217,7 +303,6 @@ export async function startPipelineRun(input: {
       () => startPipelineRun({ ...input, outputParentAdmissionLocked: true }),
     );
   }
-
   let run: CodexPipelineRun;
   try {
     run = createCodexPipelineRunManifest({
@@ -233,8 +318,11 @@ export async function startPipelineRun(input: {
       firstOutputSubtaskPosition: outputParent.firstOutputSubtaskPosition,
       ledgerPath: context.ledgerPath,
       restartOfPipelineRunId: input.restartOfRun?.id ?? null,
+      queuedAfterExecutionId: input.queuedAfterExecutionId ?? null,
+      initialInputCardId: input.initialInputCardId ?? null,
       reservedRunId: input.reservedRunId,
       reservedFirstExecutionId: input.reservedFirstExecutionId,
+      admittedPromptSnapshots,
     });
     if (run.executionMode === 'federated') {
       const topology = run.steps.flatMap((step) => step.skills);
@@ -276,10 +364,13 @@ export async function startPipelineRun(input: {
     return { ok: false, statusCode: 400, error: String(cardError.error ?? 'Could not create pipeline step cards.') };
   }
   try {
-    writeCodexPipelineStore({
+    mutateCodexPipelineStore({
       decisionOsRoot: input.decisionOsRoot,
       availableSkillNames,
-      store: { ...normalized.store, runs: [...normalized.store.runs, run] },
+      mutate: (store) => ({
+        ...store,
+        runs: store.runs.some((entry) => entry.id === run.id) ? store.runs : [...store.runs, run],
+      }),
     });
   } catch {
     await rollbackPipelineCards({ decisionOsRoot: input.decisionOsRoot, context, ledgerBefore, sourceCardId: input.sourceCardId, outputCardIds: run.steps.map((step) => step.outputCardId) });
@@ -310,7 +401,9 @@ export async function startPipelineRun(input: {
       pipelineRunId: run.id,
       pipelineStepId: step.id,
       pipelineSkillRunId: skill.runId,
-      predecessorExecutionId: index === 0 ? null : topology[index - 1].skill.executionId,
+      predecessorExecutionId: index === 0
+        ? run.queuedAfterExecutionId ?? null
+        : topology[index - 1].skill.executionId,
       restartOfExecutionId: previousExecutions[index]?.executionId ?? null,
     }));
     try {
@@ -349,11 +442,10 @@ export async function startPipelineRun(input: {
         maxConcurrentCodexProcesses: maxConcurrentCodexProcesses(input.runtime),
       };
     } catch (error) {
-      const current = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
-      writeCodexPipelineStore({
+      mutateCodexPipelineStore({
         decisionOsRoot: input.decisionOsRoot,
         availableSkillNames,
-        store: { ...current.store, runs: current.store.runs.filter((entry) => entry.id !== run.id) },
+        mutate: (store) => ({ ...store, runs: store.runs.filter((entry) => entry.id !== run.id) }),
       });
       await rollbackPipelineCards({
         decisionOsRoot: input.decisionOsRoot,
@@ -400,7 +492,9 @@ export async function startPipelineRun(input: {
             pipelineRunId: run.id,
             pipelineStepId: step.id,
             pipelineSkillRunId: skill.runId,
-            predecessorExecutionId: index === 0 ? null : topology[index - 1].skill.executionId,
+            predecessorExecutionId: index === 0
+              ? run.queuedAfterExecutionId ?? null
+              : topology[index - 1].skill.executionId,
             restartOfExecutionId: input.restartOfRun
               ? input.restartOfRun.steps.flatMap((entry) => entry.skills)[index]?.executionId ?? null
               : null,
@@ -430,11 +524,10 @@ export async function startPipelineRun(input: {
           }).catch(() => undefined);
         }
       }
-      const current = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
-      writeCodexPipelineStore({
+      mutateCodexPipelineStore({
         decisionOsRoot: input.decisionOsRoot,
         availableSkillNames,
-        store: { ...current.store, runs: current.store.runs.filter((entry) => entry.id !== run.id) },
+        mutate: (store) => ({ ...store, runs: store.runs.filter((entry) => entry.id !== run.id) }),
       });
       await rollbackPipelineCards({
         decisionOsRoot: input.decisionOsRoot,
@@ -491,6 +584,7 @@ export async function startTemporaryPipelineRun(input: {
   ledgerId: string;
   sourceCardId: string;
   skillName: string;
+  contentKind?: CodexContentKind;
   codexModel?: CodexModel | null;
   codexEffort?: CodexEffort | null;
   onLedgerChange?: unknown;
@@ -516,6 +610,7 @@ export async function startTemporaryPipelineRun(input: {
         skills: [{
           id: `temporary-skill-${safeSegment(input.skillName)}`,
           skillName: input.skillName,
+          contentKind: input.contentKind ?? 'federated-skill',
           codexModel: input.codexModel ?? null,
           codexEffort: input.codexEffort ?? null,
         }],
@@ -576,8 +671,14 @@ export async function startCodexPipelineRunController(
   if (!ledgerId || !sourceCardId || !pipelineId) {
     return { ok: false, statusCode: 400, error: 'Missing ledgerId, sourceCardId, or pipelineId.' };
   }
-  const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) }).map((skill) => skill.name);
-  const scoped = readScopedCodexPipelineStores({ decisionOsRoot, runtime, availableSkillNames });
+  const available = availablePipelineContent({ decisionOsRoot, runtime });
+  const availableSkillNames = available.names;
+  const scoped = readScopedCodexPipelineStores({
+    decisionOsRoot,
+    runtime,
+    availableSkillNames,
+    availableContentKinds: available.kinds,
+  });
   const serverPipeline = scoped.server.store.pipelines.find((entry) => entry.id === pipelineId);
   const normalized = serverPipeline ? scoped.server : scoped.project;
   const pipeline = serverPipeline ?? normalized?.store.pipelines.find((entry) => entry.id === pipelineId);

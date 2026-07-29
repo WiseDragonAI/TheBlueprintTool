@@ -2,7 +2,7 @@
  * WHAT: Replays and follows a surviving Codex process after an HTTP server replacement.
  * WHY: Durable process adoption must keep card output and terminal execution state convergent.
  */
-import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run-events.js';
 import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-event-ingestor.js';
 import { isSameCodexProcess } from './codex-process-identity.js';
@@ -67,6 +67,7 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
   let settlementPublished = false;
   let settlementAttempt = 0;
   let processSettledAt = '';
+  let activeIngest: Promise<void> | null = null;
   let committedSettlement: Awaited<ReturnType<typeof commitTaskExecutionSettlement>> | null = null;
   let poll!: () => void;
   const ingestor = createCardSkillRunEventIngestor({
@@ -85,22 +86,35 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
       }
     },
   });
-  const ingestAvailable = (): void => {
+  const readAvailable = async (): Promise<void> => {
     if (!existsSync(process.stdoutFile)) return;
     const size = statSync(process.stdoutFile).size;
     if (size <= offset) return;
     const descriptor = openSync(process.stdoutFile, 'r');
     try {
+      let bytesSinceYield = 0;
       while (offset < size) {
         const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, size - offset));
         const bytesRead = readSync(descriptor, chunk, 0, chunk.length, offset);
         if (bytesRead <= 0) break;
         offset += bytesRead;
+        bytesSinceYield += bytesRead;
         ingestor.ingest(chunk.subarray(0, bytesRead));
+        if (bytesSinceYield >= 256 * 1024 && offset < size) {
+          bytesSinceYield = 0;
+          await new Promise<void>((resolveYield) => setImmediate(resolveYield));
+        }
       }
     } finally {
       closeSync(descriptor);
     }
+  };
+  const ingestAvailable = (): Promise<void> => {
+    if (activeIngest) return activeIngest;
+    activeIngest = readAvailable().finally(() => {
+      activeIngest = null;
+    });
+    return activeIngest;
   };
   const settle = async (): Promise<void> => {
     if (settling) return;
@@ -111,7 +125,7 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
     activeMonitors.delete(executionId);
     let operation = 'monitor-adopted-task-execution';
     try {
-      ingestAvailable();
+      await ingestAvailable();
       if (!flushed) {
         flushCardSkillRunEventIngestor(ingestor, execution.metadata.sessionId);
         flushed = true;
@@ -176,22 +190,12 @@ export function monitorAdoptedTaskExecution(runtime: AnyRecord, executionId: str
     }
   };
   poll = (): void => {
-    try {
-      ingestAvailable();
+    void ingestAvailable().then(() => {
       if (!isSameCodexProcess(process.processId, process.processStartTime)) void settle();
-    } catch (error) {
+    }).catch((error) => {
       reportFailure(runtime, executionId, 'monitor-adopted-task-execution-ingest', error);
-    }
+    });
   };
-  try {
-    if (existsSync(process.stdoutFile)) {
-      const existing = readFileSync(process.stdoutFile);
-      ingestor.ingest(existing);
-      offset = existing.length;
-    }
-  } catch (error) {
-    reportFailure(runtime, executionId, 'monitor-adopted-task-execution-ingest', error);
-  }
   const timer = setInterval(poll, 50);
   timer.unref?.();
   activeMonitors.set(executionId, timer);

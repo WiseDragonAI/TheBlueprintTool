@@ -2,7 +2,7 @@
  * WHAT: Selects the oldest dependency-ready epoch-4 execution across one project.
  * WHY: Direct, continuation, and pipeline work must share one replicated queue and one lifecycle authority.
  */
-import { readCodexPipelineStore } from './codex-pipeline-store.js';
+import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './codex-pipeline-store.js';
 import {
   maxConcurrentCodexProcesses,
   federatedPipelineExecutionReady,
@@ -19,7 +19,9 @@ type AnyRecord = Record<string, unknown>;
 function runnableExecutions(decisionOsRoot: string, runtime: AnyRecord) {
   const state = taskExecutionState(runtime);
   if (!state) return [];
-  const pipelineRuns = new Map(readCodexPipelineStore({ decisionOsRoot }).store.runs.map((run) => [run.id, run]));
+  const normalized = readCodexPipelineStore({ decisionOsRoot });
+  assertCodexPipelineStoreAvailable(normalized);
+  const pipelineRuns = new Map(normalized.store.runs.map((run) => [run.id, run]));
   const contexts = new Map<string, ReturnType<typeof resolvePipelineLedgerContext>>();
   const pipelineReady = (record: ReturnType<typeof state.executions.find>): boolean => {
     if (!record || record.metadata.kind !== 'pipeline-skill') return true;

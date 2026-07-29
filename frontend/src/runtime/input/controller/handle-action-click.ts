@@ -28,6 +28,7 @@ import { selectTarget } from '../../selection/controller/select-target.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
 import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
 import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
+import { toggleThreadPanelFullscreen } from '../../thread/effect/apply-thread-panel-fullscreen.js';
 import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
 import { executeVoiceAction } from '../../voice/controller/execute-voice-action.js';
@@ -69,6 +70,11 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   telemetry('tool-button-click', { action });
   if (action === 'close-thread-panel') {
     closeThreadPanel();
+    return;
+  }
+  if (action === 'toggle-thread-fullscreen') {
+    toggleThreadPanelFullscreen();
+    telemetry('toggle-thread-fullscreen', { expanded: state.threadPanelFullscreen });
     return;
   }
   if (action === 'open-ledgers-canvas') {

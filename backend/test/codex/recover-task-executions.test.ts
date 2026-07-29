@@ -123,6 +123,70 @@ test('recovery adopts an exact live process, interrupts a missing process, and w
   assert.deepEqual(scheduled, ['scheduled']);
 });
 
+test('recovery cancels a queued dynamic segment after its caller already failed', async (context) => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-dynamic-gate-recovery-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const ledgerFile = join(decisionOsRoot, 'tasks.json');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(ledgerFile, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot,
+    tasksLedgerFile: ledgerFile,
+    initialize: true,
+  });
+  context.after(() => rmSync(workspace, { recursive: true, force: true }));
+
+  await state.executions.admit({
+    metadata: {
+      ...metadata('execution-gate', '2026-07-23T01:00:00.000Z'),
+      kind: 'pipeline-skill',
+      pipelineRunId: 'pipeline-gate',
+      pipelineStepId: 'step-gate',
+      pipelineSkillRunId: 'skill-gate',
+    },
+    executorNodeId: 'workstation',
+  });
+  await state.executions.transition('execution-gate', { phase: 'queued' });
+  await state.executions.transition('execution-gate', { phase: 'starting' });
+  await state.executions.transition('execution-gate', {
+    phase: 'failed',
+    error: { code: 'gate_failed', message: 'Gate failed before restart.' },
+  });
+  for (const [executionId, predecessorExecutionId] of [
+    ['execution-worker', 'execution-gate'],
+    ['execution-returning-gate', 'execution-worker'],
+  ]) {
+    await state.executions.admit({
+      metadata: {
+        ...metadata(executionId, '2026-07-23T01:01:00.000Z'),
+        kind: 'pipeline-skill',
+        pipelineRunId: 'pipeline-dynamic',
+        pipelineStepId: `step-${executionId}`,
+        pipelineSkillRunId: `skill-${executionId}`,
+        predecessorExecutionId,
+      },
+      executorNodeId: 'workstation',
+    });
+    await state.executions.transition(executionId, { phase: 'queued' });
+  }
+
+  const recovered = await recoverTaskExecutions({
+    taskExecutionState: state,
+    taskExecutionNodeId: 'workstation',
+    scheduleCodexProcesses: async () => undefined,
+  });
+
+  assert.deepEqual(
+    ['execution-worker', 'execution-returning-gate']
+      .map((executionId) => state.executions.find(executionId)?.lifecycle.phase),
+    ['cancelled', 'cancelled'],
+  );
+  assert.deepEqual(recovered.queued, []);
+  assert.deepEqual(recovered.failed, []);
+});
+
 test('a replacement runtime adopts a durable process lease and settles its terminal event', async (context) => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-durable-task-execution-recovery-'));
   const decisionOsRoot = join(workspace, '.decision-os');

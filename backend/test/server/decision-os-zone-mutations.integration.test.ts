@@ -229,18 +229,17 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
     });
     assert.equal(codexPreferenceResponse.ok, true);
     const codexPreferenceLedger = await codexPreferenceResponse.json() as { changedCard: Record<string, unknown> };
-    assert.deepEqual(codexPreferenceLedger.changedCard, {
-      id: 'card-a',
-      x: 111,
-      y: 122,
-      w: 333,
-      h: 99,
-      status: 'done',
-      imageSizes: { '/.decision-os/ui-mockups/mock.png': { width: 320, height: 180 } },
-      codexRunModel: 'gpt-5.6-terra',
-      codexRunEffort: 'max',
-      comment: { what: '' }
-    });
+    assert.equal(codexPreferenceLedger.changedCard.id, 'card-a');
+    assert.equal(codexPreferenceLedger.changedCard.x, 111);
+    assert.equal(codexPreferenceLedger.changedCard.y, 122);
+    assert.equal(codexPreferenceLedger.changedCard.w, 333);
+    assert.equal(codexPreferenceLedger.changedCard.h, 99);
+    assert.equal(codexPreferenceLedger.changedCard.status, 'done');
+    assert.deepEqual(codexPreferenceLedger.changedCard.imageSizes, { '/.decision-os/ui-mockups/mock.png': { width: 320, height: 180 } });
+    assert.equal(codexPreferenceLedger.changedCard.codexRunModel, 'gpt-5.6-terra');
+    assert.equal(codexPreferenceLedger.changedCard.codexRunEffort, 'max');
+    assert.deepEqual(codexPreferenceLedger.changedCard.comment, { what: '' });
+    assert.equal(typeof codexPreferenceLedger.changedCard.contentRevision, 'string');
 
     const partialCodexPreferenceResponse = await fetch(endpoint, {
       method: 'PATCH',

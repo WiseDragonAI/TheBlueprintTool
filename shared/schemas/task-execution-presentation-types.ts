@@ -22,6 +22,7 @@ export type TaskExecutionStateItem = {
   readonly finishedAt: string | null;
   readonly model: string | null;
   readonly effort: string | null;
+  readonly predecessorExecutionId: string | null;
   readonly executorNodeId: string;
   readonly revision: number;
   readonly queuePosition: number | null;
@@ -79,6 +80,13 @@ export type TaskExecutionTodoEvent = TaskExecutionPresentationEventBase & {
   readonly items: readonly TaskExecutionTodoItem[];
 };
 
+export type TaskExecutionSubagentEvent = TaskExecutionPresentationEventBase & {
+  readonly kind: 'subagent';
+  readonly skillName: string;
+  readonly model: string;
+  readonly effort: string;
+};
+
 /**
  * WHAT: Limits the public log vocabulary to operator-facing presentation records.
  * WHY: Raw producer records and artifact coordinates must stop at the backend parser boundary.
@@ -87,7 +95,8 @@ export type TaskExecutionPresentationEvent =
   | TaskExecutionTextEvent
   | TaskExecutionToolEvent
   | TaskExecutionFileEvent
-  | TaskExecutionTodoEvent;
+  | TaskExecutionTodoEvent
+  | TaskExecutionSubagentEvent;
 
 export type TaskExecutionPresentationCounts = {
   readonly tools: number;

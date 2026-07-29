@@ -9,9 +9,10 @@ import type {
   CodexPipelineStep,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { pipelineEditorModal } from '../../dom.js';
+import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../helper/codex-run-options.js';
-import { loadCodexSkillsResult, type CodexSkillSummary } from './load-codex-skills.js';
+import { loadCodexPipelines, type CodexPipelineContentSummary } from './load-codex-pipelines.js';
 import {
   requestCodexPipelineSave,
   type CodexPipelineSaveResult,
@@ -22,6 +23,7 @@ import { closePipelineSkillPicker, openPipelineSkillPicker } from './render-pipe
 type PipelineSkillDraft = {
   id: string;
   skillName: string;
+  contentKind: CodexPipelineSkill['contentKind'];
   codexModel: CodexModel | null;
   codexEffort: CodexEffort | null;
 };
@@ -43,7 +45,7 @@ export type PipelineEditorState = {
   createdAt?: string;
   updatedAt?: string;
   steps: PipelineStepDraft[];
-  skills: CodexSkillSummary[];
+  skills: CodexPipelineContentSummary[];
   openStepId: string;
   selectedSkillName: string;
   insertionIndex: number;
@@ -90,6 +92,7 @@ function cloneSkill(skill: CodexPipelineSkill): PipelineSkillDraft {
   return {
     id: skill.id,
     skillName: skill.skillName,
+    contentKind: skill.contentKind,
     codexModel: skill.codexModel as CodexModel | null,
     codexEffort: skill.codexEffort as CodexEffort | null,
   };
@@ -119,7 +122,7 @@ function activeStep(): PipelineStepDraft | undefined {
   return pipelineEditorState.steps.find((step) => step.id === pipelineEditorState.openStepId);
 }
 
-function skillSummary(skillName: string): CodexSkillSummary | undefined {
+function skillSummary(skillName: string): CodexPipelineContentSummary | undefined {
   return pipelineEditorState.skills.find((skill) => skill.name === skillName);
 }
 
@@ -285,11 +288,12 @@ function openStepSkillPicker(step: PipelineStepDraft): void {
     stepName: step.name,
     stepSkillNames: step.skills.map((skill) => skill.skillName),
     skills: pipelineEditorState.skills,
+    requestProjectId: state.projectId,
     insertionIndex: step.skills.length,
-    onInsert: ({ skillName, insertionIndex }) => {
-      pipelineEditorState.selectedSkillName = skillName;
-      pipelineEditorState.insertionIndex = insertionIndex;
-      addSkillToStep(step.id);
+    onInsert: (selection) => {
+      pipelineEditorState.selectedSkillName = selection.skillName;
+      pipelineEditorState.insertionIndex = selection.insertionIndex;
+      addSkillToStep(step.id, selection);
     },
     reloadSkills: async () => {
       await reloadPipelineEditorSkills();
@@ -471,7 +475,7 @@ export function renderPipelineEditorModal(): void {
 export async function openPipelineEditor(input: {
   pipeline?: CodexPipeline;
   steps?: readonly CodexPipelineStep[];
-  skills?: readonly CodexSkillSummary[];
+  skills?: readonly CodexPipelineContentSummary[];
   invalidReferences?: readonly CodexPipelineInvalidReference[];
   onSaved?: PipelineEditorState['onSaved'];
   onSaveError?: PipelineEditorState['onSaveError'];
@@ -508,12 +512,12 @@ export async function openPipelineEditor(input: {
   showEditor();
   telemetry('codex-pipeline-editor-open', { pipelineId, operation: pipeline ? 'update' : 'create' });
   if (!input.skills) {
-    const result = await loadCodexSkillsResult();
+    const result = await loadCodexPipelines();
     if (generation !== editorLoadGeneration) return;
-    pipelineEditorState.skills = result.skills;
-    pipelineEditorState.skillCatalogError = result.ok ? '' : result.error || 'Could not load Codex skills.';
+    pipelineEditorState.skills = [...result.availableContent];
+    pipelineEditorState.skillCatalogError = result.ok ? '' : result.error || 'Could not load pipeline content.';
     pipelineEditorState.loadingSkills = false;
-    pipelineEditorState.selectedSkillName = result.skills[0]?.name ?? '';
+    pipelineEditorState.selectedSkillName = result.availableContent[0]?.name ?? '';
     renderPipelineEditorModal();
   }
 }
@@ -597,17 +601,21 @@ export function selectPipelineEditorSkill(skillName: string): void {
   renderPipelineEditorModal();
 }
 
-export function addSkillToStep(stepId = pipelineEditorState.openStepId): void {
+export function addSkillToStep(stepId: string, selection: {
+  skillName: string;
+  contentKind: CodexPipelineSkill['contentKind'];
+  insertionIndex: number;
+}): void {
   const step = pipelineEditorState.steps.find((entry) => entry.id === stepId);
-  const skillName = pipelineEditorState.selectedSkillName;
-  if (!step || !skillName) return;
+  if (!step) return;
   const skill: PipelineSkillDraft = {
     id: generatedId('codex-step-skill'),
-    skillName,
+    skillName: selection.skillName,
+    contentKind: selection.contentKind,
     codexModel: null,
     codexEffort: null,
   };
-  const index = Math.max(0, Math.min(pipelineEditorState.insertionIndex, step.skills.length));
+  const index = Math.max(0, Math.min(selection.insertionIndex, step.skills.length));
   step.skills.splice(index, 0, skill);
   pipelineEditorState.insertionIndex = index + 1;
   pipelineEditorState.error = '';
@@ -696,16 +704,16 @@ export async function savePipelineDraft(): Promise<boolean> {
   return true;
 }
 
-export async function reloadPipelineEditorSkills(): Promise<readonly CodexSkillSummary[]> {
+export async function reloadPipelineEditorSkills(): Promise<readonly CodexPipelineContentSummary[]> {
   const generation = ++editorLoadGeneration;
   pipelineEditorState.loadingSkills = true;
   renderPipelineEditorModal();
-  const result = await loadCodexSkillsResult();
+  const result = await loadCodexPipelines();
   if (generation !== editorLoadGeneration) return pipelineEditorState.skills;
-  pipelineEditorState.skills = result.skills;
-  pipelineEditorState.skillCatalogError = result.ok ? '' : result.error || 'Could not load Codex skills.';
+  pipelineEditorState.skills = [...result.availableContent];
+  pipelineEditorState.skillCatalogError = result.ok ? '' : result.error || 'Could not load pipeline content.';
   pipelineEditorState.loadingSkills = false;
-  if (!skillSummary(pipelineEditorState.selectedSkillName)) pipelineEditorState.selectedSkillName = result.skills[0]?.name ?? '';
+  if (!skillSummary(pipelineEditorState.selectedSkillName)) pipelineEditorState.selectedSkillName = result.availableContent[0]?.name ?? '';
   renderPipelineEditorModal();
   return pipelineEditorState.skills;
 }

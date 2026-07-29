@@ -1,0 +1,153 @@
+## A. Scope
+
+1. **Goal need:** let an authorized author create and edit federated skills, workspace skills, and pipeline-only prompts; inspect Git-backed revisions; open an authorized Markdown file directly in the reusable editor; and deliver an admitted `dev` release to `main`, every Decision OS node, and the federation relay through one CLI.
+2. **Affected product areas:** Skills library, pipeline authoring and execution, federation library synchronization, Markdown routing, the CodeMirror file editor, Git revision storage, node lifecycle control, and relay deployment.
+3. **Evidence boundary:** findings use product source under `backend/src`, `frontend/src`, `frontend/assets`, `shared/schemas`, `bin`, and `federation-relay/src`. Documentation, README files, generated reports, Decision OS cards, and Decision OS threads were not used.
+4. **Implementation state:** the `dev` worktree contains uncommitted authoring and revision code. This analysis treats the visible source as current behavior evidence and does not establish release, deployment, or production status.
+
+---
+
+## B. Actors And Workflows
+
+1. **Content author:** opens the Skills surface, chooses `federated-skill`, `workspace-skill`, or `pipeline-prompt`, supplies identity and instructions, edits Markdown in CodeMirror, saves against an expected content revision, and inspects immutable Git revisions.
+2. **Pipeline designer:** selects content identities from the merged content catalog. Pipeline steps persist both `skillName` and `contentKind`.
+3. **Pipeline executor:** receives a generated prompt. Agent skills use normal skill invocation plus server package context; pipeline-only prompts are inserted directly into the process prompt.
+4. **Federated node:** exports committed server-owned skill packages, imports newer packages, and rejects remote pipeline manifests that contain `pipeline-prompt`.
+5. **Direct-file visitor:** follows a server URL whose path identifies a Markdown file. Current routing has no direct-file editor workflow for this actor.
+6. **Release operator:** needs one delivery command after `dev` admission. Current source exposes repository synchronization, node discovery and messaging, one local server restart endpoint, and a relay `deploy` package script as separate boundaries.
+
+---
+
+## C. Current Product Behavior
+
+1. **Three authored content kinds exist:** `CodexContentKind` defines `federated-skill`, `workspace-skill`, and `pipeline-prompt` in `shared/schemas/codex-pipeline-types.ts`.
+2. **Path-free creation exists:** `createCodexSkillLibrary` rejects client-supplied `skillFile`, `filePath`, and `path`. It derives server-owned creation roots and validates the frontmatter name, description, body, and one-million-byte ceiling.
+3. **Storage ownership differs by kind:** federated skills are created under the server root `.skills`; workspace skills are created under the selected project `.skills`; pipeline prompts are created under the server `.decision-os/pipeline-prompts` root and registered in `codex-pipelines.json`.
+4. **Discovery separates pipeline prompts:** `scanCodexSkills` scans server, workspace, user, system, and plugin roots. `scanPipelinePrompts` reads only registered prompt files from pipeline-owned storage. `readCodexSkillCatalog` excludes prompts; `readCodexContentCatalog` includes them for authoring and pipeline selection.
+5. **Identity collision is global within the merged authoring catalog:** creation rejects a new record when any discovered skill or pipeline prompt already has the requested name. When catalogs are merged, an existing skill name suppresses a same-name pipeline prompt.
+6. **Edit authorization is source- and path-bound:** system and plugin skills are read-only; symlinked files and paths outside verified roots are rejected. The client submits content identity and expected revision, not a filesystem path.
+7. **Concurrent edit detection exists:** saves compare the submitted SHA-256 revision with the current file bytes and return `409` when the file changed after load.
+8. **Every successful content create and edit attempts a Git commit:** `commitSkillFileRevision` uses a temporary index, refuses pre-staged authored paths, creates a single-file commit, updates `HEAD`, and reconciles those paths in the real index.
+9. **Save and Git commit are not one atomic outcome:** if file and metadata writes succeed but Git commit creation fails, the authored bytes remain, the response is `503`, and the response exposes `authoredBytesPreserved: true` and `gitRevisionCreated: false`.
+10. **Revision browsing exists for authorized content identities:** the backend exposes file history and immutable revision content plus patch data. The frontend provides `Newer` and `Older` navigation and renders the patch with Pierre using red removals, blue additions, signs, text, and ARIA labels.
+11. **The authoring modal is nearly full-screen:** `.skill-library-editor-modal` is `80vw` by `95vh` on desktop and viewport-filling within a `24px` inset on small screens.
+12. **The CodeMirror adapter is reusable but the workflow is skill-specific:** `mountCodeMirrorFileEditor` accepts a filename, Markdown, revision, read-only state, and change callbacks. The owning modal, API, validation, state, save behavior, and revision routes are all expressed in skill-library terms.
+13. **Unsaved-close protection exists inside the modal:** closing through the UI or dialog cancel asks for confirmation when the state differs from persisted content. No source evidence establishes protection for browser navigation away from the page.
+14. **Federated skill publication exports only committed server packages:** `exportableSkills` filters to `source === 'server'`, clean package paths, and tracked `SKILL.md` files. Workspace skills and pipeline prompts are excluded.
+15. **Federated skill synchronization transfers the current package, not its Git history:** snapshots contain package files, revision hash, and updated timestamp. Import replaces the package directory; no revision-commit transfer contract is present.
+16. **Pipeline-only injection works for local pipeline execution:** `buildPipelineSkillPrompt` inserts the prompt Markdown directly and omits the natural `$skillName` invocation.
+17. **Pipeline-only prompts cannot execute on a remote federated executor:** `assertExecutorCanRun` throws `task_execution_pipeline_prompt_not_federated` for a remote manifest containing `pipeline-prompt`.
+18. **Direct Markdown URLs do not open the editor:** the HTTP server recognizes application routes and static module roots. An unmatched filesystem-like Markdown URL reaches the generic JSON response `{ ok: true, method, url }`.
+19. **A single delivery CLI is absent:** `bin` contains server, node messaging, verification, migration, workload, and ledger commands, but no source-defined command that promotes `dev`, updates `main`, restarts every node, and deploys the relay.
+20. **Delivery primitives are separate and incomplete for the stated workflow:** project synchronization can publish and reconcile Git repositories; `/api/server/restart` restarts only the receiving process; `decision-os-node` lists nodes and sends Codex-backed messages; `federation-relay/package.json` exposes `wrangler deploy`.
+
+---
+
+## D. Expected Product Behavior
+
+1. **Safe authoring:** each supported content kind has an explicit owner, execution visibility, edit boundary, persistence result, revision result, and publication result visible to the author.
+2. **Reusable Markdown editor:** an authorized direct Markdown URL resolves to the same editor capability instead of the generic JSON fallback, while preserving server-owned file authorization.
+3. **Revision inspection:** every admitted save creates a navigable Git revision, and revision navigation shows the selected file state and an accessible red/blue diff.
+4. **Pipeline-only isolation:** prompt content remains absent from natural agent discovery and is injected only through a pipeline selection.
+5. **Federated behavior:** the expected availability of federated skills, workspace skills, pipeline prompts, and their histories is explicit for local and remote execution.
+6. **One-command delivery:** one CLI owns the complete admitted-dev-to-main delivery attempt, node restart coordination, relay deployment, verification, failure reporting, and durable outcome.
+
+---
+
+## E. Linked Source Contracts
+
+1. **`CodexContentKind` — authored content discriminator:** source `shared/schemas/codex-pipeline-types.ts`; **supports** the three content identities and constrains pipeline records to one declared kind.
+2. **`createCodexSkillLibrary` — path-free creation boundary:** source `backend/src/business/codex/helper/codex-skill-library.ts`; **supports** safe creation and constrains names, Markdown, roots, collisions, symlinks, and Git creation.
+3. **`saveCodexSkillLibrary` — revision-aware save boundary:** source `backend/src/business/codex/helper/codex-skill-library.ts`; **supports** optimistic concurrency and exposes the non-atomic content-written/Git-failed state.
+4. **`scanCodexSkills` and `scanPipelinePrompts` — discovery boundary:** sources `backend/src/business/codex/helper/scan-codex-skills.ts` and `backend/src/business/codex/helper/pipeline-prompt-library.ts`; **supports** prompt isolation and constrains which roots are naturally agent-discoverable.
+5. **`commitSkillFileRevision` — Git revision boundary:** source `backend/src/business/codex/helper/skill-git-revisions.ts`; **supports** authored revision creation and constrains commits to one repository and unstaged authored paths.
+6. **`mountCodeMirrorFileEditor` — editor adapter:** source `frontend/src/runtime/codex/component/codemirror-file-editor.ts`; **supports** a reusable Markdown editing surface but does not define file authorization, identity, persistence, or routing.
+7. **`renderSkillRevisionDiff` — Pierre revision renderer:** source `frontend/src/runtime/codex/component/render-skill-revision-diff.ts`; **supports** unified red/blue file diffs with non-color indicators.
+8. **`exportableSkills` and `importFederatedSkillSnapshot` — federated package boundary:** source `backend/src/business/federation/helper/federated-library-cache.ts`; **supports** current-package synchronization and constrains exports to clean committed server skills.
+9. **`buildPipelineSkillPrompt` and `assertExecutorCanRun` — execution boundary:** sources `backend/src/business/codex/helper/build-pipeline-skill-prompt.ts` and `backend/src/business/codex/helper/install-remote-pipeline-run.ts`; **supports** local explicit prompt injection and **blocks** pipeline prompts on remote federated executors.
+10. **`handleRequest` fallback routing — direct URL boundary:** source `backend/src/business/server/helper/create-http-server.ts`; **blocks** direct Markdown editing because unmatched file paths return generic JSON.
+11. **`createProjectSyncController` — repository synchronization protocol:** source `backend/src/business/project-sync/controller/start-project-sync.ts`; **adjacent** to delivery because it coordinates repository publication and reconciliation but does not own release promotion, node restart, or relay deployment.
+12. **`/api/server/restart`, `decision-os-node`, and relay `deploy` script — operational primitives:** sources `backend/src/business/server/helper/create-http-server.ts`, `bin/decision-os-node.mjs`, and `federation-relay/package.json`; **adjacent** to one-command delivery but remain independent operations.
+13. **Formal spec IDs and titles:** **unknown**. No source-code spec registry or stable product-spec IDs were found in the inspected product source, so none are invented here.
+
+---
+
+## F. Acceptance Signals
+
+1. **Federated skill creation:** the author selects `federated-skill`; the returned record reports `contentKind: federated-skill`, `executionVisibility: agent`, an editable current revision, and a Git revision; the committed server package becomes eligible for federation export.
+2. **Workspace skill creation:** the author selects a concrete project; the returned record reports `contentKind: workspace-skill`; the file remains owned by that project and is absent from the federated server-skill export.
+3. **Pipeline prompt creation:** the returned record reports `contentKind: pipeline-prompt` and `executionVisibility: pipeline-only`; the prompt is absent from the natural skill catalog and present in the pipeline content catalog.
+4. **Conflict handling:** a stale expected revision returns `409`, does not overwrite the newer canonical bytes, and leaves the author with an explicit conflict state.
+5. **Successful save:** the returned Markdown and SHA-256 revision match persisted bytes, the returned Git revision is present in the file history, and revision navigation can load its immutable content and patch.
+6. **Diff accessibility:** removed and added lines remain distinguishable through red/blue color, minus/plus indicators, text labels, and an accessible group description.
+7. **Direct Markdown URL:** the URL opens an editor for the resolved authorized file identity; an unauthorized, missing, symlinked, oversized, binary, or out-of-root file produces a specific non-editing state.
+8. **Reusable editor persistence:** a direct-file save reports the new content revision and Git revision using the owning file contract, and reloading the same URL returns the saved bytes.
+9. **Pipeline isolation:** ordinary skill discovery never returns pipeline prompts; a selected local pipeline injects the exact registered prompt bytes.
+10. **Delivery admission:** the CLI identifies the exact admitted `dev` commit and the exact `main` predecessor before mutation.
+11. **Delivery completion:** the CLI reports the resulting `main` commit, relay deployment identity, every targeted node, restart acknowledgement, post-restart version, health, and required convergence state.
+12. **Delivery failure:** partial completion identifies each completed and failed phase without reporting global success; the durable result remains queryable after the invoking process exits.
+
+---
+
+## G. Missing Product And UX Specifications
+
+1. **Author role and authorization are missing:** source verifies filesystem boundaries but does not define which authenticated actor may create, edit, publish, inspect history, or invoke delivery.
+2. **Content-kind naming and explanation are incomplete:** the UI labels exist, but the product copy, default kind, destructive consequences of changing visibility, and user-facing distinction between server-wide, project-owned, and pipeline-only content are not specified.
+3. **Cross-kind name collision behavior is unspecified:** current code enforces one merged identity namespace. The expected user experience when the same name is meaningful in multiple scopes is unknown.
+4. **Ownership transfer is unspecified:** no expected workflow is defined for moving content between federated, workspace, and pipeline-only ownership after creation.
+5. **Deletion, archival, rename, and restoration are unspecified:** the authoring contract creates and edits content only.
+6. **Git-failure UX is unspecified:** current behavior can preserve new bytes while returning a failed save because no Git revision exists. The author-visible status, next action, publication eligibility, and repeat-save semantics are unknown.
+7. **History semantics are incomplete:** the expected maximum visible revisions, pagination, initial revision selection, renamed-file history, merge history, revision author identity, empty diffs, and historical restore behavior are unspecified.
+8. **Revision browser behavior is incomplete:** the operator need mentions seeing prior file states, but the current history view renders a diff only. Whether the full historical Markdown must be displayed alongside the diff is unknown.
+9. **Unsaved navigation behavior is incomplete:** modal close confirmation exists, but route changes, direct URL changes, page refresh, browser close, and session restoration are unspecified.
+10. **Direct Markdown URL presentation is unspecified:** the expected canonical route shape, whether the surrounding Decision OS shell remains visible, initial focus, title, breadcrumbs, back behavior, and read-only presentation are unknown.
+11. **Direct-file permissions and error states are unspecified:** allowed roots, file types beyond Markdown, maximum bytes, symlink policy, repository requirement, non-Git files, staged files, externally changed files, and remote project replicas are unknown.
+12. **Direct-file identity is unspecified:** the URL currently embeds a filesystem path, while the existing authoring API explicitly rejects client paths. The stable server-authorized identity returned to the client is not defined.
+13. **Direct-file revision behavior is unspecified:** whether arbitrary Markdown saves commit only that file, include related metadata, refuse staged paths, and move the repository `HEAD` is unknown.
+14. **Thread attachment scope is adjacent but unspecified:** the generic editor adapter mentions future attachment editing, while current uploads are served as thread assets. Attachment mutability, ownership, revision storage, and authorization are not defined.
+15. **Federated prompt execution is unresolved:** local injection exists, but remote admission rejects every pipeline prompt. The expected behavior for a pipeline step assigned to another node is unknown.
+16. **Federated revision availability is unspecified:** synchronization transfers the current skill package without Git commit history. The expected history visible on importing nodes is unknown.
+17. **Federated conflict behavior is unspecified:** package import selects by timestamp then revision and skips an equal or newer local package. Operator-visible conflict, provenance, and reconciliation behavior are not defined.
+18. **Publication feedback is incomplete:** create and save responses can succeed before asynchronous federation synchronization settles. The UI has no source-backed synchronized, pending, or failed publication state for the authored revision.
+19. **Mobile editor behavior is incomplete:** responsive dimensions exist, but keyboard occlusion, toolbar overflow, revision navigation density, and long-diff behavior are unspecified.
+20. **Delivery command experience is missing:** command name, arguments, interactive behavior, machine-readable output, dry-run behavior, confirmation semantics, and exit-code contract are unknown.
+
+---
+
+## H. Missing Technical, Data, And Operational Specifications
+
+1. **Dev admission record is undefined:** source does not define the durable object that proves a specific `dev` commit is accepted for promotion.
+2. **Promotion semantics are undefined:** fast-forward, merge commit, cherry-pick, protected branch interaction, remote branch, tag, and release identity are unknown.
+3. **Repository cleanliness rules are incomplete:** project synchronization requires clean retained worktrees, but delivery behavior for unrelated dirty worktrees, staged operator changes, local commits, active Git operations, and concurrent pushes is not defined.
+4. **Delivery topology is undefined:** federation node discovery exposes currently known nodes, but the authoritative set of all nodes that must be restarted is unknown, especially for offline nodes.
+5. **Node restart authorization is missing:** `/api/server/restart` has no source-visible delivery-scoped authentication, idempotency token, target version, or admission proof.
+6. **Restart acknowledgement is insufficient:** the endpoint acknowledges before process exit. The source does not define how the delivery owner proves supervisor restart, new process identity, new code version, catalog restoration, and federation reconnection.
+7. **Restart order is undefined:** relay-first, nodes-first, rolling, parallel, and compatibility-window behavior are unresolved.
+8. **Service availability requirements are undefined:** permitted downtime, minimum healthy nodes, rolling quorum, client retry behavior, and maintenance signaling are unknown.
+9. **Relay deployment contract is missing:** environment, account, Worker name, credential source, migration admission, deploy version, rollback target, and post-deploy health evidence are not represented by one product boundary.
+10. **Cross-version protocol compatibility is unspecified:** the relay declares protocol and state versions, but delivery has no source-defined compatibility check between the admitted node code and the relay deployment.
+11. **Failure containment and compensation are undefined:** behavior after main promotion succeeds but relay deploy fails, after some nodes restart, or after an offline node misses the release is unknown.
+12. **Retry and resume identity are undefined:** no delivery ID, phase journal, idempotency key, lock, lease, deadline, cancellation signal, or resume command exists.
+13. **Audit data is undefined:** initiator, admitted commit, main predecessor/result, relay deployment, target nodes, phase timestamps, evidence, failures, retries, and final status have no durable schema.
+14. **Secret handling is undefined:** Git credentials, federation credentials, Cloudflare credentials, and supervisor access have separate current owners; one-command delivery credential boundaries are not specified.
+15. **Canary-to-production configuration mapping is undefined:** the expected transformation of ports, node identities, federation IDs, relay environment, settings files, and process registrations during promotion is unknown.
+16. **Post-delivery verification is undefined:** required HTTP routes, process identity, code SHA, project catalog, task-state convergence, content convergence, skill manifest convergence, pipeline availability, and relay health do not have one acceptance contract.
+17. **Rollback is undefined:** rollback trigger, allowed window, main branch restoration, node binary restoration, relay rollback, data migration compatibility, and evidence required before rollback success are unknown.
+18. **Global Git concurrency is unverified:** authored saves update repository `HEAD`; source has a compare-and-swap retry but no product-level coordination with delivery promotion or other concurrent authored saves.
+19. **Pipeline-prompt data replication is absent:** pipeline snapshots carry pipeline and step records but not prompt Markdown; remote executor admission explicitly rejects prompt content. The required content distribution model is unknown.
+20. **Formal ownership is missing:** no source contract assigns one component as the authority for the complete delivery lifecycle or the reusable arbitrary-file editing lifecycle.
+
+---
+
+## I. Evidence Gaps Requiring Product Decisions
+
+1. **Product-boundary decision:** whether pipeline-only prompts are local-only pipeline content or valid in federated pipelines.
+2. **Product-boundary decision:** whether arbitrary Markdown editing is limited to registered authored content, extends to project-owned files, or accepts absolute-path URLs through a server authorization layer.
+3. **Product-boundary decision:** whether direct-file revisions share the current skill Git-commit behavior, including `HEAD` movement and staged-path refusal.
+4. **Product-boundary decision:** whether imported federated skills expose origin revision history, local import history, or current content only.
+5. **Product-boundary decision:** what exact durable fact means `dev` is admitted for production delivery.
+6. **Operational decision:** which node registry is authoritative for “all nodes,” including offline and newly joining nodes.
+7. **Operational decision:** whether one delivery completes only when every node runs the admitted version or when unavailable nodes are recorded for later reconciliation.
+8. **Operational decision:** the required order and compatibility contract for main promotion, relay deployment, and node restarts.
+9. **Data decision:** the durable schema and storage owner for delivery attempts, phase receipts, verification evidence, retry state, and rollback state.
+10. **UX decision:** the exact success, partial-success, failure, recovery, and historical-restore states shown to authors and release operators.
