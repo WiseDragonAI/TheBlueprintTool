@@ -121,7 +121,9 @@ function displaySegment(segment: string): string {
 
 function isMeaningfulPath(path: string): boolean {
   const segments = path.split('/');
-  if (segments.some((segment, index) => index < segments.length - 1 && excludedDirectoryNames.has(segment))) return false;
+  if (segments.some((segment, index) =>
+    index < segments.length - 1
+    && (excludedDirectoryNames.has(segment) || segment.startsWith('.decision-os-')))) return false;
   const name = basename(path);
   if (excludedFileNames.has(name)) return false;
   if (/\.min\.(?:css|js)$/.test(name) || /\.map$/.test(name) || /(?:^|[-_.])license(?:[-_.]|$)/i.test(name)) return false;

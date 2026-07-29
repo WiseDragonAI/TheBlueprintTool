@@ -33,6 +33,7 @@ test('meaningful file map uses Git ignore rules and renders source plus document
     write(workspace, 'frontend/dist/bundle.js');
     write(workspace, 'frontend/assets/vendor/library.js');
     write(workspace, '.decision-os/cards/card.md');
+    write(workspace, '.decision-os-recovery/state.json');
     write(workspace, '.skills/example/SKILL.md');
     write(workspace, 'package-lock.json');
     write(workspace, 'assets/logo.png');
