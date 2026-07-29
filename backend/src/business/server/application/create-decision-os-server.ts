@@ -16,7 +16,6 @@ import { watchProjectFiles } from '../../refresh/helper/watch-project-files.js';
 import { applyLedgerMutation, type LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { createLedgerRevisionTracker } from '../helper/create-ledger-revision-tracker.js';
 import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
-import { recoverTaskExecutions } from '../../codex/helper/recover-task-executions.js';
 import { readCodexPipelineRunController } from '../../codex/controller/read-codex-pipeline-run-controller.js';
 import { unifiedCodexQueuePosition } from '../../codex/helper/codex-process-scheduler.js';
 import {
@@ -86,7 +85,6 @@ import { createCodexProcessCoordinator } from '../../codex/runtime/codex-process
 import { createTaskExecutionPresentationRegistry } from '../../codex/runtime/task-execution-presentation-registry.js';
 import { handleDeliveryRoutes } from '../../delivery/http/delivery-routes.js';
 import { handleRuntimeRecoveryRoute } from '../http/runtime-recovery-route.js';
-import { resumeRuntimeScope } from '../runtime/resume-runtime-scope.js';
 import { handleLegacyLedgerRoutes } from '../../ledger/http/legacy-ledger-routes.js';
 import { createLedgerPersistence } from '../../ledger/runtime/ledger-persistence.js';
 import { handleMarkdownTargetRoutes } from '../../content-authoring/http/markdown-target-routes.js';
@@ -99,6 +97,7 @@ import { createFederatedLibraryRuntime } from '../../federation/runtime/federate
 import { handleRemoteProjectGateway } from '../../federation/http/remote-project-gateway.js';
 import { createFederatedExecutionObservationHandler } from '../../federation/runtime/federated-execution-observation-handler.js';
 import { createProjectRuntimeRegistry } from '../runtime/project-runtime-registry.js';
+import { createRuntimeRecoveryService } from '../runtime/runtime-recovery-service.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -180,14 +179,12 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
     pauseGlobalRuntime,
     pauseTaskProject,
     pausedBackgroundComponents,
-    pausedFederatedTaskProjects,
     pausedProjectRuntimes,
     pausedProjectWatchers,
     pausedTaskProjects,
     recordBackgroundFailure,
     recordIncident,
     recordStoppedOperation,
-    taskProjectsPendingFrameIncidentRevalidation,
   } = incidentSupervisor;
   const onUncaughtException = (error: Error): void => pauseGlobalRuntime(error, 'uncaught-exception');
   const onUnhandledRejection = (reason: unknown): void => pauseGlobalRuntime(reason, 'unhandled-rejection');
@@ -678,6 +675,22 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
   });
   resumeProjectSyncRuntime = projectSyncRuntime.resume;
   const activeProjectSyncController = projectSyncRuntime.controller;
+  const recoverRuntimeScope = createRuntimeRecoveryService({
+    codexCoordinator: codexProcessCoordinator,
+    contentScheduler: () => federationContentScheduler,
+    federatedLibrary: federatedLibraryRuntime,
+    federatedTaskRuntime,
+    incidentLedger,
+    incidentSupervisor,
+    initializePipelineCatalog: federatedLibraryRuntime.initialize,
+    localTaskRuntime,
+    migrateProjectPipelines,
+    projectById: (projectId) => projectCatalogStore.projects()
+      .find((project) => project.id === projectId && project.available) ?? null,
+    projectRuntimeRegistry,
+    projectSyncRuntime,
+    replicator: () => federationTaskStateReplicator,
+  });
   Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
   controlRoomProjectionStore = createControlRoomProjectionStore({
     cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
@@ -782,97 +795,7 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
     const runtimeRecoveryRoute = await handleRuntimeRecoveryRoute({
       request,
       response,
-      resume: (scope, resolution) => resumeRuntimeScope({
-        incidentLedger,
-        incidentSupervisor,
-        resolution,
-        resumeBackground: async (component) => {
-          if (component === 'pipeline-migration') migrateProjectPipelines();
-          if (component === 'pipeline-catalog') federatedLibraryRuntime.initialize();
-          if (component === 'federated-library-sync') await federatedLibraryRuntime.synchronize();
-          if (component === 'codex-process-scheduler') await scheduleGlobalCodexProcesses();
-          if (component === 'federation-content-scheduler') {
-            await federationContentScheduler?.drain();
-          }
-          if (component === 'project-sync-store' || component === 'project-sync-runtime') {
-            projectSyncRuntime.resume();
-          }
-          if (component.startsWith('codex-runtime:')) {
-            const projectId = component.slice('codex-runtime:'.length);
-            const project = projectCatalogStore.projects()
-              .find((entry) => entry.id === projectId && entry.available);
-            const activeContext = project
-              ? projectContexts.get(project.decisionOsRoot)
-              : null;
-            if (!project || !activeContext) {
-              throw new Error(`Codex runtime ${projectId} is unavailable.`);
-            }
-            try {
-              await recoverTaskExecutions(activeContext.runtime);
-              activeContext.runtime.codexRuntimePaused = false;
-              await scheduleGlobalCodexProcesses();
-            } catch (error) {
-              activeContext.runtime.codexRuntimePaused = true;
-              throw error;
-            }
-          }
-          if (component.startsWith('codex-startup-')) {
-            const projectId = component.slice('codex-startup-'.length);
-            const project = projectCatalogStore.projects()
-              .find((entry) => entry.id === projectId && entry.available);
-            const activeContext = project
-              ? projectContexts.get(project.decisionOsRoot)
-              : null;
-            if (!project || !activeContext) {
-              throw new Error(`Project runtime ${projectId} is unavailable.`);
-            }
-            await recoverTaskExecutions(activeContext.runtime);
-          }
-          return true;
-        },
-        resumeFederatedTaskProject: (projectId) => {
-          pausedFederatedTaskProjects.delete(projectId);
-          federatedExecutionStates.delete(projectId);
-          federatedTaskStores.delete(projectId);
-          const resumed = Boolean(federatedTaskStoreForProject(projectId, 'operator-resume'));
-          if (resumed) federationTaskStateReplicator?.reconcileProject('relay', projectId);
-          return resumed;
-        },
-        resumeProjectRuntime: (projectId) => {
-          const project = projectCatalogStore.projects()
-            .find((entry) => entry.id === projectId && entry.available);
-          if (!project) return false;
-          pausedProjectRuntimes.delete(projectId);
-          return Boolean(tryProjectContext(project, 'operator-resume-project-runtime'));
-        },
-        resumeProjectWatcher: (projectId) => {
-          const project = projectCatalogStore.projects()
-            .find((entry) => entry.id === projectId && entry.available);
-          if (!project) return false;
-          pausedProjectWatchers.delete(projectId);
-          const activeContext = projectContexts.get(project.decisionOsRoot);
-          if (activeContext) disposeProjectContext(activeContext);
-          projectContexts.delete(project.decisionOsRoot);
-          return Boolean(tryProjectContext(project, 'operator-resume-project-runtime'));
-        },
-        resumeTaskProject: (projectId) => {
-          const project = projectCatalogStore.projects()
-            .find((entry) => entry.id === projectId && entry.available);
-          if (!project) return false;
-          pausedTaskProjects.delete(projectId);
-          projectTaskStates.delete(projectId);
-          let resumed = Boolean(tryTaskStateForProject(project));
-          if (resumed) {
-            const activeContext = projectContexts.get(project.decisionOsRoot);
-            if (activeContext) disposeProjectContext(activeContext);
-            projectContexts.delete(project.decisionOsRoot);
-            resumed = Boolean(tryProjectContext(project, 'operator-resume-task-state'));
-          }
-          if (resumed) federationTaskStateReplicator?.reconcileProject('relay', projectId);
-          return resumed;
-        },
-        scope,
-      }),
+      resume: recoverRuntimeScope,
       url: requestPath,
     });
     if (runtimeRecoveryRoute.handled) return;
