@@ -22,6 +22,7 @@ export type ProjectTaskMutationResult = {
   deltas: TaskStateDelta[];
   localChanges: TaskProjectionEntityChange[];
   ledger: AnyRecord;
+  contentGitRevision?: AnyRecord;
 };
 
 export type TaskContentHeadRepairResult = {
@@ -56,6 +57,7 @@ export function createProjectTaskState(input: {
   tasksLedgerFile: string;
   publish?: (delta: TaskStateDelta) => void | Promise<void>;
   publishContent?: (resourceId: string) => void | Promise<void>;
+  commitContent?: (change: { mutation: LedgerMutation; changedContentFiles: readonly string[] }) => Promise<AnyRecord | null>;
   initialize?: boolean;
   canWrite?: () => boolean;
   onPersistenceError?: (error: Error) => void;
@@ -313,7 +315,18 @@ export function createProjectTaskState(input: {
       const resourceIds = taskContentReferences(body);
       deltas.push(await recordContentContribution(command.activationTaskId, resourceIds));
     }
-    return { changed, deltas, localChanges: projectionEntityChanges(command.changes), ledger: store.projection().ledger };
+    // WHAT: Put versioned task Markdown behind a second durable boundary before acknowledging the mutation.
+    // WHY: Repository cleanup must not be able to remove a newly created task or accepted thread message as untracked state.
+    const contentGitRevision = mutationResources.size > 0
+      ? await input.commitContent?.({ mutation, changedContentFiles: [...mutationResources] }) ?? null
+      : null;
+    return {
+      changed,
+      deltas,
+      localChanges: projectionEntityChanges(command.changes),
+      ledger: store.projection().ledger,
+      ...(contentGitRevision ? { contentGitRevision } : {}),
+    };
   };
 
   const executeMutation = (
