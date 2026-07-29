@@ -90,7 +90,120 @@
       "updatedAt": "2026-07-28T16:19:04.151Z"
     }
   ],
-  "runs": [],
+  "runs": [
+    {
+      "id": "codex-pipeline-1785277993972-5b69c11a",
+      "restartOfPipelineRunId": null,
+      "queuedAfterExecutionId": null,
+      "initialInputCardId": null,
+      "pipelineId": "codex-pipeline-abc71bb3-8c7a-4891-8044-79e3a76651b7",
+      "pipelineName": "ReflectLife",
+      "temporary": false,
+      "executionMode": "local",
+      "ledgerId": "tasks",
+      "sourceCardId": "card-6375a063-6f1a-4a04-90fb-9233db9edcf9",
+      "sourceCardTitle": "New task intake",
+      "outputParentCardId": "card-6375a063-6f1a-4a04-90fb-9233db9edcf9",
+      "status": "pending",
+      "steps": [
+        {
+          "id": "codex-pipeline-1785277993972-5b69c11a-step-1",
+          "stepId": "codex-step-dad96b0a-cada-4c9a-ae90-9244eb8311f2",
+          "name": "Step 1",
+          "purpose": "",
+          "outputCardId": "card-codex-pipeline-1785277993972-5b69c11a-step-1",
+          "outputSubtaskPosition": 0,
+          "status": "pending",
+          "skills": [
+            {
+              "id": "codex-pipeline-1785277993972-5b69c11a-step-1-skill-1",
+              "pipelineSkillId": "codex-pipeline-skill-d0e3b6bc-adcb-4dc4-9eb7-bdfe844f7672",
+              "skillName": "psychoqwak",
+              "runId": "codex-skill-1785277993973-12f9fc36",
+              "executionId": "codex-execution-1785277993973-535526f9",
+              "status": "pending",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "low",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.worktrees/dev/.decision-os/runs/codex-skills/tasks/codex-skill-1785277993973-12f9fc36.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.worktrees/dev/.decision-os/runs/codex-skills/tasks/codex-skill-1785277993973-12f9fc36.log",
+              "startedAt": null,
+              "finishedAt": null,
+              "error": "",
+              "contentKind": "pipeline-prompt",
+              "contentRevision": "28a8dee11bb4738bc5f675a768192c61aabffbea2b7fab804a33f0004257a576",
+              "contentCommit": "8724919f42498a1024484069f3e270390ed2b443",
+              "promptSnapshot": "Reflect using psychology skills on the user input. \nTry to raise it's awareness and move from pure psychological to spiritual awareness. \nWorld is pain and pleasure, until you realize there is none, and then peace can exists.\n\nDon't repeat it verbatim, Find where the user needs to go.\n"
+            }
+          ],
+          "startedAt": null,
+          "finishedAt": null,
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-28T22:33:13.972Z",
+      "updatedAt": "2026-07-28T22:33:13.972Z",
+      "startedAt": null,
+      "finishedAt": null,
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-pipeline-1785280877160-9427852b",
+      "restartOfPipelineRunId": null,
+      "queuedAfterExecutionId": null,
+      "initialInputCardId": null,
+      "pipelineId": "codex-pipeline-abc71bb3-8c7a-4891-8044-79e3a76651b7",
+      "pipelineName": "ReflectLife",
+      "temporary": false,
+      "executionMode": "local",
+      "ledgerId": "tasks",
+      "sourceCardId": "card-6375a063-6f1a-4a04-90fb-9233db9edcf9",
+      "sourceCardTitle": "Build Mutual Clarity in an Important Relationship",
+      "outputParentCardId": "card-6375a063-6f1a-4a04-90fb-9233db9edcf9",
+      "status": "pending",
+      "steps": [
+        {
+          "id": "codex-pipeline-1785280877160-9427852b-step-1",
+          "stepId": "codex-step-dad96b0a-cada-4c9a-ae90-9244eb8311f2",
+          "name": "Step 1",
+          "purpose": "",
+          "outputCardId": "card-codex-pipeline-1785280877160-9427852b-step-1",
+          "outputSubtaskPosition": 1,
+          "status": "pending",
+          "skills": [
+            {
+              "id": "codex-pipeline-1785280877160-9427852b-step-1-skill-1",
+              "pipelineSkillId": "codex-pipeline-skill-d0e3b6bc-adcb-4dc4-9eb7-bdfe844f7672",
+              "skillName": "psychoqwak",
+              "runId": "codex-skill-1785280877160-5575dfe2",
+              "executionId": "codex-execution-1785280877160-f13ef7be",
+              "status": "pending",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "low",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.worktrees/dev/.decision-os/runs/codex-skills/tasks/codex-skill-1785280877160-5575dfe2.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.worktrees/dev/.decision-os/runs/codex-skills/tasks/codex-skill-1785280877160-5575dfe2.log",
+              "startedAt": null,
+              "finishedAt": null,
+              "error": "",
+              "contentKind": "pipeline-prompt",
+              "contentRevision": "28a8dee11bb4738bc5f675a768192c61aabffbea2b7fab804a33f0004257a576",
+              "contentCommit": "8724919f42498a1024484069f3e270390ed2b443",
+              "promptSnapshot": "Reflect using psychology skills on the user input. \nTry to raise it's awareness and move from pure psychological to spiritual awareness. \nWorld is pain and pleasure, until you realize there is none, and then peace can exists.\n\nDon't repeat it verbatim, Find where the user needs to go.\n"
+            }
+          ],
+          "startedAt": null,
+          "finishedAt": null,
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-28T23:21:17.160Z",
+      "updatedAt": "2026-07-28T23:21:17.160Z",
+      "startedAt": null,
+      "finishedAt": null,
+      "resumedAt": null,
+      "error": ""
+    }
+  ],
   "skillLibrary": [
     {
       "skillName": "implementation-orchestrator",
@@ -117,6 +230,14 @@
       "defaultCodexModel": null,
       "defaultCodexEffort": null,
       "updatedAt": "2026-07-17T04:51:46.105Z"
+    },
+    {
+      "skillName": "psychoqwak",
+      "favorite": true,
+      "tags": [],
+      "defaultCodexModel": null,
+      "defaultCodexEffort": null,
+      "updatedAt": "2026-07-29T01:53:59.283Z"
     }
   ],
   "authoredContent": [
@@ -124,7 +245,7 @@
       "id": "psychoqwak",
       "description": "Use to reflect on life",
       "createdAt": "2026-07-28T16:16:18.207Z",
-      "updatedAt": "2026-07-28T16:16:18.207Z",
+      "updatedAt": "2026-07-29T01:53:59.283Z",
       "kind": "pipeline-prompt",
       "contentFile": "pipeline-prompts/psychoqwak.md"
     }
