@@ -1,5 +1,13 @@
 ## A. Static Canary Topology
 
+1. This procedure is the Linux workstation implementation. The Android phone implementation is [Termux Phone Canary Environment](./canary-termux-phone-environment.md).
+2. Do not combine MultiTerm and runit registrations. Select the procedure matching the host that owns ports `50151` and `50152`.
+3. The shared invariants are the `dev` branch, isolated worktree, ports, exact-SHA evidence, distinct federation identity, production exclusion, and dev-only cleanup.
+
+---
+
+## B. Workstation Topology
+
 1. **Branch:** `dev`.
 2. **Worktree:** `/home/jbb/dev/EditorBP/decision-os/.worktrees/dev`.
 3. **Production application:** `http://127.0.0.1:50150/`.
@@ -21,7 +29,7 @@
 
 ---
 
-## B. MultiTerm Ownership
+## C. MultiTerm Ownership
 
 1. Replace `<exact-origin-dev-sha>` with the same current candidate SHA in both registrations.
 2. Register the source-defined `env.dev` relay:
@@ -74,7 +82,7 @@
 
 ---
 
-## C. Relay Identity
+## D. Relay Identity
 
 1. `federation-relay/wrangler.toml` defines:
    1. Production Worker `decision-os-federation-relay`
@@ -100,7 +108,7 @@
 
 ---
 
-## D. Fixed Health And Isolation Evidence
+## E. Fixed Health And Isolation Evidence
 
 1. Capture application and relay health without restarting production:
 
@@ -132,7 +140,7 @@
 
 ---
 
-## E. Verification Lease
+## F. Verification Lease
 
 1. Run every test and typecheck through the repository-wide lease:
 
@@ -150,7 +158,7 @@
 
 ---
 
-## F. Content Authoring Proof
+## G. Content Authoring Proof
 
 1. Create, save, reload, and inspect history for `federated-skill`, `workspace-skill`, and `pipeline-prompt`.
 2. Record the exact identity-scoped request, response, loaded SHA-256 revision, resulting Git commit, committed path allowlist, reload result, and cursor history receipts.
@@ -164,7 +172,7 @@
 
 ---
 
-## G. Owner Routing And Task Proof
+## H. Owner Routing And Task Proof
 
 1. Open direct `GET` and `HEAD` Markdown paths for a Task card, current card thread, editable skill, protected skill, and registered prompt.
 2. Record HTTP `302`, `Cache-Control: no-store`, no raw Markdown response, and the exact canonical route.
@@ -178,7 +186,7 @@
 
 ---
 
-## H. Prompt And Federation Proof
+## I. Prompt And Federation Proof
 
 1. Admit one clean committed prompt and record its exact `contentKind`, `contentRevision`, `contentCommit`, and `promptSnapshot`.
 2. Verify local execution injects the snapshot exactly once and does not re-read mutable prompt bytes.
@@ -191,7 +199,7 @@
 
 ---
 
-## I. Git And Recovery Proof
+## J. Git And Recovery Proof
 
 1. For each successful create and save, record prior and resulting `HEAD`, exact transaction-bound files, response content revision, response Git revision, and reloaded bytes.
 2. A prompt commit contains only prompt Markdown and `.decision-os/codex-pipelines.json`.
@@ -204,7 +212,7 @@
 
 ---
 
-## J. Candidate Evidence Bundle
+## K. Candidate Evidence Bundle
 
 1. After the complete automated and served proof passes, write the strict `<catalog-root>/.decision-os/delivery/candidate-input.json`, then invoke:
 
@@ -225,7 +233,7 @@
 
 ---
 
-## K. Promotion Gate
+## L. Promotion Gate
 
 1. Require one clean pushed candidate where `HEAD == origin/dev`, current `origin/main` is an ancestor, all required checks pass, and candidate evidence matches that exact SHA.
 2. Require every active project-owning node to expose delivery protocol `1` and adopted supervisor evidence.
@@ -244,7 +252,7 @@
 
 ---
 
-## L. Dev-Only Cleanup
+## M. Dev-Only Cleanup
 
 1. Stop and remove the canary application:
 
