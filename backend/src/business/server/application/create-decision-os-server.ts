@@ -9,7 +9,6 @@ import { basename, dirname, resolve } from 'node:path';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { resolveDecisionOsRoot } from '../helper/resolve-decision-os-root.js';
 import { normalizeLedgerNotes } from '../helper/normalize-ledger-notes.js';
-import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '../../ledger/helper/card-content-file.js';
 import { stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
 import { resolveCardContentChange, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
@@ -40,46 +39,26 @@ import { runtimeIncidentReviewProjectId } from '../helper/synchronize-runtime-in
 import { exportFederatedPipelineSnapshot } from '../../federation/helper/federated-library-cache.js';
 import type { TaskExecutionObservation } from '../../../../../shared/schemas/task-execution-types.js';
 import { migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
-import { tryServeDecisionOsAsset } from '../http/decision-os-asset-handler.js';
-import { serveStaticApplication } from '../http/static-application-handler.js';
-import { handleProjectCatalogRoutes } from '../http/project-catalog-routes.js';
-import { handleSettingsRoutes } from '../http/settings-routes.js';
-import { handleTranscriptionRoutes } from '../../transcription/http/transcription-routes.js';
-import { handleThreadUploadRoutes } from '../../transcription/http/thread-upload-routes.js';
 import { handleGitReviewRoutes } from '../../git-review/http/git-review-routes.js';
-import { handleContentEventRoutes } from '../http/content-event-routes.js';
 import {
   createIncidentSupervisor,
   isExecutionScopedCodexFailure,
 } from '../runtime/incident-supervisor.js';
-import { handleOperationalRoutes } from '../http/operational-routes.js';
 import { createNodeHttpListener } from '../http/create-node-http-listener.js';
 import { handleControlRoomRoutes } from '../http/control-room-routes.js';
 import { handleDiagnosticReadRoutes } from '../http/diagnostic-routes.js';
-import { handleCodexPipelineRoutes } from '../../codex/http/pipeline-routes.js';
-import { handleCodexSkillLibraryRoutes } from '../../codex/http/skill-library-routes.js';
-import { handleCodexSkillRunRoutes } from '../../codex/http/skill-run-routes.js';
 import { createLocalTaskRuntime } from '../../task-state/runtime/local-task-runtime.js';
 import { createTaskExecutionRouterRegistry } from '../../codex/runtime/task-execution-router-registry.js';
 import { createFederatedTaskRuntime } from '../../task-state/runtime/federated-task-runtime.js';
-import { handleTaskStateRoutes } from '../../task-state/http/task-state-routes.js';
-import { handleFederationContentRoutes } from '../../federation/http/content-routes.js';
-import { handleFederatedLibraryRoutes } from '../../federation/http/library-routes.js';
 import { handleNodeMessageRoutes } from '../../federation/http/node-message-routes.js';
-import { handleProjectSyncRoutes } from '../../project-sync/http/project-sync-routes.js';
 import { executeFederatedProjectSyncRole } from '../../project-sync/runtime/execute-federated-project-sync-role.js';
 import { createProjectSyncRuntime } from '../../project-sync/runtime/project-sync-runtime.js';
-import { handleLedgerReadRoutes } from '../../ledger/http/ledger-read-routes.js';
-import { handleCardContentRoutes } from '../../ledger/http/card-content-routes.js';
-import { handleTaskExecutionReadRoutes } from '../../codex/http/task-execution-read-routes.js';
 import { handleInternalTaskExecutionRoutes } from '../../codex/http/internal-task-execution-routes.js';
 import { handleFederatedExecutionAdmissionRoutes } from '../../codex/http/federated-execution-admission-routes.js';
 import { createCodexProcessCoordinator } from '../../codex/runtime/codex-process-coordinator.js';
 import { createTaskExecutionPresentationRegistry } from '../../codex/runtime/task-execution-presentation-registry.js';
 import { handleDeliveryRoutes } from '../../delivery/http/delivery-routes.js';
 import { handleRuntimeRecoveryRoute } from '../http/runtime-recovery-route.js';
-import { handleLegacyLedgerRoutes } from '../../ledger/http/legacy-ledger-routes.js';
-import { createLedgerPersistence } from '../../ledger/runtime/ledger-persistence.js';
 import { handleMarkdownTargetRoutes } from '../../content-authoring/http/markdown-target-routes.js';
 import {
   buildDeliveryAdmissionState,
@@ -91,8 +70,9 @@ import { handleRemoteProjectGateway } from '../../federation/http/remote-project
 import { createFederatedExecutionObservationHandler } from '../../federation/runtime/federated-execution-observation-handler.js';
 import { createProjectRuntimeRegistry } from '../runtime/project-runtime-registry.js';
 import { createRuntimeRecoveryService } from '../runtime/runtime-recovery-service.js';
-import { createCardAuthoringRuntime } from '../../ledger/runtime/card-authoring-runtime.js';
-import { createTaskExecutionPresentationReader } from '../../codex/runtime/task-execution-presentation-reader.js';
+import { handleProjectInteractionRequestStage } from '../http/project-interaction-request-stage.js';
+import { handleProjectDataRequestStage } from '../http/project-data-request-stage.js';
+import { handleGlobalRequestStage } from '../http/global-request-stage.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -785,88 +765,87 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
   });
   const runLocalDeliveryCommand = deliveryNodeRuntime.run;
   const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
-    const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
-    const requestPath = requestUrl.pathname;
-    const runtimeRecoveryRoute = await handleRuntimeRecoveryRoute({
-      request,
-      response,
-      resume: recoverRuntimeScope,
-      url: requestPath,
-    });
-    if (runtimeRecoveryRoute.handled) return;
-    const diagnosticReadRoute = handleDiagnosticReadRoutes({
-      incidentLedger,
-      incidentSupervisor,
-      request,
-      requestPath,
-      response,
-      settings: runtime.decisionOsSettings,
-    });
-    if (diagnosticReadRoute.handled) return;
-    const deliveryRoute = await handleDeliveryRoutes({
-      admissionState: () => buildDeliveryAdmissionState(deliveryAdmissionInput()),
-      consumeCapability: (capability) => federation.consumeDeliveryCapability(capability),
-      dispatchRemote: (nodeId, command, signal) => federation.requestDelivery(
-        nodeId,
-        command,
-        { timeoutMs: 30_000, signal },
-      ),
-      localNodeId: federation.localOwner().ownerNodeId,
-      projectScoped: false,
-      request,
-      response,
-      runCommand: (command, signal) => runLocalDeliveryCommand(command, signal),
-      settings: runtime.decisionOsSettings,
-      targetOnline: (nodeId) => federation.nodes()
-        .some((node) => node.nodeId === nodeId && node.online),
-      url: requestPath,
-    });
-    if (deliveryRoute.handled) return;
-    const globalRuntimeIncident = incidentSupervisor.globalRuntimeIncident();
-    if (globalRuntimeIncident) throw new RuntimeScopePausedError('server-runtime', globalRuntimeIncident.id);
-    const projectScope = parseProjectUrlScope(requestPath);
-    if (requestPath.startsWith('/p/') && !projectScope) {
-      response.statusCode = 400;
-      response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ ok: false, error: 'Malformed project URL.' }));
-      return;
-    }
-    const requestedReplicaNodeId = String(request.headers['x-decision-os-replica-node']
-      ?? (request.method === 'GET' ? requestUrl.searchParams.get('replica') : '')
-      ?? '').trim();
-    const localNodeId = federation.localOwner().ownerNodeId;
-    const projects = projectCatalog();
-    const activeProject = projectScope
-      ? resolveCatalogProject({ projects, projectId: projectScope.projectId, fallbackDecisionOsRoot: masterDecisionOsRoot })
-      : projects.length === 1 && isProjectSensitiveEndpoint(requestPath) && !isGlobalProjectEndpoint(requestPath)
-        ? projects[0]
-        : null;
-    const internalTaskExecutionRoute = await handleInternalTaskExecutionRoutes({
-      artifactFile: (projectId, requesterNodeId, hash) => {
-        const store = taskStoreForProject(projectId, requesterNodeId);
-        return store && /^[a-f0-9]{64}$/i.test(hash)
-          ? resolve(store.root, 'objects', hash.slice(0, 2), hash)
-          : '';
+    const globalRequest = await handleGlobalRequestStage({
+      controlRoom: {
+        controlRoomProjectionStore,
+        executionObservation: (projectId, executionId, ownerNodeId) => {
+          const observation = federatedExecutionObservations.get(
+            `${projectId}\0${executionId}\0${ownerNodeId}`,
+          ) ?? null;
+          if (!observation || Date.parse(observation.expiresAt) <= Date.now()) return null;
+          return observation;
+        },
+        federation,
+        hydrateProject: (project) => {
+          projectContext(project.decisionOsRoot, project.id);
+        },
+        listProjectSyncRuns: () => projectSyncRuntime.store().list(),
+        taskStoreForProject,
       },
-      authenticateNode: (nodeId) => federation.nodes()
-        .some((node) => node.nodeId === nodeId && node.online),
-      baseRuntime: (executionId, projectId) => {
-        const localProject = projects.find((project) => project.id === projectId && project.available);
-        return federatedSchedulerContexts.get(executionId)?.runtime
-          ?? (localProject ? projectContext(localProject.decisionOsRoot, localProject.id).runtime : runtime);
+      delivery: {
+        admissionState: () => buildDeliveryAdmissionState(deliveryAdmissionInput()),
+        consumeCapability: (capability) => federation.consumeDeliveryCapability(capability),
+        dispatchRemote: (nodeId, command, signal) => federation.requestDelivery(
+          nodeId,
+          command,
+          { timeoutMs: 30_000, signal },
+        ),
+        localNodeId: federation.localOwner().ownerNodeId,
+        projectScoped: false,
+        runCommand: (command, signal) => runLocalDeliveryCommand(command, signal),
+        settings: runtime.decisionOsSettings,
+        targetOnline: (nodeId) => federation.nodes()
+          .some((node) => node.nodeId === nodeId && node.online),
       },
-      localNodeId: federation.localOwner().ownerNodeId,
-      request,
-      response,
-      stateForProject: executionStateForProject,
-      url: requestUrl,
-    });
-    if (internalTaskExecutionRoute.handled) return;
-    // A hosted project is always authoritative locally. Stale replica selectors apply only to remote-only resources.
-    if (projectScope && !activeProject && requestedReplicaNodeId && requestedReplicaNodeId !== localNodeId) {
-      const ownerNodeId = requestedReplicaNodeId;
-      const localProjectId = projectScope.projectId;
-      await handleRemoteProjectGateway({
+      diagnostics: {
+        incidentLedger,
+        incidentSupervisor,
+        settings: runtime.decisionOsSettings,
+      },
+      federationLocalNodeId: () => federation.localOwner().ownerNodeId,
+      gitReview: {},
+      globalRuntimeIncident: incidentSupervisor.globalRuntimeIncident,
+      internalExecution: {
+        artifactFile: (projectId, requesterNodeId, hash) => {
+          const store = taskStoreForProject(projectId, requesterNodeId);
+          return store && /^[a-f0-9]{64}$/i.test(hash)
+            ? resolve(store.root, 'objects', hash.slice(0, 2), hash)
+            : '';
+        },
+        authenticateNode: (nodeId) => federation.nodes()
+          .some((node) => node.nodeId === nodeId && node.online),
+        baseRuntime: (executionId, projectId) => {
+          const project = projectCatalog().find((entry) => (
+            entry.id === projectId && entry.available
+          ));
+          return federatedSchedulerContexts.get(executionId)?.runtime
+            ?? (project ? projectContext(project.decisionOsRoot, project.id).runtime : runtime);
+        },
+        localNodeId: federation.localOwner().ownerNodeId,
+        stateForProject: executionStateForProject,
+      },
+      markdown: {
+        masterRoot,
+        projects: projectCatalogStore.projects(),
+        taskLedger: (project) => taskStateForProject(project).projection().ledger,
+      },
+      masterDecisionOsRoot,
+      nodeMessages: {
+        federation,
+        messageTimeoutMs: federationNodeMessageTimeoutMs,
+        projectRuntime: (project) => projectContext(project.decisionOsRoot, project.id).runtime,
+        recordFailure: recordStoppedOperation,
+      },
+      projectAdmission: {
+        authenticateNode: (nodeId) => federation.nodes()
+          .some((node) => node.nodeId === nodeId && node.online),
+        recordFailure: recordStoppedOperation,
+        router: taskExecutionRouterForProject,
+        runtime: (project) => projectContext(project.decisionOsRoot, project.id).runtime,
+      },
+      projects: projectCatalog,
+      recovery: { resume: recoverRuntimeScope },
+      remoteGateway: {
         contentScheduler: federationContentScheduler,
         contentStore: federationContentStore,
         federation,
@@ -874,134 +853,43 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
           projectId,
           [...changes] as TaskEntityChange[],
         ),
-        localNodeId,
+        localNodeId: federation.localOwner().ownerNodeId,
         masterDecisionOsRoot,
-        ownerNodeId,
         pausedContentScheduler: () => pausedBackgroundComponents.has('federation-content-scheduler'),
         pipelinePresentation: (projectId, runId, nodeId) => federatedPipelinePresentations.get(
           `${projectId}\0${runId}\0${nodeId}`,
         ) ?? null,
         presentationRegistry: executionPresentations,
         presentationRuntime: (executionId) => federatedSchedulerContexts.get(executionId)?.runtime ?? null,
-        projectId: localProjectId,
         recordBackgroundFailure: (operation, error, context) => {
           recordBackgroundFailure('federation-content-scheduler', operation, error, context);
         },
-        remoteProject: federation.remoteProjects().find((project) => (
-          project.ownerNodeId === ownerNodeId && project.localProjectId === localProjectId
-        )) ?? null,
+        remoteProject: (ownerNodeId, projectId) => federation.remoteProjects()
+          .find((project) => (
+            project.ownerNodeId === ownerNodeId && project.localProjectId === projectId
+          )) ?? null,
         replicator: federationTaskStateReplicator,
-        request,
-        response,
         revision: (projectId) => federatedTaskRevisionForProject(projectId).advance('tasks'),
-        scopedPath: projectScope.scopedPath,
         stateForProject: federatedTaskStateForProject,
         storeForProject: federatedTaskStoreForProject,
-        url: requestUrl,
-      });
-      return;
-    }
-    const url = projectScope && isProjectSensitiveEndpoint(projectScope.scopedPath) ? projectScope.scopedPath : requestPath;
-    if (requestPath === '/api/federation/task-replica') {
-      response.statusCode = 404;
-      response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ ok: false, error: 'The hydrated task replica endpoint has been retired.' }));
-      return;
-    }
-    if (projectScope && !activeProject) {
-      response.statusCode = 404;
-      response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ ok: false, error: 'Unknown project id.' }));
-      return;
-    }
-    if (projectScope && activeProject && !activeProject.available) {
-      response.statusCode = 503;
-      response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ ok: false, error: activeProject.diagnostic, projectId: activeProject.id }));
-      return;
-    }
-    const markdownTargetRoute = handleMarkdownTargetRoutes({
-      masterRoot,
-      projectId: projectScope?.projectId,
-      projectRoot: activeProject?.decisionOsRoot,
-      projects: projectCatalogStore.projects(),
+      },
       request,
-      requestPath,
+      resolveProject: (projectId) => resolveCatalogProject({
+        projects: projectCatalog(),
+        projectId,
+        fallbackDecisionOsRoot: masterDecisionOsRoot,
+      }),
       response,
-      scopedPath: projectScope?.scopedPath,
-      taskLedger: (project) => taskStateForProject(project).projection().ledger,
     });
-    if (markdownTargetRoute.handled) return;
-    const federatedAdmissionRoute = await handleFederatedExecutionAdmissionRoutes({
-      authenticateNode: (nodeId) => federation.nodes()
-        .some((node) => node.nodeId === nodeId && node.online),
-      project: activeProject,
-      projectScoped: Boolean(projectScope),
-      recordFailure: recordStoppedOperation,
-      request,
-      response,
-      router: taskExecutionRouterForProject,
-      runtime: (project) => projectContext(project.decisionOsRoot, project.id).runtime,
-      url,
-    });
-    if (federatedAdmissionRoute.handled) return;
-    const nodeMessageRoute = await handleNodeMessageRoutes({
-      federation,
-      messageTimeoutMs: federationNodeMessageTimeoutMs,
-      projectRuntime: (project) => projectContext(project.decisionOsRoot, project.id).runtime,
-      projects,
-      recordFailure: recordStoppedOperation,
-      projectScoped: Boolean(projectScope),
-      request,
-      response,
-      url,
-    });
-    if (nodeMessageRoute.handled) return;
-    const gitReviewRoute = await handleGitReviewRoutes({
+    if (!('request' in globalRequest)) return;
+    const {
       activeProject,
-      request,
-      requestUrl,
-      response,
-      url,
-    });
-    if (gitReviewRoute.handled) return;
-    const controlRoomRoute = handleControlRoomRoutes({
-      controlRoomProjectionStore,
-      executionObservation: (projectId, executionId, ownerNodeId) => {
-        const observation = federatedExecutionObservations.get(
-          `${projectId}\0${executionId}\0${ownerNodeId}`,
-        ) ?? null;
-        if (!observation || Date.parse(observation.expiresAt) <= Date.now()) return null;
-        return observation;
-      },
-      federation,
-      hydrateProject: (project) => {
-        projectContext(project.decisionOsRoot, project.id);
-      },
-      listProjectSyncRuns: () => projectSyncRuntime.store().list(),
       projectScope,
       projects,
-      request,
+      requestPath,
       requestUrl,
-      response,
-      taskStoreForProject,
       url,
-    });
-    if (controlRoomRoute.handled) return;
-    if (request.method === 'GET') {
-      const query = (request.url ?? '').includes('?') ? `?${(request.url ?? '').split('?').slice(1).join('?')}` : '';
-      let destination = '';
-      if (requestPath === '/control-room') destination = `/${query}`;
-      if (projectScope?.scopedPath === '/control-room') destination = `/${query}`;
-      if (projectScope?.scopedPath === '/projects') destination = `/projects${query}`;
-      if (projectScope?.scopedPath.startsWith('/projects/')) destination = `${projectScope.scopedPath}${query}`;
-      if (destination) {
-        response.statusCode = 302;
-        response.setHeader('location', destination);
-        response.end();
-        return;
-      }
-    }
+    } = globalRequest.request;
     const decisionOsRoot = activeProject?.decisionOsRoot ?? masterDecisionOsRoot;
     const context = projectContext(decisionOsRoot, activeProject?.id ?? '');
     const requestRuntime = context.runtime;
@@ -1010,178 +898,48 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
     const publishCardContentChange = context.publishCard;
     const publishLedgerContentChange = context.publishLedger;
     const localProject = activeProject ?? projectCatalog().find((project) => project.decisionOsRoot === decisionOsRoot);
-    const cardAuthoringRuntime = createCardAuthoringRuntime({
-      contentDrain: federationContentScheduler?.drain ?? null,
-      contentStore: federationContentStore,
-      decisionOsRoot,
-      invalidateProject: (projectId, changes) => controlRoomProjectionStore?.invalidate(
-        projectId,
-        changes ? [...changes] as TaskEntityChange[] : undefined,
-      ),
-      localProject,
-      publishContentChange: () => federation.publishContentChange(),
-      revisions: ledgerRevisions,
-      stateForProject: taskStateForProject,
-      watcher: context.watcher,
-    });
-    const cardContentRoute = await handleCardContentRoutes({
-      decisionOsRoot,
-      loadLedger: cardAuthoringRuntime.loadLedger,
-      localProject,
-      patchCard: cardAuthoringRuntime.patchCard,
-      request,
-      requestUrl,
-      response,
-      serverCloseSignal: serverCloseAbort.signal,
-      url,
-    });
-    if (cardContentRoute.handled) return;
-    const presentationReader = createTaskExecutionPresentationReader({
-      presentationRegistry: executionPresentations,
-      request,
-      response,
-      runtime: requestRuntime,
-      runtimeForExecution: (executionId) => federatedSchedulerContexts.get(executionId)?.runtime ?? null,
-    });
-    const taskExecutionReadRoute = await handleTaskExecutionReadRoutes({
-      presentation: presentationReader.presentation,
-      queuePosition: presentationReader.queuePosition,
-      request,
-      response,
-      state: presentationReader.state,
-      url,
-    });
-    if (taskExecutionReadRoute.handled) return;
-    const ledgerPersistence = createLedgerPersistence({
-      decisionOsRoot,
-      invalidateProject: (projectId, entities) => controlRoomProjectionStore?.invalidate(
-        projectId,
-        entities ? [...entities] : undefined,
-      ),
-      localProject,
-      projectId: activeProject?.id ?? '',
-      publishContentChange: () => federation.publishContentChange(),
-      revisions: ledgerRevisions,
-      stateForProject: taskStateForProject,
-      watcher: context.watcher,
-    });
-    const persistLedgerAndRespond = (
-      ledgerId: string,
-      ledgerPath: string,
-      ledger: AnyRecord,
-      activeResponse: ServerResponse,
-    ): Promise<void> => ledgerPersistence.persistLedger(
-      ledgerId,
-      ledgerPath,
-      ledger,
-      activeResponse,
-    );
-    const persistLedgerMutationAndRespond = (
-      ledgerId: string,
-      ledgerPath: string,
-      before: AnyRecord,
-      ledger: AnyRecord,
-      mutation: LedgerMutation,
-      changedFiles: readonly string[],
-      activeResponse: ServerResponse,
-    ): Promise<void> => ledgerPersistence.persistMutation(
-      ledgerId,
-      ledgerPath,
-      before,
-      ledger,
-      mutation,
-      changedFiles,
-      activeResponse,
-    );
-    const ledgerReadRoute = await handleLedgerReadRoutes({
-      contentDrain: federationContentScheduler?.drain ?? null,
-      contentStore: federationContentStore,
-      decisionOsRoot,
-      localProject,
-      request,
-      response,
-      revisions: ledgerRevisions,
-      stateForProject: taskStateForProject,
-      url,
-    });
-    if (ledgerReadRoute.handled) return;
-    const federationContentRoute = await handleFederationContentRoutes({
-      contentObjectFile: (hash) => federationContentStore.objectFile(hash),
-      contentStatus: () => federationContentStore.status() as AnyRecord,
-      localNodeId: federation.localOwner().ownerNodeId,
-      projectScoped: Boolean(projectScope),
-      projects,
-      remoteProjectKnown: (projectId) => federation.remoteProjects()
-        .some((project) => project.localProjectId === projectId),
-      replicationDiagnostics: () => federationTaskStateReplicator?.diagnostics() ?? {},
-      replicationStores: () => [
-        ...[...projectTaskStates].map(([projectId, state]) => ({
+    const projectData = await handleProjectDataRequestStage({
+      activeProject,
+      cardRuntime: {
+        contentDrain: federationContentScheduler?.drain ?? null,
+        contentStore: federationContentStore,
+        decisionOsRoot,
+        invalidateProject: (projectId, changes) => controlRoomProjectionStore?.invalidate(
           projectId,
-          ownerNodeId: federation.localOwner().ownerNodeId,
-          store: state.store,
-        })),
-        ...[...federatedTaskStores].map(([projectId, store]) => ({
-          projectId,
-          ownerNodeId: 'replicated',
-          store,
-        })),
-      ],
-      request,
-      response,
-      schedulerRunning: federationContentScheduler?.running ?? false,
-      stateForProject: taskStateForProject,
-      url,
-    });
-    if (federationContentRoute.handled) return;
-    const taskStateRoute = await handleTaskStateRoutes({
-      invalidateProject: (projectId, entities) => controlRoomProjectionStore?.invalidate(
-        projectId,
-        [...entities],
-      ),
-      projectScoped: Boolean(projectScope),
-      projects,
-      request,
-      response,
-      stateForProject: taskStateForProject,
-      url,
-    });
-    if (taskStateRoute.handled) return;
-    const federatedLibraryRoute = await handleFederatedLibraryRoutes({
-      exportPipelines: () => exportFederatedPipelineSnapshot(localDecisionOsRoots()),
-      invalidateSkillIndex: federatedLibraryRuntime.invalidateIndex,
-      projectScoped: Boolean(projectScope),
-      readSkillIndex: federatedLibraryRuntime.readSkillIndex,
-      request,
-      response,
-      status: () => runtime.federatedLibrarySyncStatus as AnyRecord | undefined,
-      synchronize: async () => {
-        pausedBackgroundComponents.delete('federated-library-sync');
-        await federatedLibraryRuntime.synchronize(true);
+          changes ? [...changes] as TaskEntityChange[] : undefined,
+        ),
+        localProject,
+        publishContentChange: () => federation.publishContentChange(),
+        revisions: ledgerRevisions,
+        stateForProject: taskStateForProject,
+        watcher: context.watcher,
       },
-      url,
-    });
-    if (federatedLibraryRoute.handled) return;
-    const settingsRoute = await handleSettingsRoutes({
-      federation,
-      masterDecisionOsRoot,
-      onCodexSettingsChanged: () => {
-        pausedBackgroundComponents.delete('codex-process-scheduler');
-        void scheduleGlobalCodexProcesses()
-          .catch((error: unknown) => recordBackgroundFailure(
-            'codex-process-scheduler',
-            'settings-change-schedule',
-            error,
-          ));
+      content: {
+        contentObjectFile: (hash) => federationContentStore.objectFile(hash),
+        contentStatus: () => federationContentStore.status() as AnyRecord,
+        localNodeId: federation.localOwner().ownerNodeId,
+        projectScoped: Boolean(projectScope),
+        projects,
+        remoteProjectKnown: (projectId) => federation.remoteProjects()
+          .some((project) => project.localProjectId === projectId),
+        replicationDiagnostics: () => federationTaskStateReplicator?.diagnostics() ?? {},
+        replicationStores: () => [
+          ...[...projectTaskStates].map(([projectId, state]) => ({
+            projectId,
+            ownerNodeId: federation.localOwner().ownerNodeId,
+            store: state.store,
+          })),
+          ...[...federatedTaskStores].map(([projectId, store]) => ({
+            projectId,
+            ownerNodeId: 'replicated',
+            store,
+          })),
+        ],
+        schedulerRunning: federationContentScheduler?.running ?? false,
+        stateForProject: taskStateForProject,
       },
-      request,
-      response,
-      runtime,
-      url,
-    });
-    if (settingsRoute.handled) return;
-    const projectSyncRoute = await handleProjectSyncRoutes({
-      controller: activeProjectSyncController,
-      executeRole: (body, authenticatedNodeId) => executeFederatedProjectSyncRole({
+      decisionOsRoot,
+      executeProjectSyncRole: (body, authenticatedNodeId) => executeFederatedProjectSyncRole({
         authenticatedNodeId,
         body,
         executionState: executionStateForProject,
@@ -1196,82 +954,122 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
         },
         store: projectSyncRuntime.store(),
       }),
+      exportPipelines: () => exportFederatedPipelineSnapshot(localDecisionOsRoots()),
       federation,
-      projects,
-      request,
-      response,
-      store: projectSyncRuntime.store(),
-      url,
-    });
-    if (projectSyncRoute.handled) return;
-    const projectCatalogRoute = await handleProjectCatalogRoutes({
-      controlRoomInvalidation: (projectId) => controlRoomProjectionStore?.invalidate(projectId),
-      federation,
+      invalidateSkillIndex: federatedLibraryRuntime.invalidateIndex,
+      ledgerPersistence: {
+        decisionOsRoot,
+        invalidateProject: (projectId, entities) => controlRoomProjectionStore?.invalidate(
+          projectId,
+          entities ? [...entities] : undefined,
+        ),
+        localProject,
+        projectId: activeProject?.id ?? '',
+        publishContentChange: () => federation.publishContentChange(),
+        revisions: ledgerRevisions,
+        stateForProject: taskStateForProject,
+        watcher: context.watcher,
+      },
+      libraryStatus: () => runtime.federatedLibrarySyncStatus as AnyRecord | undefined,
       masterDecisionOsRoot,
       masterRoot,
+      onCodexSettingsChanged: () => {
+        pausedBackgroundComponents.delete('codex-process-scheduler');
+        void scheduleGlobalCodexProcesses()
+          .catch((error: unknown) => recordBackgroundFailure(
+            'codex-process-scheduler',
+            'settings-change-schedule',
+            error,
+          ));
+      },
+      presentation: {
+        presentationRegistry: executionPresentations,
+        runtime: requestRuntime,
+        runtimeForExecution: (executionId) => federatedSchedulerContexts.get(executionId)?.runtime ?? null,
+      },
       projectCatalog,
       projectCatalogStore,
       projectScope,
+      projectScoped: Boolean(projectScope),
+      projectSyncController: activeProjectSyncController,
+      projectSyncStore: projectSyncRuntime.store(),
       projects,
+      readSkillIndex: federatedLibraryRuntime.readSkillIndex,
       reconcileProjectRuntimes,
       request,
+      requestUrl,
       response,
+      serverCloseSignal: serverCloseAbort.signal,
+      settingsRuntime: runtime,
+      synchronizeLibraries: async () => {
+        pausedBackgroundComponents.delete('federated-library-sync');
+        await federatedLibraryRuntime.synchronize(true);
+      },
+      taskState: {
+        invalidateProject: (projectId, entities) => controlRoomProjectionStore?.invalidate(
+          projectId,
+          [...entities],
+        ),
+        stateForProject: taskStateForProject,
+      },
       taskStoreForProject,
       url,
     });
-    if (projectCatalogRoute.handled) return;
-    if (tryServeDecisionOsAsset({ url, decisionOsRoot, response })) return;
-    const operationalRoute = await handleOperationalRoutes({
-      request,
-      response,
-      restartServer: runtime.restartServer,
-      url,
-    });
-    if (operationalRoute.handled) return;
-    const contentEventRoute = handleContentEventRoutes({
-      contentEventClients,
-      globalContentEventClients,
-      request,
-      response,
-      url,
-    });
-    if (contentEventRoute.handled) return;
-    const codexPipelineRoute = await handleCodexPipelineRoutes({
-      assertRuntimeAvailable: () => assertCodexRuntimeAvailable(requestRuntime),
-      masterDecisionOsRoot,
-      onLedgerChange: publishLedgerContentChange,
-      publishManifest: () => federation.publishManifest(),
-      request,
-      requestRuntime,
-      response,
-      url,
-    });
-    if (codexPipelineRoute.handled) return;
-    const codexSkillLibraryRoute = await handleCodexSkillLibraryRoutes({
+    if (!('persistLedger' in projectData)) return;
+    await handleProjectInteractionRequestStage({
+      activeExecutionPhase: (taskId) => taskExecutionState(requestRuntime)
+        ?.executions.byTaskId(taskId)
+        .find((execution) => [
+          'preparing',
+          'queued',
+          'starting',
+          'running',
+          'cancelling',
+        ].includes(execution.lifecycle.phase))?.lifecycle.phase ?? '',
+      advanceRevision: (ledgerId) => ledgerRevisions.advance(ledgerId),
       applyOwnedDetail: federatedLibraryRuntime.applyOwnedDetail,
       applyOwnedMetadata: federatedLibraryRuntime.applyOwnedMetadata,
-      masterDecisionOsRoot,
-      publishAuthoredSkill: federatedLibraryRuntime.publishAuthoredSkill,
-      recordRevisionFailure: (skillName, result) => {
-        recordIncident({
-          severity: 'warning',
-          scope: `content-authoring:${skillName}`,
-          component: 'codex-content-authoring',
-          operation: 'commit-authored-content',
-          error: String(result.error ?? 'Git revision failed.'),
-          context: { skillName, recovery: result.recovery },
-        });
-      },
-      request,
-      requestRuntime,
-      requestUrl,
-      response,
-      url,
-    });
-    if (codexSkillLibraryRoute.handled) return;
-    const codexSkillRunRoute = await handleCodexSkillRunRoutes({
       assertRuntimeAvailable: () => assertCodexRuntimeAvailable(requestRuntime),
+      contentEventClients,
+      currentRevision: (ledgerId) => ledgerRevisions.current(ledgerId),
+      decisionOsRoot,
+      frontendRoot,
+      globalContentEventClients,
+      invalidateProject: (projectId, entities) => controlRoomProjectionStore?.invalidate(
+        projectId,
+        [...entities],
+      ),
+      localProject,
+      masterDecisionOsRoot,
+      materializeTaskMutation: async (before, mutation) => {
+        if (!localProject) return null;
+        try {
+          await materializeTaskMutationInputs({
+            projectId: localProject.id,
+            decisionOsRoot,
+            ledger: before,
+            mutation,
+            store: taskStateForProject(localProject).store,
+            contentStore: federationContentStore,
+            drain: federationContentScheduler?.drain ?? null,
+          });
+          return null;
+        } catch (error) {
+          if (!(error instanceof TaskContentMaterializationError)) throw error;
+          return { error: error.code, key: error.key, statusCode: error.statusCode };
+        }
+      },
+      onCardContentChange: publishCardContentChange,
       onLedgerChange: publishLedgerContentChange,
+      persistLedger: projectData.persistLedger,
+      persistMutation: projectData.persistMutation,
+      projectColor: activeProject?.color ?? '#38d9e8',
+      projectId: activeProject?.id ?? '',
+      projectName: projectNameForDecisionOsRoot(decisionOsRoot),
+      projectScope,
+      projects,
+      publishAuthoredSkill: federatedLibraryRuntime.publishAuthoredSkill,
+      publishManifest: () => federation.publishManifest(),
       readReplicatedRun: ({ runId, ledgerId, cardId }) => {
         const state = taskExecutionState(requestRuntime);
         const execution = state?.executions.bySessionId(runId)
@@ -1302,111 +1100,27 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
           queuePosition: null,
         });
       },
+      recordRevisionFailure: (skillName, result) => {
+        recordIncident({
+          severity: 'warning',
+          scope: `content-authoring:${skillName}`,
+          component: 'codex-content-authoring',
+          operation: 'commit-authored-content',
+          error: String(result.error ?? 'Git revision failed.'),
+          context: { skillName, recovery: result.recovery },
+        });
+      },
       request,
       requestRuntime,
+      requestPath,
       requestUrl,
       response,
-      url,
-    });
-    if (codexSkillRunRoute.handled) return;
-    const transcriptionRoute = await handleTranscriptionRoutes({
-      invalidateProject: (projectId, entities) => controlRoomProjectionStore?.invalidate(
-        projectId,
-        [...entities],
-      ),
-      localProject,
-      masterDecisionOsRoot,
-      onCardContentChange: publishCardContentChange,
-      onLedgerChange: publishLedgerContentChange,
-      request,
-      requestRuntime,
-      response,
+      restartServer: runtime.restartServer,
       runtime,
       taskStateForProject,
-      url,
-    });
-    if (transcriptionRoute.handled) return;
-
-    const uploadRoute = await handleThreadUploadRoutes({
-      decisionOsRoot,
-      invalidateProject: (projectId, entities) => controlRoomProjectionStore?.invalidate(
-        projectId,
-        [...entities],
-      ),
-      localProject,
-      request,
-      response,
-      taskStateForProject,
-      url,
-    });
-    if (uploadRoute.handled) return;
-    const legacyLedgerRoute = await handleLegacyLedgerRoutes({
-      activeExecutionPhase: (taskId) => taskExecutionState(requestRuntime)
-        ?.executions.byTaskId(taskId)
-        .find((execution) => [
-          'preparing',
-          'queued',
-          'starting',
-          'running',
-          'cancelling',
-        ].includes(execution.lifecycle.phase))?.lifecycle.phase ?? '',
-      advanceRevision: (ledgerId) => ledgerRevisions.advance(ledgerId),
-      currentRevision: (ledgerId) => ledgerRevisions.current(ledgerId),
-      decisionOsRoot,
-      materializeTaskMutation: async (before, mutation) => {
-        if (!localProject) return null;
-        try {
-          await materializeTaskMutationInputs({
-            projectId: localProject.id,
-            decisionOsRoot,
-            ledger: before,
-            mutation,
-            store: taskStateForProject(localProject).store,
-            contentStore: federationContentStore,
-            drain: federationContentScheduler?.drain ?? null,
-          });
-          return null;
-        } catch (error) {
-          if (!(error instanceof TaskContentMaterializationError)) throw error;
-          return { error: error.code, key: error.key, statusCode: error.statusCode };
-        }
-      },
-      persistLedger: (ledgerId, ledgerPath, ledger) => persistLedgerAndRespond(
-        ledgerId,
-        ledgerPath,
-        ledger,
-        response,
-      ),
-      persistMutation: (ledgerId, ledgerPath, before, ledger, mutation, changedFiles) => (
-        persistLedgerMutationAndRespond(
-          ledgerId,
-          ledgerPath,
-          before,
-          ledger,
-          mutation,
-          changedFiles,
-          response,
-        )
-      ),
-      projectColor: activeProject?.color ?? '#38d9e8',
-      projectId: activeProject?.id ?? '',
-      projectName: projectNameForDecisionOsRoot(decisionOsRoot),
-      request,
-      response,
-      runtime: requestRuntime,
       taskLedger: () => localProject
         ? taskStateForProject(localProject).projection().ledger
         : null,
-      url,
-    });
-    if (legacyLedgerRoute.handled) return;
-    serveStaticApplication({
-      frontendRoot,
-      projectScope,
-      projects,
-      request,
-      requestPath,
-      response,
       url,
     });
   };
