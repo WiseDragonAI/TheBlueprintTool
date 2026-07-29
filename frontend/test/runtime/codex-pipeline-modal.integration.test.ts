@@ -556,7 +556,7 @@ test('Process card opens pipeline prompts through the server-owned revision edit
     assert.match(fakeDocument.skillLibraryEditorModal.textContent, /pipeline-outline\.md/);
     assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Editor').length, 0);
     assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Revisions (1)').length, 0);
-    assert.match(fakeDocument.skillLibraryEditorModal.textContent, /Create prompt/);
+    assert.match(fakeDocument.skillLibraryEditorModal.textContent, /New revision/);
     assert.ok(requestedUrls.includes('/api/codex/server-skills/pipeline-outline'));
     assert.equal(requestedUrls.some((url) => url.includes('/p/project-a/api/codex/skill-library/pipeline-outline')), false);
   } finally {
@@ -889,7 +889,7 @@ test('skill editor reconciles a conflicting draft and protected skills remain un
   }
 });
 
-test('skill editor guards dirty close, returns focus, and navigates adjacent Git revisions', async () => {
+test('skill editor guards dirty close and uses one draft-to-history content surface', async () => {
   const previousFetch = globalThis.fetch;
   const previousConfirm = globalThis.confirm;
   const opener = new FakeElement('button');
@@ -934,17 +934,39 @@ test('skill editor guards dirty close, returns focus, and navigates adjacent Git
       }), { status: 200 });
     }) as typeof fetch;
     await openSkillLibraryEditor({ skillName: 'analysis', requestProjectId: 'project-a' });
-    for (let attempt = 0; attempt < 5 && skillLibraryEditorState.revisionDetail?.commit !== 'commit-new'; attempt += 1) {
+    for (let attempt = 0; attempt < 5 && !skillLibraryEditorState.historyInitialized; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
     assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Editor').length, 0);
     assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Revisions (2)').length, 0);
-    assert.equal(skillLibraryEditorState.revisionDetail?.commit, 'commit-new');
+    assert.equal(skillLibraryEditorState.selectedRevisionIndex, -1);
+    assert.equal(skillLibraryEditorState.revisionDetail, null);
+    assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-codemirror-host')?.hidden, false);
+    assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-history-pane')?.hidden, true);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Save new revision').length, 1);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'New revision').length, 1);
     const newer = findByText(fakeDocument.skillLibraryEditorModal, 'Newer')[0];
     const older = findByText(fakeDocument.skillLibraryEditorModal, 'Older')[0];
     assert.equal(newer.disabled, true);
     assert.equal(older.disabled, false);
+    skillLibraryEditorState.markdown = 'preserved draft';
+    older.trigger('click');
+    for (let attempt = 0; attempt < 5 && skillLibraryEditorState.revisionDetail?.commit !== 'commit-new'; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.equal(skillLibraryEditorState.selectedRevisionIndex, 0);
+    assert.equal(skillLibraryEditorState.revisionDetail?.commit, 'commit-new');
+    assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-codemirror-host')?.hidden, true);
+    assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-history-pane')?.hidden, false);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Save new revision').length, 0);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Current · Newest').length, 1);
     assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-revision-viewport')?.getAttribute('role'), 'region');
+    findByText(fakeDocument.skillLibraryEditorModal, 'Newer')[0].trigger('click');
+    assert.equal(skillLibraryEditorState.selectedRevisionIndex, -1);
+    assert.equal(skillLibraryEditorState.markdown, 'preserved draft');
+    assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-codemirror-host')?.hidden, false);
+    assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-history-pane')?.hidden, true);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Save new revision').length, 1);
     await selectSkillRevision(1);
     assert.equal(skillLibraryEditorState.revisionDetail?.commit, 'commit-old');
     assert.match(skillLibraryEditorState.revisionDetail?.patch ?? '', /^@@/);

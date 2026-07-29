@@ -570,7 +570,6 @@ test('Pierre 1.2.12 receives the adjacent patch and exposes red-blue non-color s
     const container = host.children[0];
     assert.equal(container.style.values.get('--diffs-addition-color'), '#38d9e8');
     assert.equal(container.style.values.get('--diffs-addition-color-override'), '#38d9e8');
-    assert.equal(container.style.values.get('--diffs-bg-addition-override'), 'rgba(56, 217, 232, 0.14)');
     assert.equal(container.style.values.get('--diffs-deletion-color'), '#ff5f6d');
     assert.match(container.getAttribute('aria-label') ?? '', /minus sign and red/);
     assert.match(container.getAttribute('aria-label') ?? '', /plus sign and blue/);

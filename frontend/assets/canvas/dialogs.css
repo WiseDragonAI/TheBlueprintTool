@@ -1236,7 +1236,7 @@
 
 .skill-library-editor-body {
   display: grid;
-  grid-template-rows: max-content max-content minmax(240px, 34vh) minmax(280px, max-content);
+  grid-template-rows: max-content max-content minmax(280px, 1fr);
   gap: 12px;
   min-height: 0;
   overflow-y: auto;
@@ -1319,6 +1319,12 @@
   min-height: 0;
 }
 
+.skill-editor-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
 .skill-editor-footer-actions {
   display: flex;
   align-items: center;
@@ -1397,6 +1403,10 @@
   text-align: center;
 }
 
+.skill-editor-timeline-navigation {
+  min-height: 34px;
+}
+
 .skill-revision-navigation small {
   color: var(--muted);
   font-family: var(--mono);
@@ -1423,6 +1433,8 @@
   border: 1px solid var(--line);
   border-radius: var(--control-radius);
   background: #0b0d11;
+  font-weight: 400;
+  text-transform: none;
 }
 
 .authored-revision-content {
@@ -1452,12 +1464,14 @@
 .skill-revision-pierre {
   --diffs-addition-color: #38d9e8;
   --diffs-addition-color-override: #38d9e8;
-  --diffs-bg-addition-override: rgba(56, 217, 232, 0.14);
-  --diffs-bg-addition-emphasis-override: rgba(56, 217, 232, 0.22);
   --diffs-fg-number-addition-override: #38d9e8;
-  --diffs-bg-addition-number-override: rgba(56, 217, 232, 0.18);
   --diffs-deletion-color: #ff5f6d;
+  --diffs-font-family: var(--mono);
+  --diffs-font-size: 12px;
+  --diffs-line-height: 18px;
   min-width: 0;
+  font-weight: 400;
+  text-transform: none;
 }
 
 @media (max-width: 760px) {

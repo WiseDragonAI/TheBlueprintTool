@@ -16,22 +16,24 @@ export async function renderSkillRevisionDiff(input: {
   host: HTMLElement;
   patch: string;
   commit: string;
+  filename?: string;
+  markdown?: string;
+  parentMarkdown?: string;
   isCurrent?: () => boolean;
 }, loadModule: () => Promise<PierreModule> = loadPierre): Promise<() => void> {
   const pierre = await loadModule();
   if (!input.host.isConnected || input.isCurrent?.() === false) return () => {};
-  const parsed = pierre.parsePatchFiles(input.patch, input.commit, true)[0]?.files[0];
-  if (!parsed) throw new Error('This revision did not produce a renderable diff.');
+  const parsed = input.markdown === undefined
+    ? pierre.parsePatchFiles(input.patch, input.commit, true)[0]?.files[0]
+    : null;
+  if (input.markdown === undefined && !parsed) throw new Error('This revision did not produce a renderable diff.');
   const container = document.createElement(pierre.DIFFS_TAG_NAME) as HTMLElement;
   container.className = 'skill-revision-pierre';
   container.setAttribute('role', 'group');
   container.setAttribute('aria-label', 'File changes. Removed lines use a minus sign and red. Added lines use a plus sign and blue.');
   container.style.setProperty('--diffs-addition-color', '#38d9e8');
   container.style.setProperty('--diffs-addition-color-override', '#38d9e8');
-  container.style.setProperty('--diffs-bg-addition-override', 'rgba(56, 217, 232, 0.14)');
-  container.style.setProperty('--diffs-bg-addition-emphasis-override', 'rgba(56, 217, 232, 0.22)');
   container.style.setProperty('--diffs-fg-number-addition-override', '#38d9e8');
-  container.style.setProperty('--diffs-bg-addition-number-override', 'rgba(56, 217, 232, 0.18)');
   container.style.setProperty('--diffs-deletion-color', '#ff5f6d');
   input.host.replaceChildren(container);
   const renderer = new pierre.FileDiff({
@@ -40,7 +42,17 @@ export async function renderSkillRevisionDiff(input: {
     diffIndicators: 'classic',
     overflow: 'wrap',
     disableFileHeader: true,
+    expandUnchanged: true,
   });
-  renderer.render({ fileDiff: parsed, fileContainer: container });
+  if (input.markdown === undefined) {
+    renderer.render({ fileDiff: parsed ?? undefined, fileContainer: container });
+  } else {
+    const name = input.filename ?? 'SKILL.md';
+    renderer.render({
+      oldFile: { name, contents: input.parentMarkdown ?? '', cacheKey: `${input.commit}:parent` },
+      newFile: { name, contents: input.markdown, cacheKey: input.commit },
+      fileContainer: container,
+    });
+  }
   return () => renderer.cleanUp();
 }
