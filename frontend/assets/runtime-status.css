@@ -1,0 +1,108 @@
+/**
+ * WHAT: Owns the complete System status view presentation.
+ * WHY: Runtime diagnostics must not leak layout rules into the shared application shell.
+ */
+.runtime-status-view { display: grid; gap: 18px; }
+.runtime-status-header { align-items: end; }
+.runtime-status-refresh { min-width: 150px; }
+.runtime-status-block {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.runtime-status-block-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.runtime-status-block-header h2,
+.runtime-status-block-header p { margin: 0; }
+.runtime-status-block-header h2 { font-size: 17px; }
+.runtime-status-block-header p { color: var(--muted); font-size: 12px; }
+.runtime-project-list,
+.runtime-incident-list { display: grid; gap: 8px; }
+.runtime-project-row {
+  --project-color: var(--accent);
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 66px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-deep);
+}
+.runtime-project-mark {
+  width: 8px;
+  height: 36px;
+  border-radius: 99px;
+  background: var(--project-color);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--project-color), transparent 42%);
+}
+.runtime-project-copy { display: grid; gap: 4px; min-width: 0; }
+.runtime-project-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runtime-project-copy small { color: var(--muted); overflow-wrap: anywhere; }
+.runtime-status-badge {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.runtime-project-row[data-status="available"] .runtime-status-badge { color: #53e08a; }
+.runtime-project-row[data-status="paused"] .runtime-status-badge,
+.runtime-incident-card[data-interrupting="true"] .runtime-status-badge { color: var(--danger); }
+.runtime-project-row[data-status="unavailable"] .runtime-status-badge { color: #ffbd57; }
+.runtime-incident-card {
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid #ffbd57;
+  border-radius: var(--radius);
+  background: var(--panel-deep);
+}
+.runtime-incident-card[data-interrupting="true"] { border-inline-start-color: var(--danger); }
+.runtime-incident-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.runtime-incident-heading div { display: grid; gap: 5px; min-width: 0; }
+.runtime-incident-heading code { color: var(--text); font-weight: 800; overflow-wrap: anywhere; }
+.runtime-incident-heading small { color: var(--muted); }
+.runtime-incident-message { margin: 0; color: var(--text); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.runtime-incident-scopes {
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.runtime-incident-scopes summary { cursor: pointer; font-weight: 750; }
+.runtime-incident-scopes ul { display: grid; gap: 5px; margin: 9px 0 0; padding-left: 18px; }
+.runtime-incident-scopes code { overflow-wrap: anywhere; }
+.runtime-status-empty { margin: 0; padding: 18px; color: var(--muted); text-align: center; }
+
+@media (max-width: 540px) {
+  .runtime-status-header { align-items: stretch; }
+  .runtime-status-refresh { width: 100%; }
+  .runtime-status-block { padding: 14px; }
+  .runtime-status-block-header,
+  .runtime-incident-heading { align-items: stretch; flex-direction: column; }
+  .runtime-project-row { grid-template-columns: 8px minmax(0, 1fr); }
+  .runtime-project-row .runtime-status-badge { grid-column: 2; justify-self: start; }
+}
