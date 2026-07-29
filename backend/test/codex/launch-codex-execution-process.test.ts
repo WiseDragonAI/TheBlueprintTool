@@ -51,7 +51,10 @@ test('launch binds Codex stdio directly to durable files', async (context) => {
 
   assert.equal(settlement.kind, 'close');
   assert.equal(settlement.exitCode, 0);
-  assert.equal(readFileSync(stdoutFile, 'utf8'), 'prompt-through-file\n');
+  assert.equal(
+    readFileSync(stdoutFile, 'utf8'),
+    '{"type":"decision_os.user_prompt","prompt":"prompt-through-file\\n"}\nprompt-through-file\n',
+  );
   assert.match(readFileSync(stderrFile, 'utf8'), /stderr-direct/);
   assert.equal(existsSync(`${stderrFile}.execution-a.stdin`), false);
   assert.ok(launched.child.pid);

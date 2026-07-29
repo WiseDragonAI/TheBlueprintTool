@@ -400,8 +400,8 @@ test('execution remains non-terminal until immutable artifacts are finalized', a
     });
     assert.equal(settling.ok, true);
     assert.equal(settling.phase, 'running');
-    assert.equal(settling.lineCount, 1);
-    assert.equal((settling.events as Array<Record<string, unknown>>).length, 1);
+    assert.equal(settling.lineCount, 2);
+    assert.equal((settling.events as Array<Record<string, unknown>>).length, 2);
 
     releaseFinalization();
     await waitForCondition(

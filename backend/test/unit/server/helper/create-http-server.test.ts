@@ -11,7 +11,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { traces } from '@backend/telemetry/harness.js';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { createRuntimeIncidentLedger } from '@backend/business/server/helper/runtime-incident-ledger.js';
 import { scheduleCodexRuntimeTimer } from '@backend/business/codex/helper/codex-runtime-run-store.js';
 import { createTaskExecutionLaunchRequest, type TaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
@@ -461,6 +461,7 @@ test('server admits local assigned execution while its configured relay is unrea
         finishedAt: null,
         model: null,
         effort: null,
+        predecessorExecutionId: null,
         executorNodeId: 'workstation',
         revision: 2,
         error: null,
@@ -468,8 +469,8 @@ test('server admits local assigned execution while its configured relay is unrea
       }],
     }]);
     const presentationResponse = await fetch(`${baseUrl}/p/project-a/api/task-executions/execution-local`);
-    assert.equal(presentationResponse.status, 200);
     const presentationText = await presentationResponse.text();
+    assert.equal(presentationResponse.status, 200, presentationText);
     assert.match(presentationText, /"executionId":"execution-local"/);
     assert.match(presentationText, /"events":\[\]/);
     assert.doesNotMatch(presentationText, /stdoutFile|stderrFile|startLine|endLine|sourceLine/);

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { createRuntimeIncidentLedger } from '@backend/business/server/helper/runtime-incident-ledger.js';
 import { runtimeIncidentReviewCardId, runtimeIncidentReviewProjectId } from '@backend/business/server/helper/synchronize-runtime-incident-review-task.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';

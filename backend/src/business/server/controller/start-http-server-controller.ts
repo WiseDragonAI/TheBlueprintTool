@@ -4,7 +4,7 @@
  */
 import { readDecisionOsState } from '@backend/business/ledger/helper/read-decision-os-state.js';
 import { watchLedgerDirectory } from '@backend/business/refresh/helper/watch-ledger-directory.js';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createDecisionOsServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { readDecisionOsSettings } from '@backend/business/server/helper/read-decision-os-settings.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -18,6 +18,6 @@ export async function startHttpServerController(input: { action_payload?: AnyRec
   const settingsPayload = { ...(settings.settings as AnyRecord), ...payload, decisionOsRoot: settings.decisionOsRoot };
   const state = readDecisionOsState({ action_payload: settingsPayload, runtime_state: runtime, data_model: data });
   const watch = watchLedgerDirectory({ action_payload: settingsPayload, runtime_state: runtime, data_model: data });
-  const server = createHttpServer({ action_payload: settingsPayload, runtime_state: runtime, data_model: data });
+  const server = createDecisionOsServer({ action_payload: settingsPayload, runtime_state: runtime, data_model: data });
   return { ok: settings.ok !== false && state.ok !== false && watch.ok !== false && server.ok !== false, settings, state, watch, server };
 }

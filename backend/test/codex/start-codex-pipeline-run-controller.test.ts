@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
 import { discoverDecisionOsProjects } from '@backend/business/server/helper/project-catalog.js';
 import { taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
@@ -1073,6 +1073,7 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
   const { workspace, decisionOsRoot } = createWorkspace('decision-os-capacity-');
   const fakeCodex = join(workspace, 'fake-codex.mjs');
   const lifecycleFile = join(workspace, 'lifecycle.txt');
+  const releaseFile = join(workspace, 'release-capacity');
   createSkill(workspace, 'alpha');
   const ledgerPath = join(decisionOsRoot, 'specs.json');
   const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as Record<string, any>;
@@ -1083,17 +1084,19 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
   writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
-    'import { appendFileSync, writeFileSync } from "node:fs";',
+    'import { appendFileSync, existsSync, writeFileSync } from "node:fs";',
     'let prompt = "";',
     'process.stdin.on("data", (chunk) => { prompt += chunk; });',
     'process.stdin.on("end", () => {',
     '  const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
     `  appendFileSync(${JSON.stringify(lifecycleFile)}, "start" + String.fromCharCode(10));`,
     '  writeFileSync(output.trim(), "# result\\n");',
-    '  setTimeout(() => {',
+    '  const release = setInterval(() => {',
+    `    if (!existsSync(${JSON.stringify(releaseFile)})) return;`,
+    '    clearInterval(release);',
     '    console.log(JSON.stringify({ type: "turn.completed" }));',
     `    appendFileSync(${JSON.stringify(lifecycleFile)}, "end" + String.fromCharCode(10));`,
-    '  }, 500);',
+    '  }, 10);',
     '});',
   ].join('\n'));
   chmodSync(fakeCodex, 0o755);
@@ -1107,6 +1110,8 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
+    assert.equal((runtime.decisionOsSettings as Record<string, unknown>).maxConcurrentCodexProcesses, 2);
+    assert.equal((runtime.globalCodexProcessCapacity as () => number)(), 2);
     const starts: Record<string, any>[] = [];
     for (let index = 0; index < 3; index += 1) {
       const response = await fetch(`${baseUrl}/api/codex/skills/process`, {
@@ -1118,6 +1123,12 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
     }
     assert.deepEqual(starts.map((entry) => entry.pipelineRun.status), ['pending', 'pending', 'pending']);
     assert.equal(starts.every((entry) => Number.isInteger(entry.queuePosition) && entry.queuePosition >= 1), true);
+    await waitForAsync(async () => {
+      if (!existsSync(lifecycleFile)) return null;
+      const starts = readFileSync(lifecycleFile, 'utf8').split('\n').filter((line) => line === 'start');
+      return starts.length === 2 ? true : null;
+    }, 'two capacity slots to start');
+    writeFileSync(releaseFile, 'release\n');
     await Promise.all(starts.map((entry) => waitForAsync(async () => {
       const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(entry.pipelineRun.id)}`)
         .then((response) => response.json()) as Record<string, any>;

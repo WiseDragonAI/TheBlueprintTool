@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import { createTaskCurrentStateStore } from '@backend/business/task-state/helper/task-current-state-store.js';
 import { finalizeTaskCurrentEntity, taskCurrentStateVersion, type TaskCurrentEntity } from '../../../shared/task-current-state-core.js';
