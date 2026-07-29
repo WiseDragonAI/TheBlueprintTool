@@ -32,6 +32,7 @@
 5. **Unavailable assignment:** An unreachable assigned node returns `assigned_node_unreachable` and creates no substitute execution on the requesting node.
 6. **Restart recovery:** Startup reads locally assigned active executions. It adopts a child only when both PID and process-start identity match; stale active state becomes `interrupted` after available artifacts are captured.
 7. **Projection rule:** Replicated lifecycle owns the visible phase. Missing process observation does not relabel a durable `starting` or `running` execution as `interrupted`.
+8. **Scheduler failure containment:** Global capacity remains available when one project pipeline store cannot be inspected. Queue inspection pauses only that project's `codex-runtime` scope, records the project and store path, and continues selecting healthy project work. Explicit project-runtime recovery re-reads the durable store before restoring that project to scheduling.
 
 ---
 
