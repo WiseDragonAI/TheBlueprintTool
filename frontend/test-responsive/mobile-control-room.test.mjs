@@ -449,12 +449,29 @@ test('offers manual and configured-pipeline completion from the master-task deta
 
 test('deletes a master task from its detail after explicit confirmation', () => {
   assert.match(mobile, /completion\.append\(delayButton, completionActions, deleteButton\)/);
-  assert.match(mobile, /deleteMasterTaskModal\.showModal\(\)/);
+  assert.match(mobile, /kind: 'master-task'/);
+  assert.match(mobile, /function openTaskCardDeletion\(/);
   assert.match(mobile, /action: 'delete-card', cardId/);
   assert.match(mobile, /navigate\(controlRoomPath\(state\.controlTab\), true\)/);
   assert.match(html, /class="delete-master-task-modal mobile-confirm-modal"/);
   assert.match(html, /Its linked subtask cards are kept\./);
-  assert.match(styles, /\.delete-master-task-button \{ width: 100%; min-height: 52px; margin-top: 12px;/);
+  assert.match(styles, /\.delete-master-task-button, \.delete-subtask-button \{ width: 100%; min-height: 52px; margin-top: 12px;/);
+});
+
+test('deletes a subtask from its detail and returns through the canonical parent Back path', () => {
+  assert.match(mobile, /const subtaskActions = parentMaster \? document\.createElement\('section'\) : null/);
+  assert.match(mobile, /deleteButton\.className = 'delete-subtask-button'/);
+  assert.match(mobile, /deleteButton\.textContent = 'Delete subtask'/);
+  assert.match(mobile, /kind: 'subtask',[\s\S]*parentCardId: String\(parentMaster\.id\)/);
+  assert.match(mobile, /deleteTaskCardTitle\.textContent = subtask \? 'Delete subtask\?' : 'Delete master task\?'/);
+  assert.match(mobile, /This permanently removes the subtask card and its link to the master task\./);
+  assert.match(mobile, /subtask && parentCardId[\s\S]*querySelector\('\.back-to-zone-button'\)\.click\(\)/);
+  assert.match(mobile, /onRejected:[\s\S]*subtask && \[cardId, parentCardId\]\.includes\(String\(state\.activeCardId\)\)[\s\S]*navigate\(deletionSourcePath\)/);
+  assert.match(mobile, /if \(!subtask\) renderControlRoom\(\)/);
+  assert.match(html, /class="delete-task-card-title"/);
+  assert.match(html, /class="delete-task-card-message"/);
+  assert.match(styles, /\.subtask-actions \{ padding-top: 20px; border-top: 1px solid var\(--line\); \}/);
+  assert.match(styles, /\.subtask-actions \.delete-subtask-button \{ margin-top: 0; \}/);
 });
 
 test('keeps four mobile actions and scopes project and node shortcuts to the desktop task-creation modal', () => {
