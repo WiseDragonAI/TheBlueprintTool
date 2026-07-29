@@ -21,6 +21,7 @@ import {
   readCodexContentCatalog,
   readCodexSkillCatalog,
   readCodexSkillLibraryDetail,
+  readCodexSkillRevisionHistory,
   saveCodexSkillLibrary,
   validateSkillMarkdown,
   writeEditableSkillFile,
@@ -482,6 +483,60 @@ test('skill creation separates pipeline-only prompts from natural discovery and 
       .trim().split('\n').sort();
     assert.deepEqual(revisedPaths, ['.decision-os/codex-pipelines.json', '.decision-os/pipeline-prompts/pipeline-review.md']);
     assert.deepEqual(execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: workspace, encoding: 'utf8' }).trim().split('\n'), ['README.md']);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('pipeline prompts persist under .decision-os without a Git repository', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-unversioned-prompt-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  try {
+    const created = await createCodexSkillLibrary({
+      decisionOsRoot,
+      runtime: { serverRoot: workspace },
+      payload: {
+        name: 'local-controller',
+        description: 'Runs without a Git owner.',
+        markdown: '# Local controller\n',
+        contentKind: 'pipeline-prompt',
+      },
+    });
+    assert.equal(created.ok, true);
+    if (!created.ok) return;
+    const promptFile = join(decisionOsRoot, 'pipeline-prompts', 'local-controller.md');
+    assert.equal(readFileSync(promptFile, 'utf8'), '# Local controller\n');
+    assert.equal(created.skill.gitRevision, null);
+    assert.deepEqual(created.skill.history, []);
+
+    const revised = await saveCodexSkillLibrary({
+      decisionOsRoot,
+      runtime: { serverRoot: workspace },
+      skillName: 'local-controller',
+      payload: {
+        revision: created.skill.revision,
+        markdown: '# Revised local controller\n',
+        defaultCodexModel: null,
+        defaultCodexEffort: null,
+      },
+    });
+    assert.equal(revised.ok, true);
+    if (!revised.ok) return;
+    assert.equal(readFileSync(promptFile, 'utf8'), '# Revised local controller\n');
+    assert.equal(revised.skill.gitRevision, null);
+    assert.deepEqual(revised.skill.history, []);
+
+    const history = await readCodexSkillRevisionHistory({
+      decisionOsRoot,
+      runtime: { serverRoot: workspace },
+      skillName: 'local-controller',
+    });
+    assert.equal(history.ok, true);
+    if (history.ok) {
+      assert.deepEqual(history.history, []);
+      assert.equal(history.nextCursor, null);
+    }
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

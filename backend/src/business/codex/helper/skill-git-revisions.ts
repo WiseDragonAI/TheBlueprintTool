@@ -29,6 +29,7 @@ export type SkillGitRevisionDetail = SkillGitRevision & {
 
 export type SkillGitHistoryPage = AuthoredFileRevisionHistoryPage;
 export type SkillGitFailurePoint = AuthoredGitFailurePoint | 'commit';
+export type SkillRevisionPersistence = 'git' | 'unversioned';
 
 function ownerId(file: string): string {
   return `codex-content:${createHash('sha256').update(resolve(file)).digest('hex')}`;
@@ -38,14 +39,49 @@ function failurePoint(point?: SkillGitFailurePoint): AuthoredGitFailurePoint | u
   return point === 'commit' ? 'commit-tree' : point;
 }
 
+export async function resolveSkillRevisionPersistence(input: {
+  repositoryRoot: string;
+  allowUnversioned: boolean;
+  signal?: AbortSignal;
+}): Promise<SkillRevisionPersistence> {
+  const result = await runBoundedProcess({
+    command: 'git',
+    args: ['rev-parse', '--show-toplevel'],
+    cwd: input.repositoryRoot,
+    env: { ...process.env, LANG: 'C', LC_ALL: 'C' },
+    deadlineMs: 20_000,
+    signal: input.signal,
+    maximumOutputBytes: 1024 * 1024,
+    context: { component: 'skill-git-revisions', operation: 'resolve-persistence' },
+  });
+  if (result.ok) return 'git';
+  if (input.allowUnversioned && result.exitCode === 128 && /^fatal: not a git repository\b/.test(result.stderr.trim())) {
+    return 'unversioned';
+  }
+  const detail = result.stderr.trim()
+    || result.stdout.trim()
+    || result.spawnError
+    || result.termination
+    || `exit ${result.exitCode}`;
+  throw new Error(`Git resolve-root failed: ${detail}.`);
+}
+
 export async function assertSkillFileRevisionWritable(input: {
   file: string;
   additionalFiles?: readonly string[];
   repositoryRoot?: string;
+  allowUnversioned?: boolean;
   signal?: AbortSignal;
-}): Promise<void> {
+}): Promise<SkillRevisionPersistence> {
+  const repositoryRoot = resolve(input.repositoryRoot ?? resolve(input.file, '..'));
+  const persistence = await resolveSkillRevisionPersistence({
+    repositoryRoot,
+    allowUnversioned: input.allowUnversioned === true,
+    signal: input.signal,
+  });
+  if (persistence === 'unversioned') return persistence;
   const lock = await acquireRepositoryMutationLock({
-    repositoryRoot: resolve(input.repositoryRoot ?? resolve(input.file, '..')),
+    repositoryRoot,
     purpose: `authored-save-admission:${ownerId(input.file)}`,
     signal: input.signal,
   });
@@ -68,6 +104,7 @@ export async function assertSkillFileRevisionWritable(input: {
   } finally {
     lock.release();
   }
+  return persistence;
 }
 
 export async function commitSkillFileRevision(input: {
@@ -120,8 +157,17 @@ export async function readSkillGitHistoryPage(input: {
   file: string;
   cursor?: string | null;
   limit?: number;
+  allowUnversioned?: boolean;
   signal?: AbortSignal;
 }): Promise<SkillGitHistoryPage> {
+  if (input.allowUnversioned) {
+    const persistence = await resolveSkillRevisionPersistence({
+      repositoryRoot: resolve(input.file, '..'),
+      allowUnversioned: true,
+      signal: input.signal,
+    });
+    if (persistence === 'unversioned') return { revisions: [], nextCursor: null };
+  }
   return await readAuthoredFileRevisionHistory(input);
 }
 

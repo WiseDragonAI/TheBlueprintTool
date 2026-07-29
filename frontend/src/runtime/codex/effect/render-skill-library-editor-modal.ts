@@ -769,7 +769,9 @@ export async function createSkillLibraryDraft(): Promise<boolean> {
   adoptDetail(saved, skillLibraryEditorState.availableTags, false);
   session?.markSaved(saved.markdown, saved.revision);
   session?.setIdentity(filename(), saved.gitRevision?.commit || saved.revision);
-  skillLibraryEditorState.notice = 'Created with its first Git revision.';
+  skillLibraryEditorState.notice = saved.gitRevision !== null
+    ? 'Created with its first Git revision.'
+    : 'Created locally without Git history.';
   await skillLibraryEditorState.onSaved?.(saved);
   renderSkillLibraryEditorModal();
   return true;
@@ -826,7 +828,9 @@ export async function saveSkillLibraryDraft(): Promise<boolean> {
   session?.markSaved(result.skill.markdown, result.skill.revision);
   skillLibraryEditorState.notice = result.publication?.status === 'failed'
     ? `Saved locally; publication failed: ${result.publication.error ?? 'retry synchronization.'}`
-    : 'Saved as a new Git revision.';
+    : result.skill.gitRevision !== null
+      ? 'Saved as a new Git revision.'
+      : 'Saved locally without Git history.';
   await skillLibraryEditorState.onSaved?.(result.skill);
   renderSkillLibraryEditorModal();
   return true;
