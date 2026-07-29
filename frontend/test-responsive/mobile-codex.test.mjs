@@ -20,6 +20,9 @@ test('mobile card detail exposes processing and both process libraries', () => {
   assert.match(html, /data-process-tab="pipelines"/);
   assert.match(mobile, /setMobileCodexContext\(\{ projectId: state\.resourceProjectId, ledgerId: state\.activeLedgerId, cardId: state\.activeCardId \}\)/);
   assert.match(script, /projectScopedRequestPath\(url, projectId\)/);
+  assert.match(script, /state\.pipelineContent\.filter\(\(content\) => content\.contentKind === 'pipeline-prompt'\)/);
+  assert.match(script, /if \(!mergedSkills\.has\(content\.name\)\) mergedSkills\.set\(content\.name, content\)/);
+  assert.match(script, /state\.skills = \[\.\.\.mergedSkills\.values\(\)\]/);
   assert.match(script, /ledgerId: launch\.ledgerId, cardId: launch\.cardId, skillName: skill\.name/);
   assert.match(script, /ledgerId: launch\.ledgerId, sourceCardId: launch\.cardId, pipelineId: pipeline\.id/);
 });
