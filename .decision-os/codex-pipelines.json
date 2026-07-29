@@ -237,7 +237,7 @@
       "tags": [],
       "defaultCodexModel": null,
       "defaultCodexEffort": null,
-      "updatedAt": "2026-07-29T01:53:59.283Z"
+      "updatedAt": "2026-07-29T02:02:39.672Z"
     }
   ],
   "authoredContent": [
@@ -245,7 +245,7 @@
       "id": "psychoqwak",
       "description": "Use to reflect on life",
       "createdAt": "2026-07-28T16:16:18.207Z",
-      "updatedAt": "2026-07-29T01:53:59.283Z",
+      "updatedAt": "2026-07-29T02:02:39.672Z",
       "kind": "pipeline-prompt",
       "contentFile": "pipeline-prompts/psychoqwak.md"
     }
