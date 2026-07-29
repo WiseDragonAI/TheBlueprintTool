@@ -45,6 +45,7 @@ import {
   readPipelinePrompt,
   scanPipelinePrompts,
   validatePipelinePromptMarkdown,
+  validatePipelinePromptTemplates,
   writePipelinePrompt,
 } from './pipeline-prompt-library.js';
 import { atomicCreateTextFile, atomicReplaceTextFile } from './skill-content-file.js';
@@ -671,6 +672,23 @@ export async function createCodexSkillLibrary(input: {
       skillName: name,
     };
   }
+  if (kind === 'pipeline-prompt') {
+    const templates = validatePipelinePromptTemplates({
+      decisionOsRoot: pipelinePromptDecisionOsRoot(input),
+      name,
+      markdown,
+    });
+    if (!templates.ok) {
+      return {
+        ok: false,
+        statusCode: 422,
+        code: 'pipeline_prompt_template_invalid',
+        field: 'markdown',
+        error: 'error' in templates ? templates.error : 'Invalid pipeline prompt template.',
+        skillName: name,
+      };
+    }
+  }
   const workspaceRoot = dirname(input.decisionOsRoot);
   const serverRoot = runtimeServerRoot(input.runtime ?? {});
   if (kind === 'federated-skill' && !serverRoot) {
@@ -940,6 +958,23 @@ export async function saveCodexSkillLibrary(input: {
       error,
       skillName: input.skillName,
     };
+  }
+  if (skill.source === 'pipeline-prompt') {
+    const templates = validatePipelinePromptTemplates({
+      decisionOsRoot: pipelinePromptDecisionOsRoot(input),
+      name: skill.name,
+      markdown,
+    });
+    if (!templates.ok) {
+      return {
+        ok: false,
+        statusCode: 422,
+        code: 'pipeline_prompt_template_invalid',
+        field: 'markdown',
+        error: 'error' in templates ? templates.error : 'Invalid pipeline prompt template.',
+        skillName: input.skillName,
+      };
+    }
   }
 
   const currentMarkdown = readFileSync(skill.skillFile, 'utf8');

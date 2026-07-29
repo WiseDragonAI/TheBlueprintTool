@@ -554,6 +554,65 @@ test('pipeline-prompt save rejects a coupled-store race with HTTP 409 and no new
   }
 });
 
+test('pipeline-prompt revisions reject unresolved exact-name templates before writing', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-prompt-template-validation-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(join(workspace, 'README.md'), 'fixture\n');
+  initializeGitRepository(workspace);
+  try {
+    const availableSkills = await createCodexSkillLibrary({
+      decisionOsRoot,
+      runtime: { serverRoot: workspace },
+      payload: {
+        name: 'AVAILABLE_SKILLS',
+        description: 'Available skill instructions.',
+        markdown: '# Available skills\n\nUse task-list.\n',
+        contentKind: 'pipeline-prompt',
+      },
+    });
+    assert.equal(availableSkills.ok, true);
+    const gate = await createCodexSkillLibrary({
+      decisionOsRoot,
+      runtime: { serverRoot: workspace },
+      payload: {
+        name: 'gate',
+        description: 'Dynamic gate.',
+        markdown: '# Gate\n\n{{AVAILABLE_SKILLS}}\n\n{{MASTER_TASK}}\n',
+        contentKind: 'pipeline-prompt',
+      },
+    });
+    assert.equal(gate.ok, true);
+    if (!gate.ok) return;
+    const promptFile = join(decisionOsRoot, 'pipeline-prompts', 'gate.md');
+    const bytesBefore = readFileSync(promptFile);
+    const headBefore = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim();
+    const rejected = await saveCodexSkillLibrary({
+      decisionOsRoot,
+      runtime: { serverRoot: workspace },
+      skillName: 'gate',
+      payload: {
+        revision: gate.skill.revision,
+        markdown: '# Gate\n\n{{available_skills}}\n',
+        defaultCodexModel: null,
+        defaultCodexEffort: null,
+      },
+    });
+    assert.equal(rejected.ok, false);
+    if (rejected.ok) return;
+    assert.equal(rejected.statusCode, 422);
+    assert.equal(rejected.code, 'pipeline_prompt_template_invalid');
+    assert.match(rejected.error, /Pipeline prompt template "available_skills" was not found\./);
+    assert.deepEqual(readFileSync(promptFile), bytesBefore);
+    assert.equal(
+      execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim(),
+      headBefore,
+    );
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('global authored identity admission rejects every indexed source class without path disclosure or writes', async () => {
   const previousCodexHome = process.env.CODEX_HOME;
   const serverRoot = mkdtempSync(join(tmpdir(), 'decision-os-global-identity-server-'));

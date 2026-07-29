@@ -22,8 +22,11 @@ import {
   pipelineStoreFile,
 } from './codex-pipeline-store.js';
 import {
+  expandPipelinePromptTemplates,
   pipelinePromptFile,
   pipelinePromptRoot,
+  pipelinePromptRuntimeVariables,
+  pipelinePromptTemplateVariables,
   validatePipelinePromptMarkdown,
 } from './pipeline-prompt-library.js';
 
@@ -244,10 +247,12 @@ export async function admitPipelinePromptSnapshots(input: {
   /** Test-only race injection after exact bytes are captured and before Git identity is resolved. */
   beforeGitValidation?: (context: { name: string; promptFile: string; storeFile: string }) => void | Promise<void>;
 }): Promise<Map<string, AdmittedPipelinePromptSnapshot>> {
-  const promptNames = [...new Set(input.steps
+  const requestedPromptNames = [...new Set(input.steps
     .flatMap((step) => step.skills)
     .filter((skill) => skill.contentKind === 'pipeline-prompt')
     .map((skill) => skill.skillName))];
+  const promptNames = [...requestedPromptNames];
+  const queuedPromptNames = new Set(promptNames);
   const admitted = new Map<string, AdmittedPipelinePromptSnapshot>();
   if (promptNames.length === 0) return admitted;
 
@@ -381,6 +386,11 @@ export async function admitPipelinePromptSnapshots(input: {
         400,
         'error' in markdownValidation ? markdownValidation.error : 'Pipeline prompt Markdown is malformed.',
       );
+    }
+    for (const variable of pipelinePromptTemplateVariables(promptSnapshot)) {
+      if (pipelinePromptRuntimeVariables.has(variable) || queuedPromptNames.has(variable)) continue;
+      queuedPromptNames.add(variable);
+      promptNames.push(variable);
     }
     await input.beforeGitValidation?.({ name, promptFile: registeredFile, storeFile });
     const commit = await requiredGit({
@@ -521,6 +531,31 @@ export async function admitPipelinePromptSnapshots(input: {
     };
     assertSnapshotShape(snapshot);
     admitted.set(name, snapshot);
+  }
+  for (const name of requestedPromptNames) {
+    const snapshot = admitted.get(name);
+    if (!snapshot) continue;
+    let expanded: string;
+    try {
+      expanded = expandPipelinePromptTemplates({
+        markdown: snapshot.promptSnapshot,
+        stack: [name],
+        resolve: (templateName) => admitted.get(templateName)?.promptSnapshot ?? null,
+      });
+    } catch (error) {
+      throw new PipelinePromptAdmissionError(
+        'pipeline_prompt_template_invalid',
+        409,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    const resolved = {
+      ...snapshot,
+      contentRevision: sha256(expanded),
+      promptSnapshot: expanded,
+    };
+    assertSnapshotShape(resolved);
+    admitted.set(name, resolved);
   }
   return admitted;
 }

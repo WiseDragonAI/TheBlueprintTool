@@ -7,6 +7,7 @@ import {
   assertPipelinePromptRunSkillSnapshot,
   assertPipelineRunSkillPromptEvidence,
 } from './pipeline-prompt-snapshot.js';
+import { renderPipelinePromptRuntimeVariables } from './pipeline-prompt-library.js';
 
 export function buildPipelineSkillPrompt(input: {
   skillName: string;
@@ -29,13 +30,50 @@ export function buildPipelineSkillPrompt(input: {
   outputMarkdownFile: string;
   taskThreadId?: string;
   taskConversationContext?: Record<string, unknown>;
+  projectId?: string;
+  ledgerId?: string;
+  executionId?: string;
   serverSkill?: { markdown: string; packageRoot: string } | null;
 }): string {
   assertPipelineRunSkillPromptEvidence(input);
-  let promptSnapshot: string | null = null;
   if (input.contentKind === 'pipeline-prompt') {
     assertPipelinePromptRunSkillSnapshot(input);
-    promptSnapshot = input.promptSnapshot;
+    const card = input.taskConversationContext?.card && typeof input.taskConversationContext.card === 'object'
+      ? input.taskConversationContext.card as Record<string, unknown>
+      : {};
+    const thread = input.taskConversationContext?.thread && typeof input.taskConversationContext.thread === 'object'
+      ? input.taskConversationContext.thread as Record<string, unknown>
+      : {};
+    const previousSkillResult = input.stepInputCardId === input.outputParentCardId
+      ? 'No preceding skill result exists; this gate was launched from the canonical task.'
+      : input.stepInputCardContent;
+    return renderPipelinePromptRuntimeVariables(input.promptSnapshot, {
+      MASTER_TASK: String(card.markdown ?? ''),
+      FULL_THREAD: String(thread.markdown ?? ''),
+      PREVIOUS_SKILL_RESULT: previousSkillResult,
+      EXECUTION_CONTEXT: JSON.stringify({
+        projectId: input.projectId ?? '',
+        ledgerId: input.ledgerId ?? '',
+        ledgerFile: input.ledgerFile,
+        masterTaskId: input.outputParentCardId,
+        masterTaskTitle: String(card.title ?? ''),
+        threadId: input.taskThreadId ?? String(thread.id ?? ''),
+        pipelineRunId: input.pipelineRunId,
+        pipelineName: input.pipelineName,
+        executionId: input.executionId ?? '',
+        sourceCardId: input.sourceCardId,
+        sourceCardTitle: input.sourceCardTitle,
+        stepId: input.stepId,
+        stepTitle: input.stepTitle,
+        inputCardId: input.stepInputCardId,
+        output: {
+          parentCardId: input.outputParentCardId,
+          cardId: input.outputCardId,
+          subtaskPosition: input.outputSubtaskPosition,
+          markdownFile: input.outputMarkdownFile,
+        },
+      }, null, 2),
+    });
   }
   const serverSkill = input.serverSkill ? [
     '',
@@ -45,37 +83,15 @@ export function buildPipelineSkillPrompt(input: {
     input.serverSkill.markdown,
     '```',
   ] : [];
-  const pipelinePrompt = promptSnapshot !== null ? [
-    'Decision OS pipeline-only prompt:',
-    'Apply the following exact injected instructions. This prompt is intentionally unavailable to natural Codex skill discovery.',
-    '```markdown',
-    promptSnapshot,
-    '```',
-    '',
-  ] : [];
-  const taskConversation = promptSnapshot !== null && input.taskConversationContext && input.taskThreadId ? [
-    'Canonical task and operator conversation:',
-    '```json',
-    JSON.stringify(input.taskConversationContext, null, 2),
-    '```',
-    '',
-    'This pipeline-only prompt owns operator-facing communication for this run.',
-    'Append its concise operator-facing conclusion or blocking question to the canonical task thread by running:',
-    `ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id "${input.taskThreadId}" --message-stdin`,
-    'Keep the output Markdown separate: it is the direct handoff consumed by the next queued skill.',
-    '',
-  ] : [];
-  const directInput = promptSnapshot !== null && input.stepInputCardId === input.outputParentCardId ? [
-    'Direct previous skill result:',
-    'No preceding skill result exists; this gate was launched from the canonical task.',
-  ] : [
+  const directInput = [
     'Direct previous skill result:',
     '```markdown',
     input.stepInputCardContent,
     '```',
   ];
   return [
-    ...(input.contentKind === 'pipeline-prompt' ? [] : [`$${input.skillName}`, '']),
+    `$${input.skillName}`,
+    '',
     'ledger-cli is on PATH; use $DECISION_OS_LEDGER_FILE and do not locate the CLI.',
     'You are processing one stage of a decision-os card pipeline from the active workspace.',
     '',
@@ -94,8 +110,6 @@ export function buildPipelineSkillPrompt(input: {
     `Output card role: linked subtask of ${input.outputParentCardId}`,
     ...serverSkill,
     '',
-    ...pipelinePrompt,
-    ...taskConversation,
     ...directInput,
     '',
     `Write the final result to this Markdown file: ${input.outputMarkdownFile}`,

@@ -10,7 +10,14 @@ import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './cod
 import type { CodexAuthoredContentRecord } from '../../../../../shared/schemas/codex-pipeline-types.js';
 
 const maximumPromptBytes = 1_000_000;
-const safePromptName = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+const safePromptName = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?$/;
+const promptVariable = /\{\{\s*([A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?)\s*\}\}/g;
+export const pipelinePromptRuntimeVariables = new Set([
+  'MASTER_TASK',
+  'FULL_THREAD',
+  'PREVIOUS_SKILL_RESULT',
+  'EXECUTION_CONTEXT',
+]);
 
 function isInside(parent: string, child: string): boolean {
   const inner = relative(parent, child);
@@ -24,9 +31,63 @@ export function pipelinePromptRoot(decisionOsRoot: string): string {
 export function assertPipelinePromptName(name: string): string {
   const normalized = name.trim();
   if (!safePromptName.test(normalized)) {
-    throw new Error('Names must contain 1-64 lowercase letters, numbers, or hyphens and cannot end with a hyphen.');
+    throw new Error('Names must contain 1-64 letters, numbers, underscores, or hyphens and cannot end with an underscore or hyphen.');
   }
   return normalized;
+}
+
+export function pipelinePromptTemplateVariables(markdown: string): string[] {
+  return [...new Set([...markdown.matchAll(promptVariable)].map((match) => match[1]))];
+}
+
+export function expandPipelinePromptTemplates(input: {
+  markdown: string;
+  resolve: (name: string) => string | null;
+  stack?: readonly string[];
+}): string {
+  const stack = [...(input.stack ?? [])];
+  return input.markdown.replace(promptVariable, (token, name: string) => {
+    if (pipelinePromptRuntimeVariables.has(name)) return token;
+    if (stack.includes(name)) throw new Error(`Pipeline prompt template cycle: ${[...stack, name].join(' -> ')}.`);
+    const template = input.resolve(name);
+    if (template === null) throw new Error(`Pipeline prompt template "${name}" was not found.`);
+    return expandPipelinePromptTemplates({
+      markdown: template,
+      resolve: input.resolve,
+      stack: [...stack, name],
+    });
+  });
+}
+
+export function renderPipelinePromptRuntimeVariables(
+  markdown: string,
+  values: Readonly<Record<string, string>>,
+): string {
+  return markdown.replace(promptVariable, (_token, name: string) => {
+    if (!pipelinePromptRuntimeVariables.has(name)) {
+      throw new Error(`Pipeline prompt template "${name}" was not resolved at admission.`);
+    }
+    return values[name] ?? '';
+  });
+}
+
+export function validatePipelinePromptTemplates(input: {
+  decisionOsRoot: string;
+  name: string;
+  markdown: string;
+}): { ok: true } | { ok: false; error: string } {
+  try {
+    expandPipelinePromptTemplates({
+      markdown: input.markdown,
+      stack: [input.name],
+      resolve: (name) => name === input.name
+        ? input.markdown
+        : readPipelinePrompt(input.decisionOsRoot, name)?.markdown ?? null,
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export function pipelinePromptFile(decisionOsRoot: string, name: string): string {

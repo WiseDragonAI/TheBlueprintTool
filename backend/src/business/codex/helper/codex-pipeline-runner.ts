@@ -433,6 +433,9 @@ export async function spawnPipelineSkillProcess(input: {
     outputCardId: input.step.outputCardId,
     outputSubtaskPosition: input.step.outputSubtaskPosition,
     outputMarkdownFile: outputFile,
+    projectId: String(input.runtime.projectId ?? ''),
+    ledgerId: input.pipelineRun.ledgerId,
+    executionId: input.skill.executionId,
     ...(taskConversation ? {
       taskThreadId: taskConversation.threadId,
       taskConversationContext: taskConversation.context,

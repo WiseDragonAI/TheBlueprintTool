@@ -243,7 +243,7 @@ export function assertCodexPipelineStoreAvailable(
 }
 
 const contentKindSet = new Set<string>(codexContentKinds);
-const safeContentId = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+const safeContentId = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?$/;
 
 function normalizePipelineSkill(
   input: AnyRecord,

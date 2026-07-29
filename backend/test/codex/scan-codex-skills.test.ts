@@ -132,8 +132,7 @@ test('one server skill wins in every managed project and supplies exact run inst
       outputCardId: 'output', outputSubtaskPosition: 1, outputMarkdownFile: '/output.md',
     });
     assert.equal(injected.startsWith('$pipeline-only'), false);
-    assert.match(injected, /intentionally unavailable to natural Codex skill discovery/);
-    assert.match(injected, /# Injected pipeline instructions/);
+    assert.equal(injected, promptSnapshot);
   } finally {
     rmSync(serverRoot, { recursive: true, force: true });
   }
