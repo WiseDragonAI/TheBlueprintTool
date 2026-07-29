@@ -1,9 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
+const source = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('Git diff card widget uses shared controls without entering the thread voice lifecycle', () => {
   const widget = source('src/runtime/ledger/component/render-ledger-card-git-diff.ts');

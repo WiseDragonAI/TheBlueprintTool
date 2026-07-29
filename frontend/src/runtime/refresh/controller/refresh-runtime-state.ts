@@ -22,7 +22,9 @@ export async function refreshRuntimeState(): Promise<void> {
   telemetry('subscribe-server-refresh', { specId: '50000006', source: 'refresh-button' });
   const nextCanvasMode = routeCanvasMode(window.location.pathname);
   const nextScope = routeScope(window.location.pathname);
-  state.projectId = nextScope.projectId;
+  // WHAT: Preserve the installed project identity on direct legacy ledger URLs.
+  // WHY: `/specs` carries no project segment, but its scoped caches and requests still belong to the current project.
+  state.projectId = nextScope.projectId || (nextCanvasMode === 'ledger' ? state.projectId : '');
   state.replicaNodeId = replicaNodeIdFromLocation();
   if (nextCanvasMode !== 'projects') subscribeLedgerContentEvents();
   const nextActiveTab = nextCanvasMode === 'ledger' ? routeTab(window.location.pathname) : state.activeTab;

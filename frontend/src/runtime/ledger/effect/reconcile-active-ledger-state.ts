@@ -12,6 +12,7 @@ import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
 import { refreshZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 import { overlayPendingActiveLedger } from './run-optimistic-active-ledger-mutation.js';
 import { acceptTaskClockForInstall } from '../../refresh/helper/task-causal-clock.js';
+import { restoreThreadDocumentsIntoLedger } from '../../thread/helper/thread-document-state.js';
 
 type AnyRecord = Record<string, any>;
 
@@ -286,6 +287,14 @@ export function reconcileActiveLedgerState(input: ReconcileActiveLedgerInput): b
   // WHY: A helper must not be able to pass an invalid replacement into active state.
   if (!isRecord(reconciledLedger)) return false;
 
+  // WHAT: Reinstall independently verified thread documents before replacing the active ledger.
+  // WHY: A same-revision canvas response can contain an older explicit thread slice and must not erase newer hydrated notes.
+  restoreThreadDocumentsIntoLedger({
+    projectId: String(state.projectId ?? ''),
+    replicaNodeId: String(state.replicaNodeId ?? ''),
+    ledgerId: input.request.ledgerStateId,
+    ledger: reconciledLedger,
+  });
   replaceActiveLedger(reconciledLedger, input.request.ledgerStateId);
   state.selection = sameLedger ? pruneSelectionToActiveLedger(state.selection) : emptySelection();
   reconciliation.lastAppliedServerRevision = serverRevision;

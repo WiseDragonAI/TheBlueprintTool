@@ -29,6 +29,7 @@ import { syncThreadCodexRunControls } from './sync-thread-codex-run-controls.js'
 import { restorePendingVoiceUploads } from '../../voice/effect/restore-pending-voice-uploads.js';
 import { restorePendingThreadMessages } from './restore-pending-thread-messages.js';
 import { SVG_NS } from '../../dom.js';
+import { restoreThreadDocumentsIntoLedger } from '../helper/thread-document-state.js';
 
 const threadTabOrder: ThreadPanelTab[] = ['thread', 'codex-log'];
 
@@ -250,12 +251,21 @@ function unbindActiveThreadRuns(threadId: string): void {
 }
 
 export function renderThreadPanel(): void {
+  const activeThreadId = String(state.threadId ?? '');
+  // WHAT: Reinstall the verified thread-document cache before rendering either panel surface.
+  // WHY: Closing a thread and later reopening it must recover newer notes when the active canvas still carries an older slice.
+  restoreThreadDocumentsIntoLedger({
+    projectId: String(state.projectId ?? ''),
+    replicaNodeId: String(state.replicaNodeId ?? ''),
+    ledgerId: String(state.activeTab ?? ''),
+    threadId: activeThreadId,
+    ledger: state.activeLedger,
+  });
   const panel = document.querySelector('.thread-panel') as HTMLElement | null;
   const inspector = document.querySelector('.panel') as HTMLElement | null;
   const shell = document.querySelector('.shell') as HTMLElement | null;
   if (!panel || !inspector || !shell) return;
   const shouldOpenThread = Boolean(state.threadPanelOpen || state.activeTool === 'thread');
-  const activeThreadId = String(state.threadId ?? '');
   const activeTab = activeThreadPanelTab(activeThreadId);
 
   inspector.hidden = !shouldOpenThread;

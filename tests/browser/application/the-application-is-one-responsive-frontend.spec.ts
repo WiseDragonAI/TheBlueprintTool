@@ -242,9 +242,15 @@ test('An interrupted responsive thread hydration recovers without an operator re
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
     const route = localResponsiveCardRoute();
+    const expectedThreadId = `thread-${decodeURIComponent(route.split('/').at(-1) ?? '')}`;
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     let threadRequestCount = 0;
     await desktop.route('**/api/ledgers/*/threads/*', async (request) => {
+      const threadId = decodeURIComponent(new URL(request.request().url()).pathname.split('/').at(-1) ?? '');
+      if (threadId !== expectedThreadId) {
+        await request.continue();
+        return;
+      }
       threadRequestCount += 1;
       if (threadRequestCount === 1) {
         await request.abort('connectionreset');
@@ -252,7 +258,6 @@ test('An interrupted responsive thread hydration recovers without an operator re
       }
       const response = await request.fetch();
       const payload = await response.json() as { notes?: Record<string, unknown[]> };
-      const threadId = decodeURIComponent(new URL(request.request().url()).pathname.split('/').at(-1) ?? '');
       payload.notes = {
         ...(payload.notes ?? {}),
         [threadId]: [{
@@ -279,7 +284,7 @@ test('An interrupted responsive thread hydration recovers without an operator re
   }
 });
 
-test('A hydrated responsive thread remains visible while navigation refresh is pending.', { timeout: 30_000 }, async () => {
+test('A hydrated responsive thread remains visible while navigation refresh is pending.', { timeout: 60_000 }, async () => {
   const server = await startDecisionOsServer();
   let browser: Browser | undefined;
   let releaseRefresh: (() => void) | undefined;
@@ -290,16 +295,24 @@ test('A hydrated responsive thread remains visible while navigation refresh is p
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
     const route = localResponsiveCardRoute();
+    const expectedThreadId = `thread-${decodeURIComponent(route.split('/').at(-1) ?? '')}`;
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const refreshGate = new Promise<void>((resolveRefresh) => { releaseRefresh = resolveRefresh; });
-    let threadRequestCount = 0;
+    let holdTargetRefresh = false;
+    let observeTargetRefresh!: () => void;
+    let finishTargetRefresh!: () => void;
+    const targetRefreshStarted = new Promise<void>((resolveStarted) => { observeTargetRefresh = resolveStarted; });
+    const targetRefreshFinished = new Promise<void>((resolveFinished) => { finishTargetRefresh = resolveFinished; });
     let retainedPayload: Record<string, unknown> | null = null;
     await desktop.route('**/api/ledgers/*/threads/*', async (request) => {
-      threadRequestCount += 1;
+      const threadId = decodeURIComponent(new URL(request.request().url()).pathname.split('/').at(-1) ?? '');
+      if (threadId !== expectedThreadId) {
+        await request.continue();
+        return;
+      }
       if (!retainedPayload) {
         const response = await request.fetch();
         const payload = await response.json() as { notes?: Record<string, unknown[]> };
-        const threadId = decodeURIComponent(new URL(request.request().url()).pathname.split('/').at(-1) ?? '');
         payload.notes = {
           ...(payload.notes ?? {}),
           [threadId]: [{
@@ -313,8 +326,14 @@ test('A hydrated responsive thread remains visible while navigation refresh is p
         await request.fulfill({ response, contentType: 'application/json', body: JSON.stringify(payload) });
         return;
       }
+      if (!holdTargetRefresh) {
+        await request.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(retainedPayload) });
+        return;
+      }
+      observeTargetRefresh();
       await refreshGate;
       await request.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(retainedPayload) });
+      finishTargetRefresh();
     });
 
     await desktop.goto(`${server.url}${route}`, { waitUntil: 'domcontentloaded' });
@@ -324,14 +343,31 @@ test('A hydrated responsive thread remains visible while navigation refresh is p
     await retainedNote.waitFor({ state: 'visible', timeout: 10_000 });
     await desktop.getByRole('button', { name: 'Close thread' }).click();
     await desktop.locator('.mobile-thread-inspector').waitFor({ state: 'hidden' });
-    await desktop.locator('.back-to-zone-button').click();
-    await desktop.locator('#zone-view:not([hidden])').waitFor({ state: 'visible' });
+    await desktop.goto(server.url, { waitUntil: 'domcontentloaded' });
+    await desktop.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
     await desktop.goBack();
     await desktop.locator('#card-view:not([hidden])').waitFor({ state: 'visible' });
     await desktop.getByRole('button', { name: 'Thread', exact: true }).click();
     await retainedNote.waitFor({ state: 'visible', timeout: 1_000 });
-    assert.ok(threadRequestCount >= 2, `Expected a pending scoped refresh, received ${threadRequestCount} request.`);
+    holdTargetRefresh = true;
+    await desktop.evaluate(async () => {
+      const {
+        activeThreadIdentityScope,
+        loadActiveThreadSlice,
+      } = await import('/src/runtime/thread/effect/load-active-thread-slice.js');
+      const scope = activeThreadIdentityScope();
+      if (!scope) throw new Error('Active thread identity scope is unavailable.');
+      (window as Window & { __pendingBrowserThreadRefresh?: Promise<boolean> }).__pendingBrowserThreadRefresh =
+        loadActiveThreadSlice(scope, { allowMissingContentFile: true });
+    });
+    await waitForSignal(targetRefreshStarted, 'Timed out waiting for the held thread refresh request.');
+    await retainedNote.waitFor({ state: 'visible', timeout: 1_000 });
     releaseRefresh?.();
+    const refreshApplied = desktop.evaluate(() => (
+      (window as Window & { __pendingBrowserThreadRefresh?: Promise<boolean> }).__pendingBrowserThreadRefresh
+    ));
+    assert.equal(await waitForSignal(refreshApplied, 'Timed out waiting for the held thread refresh to settle.'), true);
+    await waitForSignal(targetRefreshFinished, 'Timed out waiting for the intercepted thread response to finish.');
   } finally {
     releaseRefresh?.();
     await browser?.close();
@@ -637,4 +673,11 @@ async function waitFor(check: () => Promise<boolean>, message: string): Promise<
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+}
+
+async function waitForSignal<T>(signal: Promise<T>, message: string): Promise<T> {
+  return Promise.race([
+    signal,
+    delay(5_000).then(() => { throw new Error(message); }),
+  ]);
 }

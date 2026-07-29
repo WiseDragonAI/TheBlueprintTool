@@ -462,6 +462,7 @@ test('keeps diagnostics online and pauses task admission for an interrupted epoc
     runId: 'interrupted-run',
     phase: 'committing',
     backupRoot: join(home, 'rollback'),
+    projectIds: [projectId],
     updatedAt: '2026-07-24T00:00:00.000Z',
   }));
 
@@ -479,9 +480,106 @@ test('keeps diagnostics online and pauses task admission for an interrupted epoc
     assert.equal((await fetch(`${baseUrl}/`)).status, 200);
     const incidents = JSON.parse(readFileSync(join(decisionOsRoot, 'runtime-incidents.json'), 'utf8')) as { incidents: Array<{ scope: string; code: string }> };
     assert.equal(incidents.incidents.some((incident) => incident.scope === `project-task-state:${projectId}` && incident.code === 'task_migration_transaction_incomplete'), true);
+
+    const eventResponse = await fetch(`${baseUrl}/p/${projectId}/api/ledger-content-events`);
+    assert.equal(eventResponse.status, 200);
+    const reader = eventResponse.body!.getReader();
+    const connected = await reader.read();
+    assert.match(Buffer.from(connected.value ?? []).toString('utf8'), /connected/);
+    writeFileSync(join(decisionOsRoot, 'runtime', 'epoch-4-migration-admission.json'), JSON.stringify({
+      version: 1,
+      runId: 'interrupted-run',
+      phase: 'verified',
+      backupRoot: join(home, 'rollback'),
+      projectIds: [projectId],
+      updatedAt: '2026-07-24T00:01:00.000Z',
+    }));
+    const resume = await fetch(`${baseUrl}/api/diagnostics/runtime/resume`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scope: `project-task-state:${projectId}`, resolution: 'Transaction evidence revalidated.' }),
+    });
+    assert.equal(resume.status, 200, await resume.clone().text());
+    const settled = await reader.read();
+    assert.equal(settled.done, true);
+    const recoveredHealth = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
+      status: string;
+      pausedTaskProjectIds: string[];
+    };
+    assert.equal(recoveredHealth.status, 'ready');
+    assert.deepEqual(recoveredHealth.pausedTaskProjectIds, []);
+    assert.equal((await fetch(`${baseUrl}/p/${projectId}/api/ledgers/tasks/navigation`)).status, 200);
   } finally {
     server.close();
     await once(server, 'close');
     rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('recovers compatible hosted task state automatically without restarting the server', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'decision-os-runtime-automatic-migration-'));
+  const decisionOsRoot = join(home, '.decision-os');
+  const projectId = 'automatic-project';
+  const stateRoot = join(decisionOsRoot, 'task-state', projectId);
+  mkdirSync(stateRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: projectId }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  const ledger = {
+    cards: [{ id: 'card-a', title: 'Recovered card' }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+    threadFiles: {},
+  };
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify(ledger));
+  writeFileSync(join(stateRoot, 'projection.json'), JSON.stringify({
+    version: 3,
+    projectId,
+    ledger,
+    conflicts: [],
+  }));
+  const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
+  const runtime: Record<string, unknown> = { decisionOsSettings: { federationNodeId: 'workstation' } };
+  createHttpServer({
+    action_payload: {
+      port: 0,
+      host: '127.0.0.1',
+      cwd: home,
+      decisionOsFrontendRoot: join(repositoryRoot, 'frontend'),
+    },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  try {
+    await waitUntil(async () => {
+      const response = await fetch(`${baseUrl}/api/task-state/projection?projectId=${projectId}`);
+      if (!response.ok) return false;
+      const body = await response.json() as { ledger?: { cards?: Array<{ id: string }> } };
+      return body.ledger?.cards?.some((card) => card.id === 'card-a') === true;
+    }, 5_000);
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
+      status: string;
+      pausedTaskProjectIds: string[];
+    };
+    assert.equal(health.status, 'ready');
+    assert.deepEqual(health.pausedTaskProjectIds, []);
+    assert.equal(JSON.parse(readFileSync(join(stateRoot, 'format.json'), 'utf8')).stateSchema, 4);
+    const admission = JSON.parse(readFileSync(join(decisionOsRoot, 'runtime', 'epoch-4-migration-admission.json'), 'utf8')) as {
+      phase: string;
+      projectIds: string[];
+    };
+    assert.equal(admission.phase, 'verified');
+    assert.deepEqual(admission.projectIds, [projectId]);
+    assert.equal(server.address() && (server.address() as AddressInfo).port, address.port);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(home, { recursive: true, force: true });
+    rmSync(join(home, '.decision-os-task-state-recovery'), { recursive: true, force: true });
   }
 });

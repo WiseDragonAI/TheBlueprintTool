@@ -104,10 +104,16 @@ test('catalog, save, run, invalid-reference, and warning messages stay actionabl
 test('global skills and pipelines read only the connection-synchronized local server catalogs', () => {
   assert.match(script, /jsonRequest\('\/api\/codex\/server-pipelines'\)/);
   assert.match(script, /jsonRequest\('\/api\/codex\/server-skills'\)/);
+  assert.match(script, /Promise\.allSettled\(\[\s*jsonRequest\('\/api\/codex\/server-skills'\),\s*jsonRequest\('\/api\/codex\/server-pipelines'\)\s*\]\)/);
   assert.doesNotMatch(script, /Promise\.allSettled\(state\.projects\.map/);
   assert.match(script, /Library views must never fan out to remote projects/);
   assert.match(script, /const serverSkillCatalog = \(serverSkills\.skills \|\| \[\]\)/);
   assert.match(script, /mergePipelinePromptsIntoSkillCatalog\(serverSkillCatalog, state\.pipelineContent\)/);
+  assert.match(script, /state\.skills\.filter\(\(skill\) => skill\.contentKind !== 'pipeline-prompt'\)/);
+  assert.match(script, /failedSlices\.push\('skills'\)/);
+  assert.match(script, /failedSlices\.push\('pipelines'\)/);
+  assert.match(script, /issues = serverPipelines\.issues \|\| \[\]/);
+  assert.match(script, /retained the last loaded data/);
   assert.match(script, /failedProjects: 0/);
   assert.doesNotMatch(script, /Choose the project whose (?:skill library|pipelines)/);
 });

@@ -161,9 +161,12 @@ export async function loadActiveThreadSlice(
     telemetry('thread-content-refresh-skipped', { reason: 'active-thread-changed-before-apply', ...scope });
     return false;
   }
-  // WHAT: Submit the notes-only fast path to the same Epoch 4 clock gate as complete ledger projections.
-  // WHY: An event-triggered thread read must not bypass acknowledgement of a locally persisted message.
-  if (!acceptTaskClockForInstall(taskClockFromResponse(response), 'event-thread-content-refresh')) return false;
+  // WHAT: Submit only Tasks notes to the Epoch 4 clock gate used by complete task projections.
+  // WHY: Non-task ledgers do not emit a task clock and must retain their independent thread lifecycle.
+  if (
+    scope.ledgerId === 'tasks'
+    && !acceptTaskClockForInstall(taskClockFromResponse(response), 'event-thread-content-refresh')
+  ) return false;
 
   const installedNotes = normalizeLedgerNotes(incomingSlice)[threadId] ?? [];
   const installedDeletedNoteIds = normalizeDeletedNoteIds(incomingSlice)[threadId] ?? [];

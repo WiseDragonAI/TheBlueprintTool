@@ -151,6 +151,39 @@ test('create-http-server resolves the retained launcher incident only after list
   }
 });
 
+test('create-http-server keeps health ready for unresolved evidence that owns no runtime pause', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-nonblocking-incident-health-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const incidents = createRuntimeIncidentLedger({ decisionOsRoot });
+  incidents.record({
+    scope: 'http-request:GET:/missing-card',
+    component: 'http-server',
+    operation: 'handle-request',
+    code: 'task_card_not_found',
+    error: new Error('task_card_not_found'),
+  });
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+
+  try {
+    const health = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/health`)
+      .then((response) => response.json()) as { status: string; activeIncidentCount: number };
+    assert.equal(health.status, 'ready');
+    assert.equal(health.activeIncidentCount, 1);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test('create-http-server resolves retained transient task bootstrap incidents at startup', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-bootstrap-incident-recovery-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
@@ -383,6 +416,7 @@ test('server admits local assigned execution while its configured relay is unrea
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  const releaseCapacity = await (runtime.acquireProjectSyncCodexSlot as () => Promise<() => void>)();
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const eventAbort = new AbortController();
   const eventResponse = await fetch(`${baseUrl}/api/control-room-events`, { signal: eventAbort.signal });
@@ -461,15 +495,24 @@ test('server admits local assigned execution while its configured relay is unrea
         finishedAt: null,
         model: null,
         effort: null,
+        predecessorExecutionId: null,
         executorNodeId: 'workstation',
         revision: 2,
         error: null,
         artifacts: { jsonl: false, stderr: false, telemetry: false, result: false },
       }],
     }]);
+    const ordinaryCardSummaryResponse = await fetch(`${baseUrl}/p/project-a/api/tasks/ordinary-card/execution-state`);
+    assert.equal(ordinaryCardSummaryResponse.status, 200);
+    assert.deepEqual(await ordinaryCardSummaryResponse.json(), {
+      taskId: 'ordinary-card',
+      activeExecutionIds: [],
+      defaultExecutionId: null,
+      sessions: [],
+    });
     const presentationResponse = await fetch(`${baseUrl}/p/project-a/api/task-executions/execution-local`);
-    assert.equal(presentationResponse.status, 200);
     const presentationText = await presentationResponse.text();
+    assert.equal(presentationResponse.status, 200, presentationText);
     assert.match(presentationText, /"executionId":"execution-local"/);
     assert.match(presentationText, /"events":\[\]/);
     assert.doesNotMatch(presentationText, /stdoutFile|stderrFile|startLine|endLine|sourceLine/);
@@ -492,6 +535,7 @@ test('server admits local assigned execution while its configured relay is unrea
   } finally {
     eventAbort.abort();
     await eventReader.cancel().catch(() => undefined);
+    releaseCapacity();
     server.close();
     await once(server, 'close');
     process.chdir(originalCwd);

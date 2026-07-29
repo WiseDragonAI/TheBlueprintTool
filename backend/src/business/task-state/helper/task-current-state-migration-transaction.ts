@@ -91,6 +91,7 @@ async function persistJournal(journal: TransactionJournal): Promise<void> {
       runId: journal.runId,
       phase: journal.phase,
       backupRoot: journal.backupRoot,
+      projectIds: journal.projects.map((project) => project.projectId).sort(),
       updatedAt: journal.updatedAt,
       error: journal.error ?? '',
     });
@@ -127,6 +128,32 @@ async function archivePlans(plans: TaskCurrentStateMigrationPlan[], backupRoot: 
 
 function sidecarArchive(archived: ArchivedSnapshot[], file: string): string {
   return archived.find((entry) => entry.file === file && entry.archiveFile)?.archiveFile ?? '';
+}
+
+function transactionProjects(
+  plans: TaskCurrentStateMigrationPlan[],
+  runId: string,
+  archived: ArchivedSnapshot[] = [],
+): TransactionProject[] {
+  return plans.map((plan) => {
+    const shadowDecisionOsRoot = resolve(dirname(plan.decisionOsRoot), `.decision-os-epoch4-shadow-${runId}-${plan.projectId}`);
+    return {
+      projectId: plan.projectId,
+      liveRoot: plan.activeRoot,
+      shadowDecisionOsRoot,
+      shadowRoot: resolve(shadowDecisionOsRoot, 'task-state', plan.projectId),
+      rollbackRoot: resolve(plan.decisionOsRoot, 'task-state-rollback', runId, plan.projectId),
+      sourceFingerprint: plan.sourceFingerprint,
+      stateArchived: false,
+      stateInstalled: false,
+      sidecars: plan.sidecars.map((sidecar) => ({
+        file: sidecar.file,
+        archiveFile: sidecarArchive(archived, sidecar.file),
+        wasPresent: sidecar.before !== null,
+        applied: false,
+      })),
+    };
+  });
 }
 
 async function rollbackJournal(journal: TransactionJournal): Promise<void> {
@@ -233,7 +260,7 @@ export async function runTaskCurrentStateMigrationTransaction(input: {
     backupRoot,
     sourceManifest,
     ...(input.admissionMarker ? { admissionMarker: resolve(input.admissionMarker) } : {}),
-    projects: [],
+    projects: transactionProjects(input.plans, runId),
   };
   await persistJournal(journal);
   await input.checkpoint?.({ phase: 'inventory' });
@@ -248,25 +275,7 @@ export async function runTaskCurrentStateMigrationTransaction(input: {
       complete: true,
     });
     journal.phase = 'backup-verified';
-    journal.projects = input.plans.map((plan) => {
-      const shadowDecisionOsRoot = resolve(dirname(plan.decisionOsRoot), `.decision-os-epoch4-shadow-${runId}-${plan.projectId}`);
-      return {
-        projectId: plan.projectId,
-        liveRoot: plan.activeRoot,
-        shadowDecisionOsRoot,
-        shadowRoot: resolve(shadowDecisionOsRoot, 'task-state', plan.projectId),
-        rollbackRoot: resolve(plan.decisionOsRoot, 'task-state-rollback', runId, plan.projectId),
-        sourceFingerprint: plan.sourceFingerprint,
-        stateArchived: false,
-        stateInstalled: false,
-        sidecars: plan.sidecars.map((sidecar) => ({
-          file: sidecar.file,
-          archiveFile: sidecarArchive(archived, sidecar.file),
-          wasPresent: sidecar.before !== null,
-          applied: false,
-        })),
-      };
-    });
+    journal.projects = transactionProjects(input.plans, runId, archived);
     await persistJournal(journal);
     await input.checkpoint?.({ phase: 'backup-verified' });
 
