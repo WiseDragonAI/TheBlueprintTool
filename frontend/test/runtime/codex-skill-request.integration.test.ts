@@ -20,7 +20,7 @@ import { requestCodexPipelineRunCancel, requestCodexPipelineRunRestart, requestC
 import { requestCodexSkillLibrarySave, requestCodexSkillRevisionRetry } from '../../src/runtime/codex/effect/request-codex-skill-library-save.js';
 import { requestCodexSkillLibraryCreate } from '../../src/runtime/codex/effect/request-codex-skill-library-create.js';
 import { requestCodexSkillFavoriteSave, requestCodexSkillMetadataSave } from '../../src/runtime/codex/effect/request-codex-skill-favorite-save.js';
-import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, bindPipelineStepRunWidget, pipelineLatestLabel, purgeCardSkillRunLog, resumeExternallyStartedCardSkillRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
+import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, bindPipelineStepRunWidget, pipelineLatestLabel, purgeCardSkillRunLog, resumeExternallyStartedCardSkillRun, resumeExternallyStartedPipelineRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
 import type { CardSkillRunEvent, CardSkillRunStatus, CardSkillRunSummary } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunId, cardCodexThreadRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
 import { groupSequentialToolCalls, mergeThreadRunEvents } from '../../src/runtime/codex/helper/thread-run-log.js';
@@ -418,6 +418,94 @@ test('queued pipeline labels expose the one-based FIFO position', () => {
   const step = { name: 'Analysis' } as any;
   const skill = { skillName: 'analyze' } as any;
   assert.equal(pipelineLatestLabel(result, step, skill, 'pending'), 'Queued · position 2');
+});
+
+test('pipeline cards poll lifecycle without querying execution presentations', async () => {
+  const previousDocument = (globalThis as unknown as { document?: unknown }).document;
+  const previousFetch = globalThis.fetch;
+  const previousWindow = (globalThis as unknown as { window?: unknown }).window;
+  const widget = fakeCodexRunWidget();
+  const requests: string[] = [];
+  let status: 'running' | 'complete' = 'running';
+  const skill = {
+    id: 'skill-run-a',
+    pipelineSkillId: 'skill-a',
+    skillName: 'analysis',
+    runId: 'run-a',
+    executionId: 'execution-a',
+    status: 'running',
+    codexModel: 'gpt-5.6-sol',
+    codexEffort: 'medium',
+    stdoutFile: 'run.jsonl',
+    stderrFile: 'run.log',
+    startedAt: '2026-07-29T00:00:00.000Z',
+    finishedAt: null,
+    error: '',
+    stdoutAvailable: true,
+    stderrAvailable: true,
+    logAvailable: true,
+    lastLogWriteAt: '2026-07-29T00:00:01.000Z',
+  };
+  const step = {
+    id: 'step-run-a',
+    stepId: 'step-a',
+    name: 'Analyze',
+    purpose: 'Analyze.',
+    outputCardId: 'output-a',
+    outputCard: { id: 'output-a', title: 'Output', contentAvailable: true, contentBytes: 10 },
+    status: 'running',
+    startedAt: '2026-07-29T00:00:00.000Z',
+    finishedAt: null,
+    error: '',
+    skills: [skill],
+  };
+  try {
+    (globalThis as unknown as { document: unknown }).document = { contains: () => true };
+    (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+    globalThis.fetch = (async (url: string) => {
+      requests.push(url);
+      const terminal = status === 'complete';
+      return new Response(JSON.stringify({
+        ok: true,
+        run: {
+          id: 'pipeline-run-a',
+          status,
+          steps: [{ ...step, status, skills: [{ ...skill, status }] }],
+        },
+        activeStep: terminal ? null : step,
+        activeSkill: terminal ? null : skill,
+        canCancel: !terminal,
+        canRestart: terminal,
+        canContinue: terminal,
+      }), { status: 200 });
+    }) as typeof fetch;
+
+    bindPipelineStepRunWidget({
+      ledgerId: 'tasks',
+      cardId: 'output-a',
+      runId: 'run-a',
+      pipelineRunId: 'pipeline-run-a',
+      pipelineStepId: 'step-a',
+      element: widget,
+    });
+    await waitFor(() => widget.dataset.runStatus === 'running');
+    status = 'complete';
+    assert.equal(resumeExternallyStartedPipelineRun({
+      ledgerId: 'tasks',
+      pipelineRunId: 'pipeline-run-a',
+      cardId: 'output-a',
+      runId: 'run-a',
+    }), true);
+    await waitFor(() => widget.dataset.runStatus === 'complete');
+
+    assert.equal(requests.length, 2);
+    assert.equal(requests.every((url) => url === '/api/codex/pipelines/runs/pipeline-run-a'), true);
+    assert.equal(requests.some((url) => url.includes('/api/task-executions/')), false);
+  } finally {
+    (globalThis as unknown as { document?: unknown }).document = previousDocument;
+    (globalThis as unknown as { window?: unknown }).window = previousWindow;
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test('pipeline-card continuation preserves pending status and cancels the accepted execution', async () => {

@@ -903,10 +903,14 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       JSON.stringify(concurrentFrontendPolls),
     );
     assert.equal(
-      frontendPollRelayPaths.some((path) => path.includes(`/api/internal/task-executions/${cancellationExecutionId}/presentation`)
-        || path.includes(`/api/internal/task-executions/${cancellationExecutionId}/status`)),
+      frontendPollRelayPaths.filter((path) => path.includes(`/api/internal/task-executions/${cancellationExecutionId}/presentation`)).length,
+      1,
+      `the selected log was not hydrated exactly once: ${JSON.stringify(frontendPollRelayPaths)}`,
+    );
+    assert.equal(
+      frontendPollRelayPaths.some((path) => path.includes(`/api/internal/task-executions/${cancellationExecutionId}/status`)),
       false,
-      `frontend polling opened execution relay requests: ${JSON.stringify(frontendPollRelayPaths)}`,
+      `frontend polling opened execution status relay requests: ${JSON.stringify(frontendPollRelayPaths)}`,
     );
     const heldRoleResult = await heldRoleRequest;
     assert.equal(heldRoleResult.status, 409);

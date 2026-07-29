@@ -76,6 +76,7 @@ import { buildTaskExecutionPresentation } from '../../codex/helper/task-executio
 import { taskExecutionPresentationHttpResult } from '../../codex/helper/task-execution-presentation-http-result.js';
 import {
   applyTaskExecutionPresentationUpdate,
+  isTaskExecutionPresentationEvent,
   isTaskExecutionPresentationUpdate,
   replicatedTaskExecutionPresentation,
 } from '../../codex/helper/replicated-task-execution-presentation.js';
@@ -359,7 +360,30 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   type ExecutionState = Pick<ProjectTaskState, 'executions' | 'finalizeExecutionArtifacts'>;
   const federatedExecutionStates = new Map<string, ExecutionState>();
   const federatedExecutionObservations = new Map<string, TaskExecutionObservation>();
-  const federatedExecutionPresentations = new Map<string, TaskExecutionPresentationEvent[]>();
+  type ExecutionPresentationProjection = {
+    events: readonly TaskExecutionPresentationEvent[];
+    hydrated: boolean;
+  };
+  const executionPresentations = new Map<string, ExecutionPresentationProjection>();
+  const executionPresentationKey = (projectId: string, executionId: string, executorNodeId: string): string => (
+    `${projectId}\0${executionId}\0${executorNodeId}`
+  );
+  const applyExecutionPresentationEvents = (input: {
+    projectId: string;
+    executionId: string;
+    executorNodeId: string;
+    update: { reset: boolean; events: readonly TaskExecutionPresentationEvent[] };
+    hydrated?: boolean;
+  }): ExecutionPresentationProjection => {
+    const key = executionPresentationKey(input.projectId, input.executionId, input.executorNodeId);
+    const current = executionPresentations.get(key);
+    const projection = {
+      events: applyTaskExecutionPresentationUpdate(current?.events ?? [], input.update),
+      hydrated: input.hydrated ?? current?.hydrated ?? input.update.reset,
+    };
+    executionPresentations.set(key, projection);
+    return projection;
+  };
   const federatedPipelinePresentations = new Map<string, AnyRecord>();
   const terminalArtifactHydrations = new Map<string, Promise<void>>();
   const pausedTaskProjects = new Map<string, RuntimeIncident>();
@@ -374,11 +398,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   let globalRuntimeIncident: RuntimeIncident | null = null;
   let projectSyncController: ReturnType<typeof createProjectSyncController> | null = null;
   let resumeProjectSyncRuntime: (() => void) | null = null;
-  let publishExecutionPresentationSnapshot = (
-    _projectId: string,
-    _executionId: string,
-    _record: ReturnType<ProjectTaskState['executions']['find']>,
-  ): void => {};
   let publishPipelineRunSnapshot = (
     _projectId: string,
     _pipelineRunId: string,
@@ -523,9 +542,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         // A disconnected event client cannot fail the committed execution transition.
       }
     }
-    if (input.record && input.record.lifecycle.executorNodeId === (federation?.localOwner().ownerNodeId ?? 'local')) {
-      publishExecutionPresentationSnapshot(input.projectId, input.executionId, input.record);
-    }
     if (input.record?.metadata.pipelineRunId) {
       publishPipelineRunSnapshot(input.projectId, input.record.metadata.pipelineRunId, input.executionId);
     }
@@ -537,7 +553,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     events: readonly TaskExecutionPresentationEvent[];
     reset?: boolean;
   }): void => {
-    if (!input.projectId || !input.executionId || !federation) return;
+    if (!input.projectId || !input.executionId) return;
+    const executorNodeId = federation?.localOwner().ownerNodeId ?? 'local';
+    applyExecutionPresentationEvents({
+      projectId: input.projectId,
+      executionId: input.executionId,
+      executorNodeId,
+      update: {
+        reset: input.reset === true,
+        events: input.events,
+      },
+    });
+    if (!federation) return;
     const chunks = Array.from(
       { length: Math.max(1, Math.ceil(input.events.length / 128)) },
       (_, index) => input.events.slice(index * 128, (index + 1) * 128),
@@ -572,6 +599,73 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       runtime: artifactRuntime,
     });
     return 'presentation' in result ? result.presentation : null;
+  };
+  const requestRemoteExecutionPresentation = async (input: {
+    projectId: string;
+    execution: NonNullable<ReturnType<ProjectTaskState['executions']['find']>>;
+    request: IncomingMessage;
+    response: ServerResponse;
+  }): Promise<
+    | { ok: true; presentation: TaskExecutionPresentation }
+    | { ok: false; statusCode: number; body: string }
+  > => {
+    const executionId = input.execution.metadata.executionId;
+    const executorNodeId = input.execution.lifecycle.executorNodeId;
+    if (!federation) {
+      return {
+        ok: false,
+        statusCode: 503,
+        body: JSON.stringify({ ok: false, error: 'assigned_node_unreachable', executionId, executorNodeId }),
+      };
+    }
+    const requestScope = createDeliveryHttpRequestScope({
+      request: input.request,
+      response: input.response,
+      timeoutMs: 10_000,
+    });
+    try {
+      const remote = await federation.request(
+        executorNodeId,
+        `/api/internal/task-executions/${encodeURIComponent(executionId)}/presentation?projectId=${encodeURIComponent(input.projectId)}`,
+        { timeoutMs: 10_000, signal: requestScope.signal },
+      );
+      if (remote.status < 200 || remote.status >= 300) {
+        return { ok: false, statusCode: remote.status || 502, body: remote.body.toString('utf8') };
+      }
+      const presentation = JSON.parse(remote.body.toString('utf8') || '{}') as TaskExecutionPresentation;
+      if (presentation.execution?.executionId !== executionId
+        || !Array.isArray(presentation.events)
+        || !presentation.events.every(isTaskExecutionPresentationEvent)) {
+        return {
+          ok: false,
+          statusCode: 502,
+          body: JSON.stringify({ ok: false, error: 'task_execution_remote_response_invalid', executionId }),
+        };
+      }
+      const key = executionPresentationKey(input.projectId, executionId, executorNodeId);
+      const events = applyTaskExecutionPresentationUpdate(presentation.events, {
+        reset: false,
+        events: executionPresentations.get(key)?.events ?? [],
+      });
+      executionPresentations.set(key, { events, hydrated: true });
+      return {
+        ok: true,
+        presentation: { ...presentation, events },
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        statusCode: requestScope.signal.aborted ? 504 : 502,
+        body: JSON.stringify({
+          ok: false,
+          error: requestScope.signal.aborted ? 'task_execution_read_timeout' : 'task_execution_remote_request_failed',
+          executionId,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      };
+    } finally {
+      requestScope.dispose();
+    }
   };
 
   const scheduleTaskContentHeadRepair = (projectId: string, state: ProjectTaskState): void => {
@@ -1422,35 +1516,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     startupProjectTasks.push(startupTask);
     return context;
   };
-  publishExecutionPresentationSnapshot = (projectId, executionId, record): void => {
-    if (!record || record.lifecycle.executorNodeId !== (federation?.localOwner().ownerNodeId ?? 'local')) return;
-    const localProject = projectCatalogStore.projects().find((project) => project.id === projectId);
-    const executionRuntime = federatedSchedulerContexts.get(executionId)?.runtime
-      ?? (localProject ? projectContexts.get(localProject.decisionOsRoot)?.runtime : null);
-    const state = executionStateForProject(projectId, record.lifecycle.executorNodeId);
-    if (!executionRuntime || !state) return;
-    queueMicrotask(() => {
-      try {
-        const result = buildTaskExecutionPresentation({ executionId, state, runtime: executionRuntime });
-        if ('presentation' in result) {
-          publishTaskExecutionPresentationEvents({
-            projectId,
-            executionId,
-            events: result.presentation.events,
-            reset: true,
-          });
-        }
-      } catch (error) {
-        recordStoppedOperation({
-          scope: `task-execution-presentation-publish:${projectId}:${executionId}`,
-          component: 'task-execution-presentation',
-          operation: 'publish-execution-presentation-snapshot',
-          error,
-          context: { projectId, executionId },
-        });
-      }
-    });
-  };
   publishPipelineRunSnapshot = (projectId, pipelineRunId, executionId): void => {
     const localProject = projectCatalogStore.projects().find((project) => project.id === projectId && project.available);
     const pipelineRuntime = localProject ? projectContexts.get(localProject.decisionOsRoot)?.runtime : null;
@@ -1723,9 +1788,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const pipelineRuns = new Map<string, { projectId: string; executionId: string }>();
     for (const [projectId, state] of [...projectTaskStates, ...federatedExecutionStates]) {
       for (const record of state.executions.all()) {
-        if (record.lifecycle.executorNodeId === localNodeId) {
-          publishExecutionPresentationSnapshot(projectId, record.metadata.executionId, record);
-        } else {
+        if (record.lifecycle.executorNodeId !== localNodeId) {
           scheduleTerminalArtifactHydration(projectId, record.lifecycle.executorNodeId, record);
         }
         if (record.metadata.pipelineRunId) {
@@ -1851,13 +1914,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (frame.payload?.presentation !== undefined) {
         if ((!record || record.lifecycle.executorNodeId === frame.from)
           && isTaskExecutionPresentationUpdate(frame.payload.presentation)) {
-          federatedExecutionPresentations.set(
-            key,
-            applyTaskExecutionPresentationUpdate(
-              federatedExecutionPresentations.get(key) ?? [],
-              frame.payload.presentation,
-            ),
-          );
+          applyExecutionPresentationEvents({
+            projectId: frame.projectId,
+            executionId,
+            executorNodeId: frame.from,
+            update: frame.payload.presentation,
+          });
           changed = true;
         } else {
           recordStoppedOperation({
@@ -2711,27 +2773,49 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
         if (execution.lifecycle.executorNodeId === localNodeId) {
           const executionRuntime = federatedSchedulerContexts.get(executionId)?.runtime;
-          const result = executionRuntime
-            ? buildTaskExecutionPresentation({ executionId, state, runtime: executionRuntime })
-            : { ok: false as const, statusCode: 202, error: 'task_execution_presentation_synchronizing' };
+          const key = executionPresentationKey(localProjectId, executionId, localNodeId);
+          const projection = executionPresentations.get(key);
+          const result = projection?.hydrated
+            ? { ok: true as const, presentation: replicatedTaskExecutionPresentation(execution, projection.events) }
+            : executionRuntime
+              ? buildTaskExecutionPresentation({ executionId, state, runtime: executionRuntime })
+              : { ok: false as const, statusCode: 202, error: 'task_execution_presentation_synchronizing' };
+          if ('presentation' in result && !projection?.hydrated) {
+            executionPresentations.set(key, { events: result.presentation.events, hydrated: true });
+          }
           const httpResult = taskExecutionPresentationHttpResult(executionId, result);
           response.statusCode = httpResult.statusCode;
           response.end(httpResult.body);
           return;
         }
-        const events = federatedExecutionPresentations.get(
-          `${localProjectId}\0${executionId}\0${execution.lifecycle.executorNodeId}`,
+        const projection = executionPresentations.get(
+          executionPresentationKey(localProjectId, executionId, execution.lifecycle.executorNodeId),
         );
-        if (!events) {
+        if (!projection?.hydrated) {
           const hydrated = locallyHydratedTaskExecutionPresentation(state, execution);
           if (hydrated) {
+            executionPresentations.set(
+              executionPresentationKey(localProjectId, executionId, execution.lifecycle.executorNodeId),
+              { events: hydrated.events, hydrated: true },
+            );
             response.end(JSON.stringify(hydrated));
             return;
           }
-          response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, [])));
+          const remote = await requestRemoteExecutionPresentation({
+            projectId: localProjectId,
+            execution,
+            request,
+            response,
+          });
+          if ('presentation' in remote) {
+            response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, remote.presentation.events)));
+          } else {
+            response.statusCode = remote.statusCode;
+            response.end(remote.body);
+          }
           return;
         }
-        response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, events)));
+        response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, projection.events)));
         return;
       }
       const remotePipelineRunRead = request.method === 'GET'
@@ -2772,9 +2856,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           response.end(JSON.stringify({ ok: false, error: 'Execution not found.', runId }));
           return;
         }
-        const events = federatedExecutionPresentations.get(
-          `${localProjectId}\0${execution.metadata.executionId}\0${execution.lifecycle.executorNodeId}`,
-        ) ?? locallyHydratedTaskExecutionPresentation(state, execution)?.events ?? [];
+        const events = executionPresentations.get(
+          executionPresentationKey(localProjectId, execution.metadata.executionId, execution.lifecycle.executorNodeId),
+        )?.events ?? locallyHydratedTaskExecutionPresentation(state, execution)?.events ?? [];
         response.end(JSON.stringify(replicatedCardSkillRunStatus({
           runId,
           ledgerId,
@@ -3689,29 +3773,47 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const executorNodeId = execution.lifecycle.executorNodeId;
       const localExecutorNodeId = federation.localOwner().ownerNodeId;
       if (executorNodeId !== localExecutorNodeId) {
-        const events = federatedExecutionPresentations.get(
-          `${execution.metadata.projectId}\0${executionId}\0${executorNodeId}`,
-        );
-        if (!events) {
+        const key = executionPresentationKey(execution.metadata.projectId, executionId, executorNodeId);
+        const projection = executionPresentations.get(key);
+        if (!projection?.hydrated) {
           const hydrated = locallyHydratedTaskExecutionPresentation(executionState, execution);
           if (hydrated) {
+            executionPresentations.set(key, { events: hydrated.events, hydrated: true });
             response.end(JSON.stringify(hydrated));
             return;
           }
-          response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, [])));
+          const remote = await requestRemoteExecutionPresentation({
+            projectId: execution.metadata.projectId,
+            execution,
+            request,
+            response,
+          });
+          if ('presentation' in remote) {
+            response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, remote.presentation.events)));
+          } else {
+            response.statusCode = remote.statusCode;
+            response.end(remote.body);
+          }
           return;
         }
-        response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, events)));
+        response.end(JSON.stringify(replicatedTaskExecutionPresentation(execution, projection.events)));
         return;
       }
       // WHAT: Prefer the execution-scoped runtime used by federated pipeline work on this node.
       // WHY: Its live process registry can differ from the project page's ordinary request runtime.
       const presentationRuntime = federatedSchedulerContexts.get(executionId)?.runtime ?? requestRuntime;
-      const result = buildTaskExecutionPresentation({
-        executionId,
-        state: executionState,
-        runtime: presentationRuntime,
-      });
+      const key = executionPresentationKey(execution.metadata.projectId, executionId, localExecutorNodeId);
+      const projection = executionPresentations.get(key);
+      const result = projection?.hydrated
+        ? { ok: true as const, presentation: replicatedTaskExecutionPresentation(execution, projection.events) }
+        : buildTaskExecutionPresentation({
+          executionId,
+          state: executionState,
+          runtime: presentationRuntime,
+        });
+      if ('presentation' in result && !projection?.hydrated) {
+        executionPresentations.set(key, { events: result.presentation.events, hydrated: true });
+      }
       const httpResult = taskExecutionPresentationHttpResult(executionId, result);
       response.statusCode = httpResult.statusCode;
       response.end(httpResult.body);
@@ -4959,9 +5061,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           || right.metadata.executionId.localeCompare(left.metadata.executionId)
         ))[0] ?? null;
       if (replicatedExecution && replicatedExecution.lifecycle.executorNodeId !== federation.localOwner().ownerNodeId) {
-        const events = federatedExecutionPresentations.get(
-          `${replicatedExecution.metadata.projectId}\0${replicatedExecution.metadata.executionId}\0${replicatedExecution.lifecycle.executorNodeId}`,
-        ) ?? (replicatedState
+        const events = executionPresentations.get(
+          executionPresentationKey(
+            replicatedExecution.metadata.projectId,
+            replicatedExecution.metadata.executionId,
+            replicatedExecution.lifecycle.executorNodeId,
+          ),
+        )?.events ?? (replicatedState
           ? locallyHydratedTaskExecutionPresentation(replicatedState, replicatedExecution)?.events
           : undefined) ?? [];
         const result = replicatedCardSkillRunStatus({
