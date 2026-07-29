@@ -19,6 +19,7 @@
 3. Production and dev Worker names, Durable Object namespaces, credentials, relay URLs, state, logs, and admission records remain separate.
 4. Wrangler is pinned to `4.111.0` in `federation-relay/package.json`.
 5. Local canary state is under `.wrangler/state-dev`. The ignored `.dev.vars.dev` owns only the dev administrator secret.
+6. Android cannot execute `workerd`. The Termux canary uses `src/termux-local-relay.ts`, `.wrangler/state-termux`, and `.dev.vars.termux` under the same protocol and dev identity boundaries.
 
 ---
 
@@ -142,3 +143,4 @@
 
 3. Production verification includes public `/health`, exact release identity, current deployment identity, and an authenticated two-node WSS exchange.
 4. Dev launch, `50152` health, exact candidate identity, convergence proof, and dev-only cleanup are defined in [Canary Skill Authoring Dev Environment](../documentation/procedure/deployment/canary-skill-authoring-dev-environment.md).
+5. Phone-specific runit registration, native relay operation, dependency bootstrap, logs, and recovery are defined in [Termux Phone Canary Environment](../documentation/procedure/deployment/canary-termux-phone-environment.md).

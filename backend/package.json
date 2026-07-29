@@ -24,5 +24,8 @@
     "@types/ws": "8.18.1",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0"
+  },
+  "optionalDependencies": {
+    "@img/sharp-wasm32": "0.35.3"
   }
 }
