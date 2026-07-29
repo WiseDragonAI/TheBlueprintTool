@@ -30,6 +30,7 @@ export function buildPipelineSkillPrompt(input: {
   outputMarkdownFile: string;
   taskThreadId?: string;
   taskConversationContext?: Record<string, unknown>;
+  fileMap?: string;
   projectId?: string;
   ledgerId?: string;
   executionId?: string;
@@ -50,6 +51,7 @@ export function buildPipelineSkillPrompt(input: {
     return renderPipelinePromptRuntimeVariables(input.promptSnapshot, {
       MASTER_TASK: String(card.markdown ?? ''),
       FULL_THREAD: String(thread.markdown ?? ''),
+      FILE_MAP: input.fileMap ?? '',
       PREVIOUS_SKILL_RESULT: previousSkillResult,
       EXECUTION_CONTEXT: JSON.stringify({
         projectId: input.projectId ?? '',

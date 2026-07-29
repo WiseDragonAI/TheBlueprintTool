@@ -18,6 +18,7 @@ import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-
 import { codexRunExecutionFinishedMarker } from './codex-run-segment-marker.js';
 import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './codex-pipeline-store.js';
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
+import { buildMeaningfulFileMap } from './build-meaningful-file-map.js';
 import { buildCardLaunchContext } from './build-card-launch-context.js';
 import { isCodexThreadArtifactNote } from './is-codex-thread-artifact-note.js';
 import { assertPipelineRunSkillPromptEvidence } from './pipeline-prompt-snapshot.js';
@@ -412,6 +413,7 @@ export async function spawnPipelineSkillProcess(input: {
         taskCardId: input.pipelineRun.outputParentCardId,
       })
     : null;
+  const fileMap = contentKind === 'pipeline-prompt' ? buildMeaningfulFileMap(workspaceRoot) : '';
   const prompt = buildPipelineSkillPrompt({
     skillName: input.skill.skillName,
     contentKind,
@@ -433,6 +435,7 @@ export async function spawnPipelineSkillProcess(input: {
     outputCardId: input.step.outputCardId,
     outputSubtaskPosition: input.step.outputSubtaskPosition,
     outputMarkdownFile: outputFile,
+    fileMap,
     projectId: String(input.runtime.projectId ?? ''),
     ledgerId: input.pipelineRun.ledgerId,
     executionId: input.skill.executionId,
