@@ -11,6 +11,7 @@ export async function bootApplication(): Promise<void> {
       { id: 'responsive-shared-styles', href: '/assets/application-shared.css' },
       { id: 'responsive-vendor-styles', href: '/assets/vendor/nouislider-15.8.1.min.css' },
       { id: 'responsive-application-styles', href: '/assets/application.css' },
+      { id: 'responsive-runtime-status-styles', href: '/assets/runtime-status.css' },
       { id: 'responsive-content-authoring-styles', href: '/assets/shared/content-authoring.css' },
     ]),
     loadSurfaceScripts([
