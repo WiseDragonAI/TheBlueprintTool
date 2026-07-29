@@ -41,6 +41,7 @@ import { activeThreadIdentityScope, loadActiveThreadSlice } from '/src/runtime/t
 import { restoreThreadDocumentsIntoLedger } from '/src/runtime/thread/helper/thread-document-state.js';
 import { advanceLedgerRouteEpoch, beginActiveLedgerRequest, reconcileActiveLedgerState } from '/src/runtime/ledger/effect/reconcile-active-ledger-state.js';
 import { telemetry } from '/src/runtime/telemetry/effect/telemetry.js';
+import { toggleThreadPanelFullscreen } from '/src/runtime/thread/effect/apply-thread-panel-fullscreen.js';
 
 let currentCard = null;
 let currentProjectId = '';
@@ -510,7 +511,8 @@ export function initializeMobileThread() {
     if (!button || !button.closest('.mobile-thread-inspector, .mobile-confirm-modal')) return;
     const action = button.dataset.action;
     if (await handleMobileThreadSessionDeletion({ action, button })) return;
-    if (action === 'voice-toggle') {
+    if (action === 'toggle-thread-fullscreen') toggleThreadPanelFullscreen();
+    else if (action === 'voice-toggle') {
       if (canvasState.voice.recording) await stopQuickVoiceComment(voiceLaunchModeForModifiers(event));
       else await startVoiceRecording();
     } else if (action === 'voice-cancel') cancelQuickVoiceComment();

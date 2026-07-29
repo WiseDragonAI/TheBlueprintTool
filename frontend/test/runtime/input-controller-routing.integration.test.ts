@@ -225,11 +225,14 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(threadLogBinding, /renderThreadPanel/);
 
   const renderThreadPanel = source('frontend/src/runtime/thread/effect/render-thread-panel.ts');
+  const responsiveThread = source('frontend/src/app/responsive/thread.js');
   const processThreadCodex = source('frontend/src/runtime/codex/controller/process-thread-codex-controller.ts');
   const threadCss = source('frontend/assets/shared/thread.css');
   assert.match(renderThreadPanel, /renderThreadCodexSelect/);
   assert.match(renderThreadPanel, /button\.dataset\.codexModel = threadCodexModel/);
   assert.match(renderThreadPanel, /button\.dataset\.codexEffort = threadCodexEffort/);
+  assert.match(responsiveThread, /import \{ toggleThreadPanelFullscreen \} from '\/src\/runtime\/thread\/effect\/apply-thread-panel-fullscreen\.js'/);
+  assert.match(responsiveThread, /action === 'toggle-thread-fullscreen'\) toggleThreadPanelFullscreen\(\)/);
   assert.match(processThreadCodex, /existingRunId[\s\S]*requestCardSkillRunContinue\(\{ ledgerId, cardId, runId: existingRunId/);
   assert.match(processThreadCodex, /cardCodexThreadRunId\(card\)/);
   assert.match(processThreadCodex, /threadSelectedRunIdByThreadId\[threadId\] = runId/);
