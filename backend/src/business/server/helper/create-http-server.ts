@@ -113,6 +113,7 @@ import {
 import { deliveryBlockingIncidents } from '../../delivery/helper/delivery-incident-boundary.js';
 import { materializeTaskMutationInputs, materializeTaskResources, TaskContentMaterializationError } from '../../federation/helper/materialize-task-mutation-inputs.js';
 import { createProjectTaskState, type ProjectTaskState } from '../../task-state/helper/project-task-state.js';
+import { commitTaskContentMutation, taskContentAutoCommitEnabled } from '../../task-state/helper/commit-task-content-mutation.js';
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 import type { TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import { createTaskExecutionRepository } from '../../task-state/helper/task-execution-repository.js';
@@ -628,6 +629,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const document = JSON.parse(readFileSync(tasksLedgerFile, 'utf8')) as AnyRecord;
         initialize = ['cards', 'annotations', 'relationships'].every((key) => !Array.isArray(document[key]) || document[key].length === 0);
       }
+      const settingsRuntime = project.decisionOsRoot === masterDecisionOsRoot ? runtime : {};
+      const projectSettings = readDecisionOsSettings({
+        action_payload: { decisionOsRoot: project.decisionOsRoot },
+        runtime_state: settingsRuntime,
+      }).settings;
       const value = createProjectTaskState({
         projectId: project.id,
         writerId: federation?.localOwner().ownerNodeId ?? String((runtime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId ?? 'local'),
@@ -635,6 +641,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         tasksLedgerFile,
         publish: (delta) => federationTaskStateReplicator?.publishDelta(delta),
         publishContent: () => federation?.publishContentChange(),
+        commitContent: ({ mutation, changedContentFiles }) => commitTaskContentMutation({
+          enabled: taskContentAutoCommitEnabled(projectSettings),
+          projectId: project.id,
+          projectRoot: project.root,
+          decisionOsRoot: project.decisionOsRoot,
+          mutation,
+          changedContentFiles,
+          signal: serverCloseAbort.signal,
+        }),
         onExecutionChange: ({ executionId, record }) => publishExecutionChange({
           projectId: project.id,
           nodeId: federation?.localOwner().ownerNodeId ?? 'local',
@@ -3793,6 +3808,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             clock: taskClock,
             entities: taskCommit.localChanges,
           },
+          ...(taskCommit.contentGitRevision ? { gitRevision: taskCommit.contentGitRevision } : {}),
         } : {}),
         changedCard,
         changedThread,
