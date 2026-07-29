@@ -43,6 +43,7 @@ import {
   openSkillLibraryEditor,
   requestSkillLibraryEditorClose,
 } from '/src/runtime/codex/effect/render-skill-library-editor-modal.js';
+import { groupedActiveIncidents, loadRuntimeDiagnostics, projectRuntimeRows } from './runtime-status.js';
 
 installProjectRequestScope();
 
@@ -73,6 +74,8 @@ const state = {
 const elements = Object.fromEntries([
   'project-name', 'ledger-links', 'loading-view', 'error-view', 'error-message', 'empty-view',
   'projects-view', 'projects-summary', 'project-list', 'project-detail-view', 'project-detail-name', 'project-detail-description', 'settings-view',
+  'runtime-status-view', 'runtime-status-summary', 'runtime-project-status-summary', 'runtime-project-list',
+  'runtime-incident-status-summary', 'runtime-incident-list',
   'project-detail-color', 'project-detail-status', 'project-detail-path',
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
@@ -260,7 +263,7 @@ function setResourceProject(projectId) {
 
 function setView(name) {
   if (name !== 'card-view' && name !== 'loading-view' && !closeCardDetail()) return false;
-  for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'settings-view', 'overview-view', 'control-room-view', 'done-view', 'ledger-view', 'zone-view', 'card-view']) {
+  for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'settings-view', 'runtime-status-view', 'overview-view', 'control-room-view', 'done-view', 'ledger-view', 'zone-view', 'card-view']) {
     elements[id].hidden = id !== name;
   }
   if (name !== 'card-view' && name !== 'loading-view') presentedCardIdentity = '';
@@ -919,6 +922,7 @@ function renderLedgerLinks() {
     book: '<path d="M5 4h6a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm14 0h-2a3 3 0 0 0-3 3v13h2a3 3 0 0 0 3-3V4Z"/>',
     flow: '<path d="M5 5h4v4H5V5Zm10 10h4v4h-4v-4ZM7 9v3a5 5 0 0 0 5 5h3M9 7h6a2 2 0 0 1 2 2v6"/>',
     library: '<path d="M4 5h4v15H4V5Zm6-1h4v16h-4V4Zm6 3h4v13h-4V7Z"/>',
+    status: '<path d="M4 13h3l2-6 4 11 2-5h5M4 4h16v16H4V4Z"/>',
     settings: '<path d="M10.8 3h2.4l.6 2.2a7 7 0 0 1 1.5.9l2.2-.6 1.2 2.1-1.6 1.6c.1.5.2 1.1.2 1.8s-.1 1.3-.2 1.8l1.6 1.6-1.2 2.1-2.2-.6a7 7 0 0 1-1.5.9l-.6 2.2h-2.4l-.6-2.2a7 7 0 0 1-1.5-.9l-2.2.6-1.2-2.1 1.6-1.6A7 7 0 0 1 6.7 11c0-.7.1-1.3.2-1.8L5.3 7.6l1.2-2.1 2.2.6a7 7 0 0 1 1.5-.9L10.8 3Zm1.2 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/>'
   };
   const destination = (label, href, icon, activeRoute, className = '') => {
@@ -947,8 +951,93 @@ function renderLedgerLinks() {
     destination('Ledgers', '/ledgers', 'book', 'ledgers'),
     destination('Pipelines', '/pipelines', 'flow', 'pipelines', 'nav-pipelines-button'),
     destination('Skill library', '/skills', 'library', 'skills', 'nav-skills-button'),
+    destination('System status', '/status', 'status', 'status', 'nav-runtime-status-button'),
     destination('Settings', '/settings', 'settings', 'settings', 'nav-settings-button')
   );
+}
+
+function formatObservedAt(value) {
+  const timestamp = Date.parse(String(value || ''));
+  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : 'Unknown time';
+}
+
+function renderRuntimeStatus(diagnostics) {
+  const projects = projectRuntimeRows(state.projects, diagnostics);
+  const incidents = groupedActiveIncidents(diagnostics);
+  const pausedProjects = projects.filter((project) => project.status === 'paused').length;
+  const unavailableProjects = projects.filter((project) => project.status === 'unavailable').length;
+  elements['runtime-status-summary'].textContent = `${diagnostics?.status === 'ready' ? 'Ready' : 'Degraded'} · observed ${formatObservedAt(diagnostics?.observedAt)}`;
+  elements['runtime-project-status-summary'].textContent = pausedProjects > 0 || unavailableProjects > 0
+    ? `${pausedProjects} paused · ${unavailableProjects} unavailable`
+    : `${projects.length} available`;
+  elements['runtime-project-list'].replaceChildren(...projects.map((project) => {
+    const row = document.createElement('article');
+    row.className = 'runtime-project-row';
+    row.dataset.status = project.status;
+    row.style.setProperty('--project-color', project.color);
+    const mark = Object.assign(document.createElement('span'), { className: 'runtime-project-mark' });
+    mark.setAttribute('aria-hidden', 'true');
+    const copy = Object.assign(document.createElement('div'), { className: 'runtime-project-copy' });
+    copy.append(
+      Object.assign(document.createElement('strong'), { textContent: project.name }),
+      Object.assign(document.createElement('small'), { textContent: project.detail }),
+    );
+    const badge = Object.assign(document.createElement('span'), { className: 'runtime-status-badge', textContent: project.label });
+    row.append(mark, copy, badge);
+    return row;
+  }));
+  if (projects.length === 0) {
+    elements['runtime-project-list'].append(Object.assign(document.createElement('p'), { className: 'runtime-status-empty', textContent: 'No projects discovered.' }));
+  }
+  const totalOccurrences = incidents.reduce((total, incident) => total + incident.occurrences, 0);
+  elements['runtime-incident-status-summary'].textContent = incidents.length === 0
+    ? 'No active incidents'
+    : `${incidents.length} grouped errors · ${totalOccurrences} occurrences`;
+  elements['runtime-incident-list'].replaceChildren(...incidents.map((incident) => {
+    const card = document.createElement('article');
+    card.className = 'runtime-incident-card';
+    card.dataset.interrupting = String(incident.interrupting);
+    const heading = Object.assign(document.createElement('header'), { className: 'runtime-incident-heading' });
+    const copy = document.createElement('div');
+    copy.append(
+      Object.assign(document.createElement('code'), { textContent: incident.code }),
+      Object.assign(document.createElement('small'), {
+        textContent: `${incident.components.join(', ') || 'runtime'} · ${incident.occurrences} occurrence${incident.occurrences === 1 ? '' : 's'} · last ${formatObservedAt(incident.lastObservedAt)}`,
+      }),
+    );
+    heading.append(copy, Object.assign(document.createElement('span'), {
+      className: 'runtime-status-badge',
+      textContent: incident.interrupting ? 'Interruption' : 'Error',
+    }));
+    const scopes = Object.assign(document.createElement('details'), { className: 'runtime-incident-scopes' });
+    const summary = document.createElement('summary');
+    summary.textContent = `${incident.scopes.length} affected scope${incident.scopes.length === 1 ? '' : 's'}`;
+    const list = document.createElement('ul');
+    for (const scope of incident.scopes) {
+      const item = document.createElement('li');
+      item.append(Object.assign(document.createElement('code'), { textContent: scope }));
+      list.append(item);
+    }
+    scopes.append(summary, list);
+    card.append(heading, Object.assign(document.createElement('p'), { className: 'runtime-incident-message', textContent: incident.message }), scopes);
+    return card;
+  }));
+  if (incidents.length === 0) {
+    elements['runtime-incident-list'].append(Object.assign(document.createElement('p'), { className: 'runtime-status-empty', textContent: 'No current interruptions or errors.' }));
+  }
+}
+
+async function renderRuntimeStatusRoute(owner) {
+  state.resourceProjectId = '';
+  state.projectName = 'Decision OS';
+  elements['project-name'].textContent = 'Decision OS';
+  setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
+  renderLedgerLinks();
+  setView('runtime-status-view');
+  elements['runtime-status-summary'].textContent = 'Loading current runtime state…';
+  const diagnostics = await loadRuntimeDiagnostics(fetch, { signal: owner.signal });
+  requireRouteOwnership(owner);
+  renderRuntimeStatus(diagnostics);
 }
 
 function renderCodexProcessLimit(value) {
@@ -2937,6 +3026,10 @@ async function loadRoute({ retainView = false } = {}) {
       renderSettings();
       return;
     }
+    if (owner.route.pathname === '/status') {
+      await renderRuntimeStatusRoute(owner);
+      return;
+    }
     if (owner.route.pathname === '/pipelines' || owner.route.pathname === '/skills') {
       state.resourceProjectId = '';
       setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
@@ -3093,6 +3186,7 @@ document.querySelector('.refresh-button').addEventListener('click', () => {
   state.ledger = null;
   void loadRoute();
 });
+document.querySelector('.runtime-status-refresh').addEventListener('click', () => void loadRoute({ retainView: true }));
 document.querySelector('.retry-button').addEventListener('click', () => loadRoute());
 document.querySelector('.back-to-projects-button').addEventListener('click', () => navigate(projectPath()));
 document.querySelector('.open-project-button').addEventListener('click', () => {

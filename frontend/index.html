@@ -396,6 +396,31 @@
               </form>
             </section>
 
+            <section id="runtime-status-view" class="runtime-status-view" hidden>
+              <div class="ledger-header runtime-status-header">
+                <div>
+                  <p class="eyebrow">Diagnostics</p>
+                  <h1>System status</h1>
+                  <p id="runtime-status-summary" class="muted">Loading current runtime state…</p>
+                </div>
+                <button class="runtime-status-refresh" type="button">Refresh status</button>
+              </div>
+              <section class="runtime-status-block" aria-labelledby="runtime-project-status-title">
+                <header class="runtime-status-block-header">
+                  <h2 id="runtime-project-status-title">Projects</h2>
+                  <p id="runtime-project-status-summary"></p>
+                </header>
+                <div id="runtime-project-list" class="runtime-project-list" aria-live="polite"></div>
+              </section>
+              <section class="runtime-status-block" aria-labelledby="runtime-incident-status-title">
+                <header class="runtime-status-block-header">
+                  <h2 id="runtime-incident-status-title">Current interruptions and errors</h2>
+                  <p id="runtime-incident-status-summary"></p>
+                </header>
+                <div id="runtime-incident-list" class="runtime-incident-list" aria-live="polite"></div>
+              </section>
+            </section>
+
             <section id="control-room-view" class="control-room" hidden>
               <div class="control-command">
                 <div class="control-sticky">
