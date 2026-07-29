@@ -37,6 +37,24 @@ test('groups active incidents by error and sums occurrences without retaining re
   assert.deepEqual(groups[0].scopes, ['background:scheduler', 'http-request:one']);
 });
 
+test('shows an active runtime scope pause as a current service interruption', () => {
+  const groups = groupedActiveIncidents({
+    incidents: [{
+      status: 'paused',
+      code: 'runtime_scope_paused',
+      message: 'Runtime scope is paused.',
+      component: 'http-server',
+      scope: 'server-runtime',
+      occurrences: 1,
+      lastObservedAt: '2026-07-29T11:00:00.000Z',
+    }],
+  });
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].code, 'runtime_scope_paused');
+  assert.equal(groups[0].interrupting, true);
+  assert.deepEqual(groups[0].scopes, ['server-runtime']);
+});
+
 test('loads diagnostics from the current server without cache', async () => {
   let request;
   const diagnostics = await loadRuntimeDiagnostics(async (url, options) => {
