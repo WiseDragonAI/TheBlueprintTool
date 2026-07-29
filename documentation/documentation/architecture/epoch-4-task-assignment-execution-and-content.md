@@ -63,6 +63,12 @@
 12. **Remote active reads:** A non-executor node proxies an active presentation read to the authenticated executor endpoint `/api/internal/task-executions/:executionId/presentation`.
 13. **Remote terminal reads:** A non-executor node fetches only the selected execution's immutable JSONL and stderr objects by exact hash, then builds the same presentation locally. Telemetry and result objects are not fetched for log display.
 14. **Frontend replacement rule:** Each refresh installs one complete task summary and one complete selected-execution presentation. The browser does not merge line ranges, retain opaque cursors, parse JSONL, or reconstruct session ownership.
+15. **Dynamic gate command:** A running pipeline skill can execute `ledger-cli queue-skill --skill <name> --model <model> --effort <effort>`. The CLI derives the project and calling execution from its injected environment and posts to `/p/:projectId/api/codex/executions/:executionId/queue-skill`.
+16. **Immutable successor segment:** The server resolves the selected content kind, persists a temporary two-step run containing the selected skill followed by the exact calling skill, and links its first execution to the active caller. It does not mutate the caller's admitted run.
+17. **Single-successor admission:** One calling execution owns at most one dynamic successor run. An exact retry returns the existing run; a different retry returns `dynamic_skill_already_queued`.
+18. **Fresh gate context:** Each pipeline-prompt execution receives the canonical master-task Markdown, the complete latest non-deleted operator conversation, and the direct result Markdown of the immediately preceding skill. The returning gate is a new execution with a new Codex context.
+19. **Operator reply boundary:** The gate prompt receives the canonical thread identity and uses `ledger-cli answer` for its operator-facing response. Its output card remains the direct handoff for the next queued skill.
+20. **Failure propagation:** Dynamic successor executions retain the external predecessor identity in durable topology. Failure, cancellation, interruption, and restart recovery cancel every queued descendant across the originating and successor runs.
 
 ---
 

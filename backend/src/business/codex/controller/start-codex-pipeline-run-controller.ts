@@ -38,6 +38,8 @@ import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js'
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import {
   admitPipelinePromptSnapshots,
+  assertPipelinePromptRunSkillSnapshot,
+  type AdmittedPipelinePromptSnapshot,
   PipelinePromptAdmissionError,
 } from '../helper/pipeline-prompt-snapshot.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
@@ -50,7 +52,7 @@ import { resolvePipelineOutputParent } from '../helper/resolve-pipeline-output-p
 
 type AnyRecord = Record<string, unknown>;
 
-function availablePipelineContent(input: {
+export function availablePipelineContent(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
 }): { names: string[]; kinds: Map<string, CodexContentKind> } {
@@ -124,6 +126,9 @@ export async function startPipelineRun(input: {
   reservedFirstExecutionId?: string;
   requestIdPrefix?: string;
   plannedExecutors?: readonly NonNullable<CodexPipelineRunSkill['executor']>[];
+  queuedAfterExecutionId?: string | null;
+  initialInputCardId?: string | null;
+  promptSnapshotOverrides?: ReadonlyMap<string, AdmittedPipelinePromptSnapshot>;
 }): Promise<AnyRecord> {
   if (!input.admissionLocked) {
     return withCardCodexAdmission(
@@ -159,12 +164,31 @@ export async function startPipelineRun(input: {
     return { ok: false, statusCode: 400, error: 'Every pipeline step must contain at least one skill.' };
   }
 
-  let admittedPromptSnapshots;
+  let admittedPromptSnapshots: Map<string, AdmittedPipelinePromptSnapshot>;
   try {
+    const promptSnapshotOverrides = new Map(input.promptSnapshotOverrides ?? []);
+    for (const [skillName, snapshot] of promptSnapshotOverrides) {
+      const configured = input.definition.steps
+        .flatMap((step) => step.skills)
+        .some((skill) => skill.skillName === skillName && skill.contentKind === 'pipeline-prompt');
+      if (!configured) {
+        return { ok: false, statusCode: 400, error: 'Pipeline prompt snapshot override has no matching prompt.', skillName };
+      }
+      assertPipelinePromptRunSkillSnapshot(snapshot);
+    }
     admittedPromptSnapshots = await admitPipelinePromptSnapshots({
       ownerDecisionOsRoot: serverPipelineDecisionOsRoot(input.runtime, input.decisionOsRoot),
-      steps: input.definition.steps,
+      steps: input.definition.steps.map((step) => ({
+        ...step,
+        skills: step.skills.filter((skill) => (
+          skill.contentKind !== 'pipeline-prompt'
+          || !promptSnapshotOverrides.has(skill.skillName)
+        )),
+      })),
     });
+    for (const [skillName, snapshot] of promptSnapshotOverrides) {
+      admittedPromptSnapshots.set(skillName, snapshot);
+    }
   } catch (error) {
     if (error instanceof PipelinePromptAdmissionError) {
       return {
@@ -206,7 +230,7 @@ export async function startPipelineRun(input: {
   if (!replicatedState || !router) {
     return { ok: false, statusCode: 503, code: 'task_execution_state_unavailable', retryable: true, error: 'Replicated task execution state is unavailable.' };
   }
-  if (!input.restartOfRun && replicatedState) {
+  if (!input.restartOfRun && !input.queuedAfterExecutionId && replicatedState) {
     const requestedSkillName = input.definition.steps[0]?.skills[0]?.skillName ?? '';
     const existing = normalized.store.runs.find((candidate) => (
       candidate.temporary === input.definition.temporary
@@ -294,6 +318,8 @@ export async function startPipelineRun(input: {
       firstOutputSubtaskPosition: outputParent.firstOutputSubtaskPosition,
       ledgerPath: context.ledgerPath,
       restartOfPipelineRunId: input.restartOfRun?.id ?? null,
+      queuedAfterExecutionId: input.queuedAfterExecutionId ?? null,
+      initialInputCardId: input.initialInputCardId ?? null,
       reservedRunId: input.reservedRunId,
       reservedFirstExecutionId: input.reservedFirstExecutionId,
       admittedPromptSnapshots,
@@ -375,7 +401,9 @@ export async function startPipelineRun(input: {
       pipelineRunId: run.id,
       pipelineStepId: step.id,
       pipelineSkillRunId: skill.runId,
-      predecessorExecutionId: index === 0 ? null : topology[index - 1].skill.executionId,
+      predecessorExecutionId: index === 0
+        ? run.queuedAfterExecutionId ?? null
+        : topology[index - 1].skill.executionId,
       restartOfExecutionId: previousExecutions[index]?.executionId ?? null,
     }));
     try {
@@ -464,7 +492,9 @@ export async function startPipelineRun(input: {
             pipelineRunId: run.id,
             pipelineStepId: step.id,
             pipelineSkillRunId: skill.runId,
-            predecessorExecutionId: index === 0 ? null : topology[index - 1].skill.executionId,
+            predecessorExecutionId: index === 0
+              ? run.queuedAfterExecutionId ?? null
+              : topology[index - 1].skill.executionId,
             restartOfExecutionId: input.restartOfRun
               ? input.restartOfRun.steps.flatMap((entry) => entry.skills)[index]?.executionId ?? null
               : null,

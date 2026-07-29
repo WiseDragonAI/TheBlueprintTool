@@ -13,6 +13,7 @@ import {
   taskExecutionProcess,
   taskExecutionState,
 } from './task-execution-runtime.js';
+import { cancelPipelineDependents } from './codex-pipeline-runner.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -86,6 +87,23 @@ export async function recoverTaskExecutions(runtime: AnyRecord): Promise<TaskExe
     } catch (error) {
       result.failed.push(executionId);
       reportFailure(runtime, executionId, error);
+    }
+  }
+
+  for (const execution of state.executions.all().filter((record) => (
+    record.lifecycle.phase === 'failed'
+    || record.lifecycle.phase === 'cancelled'
+    || record.lifecycle.phase === 'interrupted'
+  ))) {
+    try {
+      await cancelPipelineDependents({
+        runtime,
+        pipelineRunId: execution.metadata.pipelineRunId ?? '',
+        executionId: execution.metadata.executionId,
+      });
+    } catch (error) {
+      result.failed.push(execution.metadata.executionId);
+      reportFailure(runtime, execution.metadata.executionId, error);
     }
   }
 

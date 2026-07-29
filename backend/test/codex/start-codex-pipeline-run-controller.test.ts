@@ -16,6 +16,7 @@ import { admitPipelinePromptSnapshots } from '@backend/business/codex/helper/pip
 import { createCodexPipelineRunManifest, type PipelineDefinition } from '@backend/business/codex/helper/create-codex-pipeline-run-manifest.js';
 import { buildPipelineSkillPrompt } from '@backend/business/codex/helper/build-pipeline-skill-prompt.js';
 import { startPipelineRun } from '@backend/business/codex/controller/start-codex-pipeline-run-controller.js';
+import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 
 async function closeServer(server: Server): Promise<void> {
   if (!server.listening) return;
@@ -310,6 +311,250 @@ test('local prompt construction rejects corrupted immutable evidence before proc
       expected,
       label,
     );
+  }
+});
+
+test('pipeline prompt construction separates task conversation from the direct worker result', () => {
+  const promptSnapshot = '# Dynamic gate\n\nChoose and queue the next skill.';
+  const prompt = buildPipelineSkillPrompt({
+    skillName: 'dynamic-gate',
+    contentKind: 'pipeline-prompt',
+    contentRevision: createHash('sha256').update(promptSnapshot).digest('hex'),
+    contentCommit: 'a'.repeat(40),
+    promptSnapshot,
+    ledgerFile: '/workspace/.decision-os/tasks.json',
+    pipelineRunId: 'dynamic-run',
+    pipelineName: 'Dynamic analysis then gate',
+    sourceCardId: 'source-subtask',
+    sourceCardTitle: 'Source subtask',
+    stepId: 'return-gate',
+    stepTitle: 'Dynamic gate',
+    stepInputCardId: 'worker-output',
+    stepInputCardContent: '# Worker result\n\nVerified analysis.',
+    outputParentCardId: 'master-task',
+    outputCardId: 'gate-output',
+    outputSubtaskPosition: 4,
+    outputMarkdownFile: '/workspace/.decision-os/cards/tasks/gate-output.md',
+    taskThreadId: 'thread-master-task',
+    taskConversationContext: {
+      card: { id: 'master-task', markdown: '# Master task\n\nComplete objective.' },
+      thread: { id: 'thread-master-task', markdown: '# OPERATOR\n\nContinue the iteration.' },
+    },
+  });
+  assert.match(prompt, /Canonical task and operator conversation:/);
+  assert.match(prompt, /Complete objective\./);
+  assert.match(prompt, /Continue the iteration\./);
+  assert.match(prompt, /ledger-cli answer .*thread-master-task.*--message-stdin/);
+  assert.match(prompt, /Direct previous skill result:[\s\S]*Verified analysis\./);
+  assert.match(prompt, /output Markdown separate: it is the direct handoff/);
+});
+
+test('a running pipeline prompt queues one worker then returns with the latest task conversation', async () => {
+  const previousCodexBin = process.env.CODEX_BIN;
+  const fixture = createPromptRepository({ prefix: 'decision-os-dynamic-gate-' });
+  const releaseGate = join(fixture.workspace, 'release-gate');
+  const releaseWorker = join(fixture.workspace, 'release-worker');
+  const fakeCodex = join(fixture.workspace, 'fake-codex-dynamic-gate.mjs');
+  const taskCardId = 'master-task';
+  const taskThreadId = `thread-${taskCardId}`;
+  const taskCardFile = join(fixture.decisionOsRoot, 'cards', 'tasks', `${taskCardId}.md`);
+  const taskThreadFile = join(fixture.decisionOsRoot, 'threads', 'tasks', `${taskThreadId}.md`);
+  mkdirSync(join(taskCardFile, '..'), { recursive: true });
+  mkdirSync(join(taskThreadFile, '..'), { recursive: true });
+  writeFileSync(join(fixture.decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }, null, 2));
+  writeFileSync(taskCardFile, '# Master objective\n\nImplement the dynamic gate.');
+  writeFileSync(taskThreadFile, [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-initial","timestamp":"2026-07-29T01:00:00.000Z"} -->',
+    '',
+    'Start from the complete task conversation.',
+    '',
+  ].join('\n'));
+  writeFileSync(join(fixture.decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{
+      id: taskCardId,
+      title: 'Dynamic gate task',
+      status: 'todo',
+      labels: ['master-task'],
+      x: 20,
+      y: 40,
+      w: 360,
+      h: 220,
+      comment: { contentFile: `.decision-os/cards/tasks/${taskCardId}.md` },
+      facts: [],
+      fields: [],
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+    threadFiles: { [taskThreadId]: `.decision-os/threads/tasks/${taskThreadId}.md` },
+  }, null, 2));
+  writeFileSync(join(fixture.decisionOsRoot, 'project.json'), JSON.stringify({ id: 'dynamic-gate-project' }));
+  writeFileSync(join(fixture.decisionOsRoot, '.settings.json'), JSON.stringify({ federationNodeId: 'workstation' }));
+  createSkill(fixture.workspace, 'worker');
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { existsSync, writeFileSync } from "node:fs";',
+    'let prompt = "";',
+    'process.stdin.on("data", (chunk) => { prompt += chunk; });',
+    'process.stdin.on("end", () => {',
+    '  const skill = (prompt.match(/Current skill: (.+)/) || [])[1] || "missing";',
+    '  const output = ((prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "").trim();',
+    '  const returningGate = skill === "review-output" && prompt.includes("WORKER_RESULT");',
+    '  const result = skill === "worker" ? "WORKER_RESULT" : returningGate ? "RETURNED_GATE_RESULT" : "GATE_RESULT";',
+    '  writeFileSync(output, "# " + result + "\\n");',
+    '  writeFileSync(output + ".input", prompt);',
+    '  writeFileSync(output + ".env.json", JSON.stringify({',
+    '    executionId: process.env.DECISION_OS_EXECUTION_ID,',
+    '    projectId: process.env.DECISION_OS_PROJECT_ID,',
+    '    serverUrl: process.env.DECISION_OS_SERVER_URL,',
+    '  }));',
+    '  console.log(JSON.stringify({ type: "thread.started", thread_id: "session-" + process.env.DECISION_OS_EXECUTION_ID }));',
+    '  const release = skill === "worker"',
+    `    ? ${JSON.stringify(releaseWorker)}`,
+    `    : returningGate ? "" : ${JSON.stringify(releaseGate)};`,
+    '  const finish = () => console.log(JSON.stringify({ type: "turn.completed" }));',
+    '  if (!release || existsSync(release)) finish();',
+    '  else {',
+    '    const timer = setInterval(() => {',
+    '      if (!existsSync(release)) return;',
+    '      clearInterval(timer);',
+    '      finish();',
+    '    }, 10);',
+    '  }',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  await migrateTaskCurrentState({
+    decisionOsRoot: fixture.decisionOsRoot,
+    projectId: 'dynamic-gate-project',
+    nodeId: 'workstation',
+    tasksLedgerFile: join(fixture.decisionOsRoot, 'tasks.json'),
+  });
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot: fixture.decisionOsRoot,
+    decisionOsSettings: { federationNodeId: 'workstation' },
+  };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    const startResponse = await fetch(`${baseUrl}/api/codex/skills/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ledgerId: 'tasks',
+        cardId: taskCardId,
+        skillName: 'review-output',
+        contentKind: 'pipeline-prompt',
+        codexModel: 'gpt-5.6-sol',
+        codexEffort: 'max',
+      }),
+    });
+    const started = await startResponse.json() as Record<string, any>;
+    assert.equal(startResponse.status, 202, JSON.stringify(started));
+    const firstExecutionId = String(started.run.executionId);
+    await waitFor(
+      () => taskExecutionState(runtime)?.executions.find(firstExecutionId)?.lifecycle.phase === 'running' ? true : null,
+      'initial gate execution',
+    );
+    writeFileSync(fixture.promptFile, '# Edited after gate admission\n\nThis must not replace the running gate snapshot.');
+
+    const queue = () => fetch(`${baseUrl}/api/codex/executions/${encodeURIComponent(firstExecutionId)}/queue-skill`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ skillName: 'worker', codexModel: 'gpt-5.5', codexEffort: 'high' }),
+    });
+    const concurrentQueueResponses = await Promise.all([queue(), queue()]);
+    const concurrentQueues = await Promise.all(
+      concurrentQueueResponses.map(async (response) => ({
+        response,
+        body: await response.json() as Record<string, any>,
+      })),
+    );
+    assert.deepEqual(concurrentQueues.map(({ response }) => response.status), [202, 202]);
+    assert.equal(new Set(concurrentQueues.map(({ body }) => body.run.id)).size, 1);
+    assert.deepEqual(
+      concurrentQueues.map(({ body }) => body.idempotent === true).sort(),
+      [false, true],
+    );
+    const queued = concurrentQueues.find(({ body }) => body.idempotent !== true)?.body;
+    assert.ok(queued);
+    assert.equal(queued.run.queuedAfterExecutionId, firstExecutionId);
+    assert.equal(queued.run.initialInputCardId, started.run.outputCardId);
+    assert.deepEqual(
+      queued.run.steps.map((step: Record<string, any>) =>
+        step.skills.map((skill: Record<string, any>) => [skill.skillName, skill.codexModel, skill.codexEffort])),
+      [[['worker', 'gpt-5.5', 'high']], [['review-output', 'gpt-5.6-sol', 'max']]],
+    );
+    assert.equal(queued.run.steps[1].skills[0].promptSnapshot, started.pipelineRun.steps[0].skills[0].promptSnapshot);
+    assert.equal(queued.run.steps[1].skills[0].contentRevision, started.pipelineRun.steps[0].skills[0].contentRevision);
+    assert.equal(queued.run.steps[1].skills[0].contentCommit, started.pipelineRun.steps[0].skills[0].contentCommit);
+
+    const retryResponse = await queue();
+    const retried = await retryResponse.json() as Record<string, any>;
+    assert.equal(retryResponse.status, 202, JSON.stringify(retried));
+    assert.equal(retried.idempotent, true);
+    assert.equal(retried.run.id, queued.run.id);
+    const conflictResponse = await fetch(`${baseUrl}/api/codex/executions/${encodeURIComponent(firstExecutionId)}/queue-skill`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ skillName: 'worker', codexModel: 'gpt-5.5', codexEffort: 'low' }),
+    });
+    assert.equal(conflictResponse.status, 409);
+
+    const workerExecutionId = String(queued.run.steps[0].skills[0].executionId);
+    const returningExecutionId = String(queued.run.steps[1].skills[0].executionId);
+    assert.notEqual(firstExecutionId, returningExecutionId);
+    assert.equal(taskExecutionState(runtime)?.executions.find(workerExecutionId)?.lifecycle.phase, 'queued');
+    writeFileSync(releaseGate, '');
+    await waitFor(
+      () => taskExecutionState(runtime)?.executions.find(workerExecutionId)?.lifecycle.phase === 'running' ? true : null,
+      'queued worker execution',
+    );
+    assert.equal(taskExecutionState(runtime)?.executions.find(returningExecutionId)?.lifecycle.phase, 'queued');
+    writeFileSync(taskThreadFile, [
+      readFileSync(taskThreadFile, 'utf8').trimEnd(),
+      '',
+      '# OPERATOR',
+      '<!-- decision-os:note {"id":"note-latest","timestamp":"2026-07-29T01:05:00.000Z"} -->',
+      '',
+      'This latest operator message must reach the returning gate.',
+      '',
+    ].join('\n'));
+    writeFileSync(releaseWorker, '');
+    await waitFor(
+      () => taskExecutionState(runtime)?.executions.find(returningExecutionId)?.lifecycle.phase === 'succeeded' ? true : null,
+      'returning gate completion',
+    );
+
+    const workerOutput = join(fixture.decisionOsRoot, 'cards', 'tasks', `${queued.run.steps[0].outputCardId}.md`);
+    const returningOutput = join(fixture.decisionOsRoot, 'cards', 'tasks', `${queued.run.steps[1].outputCardId}.md`);
+    assert.match(readFileSync(`${workerOutput}.input`, 'utf8'), /Direct previous skill result:[\s\S]*GATE_RESULT/);
+    const returningInput = readFileSync(`${returningOutput}.input`, 'utf8');
+    assert.match(returningInput, /# Master objective[\s\S]*Implement the dynamic gate\./);
+    assert.match(returningInput, /Start from the complete task conversation\./);
+    assert.match(returningInput, /This latest operator message must reach the returning gate\./);
+    assert.match(returningInput, /Direct previous skill result:[\s\S]*WORKER_RESULT/);
+    assert.match(returningInput, new RegExp(`ledger-cli answer .*${taskThreadId}.*--message-stdin`));
+    const firstEnvironment = JSON.parse(readFileSync(`${started.run.outputFile}.env.json`, 'utf8')) as Record<string, unknown>;
+    const returningEnvironment = JSON.parse(readFileSync(`${returningOutput}.env.json`, 'utf8')) as Record<string, unknown>;
+    assert.equal(firstEnvironment.executionId, firstExecutionId);
+    assert.equal(returningEnvironment.executionId, returningExecutionId);
+    assert.equal(returningEnvironment.projectId, 'dynamic-gate-project');
+    assert.equal(typeof returningEnvironment.serverUrl, 'string');
+  } finally {
+    writeFileSync(releaseGate, '');
+    writeFileSync(releaseWorker, '');
+    await closeServer(server);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(fixture.workspace, { recursive: true, force: true });
   }
 });
 

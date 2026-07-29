@@ -27,6 +27,8 @@ export function buildPipelineSkillPrompt(input: {
   outputCardId: string;
   outputSubtaskPosition: number;
   outputMarkdownFile: string;
+  taskThreadId?: string;
+  taskConversationContext?: Record<string, unknown>;
   serverSkill?: { markdown: string; packageRoot: string } | null;
 }): string {
   assertPipelineRunSkillPromptEvidence(input);
@@ -51,6 +53,27 @@ export function buildPipelineSkillPrompt(input: {
     '```',
     '',
   ] : [];
+  const taskConversation = promptSnapshot !== null && input.taskConversationContext && input.taskThreadId ? [
+    'Canonical task and operator conversation:',
+    '```json',
+    JSON.stringify(input.taskConversationContext, null, 2),
+    '```',
+    '',
+    'This pipeline-only prompt owns operator-facing communication for this run.',
+    'Append its concise operator-facing conclusion or blocking question to the canonical task thread by running:',
+    `ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id "${input.taskThreadId}" --message-stdin`,
+    'Keep the output Markdown separate: it is the direct handoff consumed by the next queued skill.',
+    '',
+  ] : [];
+  const directInput = promptSnapshot !== null && input.stepInputCardId === input.outputParentCardId ? [
+    'Direct previous skill result:',
+    'No preceding skill result exists; this gate was launched from the canonical task.',
+  ] : [
+    'Direct previous skill result:',
+    '```markdown',
+    input.stepInputCardContent,
+    '```',
+  ];
   return [
     ...(input.contentKind === 'pipeline-prompt' ? [] : [`$${input.skillName}`, '']),
     'ledger-cli is on PATH; use $DECISION_OS_LEDGER_FILE and do not locate the CLI.',
@@ -72,10 +95,8 @@ export function buildPipelineSkillPrompt(input: {
     ...serverSkill,
     '',
     ...pipelinePrompt,
-    'Input card content:',
-    '```markdown',
-    input.stepInputCardContent,
-    '```',
+    ...taskConversation,
+    ...directInput,
     '',
     `Write the final result to this Markdown file: ${input.outputMarkdownFile}`,
     'Update the output subtask card title to a concise result-specific title by running:',
