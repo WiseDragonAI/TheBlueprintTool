@@ -9,6 +9,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ChildProcess } from 'node:child_process';
 import { buildTaskExecutionPresentation } from '@backend/business/codex/helper/task-execution-presentation.js';
+import { normalizeCardSkillRunEvent } from '@backend/business/codex/helper/normalize-card-skill-run-event.js';
+import { taskExecutionPresentationEvents } from '@backend/business/codex/helper/task-execution-presentation-events.js';
 import type { ProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 
 function record(executionId: string, requestedAt: string) {
@@ -54,6 +56,22 @@ function record(executionId: string, requestedAt: string) {
   };
 }
 
+test('collapses legacy captured prompts and both start records into one user prompt card', () => {
+  const events = [
+    { type: 'decision_os.developer_prompt', prompt: 'Legacy captured prompt.' },
+    { type: 'thread.started' },
+    { type: 'turn.started' },
+  ].map((event, index) => normalizeCardSkillRunEvent({ line: index + 1, event }));
+  assert.deepEqual(taskExecutionPresentationEvents(events), [{
+    id: 'run_status:user-prompt',
+    kind: 'run_status',
+    title: 'User prompt',
+    status: 'running',
+    text: 'Legacy captured prompt.',
+    severity: 'info',
+  }]);
+});
+
 test('returns one exact snapshot with typed todos and no raw tool result bytes', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-execution-presentation-'));
   const jsonlFile = join(workspace, 'session.jsonl');
@@ -61,9 +79,9 @@ test('returns one exact snapshot with typed todos and no raw tool result bytes',
   const sentinel = `RAW_TOOL_RESULT_${'x'.repeat(250_000)}`;
   const first = record('execution-1', '2026-07-25T01:00:00.000Z');
   const second = record('execution-2', '2026-07-25T02:00:00.000Z');
-  const developerPrompt = '# Gate prompt\n\nUse the complete task context.';
+  const userPrompt = '# Gate prompt\n\nUse the complete task context.';
   writeFileSync(jsonlFile, [
-    JSON.stringify({ type: 'decision_os.developer_prompt', prompt: developerPrompt }),
+    JSON.stringify({ type: 'decision_os.user_prompt', prompt: userPrompt }),
     JSON.stringify({ type: 'thread.started', thread_id: 'provider-thread' }),
     JSON.stringify({ type: 'turn.started' }),
     JSON.stringify({ type: 'item.started', item: { id: 'tool-1', type: 'command_execution', command: 'rg TODO', status: 'in_progress', aggregated_output: sentinel } }),
@@ -112,19 +130,11 @@ test('returns one exact snapshot with typed todos and no raw tool result bytes',
     assert.ok(serialized.length < 10_000);
     assert.deepEqual(result.presentation.events, [
       {
-        id: 'run_status:event-8e7dbb6d1688139f',
+        id: 'run_status:user-prompt',
         kind: 'run_status',
-        title: 'Thread started',
+        title: 'User prompt',
         status: 'running',
-        text: developerPrompt,
-        severity: 'info',
-      },
-      {
-        id: 'run_status:event-af7e4efa463e905e',
-        kind: 'run_status',
-        title: 'Turn started',
-        status: 'running',
-        text: developerPrompt,
+        text: userPrompt,
         severity: 'info',
       },
       {

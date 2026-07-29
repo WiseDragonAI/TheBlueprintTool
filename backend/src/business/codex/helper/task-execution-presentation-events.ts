@@ -106,15 +106,25 @@ function presentationEvent(event: NormalizedRunEvent): TaskExecutionPresentation
 export function taskExecutionPresentationEvents(events: NormalizedRunEvent[]): TaskExecutionPresentationEvent[] {
   const presented: TaskExecutionPresentationEvent[] = [];
   const lifecycleIndexes = new Map<string, number>();
-  let developerPrompt = '';
+  let userPrompt = '';
+  let startPresented = false;
   for (const event of events) {
-    if (event.type === 'decision_os.developer_prompt') {
-      developerPrompt = event.text;
+    if (event.type === 'decision_os.user_prompt' || event.type === 'decision_os.developer_prompt') {
+      userPrompt = event.text;
+      const prompt = presentationEvent({
+        ...event,
+        kind: 'run_status',
+        title: 'User prompt',
+        status: 'running',
+        itemId: 'user-prompt',
+      });
+      if (prompt) presented.push(prompt);
       continue;
     }
-    const presentedEvent = developerPrompt && (event.type === 'thread.started' || event.type === 'turn.started')
-      ? { ...event, text: developerPrompt }
-      : event;
+    const start = event.type === 'thread.started' || event.type === 'turn.started';
+    if (start && (userPrompt || startPresented)) continue;
+    if (start) startPresented = true;
+    const presentedEvent = event;
     // WHAT: Add a typed subagent card beside the underlying tool call.
     // WHY: The inventory needs the launch contract while tool counts must continue to include the real CLI invocation.
     const items = [queuedSubagent(presentedEvent), presentationEvent(presentedEvent)]

@@ -41,7 +41,8 @@ export function createCardSkillRunEventIngestor(input: {
   const decoder = new StringDecoder('utf8');
   const pendingEvents = new Map<number, NormalizedRunEvent>();
   const pendingPresentationEvents = new Map<number, NormalizedRunEvent>();
-  let developerPrompt = '';
+  let userPrompt = '';
+  let startPresentationQueued = false;
   const batchDelayMs = Math.max(0, Number(input.batchDelayMs ?? 25));
   const presentationBatchDelayMs = Math.max(batchDelayMs, Number(input.presentationBatchDelayMs ?? 500));
   let nextLine = Math.max(0, Number(input.startLine ?? 0)) + 1;
@@ -110,16 +111,20 @@ export function createCardSkillRunEventIngestor(input: {
       // WHY: Scalars and arrays have no lifecycle event contract to persist.
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
       let event = normalizeCardSkillRunEvent({ line, event: parsed as AnyRecord });
-      if (event.type === 'decision_os.developer_prompt') developerPrompt = event.text;
-      else if (developerPrompt && (event.type === 'thread.started' || event.type === 'turn.started')) {
-        event = { ...event, text: developerPrompt };
+      if (event.type === 'decision_os.user_prompt' || event.type === 'decision_os.developer_prompt') userPrompt = event.text;
+      else if (userPrompt && (event.type === 'thread.started' || event.type === 'turn.started')) {
+        event = { ...event, text: userPrompt };
       }
       persistTelemetry(parsed as AnyRecord, event);
       if (event.type === 'turn.started') input.onTurnStarted?.(event, new Date().toISOString());
       if (event.kind === 'run_status' && (event.status === 'complete' || event.status === 'failed' || event.status === 'cancelled')) {
         input.onTerminalEvent?.(event);
       }
-      pendingPresentationEvents.set(event.line, event);
+      const start = event.type === 'thread.started' || event.type === 'turn.started';
+      if (!(start && (userPrompt || startPresentationQueued))) {
+        pendingPresentationEvents.set(event.line, event);
+        if (start) startPresentationQueued = true;
+      }
       // WHAT: Queue only events that have a durable thread representation.
       // WHY: Empty informational records remain available in the JSONL source without creating blank notes.
       if (event.persist) pendingEvents.set(event.line, event);

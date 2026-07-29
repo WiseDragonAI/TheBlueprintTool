@@ -117,7 +117,7 @@ export async function launchCodexExecutionProcess(input: {
   const stdoutStartOffset = fileSize(input.stdoutFile);
   const stderrStartOffset = fileSize(input.stderrFile);
   appendFileSync(input.stdoutFile, `${JSON.stringify({
-    type: 'decision_os.developer_prompt',
+    type: 'decision_os.user_prompt',
     prompt: input.prompt,
   })}\n`, 'utf8');
   const promptFile = `${input.stderrFile}.${input.executionId}.stdin`;

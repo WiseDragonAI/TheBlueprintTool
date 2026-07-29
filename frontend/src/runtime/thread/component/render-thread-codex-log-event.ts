@@ -28,7 +28,7 @@ function renderTodoList(event: ThreadRunLogEvent): HTMLElement | null {
 
 export function renderThreadCodexLogEvent(event: ThreadRunLogEvent): HTMLElement {
   const startDisclosure = event.kind === 'run_status'
-    && (event.title === 'Thread started' || event.title === 'Turn started');
+    && (event.title === 'User prompt' || event.title === 'Thread started' || event.title === 'Turn started');
   const article = document.createElement(startDisclosure ? 'details' : 'article');
   article.className = `codex-log-event is-${event.kind.replace(/[^a-z0-9_-]+/gi, '-')} is-${event.severity}`;
   if (startDisclosure) article.classList.add('is-start-disclosure');

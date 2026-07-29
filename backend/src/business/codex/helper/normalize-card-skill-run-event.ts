@@ -132,11 +132,11 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
   const itemType = String(item.type ?? '');
   const itemId = String(item.id ?? event.id ?? '');
   const status = String(item.status ?? event.status ?? '');
-  if (type === 'decision_os.developer_prompt') {
+  if (type === 'decision_os.user_prompt' || type === 'decision_os.developer_prompt') {
     return normalizedJsonlEvent(line.line, {
       type,
       kind: 'diagnostic',
-      title: 'Developer prompt',
+      title: 'User prompt',
       text: textBlock(event.prompt),
       status: '',
       itemId: '',
