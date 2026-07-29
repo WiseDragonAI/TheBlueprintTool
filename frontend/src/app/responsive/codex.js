@@ -25,8 +25,12 @@ async function loadLibraries(projectId = state.projectId) {
     jsonRequest('/api/codex/pipelines', undefined, projectId)
   ]);
   const project = state.projects.find((entry) => entry.id === projectId);
-  state.skills = (Array.isArray(skills.skills) ? skills.skills : []).map((skill) => ({ ...skill, projects: project ? [project] : [] }));
+  const directSkills = (Array.isArray(skills.skills) ? skills.skills : []).map((skill) => ({ ...skill, projects: project ? [project] : [] }));
   state.pipelineContent = (Array.isArray(pipelines.availableContent) ? pipelines.availableContent : []).map((content) => ({ ...content, projects: project ? [project] : [] }));
+  const mergedSkills = new Map(directSkills.map((skill) => [skill.name, skill]));
+  state.pipelineContent.filter((content) => content.contentKind === 'pipeline-prompt')
+    .forEach((content) => { if (!mergedSkills.has(content.name)) mergedSkills.set(content.name, content); });
+  state.skills = [...mergedSkills.values()];
   state.availableTags = Array.isArray(skills.availableTags) && skills.availableTags.length ? skills.availableTags : [...skillCategories];
   state.pipelines = (Array.isArray(pipelines.pipelines) ? pipelines.pipelines : []).map((pipeline) => ({ ...pipeline, projectId, projectName: project?.name || '', projectColor: project?.color || '#20242b' }));
   state.steps = (Array.isArray(pipelines.steps) ? pipelines.steps : []).map((step) => ({ ...step, projectId }));
