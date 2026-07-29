@@ -960,6 +960,12 @@ test('skill editor guards dirty close and uses one draft-to-history content surf
     assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-history-pane')?.hidden, false);
     assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Save new revision').length, 0);
     assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Current · Newest').length, 1);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, '− 1 Removed').length, 1);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, '+ 1 Added').length, 1);
+    const splitView = findByText(fakeDocument.skillLibraryEditorModal, 'Split view')[0];
+    splitView.trigger('click');
+    assert.equal(skillLibraryEditorState.revisionDiffStyle, 'split');
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Unified view').length, 1);
     assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-revision-viewport')?.getAttribute('role'), 'region');
     findByText(fakeDocument.skillLibraryEditorModal, 'Newer')[0].trigger('click');
     assert.equal(skillLibraryEditorState.selectedRevisionIndex, -1);

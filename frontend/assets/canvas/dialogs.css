@@ -1292,6 +1292,7 @@
 
 .skill-library-defaults {
   grid-template-columns: 1fr 1fr;
+  margin-top: 14px;
 }
 
 .skill-markdown-field {
@@ -1417,6 +1418,10 @@
   color: var(--muted);
   font-family: var(--mono);
   font-size: 11px;
+}
+
+.skill-revision-mode-toggle {
+  margin-right: auto;
 }
 
 .skill-revision-key .is-removal {

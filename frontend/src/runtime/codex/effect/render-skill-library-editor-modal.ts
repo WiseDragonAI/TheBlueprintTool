@@ -47,6 +47,7 @@ export type SkillLibraryEditorState = {
   selectedRevisionIndex: number;
   revisionDetail: CodexSkillGitRevisionDetail | null;
   revisionBaseMarkdown: string;
+  revisionDiffStyle: 'unified' | 'split';
   revisionLoading: boolean;
   historyNextCursor: string | null;
   historyInitialized: boolean;
@@ -82,6 +83,7 @@ export const skillLibraryEditorState: SkillLibraryEditorState = {
   selectedRevisionIndex: -1,
   revisionDetail: null,
   revisionBaseMarkdown: '',
+  revisionDiffStyle: 'unified',
   revisionLoading: false,
   historyNextCursor: null,
   historyInitialized: false,
@@ -175,6 +177,7 @@ function resetState(input: Partial<SkillLibraryEditorState>): void {
     selectedRevisionIndex: -1,
     revisionDetail: null,
     revisionBaseMarkdown: '',
+    revisionDiffStyle: 'unified',
     revisionLoading: false,
     historyNextCursor: null,
     historyInitialized: false,
@@ -439,6 +442,17 @@ function renderTimelineNavigation(target: HTMLElement, detail: CodexSkillLibrary
   target.replaceChildren(newer, identity, older);
 }
 
+function revisionLineCounts(patch: string): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) continue;
+    if (line.startsWith('+')) additions += 1;
+    else if (line.startsWith('-')) deletions += 1;
+  }
+  return { additions, deletions };
+}
+
 function renderHistory(target: HTMLElement, detail: CodexSkillLibraryDetail): void {
   disposeHistory();
   const detailRevision = skillLibraryEditorState.revisionDetail;
@@ -446,10 +460,25 @@ function renderHistory(target: HTMLElement, detail: CodexSkillLibraryDetail): vo
     target.textContent = 'Loading revision…';
     return;
   }
+  const counts = revisionLineCounts(detailRevision.patch);
   const key = document.createElement('p');
   key.className = 'skill-revision-key';
   key.setAttribute('aria-label', 'Diff key: minus means removed in red; plus means added in blue');
-  key.innerHTML = '<span class="is-removal">− Removed</span><span class="is-addition">+ Added</span>';
+  const mode = button(
+    skillLibraryEditorState.revisionDiffStyle === 'unified' ? 'Split view' : 'Unified view',
+    () => {
+      skillLibraryEditorState.revisionDiffStyle = skillLibraryEditorState.revisionDiffStyle === 'unified' ? 'split' : 'unified';
+      renderSkillLibraryEditorModal();
+    },
+    'ghost-button skill-revision-mode-toggle',
+  );
+  const removed = document.createElement('span');
+  removed.className = 'is-removal';
+  removed.textContent = `− ${counts.deletions} Removed`;
+  const added = document.createElement('span');
+  added.className = 'is-addition';
+  added.textContent = `+ ${counts.additions} Added`;
+  key.append(mode, removed, added);
   const viewport = document.createElement('section');
   viewport.className = 'skill-revision-viewport';
   viewport.setAttribute('role', 'region');
@@ -463,6 +492,7 @@ function renderHistory(target: HTMLElement, detail: CodexSkillLibraryDetail): vo
     filename: filename(),
     markdown: detailRevision.markdown,
     parentMarkdown: skillLibraryEditorState.revisionBaseMarkdown,
+    diffStyle: skillLibraryEditorState.revisionDiffStyle,
   })
     .then((dispose) => {
       if (currentGeneration !== generation || !viewport.isConnected) dispose();

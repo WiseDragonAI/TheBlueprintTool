@@ -19,6 +19,7 @@ export async function renderSkillRevisionDiff(input: {
   filename?: string;
   markdown?: string;
   parentMarkdown?: string;
+  diffStyle?: 'unified' | 'split';
   isCurrent?: () => boolean;
 }, loadModule: () => Promise<PierreModule> = loadPierre): Promise<() => void> {
   const pierre = await loadModule();
@@ -38,7 +39,7 @@ export async function renderSkillRevisionDiff(input: {
   input.host.replaceChildren(container);
   const renderer = new pierre.FileDiff({
     themeType: 'dark',
-    diffStyle: 'unified',
+    diffStyle: input.diffStyle ?? 'unified',
     diffIndicators: 'classic',
     overflow: 'wrap',
     disableFileHeader: true,
