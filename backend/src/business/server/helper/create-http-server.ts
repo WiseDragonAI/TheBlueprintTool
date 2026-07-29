@@ -5512,7 +5512,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const isSharedModuleRoute = url.startsWith('/shared/');
     const isStaticModuleRoute = isFrontendModuleRoute || isSharedModuleRoute;
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';
-    if (!projectScope && request.method === 'GET' && routeTabId && !['projects', 'projects-canvas', 'ledgers', 'pipelines', 'skills', 'settings', 'control-room', 'done'].includes(routeTabId)) {
+    if (!projectScope && request.method === 'GET' && routeTabId && !['projects', 'projects-canvas', 'ledgers', 'pipelines', 'skills', 'status', 'settings', 'control-room', 'done'].includes(routeTabId)) {
       const matches = projects.filter((project) => project.ledgers.some((ledger) => ledger.id === routeTabId));
       if (matches.length === 1) {
         const fallbackProject = matches[0];
@@ -5540,6 +5540,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       || requestPath === '/done'
       || requestPath === '/pipelines'
       || requestPath === '/skills'
+      || requestPath === '/status'
       || requestPath === '/settings';
     const isScopedAppRoute = Boolean(projectScope && projectScope.scopedPath.startsWith('/ledgers'));
     const isAppRoute = isGlobalAppRoute || isScopedAppRoute;
