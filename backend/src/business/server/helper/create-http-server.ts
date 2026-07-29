@@ -120,6 +120,8 @@ import type { TaskCurrentStateStore } from '../../task-state/helper/task-current
 import { createTaskExecutionRepository } from '../../task-state/helper/task-execution-repository.js';
 import { captureTaskExecutionArtifact } from '../../task-state/helper/capture-task-execution-artifact.js';
 import type { TaskProjectionCommand } from '../../task-state/helper/task-mutation-command.js';
+import { recoverProjectTaskCurrentState } from '../../task-state/helper/recover-project-task-current-state.js';
+import { archiveIncompatibleFederatedTaskState } from '../../task-state/helper/archive-incompatible-federated-task-state.js';
 import { createRuntimeIncidentLedger, RuntimeScopePausedError, type RuntimeIncident } from './runtime-incident-ledger.js';
 import { createRuntimeIncidentReviewScheduler } from './create-runtime-incident-review-scheduler.js';
 import { runtimeIncidentReviewProjectId } from './synchronize-runtime-incident-review-task.js';
@@ -168,6 +170,20 @@ const federationNodeMessageTimeoutMs = 30 * 60_000;
 const federatedLibraryRequestTimeoutMs = 60_000;
 const federatedLibraryRetryDelaysMs = [1_000, 3_000] as const;
 const federatedLibraryRecoveryDelayMs = 30_000;
+
+function taskExecutionStateTaskId(ledger: AnyRecord, requestedCardId: string): string {
+  const cards = Array.isArray(ledger.cards) ? ledger.cards : [];
+  const isTaskCard = cards.some((card) => (
+    card !== null
+    && typeof card === 'object'
+    && String((card as AnyRecord).id ?? '') === requestedCardId
+  ));
+  // WHAT: Treat a card outside the task projection as an empty execution-history owner.
+  // WHY: Ordinary ledger cards expose the same Codex Log without participating in task lineage.
+  return isTaskCard
+    ? resolveTaskLineage({ ledger, sourceCardId: requestedCardId }).taskId
+    : requestedCardId;
+}
 
 function isExecutionScopedCodexFailure(operation: string): boolean {
   return operation === 'codex-execution-timeout'
@@ -317,13 +333,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const masterRoot = dirname(masterDecisionOsRoot);
   const decisionOsRoot = masterDecisionOsRoot;
   const migrationAdmissionFile = resolve(masterDecisionOsRoot, 'runtime', 'epoch-4-migration-admission.json');
-  let migrationAdmission: AnyRecord | null = null;
-  if (existsSync(migrationAdmissionFile)) {
+  const migrationAdmissionForProject = (projectId: string): AnyRecord | null => {
+    if (!existsSync(migrationAdmissionFile)) return null;
+    let migrationAdmission: AnyRecord;
     try { migrationAdmission = JSON.parse(readFileSync(migrationAdmissionFile, 'utf8')) as AnyRecord; }
     catch (error) { migrationAdmission = { phase: 'invalid', error: error instanceof Error ? error.message : String(error) }; }
-  }
-  const migrationAdmissionBlocked = Boolean(migrationAdmission && !['verified', 'rolled-back'].includes(String(migrationAdmission.phase ?? '')));
-  const incidentLedger = createRuntimeIncidentLedger({ decisionOsRoot: masterDecisionOsRoot });
+    if (!migrationAdmission || ['verified', 'rolled-back'].includes(String(migrationAdmission.phase ?? ''))) return null;
+    // WHAT: Apply identified transactions only to their owning projects.
+    // WHY: One interrupted project migration cannot block unrelated task-state authorities.
+    const projectIds = Array.isArray(migrationAdmission.projectIds)
+      ? migrationAdmission.projectIds.map(String).filter(Boolean)
+      : [];
+    return projectIds.length === 0 || projectIds.includes(projectId) ? migrationAdmission : null;
+  };
+  let protectedRuntimeIncidentScopes = (): Iterable<string> => [];
+  const incidentLedger = createRuntimeIncidentLedger({
+    decisionOsRoot: masterDecisionOsRoot,
+    protectedScopes: () => protectedRuntimeIncidentScopes(),
+  });
   runtime.decisionOsRoot = masterDecisionOsRoot;
   runtime.serverRoot = masterRoot;
   runtime.port = port;
@@ -353,6 +380,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const federationContentStore = createFederationContentReplicaStore({ decisionOsRoot: masterDecisionOsRoot });
   let federationContentScheduler: ReturnType<typeof createFederationContentScheduler> | null = null;
   const projectTaskStates = new Map<string, ProjectTaskState>();
+  const automaticTaskStateRecoveries = new Map<string, Promise<void>>();
+  const automaticFederatedCacheRecoveries = new Map<string, Promise<void>>();
+  let automaticTaskStateRecoveryTail: Promise<void> = Promise.resolve();
   const taskExecutionRouters = new Map<string, TaskExecutionRouter>();
   const federatedTaskStores = new Map<string, TaskCurrentStateStore>();
   const federatedProjectTaskStates = new Map<string, ProjectTaskState>();
@@ -395,7 +425,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const scheduledTaskContentHeadRepairs = new Set<string>();
   let serverClosing = false;
   const serverCloseAbort = new AbortController();
-  let globalRuntimeIncident: RuntimeIncident | null = null;
+  let fatalExitScheduled = false;
+  protectedRuntimeIncidentScopes = () => [
+    ...[...pausedTaskProjects.keys()].map((projectId) => `project-task-state:${projectId}`),
+    ...[...pausedFederatedTaskProjects.keys()].map((projectId) => `federated-task-state:${projectId}`),
+    ...[...pausedBackgroundComponents].map((component) => `background:${component}`),
+    ...[...pausedProjectWatchers].map((projectId) => `project-watcher:${projectId}`),
+    ...[...pausedProjectRuntimes].map((projectId) => `project-runtime:${projectId}`),
+    ...(fatalExitScheduled ? ['server-runtime'] : []),
+  ];
   let projectSyncController: ReturnType<typeof createProjectSyncController> | null = null;
   let resumeProjectSyncRuntime: (() => void) | null = null;
   let publishPipelineRunSnapshot = (
@@ -413,7 +451,27 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     stopCodexRuntimeTimers(context.runtime);
     stopAdoptedTaskExecutionMonitors(context.runtime);
     stopTaskExecutionCancellationDeadlines(context.runtime);
-    context.watcher.close();
+    void context.watcher.close().catch((error: unknown) => {
+      recordIncident({
+        scope: `project-watcher:${String(context.runtime.projectId ?? 'unknown')}`,
+        component: 'project-watcher',
+        operation: 'dispose-project-context-watcher',
+        error,
+        context: {
+          projectId: String(context.runtime.projectId ?? ''),
+          decisionOsRoot: String(context.runtime.decisionOsRoot ?? ''),
+        },
+      });
+    });
+    // WHAT: Settle every project-owned event stream before discarding its context.
+    // WHY: Clearing the client set alone leaves callers waiting on a response that can never publish again.
+    for (const client of context.clients) {
+      try {
+        if (!client.writableEnded) client.end();
+      } catch {
+        client.destroy();
+      }
+    }
     context.clients.clear();
   };
 
@@ -447,7 +505,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (incident.scope.startsWith('background:')) pausedBackgroundComponents.add(incident.scope.slice('background:'.length));
     if (incident.scope.startsWith('project-watcher:')) pausedProjectWatchers.add(incident.scope.slice('project-watcher:'.length));
     if (incident.scope.startsWith('project-runtime:')) pausedProjectRuntimes.add(incident.scope.slice('project-runtime:'.length));
-    if (incident.scope === 'server-runtime') globalRuntimeIncident = incident;
   }
 
   const recordIncident = (input: {
@@ -488,18 +545,23 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     throw new Error(`Codex runtime ${String(activeRuntime.projectId ?? '')} is paused without an active incident.`);
   };
 
-  const pauseGlobalRuntime = (error: unknown, operation: string): void => {
-    globalRuntimeIncident ??= recordIncident({
+  const scheduleFatalExit = (error: unknown, operation: string): void => {
+    if (fatalExitScheduled) return;
+    fatalExitScheduled = true;
+    const incident = recordIncident({
       severity: 'fatal',
       scope: 'server-runtime',
       component: 'node-process',
       operation,
       error,
     });
-    telemetry('runtime-scope-paused', { scope: 'server-runtime', incidentId: globalRuntimeIncident.id, operation });
+    telemetry('runtime-fatal-exit-scheduled', { scope: 'server-runtime', incidentId: incident.id, operation });
+    // WHAT: Terminate the corrupted child after durable evidence is recorded.
+    // WHY: Continuing inside the same process would expose a global zombie gate with unknown invariants.
+    setImmediate(() => process.exit(1));
   };
-  const onUncaughtException = (error: Error): void => pauseGlobalRuntime(error, 'uncaught-exception');
-  const onUnhandledRejection = (reason: unknown): void => pauseGlobalRuntime(reason, 'unhandled-rejection');
+  const onUncaughtException = (error: Error): void => scheduleFatalExit(error, 'uncaught-exception');
+  const onUnhandledRejection = (reason: unknown): void => scheduleFatalExit(reason, 'unhandled-rejection');
   process.on('uncaughtException', onUncaughtException);
   process.on('unhandledRejection', onUnhandledRejection);
 
@@ -703,18 +765,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     });
   };
 
-  const taskStateForProject = (project: DecisionOsProject): ProjectTaskState => {
-    const paused = pausedTaskProjects.get(project.id);
-    if (paused) throw new RuntimeScopePausedError(paused.scope, paused.id);
-    if (migrationAdmissionBlocked) {
-      throw pauseTaskProject(project, new Error(`task_migration_transaction_incomplete:${String(migrationAdmission?.phase ?? 'unknown')}`), 'admit-migrated-task-state');
-    }
-    const current = projectTaskStates.get(project.id);
-    if (current) {
-      if (federationTaskStateReplicator) scheduleTaskContentHeadRepair(project.id, current);
-      return current;
-    }
-    try {
+  const openTaskStateForProject = (project: DecisionOsProject): ProjectTaskState => {
       const ledger = tasksLedgerForProject(project);
       const tasksLedgerFile = resolve(project.decisionOsRoot, ledger.ledgerFile.replace(/^\.decision-os\//, ''));
       const stateRoot = resolve(project.decisionOsRoot, 'task-state', project.id);
@@ -753,8 +804,25 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         onPersistenceError: (error) => { pauseTaskProject(project, error, 'materialize-local-task-state'); },
         initialize,
       });
-      projectTaskStates.set(project.id, value);
       if (federationTaskStateReplicator) scheduleTaskContentHeadRepair(project.id, value);
+      return value;
+  };
+
+  const taskStateForProject = (project: DecisionOsProject): ProjectTaskState => {
+    const paused = pausedTaskProjects.get(project.id);
+    if (paused) throw new RuntimeScopePausedError(paused.scope, paused.id);
+    const migrationAdmission = migrationAdmissionForProject(project.id);
+    if (migrationAdmission) {
+      throw pauseTaskProject(project, new Error(`task_migration_transaction_incomplete:${String(migrationAdmission.phase ?? 'unknown')}`), 'admit-migrated-task-state');
+    }
+    const current = projectTaskStates.get(project.id);
+    if (current) {
+      if (federationTaskStateReplicator) scheduleTaskContentHeadRepair(project.id, current);
+      return current;
+    }
+    try {
+      const value = openTaskStateForProject(project);
+      projectTaskStates.set(project.id, value);
       if (taskProjectsPendingFrameIncidentRevalidation.delete(project.id)) {
         incidentLedger.resolveScope(
           `project-task-state:${project.id}`,
@@ -769,8 +837,80 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         taskProjectsPendingFrameIncidentRevalidation.delete(project.id);
         pausedTaskProjects.set(project.id, retained);
       }
-      throw pauseTaskProject(project, error, 'open-local-task-state');
+      const pausedError = pauseTaskProject(project, error, 'open-local-task-state');
+      if (error instanceof Error && error.message === 'task_state_offline_migration_required') {
+        scheduleAutomaticTaskStateRecovery(project);
+      }
+      throw pausedError;
     }
+  };
+
+  const scheduleAutomaticTaskStateRecovery = (project: DecisionOsProject): void => {
+    if (automaticTaskStateRecoveries.has(project.id)) return;
+    const recovery = automaticTaskStateRecoveryTail
+      .catch(() => undefined)
+      .then(async () => {
+        const ledger = tasksLedgerForProject(project);
+        const tasksLedgerFile = resolve(project.decisionOsRoot, ledger.ledgerFile.replace(/^\.decision-os\//, ''));
+        const nodeId = String(
+          federation?.localOwner().ownerNodeId
+            ?? (runtime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId
+            ?? 'local',
+        ).trim() || 'local';
+        const currentContext = projectContexts.get(project.decisionOsRoot);
+        if (currentContext) disposeProjectContext(currentContext);
+        projectContexts.delete(project.decisionOsRoot);
+        projectTaskStates.delete(project.id);
+        let replacementContext: ProjectContext | null = null;
+        try {
+          await recoverProjectTaskCurrentState({
+            decisionOsRoot: project.decisionOsRoot,
+            projectId: project.id,
+            nodeId,
+            defaultAssignedNodeId: nodeId,
+            tasksLedgerFile,
+            admissionMarker: migrationAdmissionFile,
+            contentObjectRoots: [resolve(masterDecisionOsRoot, 'cache', 'federation-content-current', 'objects')],
+          });
+          const replacementState = openTaskStateForProject(project);
+          projectTaskStates.set(project.id, replacementState);
+          replacementContext = tryProjectContext(project, 'automatic-task-state-recovery', replacementState);
+          if (!replacementContext) throw new Error(`project_context_recovery_failed:${project.id}`);
+          controlRoomProjectionStore?.invalidate(project.id);
+          federationTaskStateReplicator?.reconcileProject('relay', project.id);
+          const scope = `project-task-state:${project.id}`;
+          const resolved = incidentLedger.resolveScope(scope, 'Compatible legacy task state recovered automatically.');
+          if (resolved.length === 0) throw new Error(`runtime_incident_resolution_not_persisted:${scope}`);
+          pausedTaskProjects.delete(project.id);
+          void recoverTaskExecutions(replacementContext.runtime)
+            .then(() => scheduleGlobalCodexProcesses())
+            .catch((error: unknown) => recordBackgroundFailure(
+              `codex-runtime:${project.id}`,
+              'recover-codex-after-automatic-task-state-recovery',
+              error,
+              { projectId: project.id, decisionOsRoot: project.decisionOsRoot },
+            ));
+        } catch (error) {
+          const fingerprint = error && typeof error === 'object' && 'sourceFingerprint' in error
+            ? String((error as { sourceFingerprint?: unknown }).sourceFingerprint ?? '')
+            : '';
+          if (replacementContext) disposeProjectContext(replacementContext);
+          projectContexts.delete(project.decisionOsRoot);
+          projectTaskStates.delete(project.id);
+          recordIncident({
+            scope: `project-task-state:${project.id}`,
+            component: 'task-current-state-recovery',
+            operation: 'automatic-project-task-state-recovery',
+            error,
+            context: { projectId: project.id, decisionOsRoot: project.decisionOsRoot, sourceFingerprint: fingerprint },
+          });
+        }
+      })
+      .finally(() => {
+        automaticTaskStateRecoveries.delete(project.id);
+      });
+    automaticTaskStateRecoveryTail = recovery;
+    automaticTaskStateRecoveries.set(project.id, recovery);
   };
 
   const taskExecutionRouterForProject = (project: DecisionOsProject): TaskExecutionRouter => {
@@ -932,14 +1072,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
 
   const taskProjectionForProject = (project: DecisionOsProject): AnyRecord => tryTaskStateForProject(project)?.projection() ?? fallbackTaskProjection(project);
 
-  const federatedTaskStoreForProject = (projectId: string, ownerNodeId: string): TaskCurrentStateStore | null => {
-    if (!projectId) return null;
-    if (pausedFederatedTaskProjects.has(projectId)) return null;
-    const current = federatedTaskStores.get(projectId);
-    if (current) return current;
-    try {
+  const openFederatedTaskStateForProject = (projectId: string, ownerNodeId: string): ProjectTaskState => {
       const replicaRoot = resolve(masterDecisionOsRoot, 'cache', 'federation-task-state');
-      const state = createProjectTaskState({
+      return createProjectTaskState({
         decisionOsRoot: replicaRoot,
         projectId,
         writerId: federation?.localOwner().ownerNodeId ?? 'local',
@@ -958,6 +1093,52 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           pausedFederatedTaskProjects.set(projectId, incident);
         },
       });
+  };
+
+  const scheduleFederatedCacheRecovery = (projectId: string, ownerNodeId: string): void => {
+    if (automaticFederatedCacheRecoveries.has(projectId)) return;
+    const recovery = (async () => {
+      let fingerprint = '';
+      try {
+        const replicaRoot = resolve(masterDecisionOsRoot, 'cache', 'federation-task-state');
+        const archived = await archiveIncompatibleFederatedTaskState({
+          replicaDecisionOsRoot: replicaRoot,
+          projectId,
+        });
+        fingerprint = archived.fingerprint;
+        federatedExecutionStates.delete(projectId);
+        federatedProjectTaskStates.delete(projectId);
+        federatedTaskStores.delete(projectId);
+        const state = openFederatedTaskStateForProject(projectId, ownerNodeId);
+        federatedProjectTaskStates.set(projectId, state);
+        federatedTaskStores.set(projectId, state.store);
+        const scope = `federated-task-state:${projectId}`;
+        const resolved = incidentLedger.resolveScope(scope, 'Incompatible derived task cache archived and rebuilt automatically.');
+        if (resolved.length === 0) throw new Error(`runtime_incident_resolution_not_persisted:${scope}`);
+        pausedFederatedTaskProjects.delete(projectId);
+        federationTaskStateReplicator?.reconcileProject('relay', projectId);
+      } catch (error) {
+        recordIncident({
+          scope: `federated-task-state:${projectId}`,
+          component: 'federation-task-state-recovery',
+          operation: 'automatic-federated-task-state-recovery',
+          error,
+          context: { projectId, ownerNodeId, sourceFingerprint: fingerprint },
+        });
+      }
+    })().finally(() => {
+      automaticFederatedCacheRecoveries.delete(projectId);
+    });
+    automaticFederatedCacheRecoveries.set(projectId, recovery);
+  };
+
+  const federatedTaskStoreForProject = (projectId: string, ownerNodeId: string): TaskCurrentStateStore | null => {
+    if (!projectId) return null;
+    if (pausedFederatedTaskProjects.has(projectId)) return null;
+    const current = federatedTaskStores.get(projectId);
+    if (current) return current;
+    try {
+      const state = openFederatedTaskStateForProject(projectId, ownerNodeId);
       const store = state.store;
       federatedProjectTaskStates.set(projectId, state);
       federatedTaskStores.set(projectId, store);
@@ -971,6 +1152,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         context: { projectId, ownerNodeId },
       });
       pausedFederatedTaskProjects.set(projectId, incident);
+      if (error instanceof Error && error.message === 'unsupported_task_current_state_format') {
+        scheduleFederatedCacheRecovery(projectId, ownerNodeId);
+      }
       return null;
     }
   };
@@ -1145,7 +1329,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     Object.defineProperty(runtime, 'globalCodexSchedulePromise', { value: schedule, writable: true, configurable: true, enumerable: false });
     return schedule;
   };
-  const projectContext = (activeDecisionOsRoot: string, projectId: string): ProjectContext => {
+  const projectContext = (
+    activeDecisionOsRoot: string,
+    projectId: string,
+    taskStateOverride: ProjectTaskState | null = null,
+  ): ProjectContext => {
     const existing = projectContexts.get(activeDecisionOsRoot);
     if (existing) return existing;
     const clients = new Set<ServerResponse>();
@@ -1319,7 +1507,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (projectId) {
       const project = projectCatalogStore.projects().find((entry) => entry.id === projectId);
       if (!project) throw new Error(`Canonical Codex execution runtime has no project ${projectId}.`);
-      const nodeId = String((projectRuntime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId
+      // WHAT: Bind request-runtime execution identity to the connector that admits the execution.
+      // WHY: A settings refresh must not split one node into `workstation` admission and `local` presentation authorities.
+      const nodeId = String(federation?.localOwner().ownerNodeId
+        ?? (projectRuntime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId
         ?? (runtime.decisionOsSettings as AnyRecord | undefined)?.federationNodeId
         ?? 'local').trim() || 'local';
       const taskProjection = (): ProjectTaskState => taskStateForProject(project);
@@ -1358,7 +1549,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         configurable: true,
         enumerable: false,
       });
-      activeTaskState = pausedTaskProjects.has(projectId) ? null : tryTaskStateForProject(project);
+      activeTaskState = taskStateOverride ?? (pausedTaskProjects.has(projectId) ? null : tryTaskStateForProject(project));
       if (activeTaskState) {
         Object.defineProperty(projectRuntime, 'taskExecutionRouter', {
           value: taskExecutionRouterForProject(project),
@@ -1539,9 +1730,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
     });
   };
-  const tryProjectContext = (project: DecisionOsProject, operation: string): ProjectContext | null => {
-    if (pausedProjectWatchers.has(project.id) || pausedProjectRuntimes.has(project.id)) return null;
-    try { return projectContext(project.decisionOsRoot, project.id); }
+  const tryProjectContext = (
+    project: DecisionOsProject,
+    operation: string,
+    taskStateOverride: ProjectTaskState | null = null,
+    recoveryScope: 'project-watcher' | 'project-runtime' | '' = '',
+  ): ProjectContext | null => {
+    if ((pausedProjectWatchers.has(project.id) && recoveryScope !== 'project-watcher')
+      || (pausedProjectRuntimes.has(project.id) && recoveryScope !== 'project-runtime')) return null;
+    try { return projectContext(project.decisionOsRoot, project.id, taskStateOverride); }
     catch (error) {
       // WHAT: Preserve the incident boundary that already paused the owning task-state scope.
       // WHY: Promoting a contained project-state failure into a second runtime incident
@@ -2359,61 +2556,122 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const body = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord;
       const scope = String(body.scope ?? '').trim();
       let resumed = false;
+      let resolved: RuntimeIncident[] = [];
       if (scope.startsWith('project-task-state:')) {
         const projectId = scope.slice('project-task-state:'.length);
         const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
-        if (project) {
-          pausedTaskProjects.delete(projectId);
+        if (project && pausedTaskProjects.has(projectId)) {
+          const currentContext = projectContexts.get(project.decisionOsRoot);
+          if (currentContext) disposeProjectContext(currentContext);
+          projectContexts.delete(project.decisionOsRoot);
           projectTaskStates.delete(projectId);
-          resumed = Boolean(tryTaskStateForProject(project));
-          if (resumed) {
-            const context = projectContexts.get(project.decisionOsRoot);
-            if (context) disposeProjectContext(context);
+          let replacementContext: ProjectContext | null = null;
+          try {
+            // WHAT: Build and register replacement state while request admission remains paused.
+            // WHY: Concurrent requests must not observe a partially recovered project.
+            const replacementState = openTaskStateForProject(project);
+            projectTaskStates.set(projectId, replacementState);
+            replacementContext = tryProjectContext(project, 'operator-resume-task-state', replacementState);
+            if (!replacementContext) throw new Error(`project_context_recovery_failed:${projectId}`);
+            controlRoomProjectionStore?.invalidate(projectId);
+            federationTaskStateReplicator?.reconcileProject('relay', projectId);
+            resolved = incidentLedger.resolveScope(scope, String(body.resolution ?? 'Operator resumed the paused runtime scope.'));
+            if (resolved.length === 0) throw new Error(`runtime_incident_resolution_not_persisted:${scope}`);
+            // WHAT: Remove admission last, after state, context, projection, reconciliation, and evidence are durable.
+            // WHY: A failed recovery must retain the exact owning pause.
+            pausedTaskProjects.delete(projectId);
+            resumed = true;
+            void recoverTaskExecutions(replacementContext.runtime)
+              .then(() => scheduleGlobalCodexProcesses())
+              .catch((error: unknown) => recordBackgroundFailure(
+                `codex-runtime:${projectId}`,
+                'recover-codex-after-task-state-resume',
+                error,
+                { projectId, decisionOsRoot: project.decisionOsRoot },
+              ));
+          } catch (error) {
+            if (replacementContext) disposeProjectContext(replacementContext);
             projectContexts.delete(project.decisionOsRoot);
-            resumed = Boolean(tryProjectContext(project, 'operator-resume-task-state'));
+            projectTaskStates.delete(projectId);
+            recordIncident({
+              scope,
+              component: 'task-current-state',
+              operation: 'operator-resume-task-state',
+              error,
+              context: { projectId, decisionOsRoot: project.decisionOsRoot },
+            });
           }
-          if (resumed) federationTaskStateReplicator?.reconcileProject('relay', projectId);
         }
       } else if (scope.startsWith('federated-task-state:')) {
         const projectId = scope.slice('federated-task-state:'.length);
-        pausedFederatedTaskProjects.delete(projectId);
-        federatedExecutionStates.delete(projectId);
-        federatedTaskStores.delete(projectId);
-        resumed = Boolean(federatedTaskStoreForProject(projectId, 'operator-resume'));
-        if (resumed) federationTaskStateReplicator?.reconcileProject('relay', projectId);
+        if (pausedFederatedTaskProjects.has(projectId)) {
+          try {
+            federatedExecutionStates.delete(projectId);
+            federatedProjectTaskStates.delete(projectId);
+            federatedTaskStores.delete(projectId);
+            const state = openFederatedTaskStateForProject(projectId, 'operator-resume');
+            federatedProjectTaskStates.set(projectId, state);
+            federatedTaskStores.set(projectId, state.store);
+            federationTaskStateReplicator?.reconcileProject('relay', projectId);
+            resolved = incidentLedger.resolveScope(scope, String(body.resolution ?? 'Operator resumed the paused runtime scope.'));
+            if (resolved.length === 0) throw new Error(`runtime_incident_resolution_not_persisted:${scope}`);
+            pausedFederatedTaskProjects.delete(projectId);
+            resumed = true;
+          } catch (error) {
+            federatedExecutionStates.delete(projectId);
+            federatedProjectTaskStates.delete(projectId);
+            federatedTaskStores.delete(projectId);
+            recordIncident({
+              scope,
+              component: 'federation-task-state',
+              operation: 'operator-resume-federated-task-state',
+              error,
+              context: { projectId },
+            });
+          }
+        }
       } else if (scope.startsWith('background:')) {
         const component = scope.slice('background:'.length);
-        pausedBackgroundComponents.delete(component);
         try {
-          if (component === 'pipeline-migration') migrateProjectPipelines();
-          if (component === 'pipeline-catalog') initializePipelineCatalog();
-          if (component === 'federated-library-sync') await synchronizeFederatedLibraries();
-          if (component === 'codex-process-scheduler') await scheduleGlobalCodexProcesses();
-          if (component === 'federation-content-scheduler') await federationContentScheduler?.drain();
+          let recognized = false;
+          if (component === 'pipeline-migration') { recognized = true; migrateProjectPipelines(); }
+          if (component === 'pipeline-catalog') { recognized = true; initializePipelineCatalog(); }
+          if (component === 'federated-library-sync') { recognized = true; await synchronizeFederatedLibraries(); }
+          if (component === 'codex-process-scheduler') { recognized = true; await scheduleGlobalCodexProcesses(); }
+          if (component === 'federation-content-scheduler') { recognized = true; await federationContentScheduler?.drain(); }
           if (component === 'project-sync-store' || component === 'project-sync-runtime') {
+            recognized = true;
             if (!resumeProjectSyncRuntime) throw new Error('Project synchronization runtime is unavailable.');
             resumeProjectSyncRuntime();
           }
           if (component.startsWith('codex-runtime:')) {
+            recognized = true;
             const projectId = component.slice('codex-runtime:'.length);
             const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
             const context = project ? projectContexts.get(project.decisionOsRoot) : null;
             if (!project || !context) throw new Error(`Codex runtime ${projectId} is unavailable.`);
-            try {
-              await recoverTaskExecutions(context.runtime);
-              context.runtime.codexRuntimePaused = false;
-              await scheduleGlobalCodexProcesses();
-            } catch (error) {
-              context.runtime.codexRuntimePaused = true;
-              throw error;
-            }
+            await recoverTaskExecutions(context.runtime);
+            await scheduleGlobalCodexProcesses();
           }
           if (component.startsWith('codex-startup-')) {
+            recognized = true;
             const projectId = component.slice('codex-startup-'.length);
             const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
             const context = project ? projectContexts.get(project.decisionOsRoot) : null;
             if (!project || !context) throw new Error(`Project runtime ${projectId} is unavailable.`);
             await recoverTaskExecutions(context.runtime);
+          }
+          if (!recognized || !pausedBackgroundComponents.has(component)) {
+            throw new Error(`runtime_background_scope_not_resumable:${component}`);
+          }
+          resolved = incidentLedger.resolveScope(scope, String(body.resolution ?? 'Operator resumed the paused runtime scope.'));
+          if (resolved.length === 0) throw new Error(`runtime_incident_resolution_not_persisted:${scope}`);
+          pausedBackgroundComponents.delete(component);
+          if (component.startsWith('codex-runtime:')) {
+            const projectId = component.slice('codex-runtime:'.length);
+            const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
+            const context = project ? projectContexts.get(project.decisionOsRoot) : null;
+            if (context) context.runtime.codexRuntimePaused = false;
           }
           resumed = true;
         } catch (error) {
@@ -2422,25 +2680,43 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       } else if (scope.startsWith('project-watcher:')) {
         const projectId = scope.slice('project-watcher:'.length);
         const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
-        if (project) {
-          pausedProjectWatchers.delete(projectId);
+        if (project && pausedProjectWatchers.has(projectId)) {
           const context = projectContexts.get(project.decisionOsRoot);
           if (context) disposeProjectContext(context);
           projectContexts.delete(project.decisionOsRoot);
-          resumed = Boolean(tryProjectContext(project, 'operator-resume-project-runtime'));
+          const replacement = tryProjectContext(project, 'operator-resume-project-watcher', null, 'project-watcher');
+          if (replacement) {
+            resolved = incidentLedger.resolveScope(scope, String(body.resolution ?? 'Operator resumed the paused runtime scope.'));
+            if (resolved.length > 0) {
+              pausedProjectWatchers.delete(projectId);
+              resumed = true;
+            } else {
+              disposeProjectContext(replacement);
+              projectContexts.delete(project.decisionOsRoot);
+            }
+          }
         }
       } else if (scope.startsWith('project-runtime:')) {
         const projectId = scope.slice('project-runtime:'.length);
         const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
-        if (project) {
-          pausedProjectRuntimes.delete(projectId);
-          resumed = Boolean(tryProjectContext(project, 'operator-resume-project-runtime'));
+        if (project && pausedProjectRuntimes.has(projectId)) {
+          const replacement = tryProjectContext(project, 'operator-resume-project-runtime', null, 'project-runtime');
+          if (replacement) {
+            resolved = incidentLedger.resolveScope(scope, String(body.resolution ?? 'Operator resumed the paused runtime scope.'));
+            if (resolved.length > 0) {
+              pausedProjectRuntimes.delete(projectId);
+              resumed = true;
+            } else {
+              disposeProjectContext(replacement);
+              projectContexts.delete(project.decisionOsRoot);
+            }
+          }
         }
-      } else if (scope === 'server-runtime') {
-        globalRuntimeIncident = null;
-        resumed = true;
       }
-      const resolved = resumed ? incidentLedger.resolveScope(scope, String(body.resolution ?? 'Operator resumed the paused runtime scope.')) : [];
+      if (resumed && resolved.length === 0) {
+        resolved = incidentLedger.resolveScope(scope, String(body.resolution ?? 'Operator resumed the paused runtime scope.'));
+        if (resolved.length === 0) resumed = false;
+      }
       response.statusCode = resumed ? 200 : 409;
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
@@ -2450,11 +2726,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if ((requestPath === '/api/health' || requestPath === '/api/diagnostics/incidents') && request.method === 'GET') {
       const incidentSnapshot = incidentLedger.snapshot();
       const activeIncidents = incidentSnapshot.incidents.filter((incident) => incident.status === 'paused');
+      // WHAT: Derive service degradation from runtime admission instead of unresolved diagnostic history.
+      // WHY: A completed request error must remain visible without claiming that an unrelated runtime scope is blocked.
+      const runtimeInterrupted = activeIncidents.some((incident) => incident.scope === 'server-runtime')
+        || pausedTaskProjects.size > 0
+        || pausedFederatedTaskProjects.size > 0
+        || pausedBackgroundComponents.size > 0
+        || pausedProjectWatchers.size > 0
+        || pausedProjectRuntimes.size > 0;
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({
         ok: true,
-        status: activeIncidents.length > 0 ? 'degraded' : 'ready',
+        status: runtimeInterrupted ? 'degraded' : 'ready',
         observedAt: new Date().toISOString(),
         ...decisionOsReleaseHealthIdentity(runtime.decisionOsSettings),
         incidentLedger: incidentLedger.file,
@@ -2556,7 +2840,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       return;
     }
-    if (globalRuntimeIncident) throw new RuntimeScopePausedError('server-runtime', globalRuntimeIncident.id);
     const projectScope = parseProjectUrlScope(requestPath);
     if (requestPath.startsWith('/p/') && !projectScope) {
       response.statusCode = 400;
@@ -2766,10 +3049,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           return;
         }
         const requestedCardId = decodeRouteSegment(remoteTaskExecutionStateRead[1]);
-        const taskId = resolveTaskLineage({
-          ledger: projection.ledger,
-          sourceCardId: requestedCardId,
-        }).taskId;
+        const taskId = taskExecutionStateTaskId(projection.ledger, requestedCardId);
         response.end(JSON.stringify(projectTaskExecutionState({
           taskId,
           state,
@@ -3769,10 +4049,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         response.end(JSON.stringify({ ok: false, error: 'task_execution_state_unavailable', taskId: requestedCardId }));
         return;
       }
-      const taskId = resolveTaskLineage({
-        ledger: executionState.projection().ledger,
-        sourceCardId: requestedCardId,
-      }).taskId;
+      const taskId = taskExecutionStateTaskId(executionState.projection().ledger, requestedCardId);
       // WHAT: Derive the complete lightweight hierarchy from the indexed Epoch 4 projection.
       // WHY: Opening a task must not read every JSONL artifact or depend on card session aliases.
       response.end(JSON.stringify(projectTaskExecutionState({
@@ -5294,6 +5571,59 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const threadId = safeAssetSegment(request.headers['x-thread-id'] ?? 'conversation-ledger');
       const ledgerId = String(request.headers['x-ledger-id'] ?? '');
       const cardId = threadId.startsWith('thread-') ? threadId.slice('thread-'.length) : '';
+      let taskPreview: Buffer | null = null;
+      if (ledgerId === 'tasks') {
+        // WHAT: Validate task ownership and required content before creating any image asset.
+        // WHY: A rejected task note must retain its client receipt without leaving an orphaned server file.
+        if (!localProject || !cardId) {
+          response.statusCode = 400;
+          response.end(JSON.stringify({ ok: false, error: 'Task image upload requires an owned project thread.' }));
+          return;
+        }
+        const taskState = taskStateForProject(localProject);
+        const projection = taskState.projection().ledger;
+        const cardOwned = Array.isArray(projection.cards)
+          && projection.cards.some((card) => card && typeof card === 'object' && String((card as AnyRecord).id ?? '') === cardId);
+        if (!cardOwned) {
+          response.statusCode = 404;
+          response.end(JSON.stringify({ ok: false, error: 'Task thread owner was not found.' }));
+          return;
+        }
+        const refs = projection.threadFiles && typeof projection.threadFiles === 'object' ? projection.threadFiles as AnyRecord : {};
+        const threadResource = String(refs[threadId] ?? '');
+        if (threadResource) {
+          try {
+            await materializeTaskResources({
+              projectId: localProject.id,
+              decisionOsRoot: localProject.decisionOsRoot,
+              keys: [threadResource],
+              store: taskState.store,
+              contentStore: federationContentStore,
+              drain: federationContentScheduler?.drain ?? null,
+            });
+          } catch (error) {
+            if (!(error instanceof TaskContentMaterializationError)) throw error;
+            response.statusCode = error.statusCode;
+            response.end(JSON.stringify({ ok: false, error: error.code, contentFile: error.key }));
+            return;
+          }
+        }
+        try {
+          taskPreview = await sharp(imageBuffer, { failOn: 'error' })
+            .rotate()
+            .resize({ width: 768, height: 768, fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 78, alphaQuality: 90, effort: 6, smartSubsample: true })
+            .toBuffer();
+        } catch (error) {
+          response.statusCode = 422;
+          response.end(JSON.stringify({
+            ok: false,
+            error: 'Image upload could not be decoded.',
+            detail: error instanceof Error ? error.message : String(error),
+          }));
+          return;
+        }
+      }
       const extension = imageExtensionForMimeType(mimeType);
       const directory = resolve(decisionOsRoot, 'thread-images', threadId);
       mkdirSync(directory, { recursive: true });
@@ -5310,13 +5640,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           const previewName = `${fileName.slice(0, -extension.length)}.canvas-preview-v1.webp`;
           previewFile = resolve(directory, previewName);
           previewFileRef = `/.decision-os/thread-images/${threadId}/${previewName}`;
-          const preview = await sharp(imageBuffer, { failOn: 'error' })
-            .rotate()
-            .resize({ width: 768, height: 768, fit: 'inside', withoutEnlargement: true })
-            .webp({ quality: 78, alphaQuality: 90, effort: 6, smartSubsample: true })
-            .toBuffer();
           const previewTemporary = `${previewFile}.upload-${process.pid}`;
-          writeFileSync(previewTemporary, preview);
+          writeFileSync(previewTemporary, taskPreview!);
           renameSync(previewTemporary, previewFile);
           const delta = await taskStateForProject(localProject).recordContentContribution(cardId, [imageFileRef, previewFileRef]);
           controlRoomProjectionStore?.invalidate(localProject.id, delta.entities);
@@ -5681,6 +6006,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const address = server.address();
     if (address && typeof address === 'object') federationServerPort = address.port;
     incidentLedger.resolveScope('server-launcher', 'The server child started and opened its HTTP listener successfully.');
+    incidentLedger.resolveScope('server-runtime', 'A supervised replacement child started and opened its HTTP listener successfully.');
     federation.start();
     void runtimeIncidentReviewScheduler.run();
   });

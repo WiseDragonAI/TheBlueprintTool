@@ -65,9 +65,19 @@ test('bounded process terminates a non-settling child, remains event-loop respon
   assert.equal(timedOut.termination, 'timeout');
   assert.equal(timedOut.ok, false);
   assert.ok(timedOut.durationMs < 1_000);
-  assert.equal(timedOut.stdout.length, 1024);
-  assert.ok(timedOut.stdoutTruncatedBytes > 0);
   assert.equal(eventLoopTurn, true);
+
+  const boundedOutput = await runBoundedProcess({
+    command: process.execPath,
+    args: ['-e', 'process.stdout.write("x".repeat(100000))'],
+    cwd: process.cwd(),
+    deadlineMs: 5_000,
+    maximumOutputBytes: 1024,
+    context: { scope: 'test-bounded-output' },
+  });
+  assert.equal(boundedOutput.ok, true);
+  assert.equal(boundedOutput.stdout.length, 1024);
+  assert.ok(boundedOutput.stdoutTruncatedBytes > 0);
 
   const controller = new AbortController();
   setTimeout(() => controller.abort(), 20);

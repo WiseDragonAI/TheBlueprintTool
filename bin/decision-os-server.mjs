@@ -77,15 +77,20 @@ function main() {
     }));
     return;
   }
-  const child = spawn(process.execPath, ['--import', loader, server, ...process.argv.slice(2)], { env, stdio: 'inherit' });
+  const maximumRestarts = Math.max(0, Math.min(10, Number.parseInt(process.env.DECISION_OS_LAUNCHER_MAX_RESTARTS ?? '3', 10) || 0));
+  const baseRestartDelayMs = Math.max(10, Math.min(30_000, Number.parseInt(process.env.DECISION_OS_LAUNCHER_RESTART_DELAY_MS ?? '100', 10) || 100));
+  const stabilityWindowMs = Math.max(1_000, Math.min(300_000, Number.parseInt(process.env.DECISION_OS_LAUNCHER_STABILITY_MS ?? '30000', 10) || 30_000));
+  let child = null;
   let forwardedSignal = null;
   let emergency = null;
-  let childSettled = false;
+  let restartTimer = null;
+  let stabilityTimer = null;
+  let restartAttempts = 0;
+  const restartDelaysMs = [];
   const emergencyPort = Number.isInteger(Number(process.env.PORT)) && Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 4173;
   const emergencyHost = String(process.env.HOST ?? '127.0.0.1');
   const enterEmergency = (error, code, childExitCode = null, childSignal = '') => {
-    if (forwardedSignal || emergency || childSettled) return;
-    childSettled = true;
+    if (forwardedSignal || emergency) return;
     try {
       emergency = startLauncherEmergencyServer({
         cwd: process.cwd(),
@@ -95,6 +100,8 @@ function main() {
         code,
         childExitCode,
         childSignal,
+        restartAttempts,
+        restartDelaysMs,
         releaseIdentity: launcherReleaseIdentity({ repoRoot, cwd: process.cwd(), processStartedAt }),
       });
     } catch (emergencyError) {
@@ -102,34 +109,76 @@ function main() {
       process.exitCode = 1;
     }
   };
+  const scheduleRestart = (error, code, childExitCode = null, childSignal = '') => {
+    if (forwardedSignal || emergency) return;
+    if (restartAttempts >= maximumRestarts) {
+      enterEmergency(error, code, childExitCode, childSignal);
+      return;
+    }
+    const delayMs = Math.min(30_000, baseRestartDelayMs * (2 ** restartAttempts));
+    restartAttempts += 1;
+    restartDelaysMs.push(delayMs);
+    process.stderr.write(`${JSON.stringify({
+      server: 'launcher-supervisor',
+      ok: false,
+      restartAttempt: restartAttempts,
+      restartDelayMs: delayMs,
+      error: error instanceof Error ? error.message : String(error),
+    })}\n`);
+    restartTimer = setTimeout(() => {
+      restartTimer = null;
+      spawnChild();
+    }, delayMs);
+  };
+  const spawnChild = () => {
+    if (forwardedSignal || emergency) return;
+    const activeChild = spawn(process.execPath, ['--import', loader, server, ...process.argv.slice(2)], { env, stdio: 'inherit' });
+    child = activeChild;
+    let settled = false;
+    if (stabilityTimer) clearTimeout(stabilityTimer);
+    stabilityTimer = setTimeout(() => {
+      if (child !== activeChild || settled) return;
+      restartAttempts = 0;
+      restartDelaysMs.length = 0;
+    }, stabilityWindowMs);
+    stabilityTimer.unref?.();
+    activeChild.once('error', (error) => {
+      if (settled) return;
+      settled = true;
+      if (stabilityTimer) clearTimeout(stabilityTimer);
+      console.error(error);
+      scheduleRestart(error, 'server_child_spawn_failed');
+    });
+    activeChild.once('exit', (code, signal) => {
+      if (settled) return;
+      settled = true;
+      if (stabilityTimer) clearTimeout(stabilityTimer);
+      if (forwardedSignal) {
+        process.exitCode = 0;
+        return;
+      }
+      if (code === 0 && !signal) {
+        process.exitCode = 0;
+        return;
+      }
+      scheduleRestart(
+        new Error(`Decision OS server child exited before shutdown (code ${code ?? 'null'}, signal ${signal ?? 'none'}).`),
+        'server_child_exited',
+        code,
+        signal ?? '',
+      );
+    });
+  };
   for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
     process.once(signal, () => {
       forwardedSignal = signal;
-      if (!child.killed) child.kill(signal);
+      if (restartTimer) clearTimeout(restartTimer);
+      if (stabilityTimer) clearTimeout(stabilityTimer);
+      if (child && !child.killed) child.kill(signal);
       if (emergency) emergency.server.close(() => { process.exitCode = 0; });
     });
   }
-  child.once('error', (error) => {
-    console.error(error);
-    enterEmergency(error, 'server_child_spawn_failed');
-  });
-  child.once('exit', (code, signal) => {
-    if (forwardedSignal) {
-      process.exitCode = 0;
-      return;
-    }
-    if (code === 0 && !signal) {
-      childSettled = true;
-      process.exitCode = 0;
-      return;
-    }
-    enterEmergency(
-      new Error(`Decision OS server child exited before shutdown (code ${code ?? 'null'}, signal ${signal ?? 'none'}).`),
-      'server_child_exited',
-      code,
-      signal ?? '',
-    );
-  });
+  spawnChild();
 }
 
 main();
