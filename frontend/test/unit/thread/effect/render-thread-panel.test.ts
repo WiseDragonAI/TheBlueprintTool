@@ -31,6 +31,7 @@ type FakeElement = {
   replaceChildren(...nodes: FakeElement[]): void;
   querySelector(selector: string): FakeElement | null;
   querySelectorAll(selector: string): FakeElement[];
+  closest(selector: string): FakeElement | null;
   setAttribute(name: string, value: string): void;
   addEventListener(type: string, listener: Listener): void;
   removeEventListener(type: string, listener: Listener): void;
@@ -138,6 +139,14 @@ function fakeElement(tagName = 'div', className = ''): FakeElement {
     },
     querySelector(selector: string) { return queryAll(element, selector)[0] ?? null; },
     querySelectorAll(selector: string) { return queryAll(element, selector); },
+    closest(selector: string) {
+      let current: FakeElement | null = element;
+      while (current) {
+        if (matches(current, selector)) return current;
+        current = current.parentElement;
+      }
+      return null;
+    },
     setAttribute(name: string, value: string) {
       if (name.startsWith('data-')) {
         const key = name.slice(5).replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
@@ -180,6 +189,7 @@ function installDom(): { root: FakeElement; heading: FakeElement; codexLog: Fake
   logScroll.append(codexLog);
   logPanel.append(logScroll);
   root.append(panel, inspector, shell, target, heading, logPanel, telemetry);
+  inspector.append(heading);
   activeElement = null;
 
   (globalThis as unknown as { document: unknown }).document = {

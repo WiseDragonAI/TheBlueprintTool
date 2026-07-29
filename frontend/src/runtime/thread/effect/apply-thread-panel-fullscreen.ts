@@ -6,8 +6,8 @@ import { state } from '../../state.js';
 
 export function applyThreadPanelFullscreen(): void {
   const expanded = Boolean(state.threadPanelFullscreen);
-  document.querySelector<HTMLElement>('.panel')?.classList.toggle('is-thread-fullscreen', expanded);
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-action="toggle-thread-fullscreen"]')) {
+    button.closest<HTMLElement>('.panel')?.classList.toggle('is-thread-fullscreen', expanded);
     const label = expanded ? 'Restore thread panel' : 'Expand thread panel';
     button.setAttribute('aria-pressed', String(expanded));
     button.setAttribute('aria-label', label);
