@@ -14,7 +14,7 @@ import {
   maximumDeliveryRequestBytes,
   readDeliveryRequestJson,
 } from '../../src/business/delivery/helper/delivery-http-boundary.js';
-import { createHttpServer } from '../../src/business/server/helper/create-http-server.js';
+import { createHttpServer } from '../../src/business/server/application/create-decision-os-server.js';
 
 function requestFixture(headers: Record<string, string> = {}): IncomingMessage {
   const request = new PassThrough() as PassThrough & Partial<IncomingMessage>;

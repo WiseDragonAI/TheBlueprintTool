@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
 import { discoverDecisionOsProjects } from '@backend/business/server/helper/project-catalog.js';
 import { taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
@@ -1108,6 +1108,8 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
+    assert.equal((runtime.decisionOsSettings as Record<string, unknown>).maxConcurrentCodexProcesses, 2);
+    assert.equal((runtime.globalCodexProcessCapacity as () => number)(), 2);
     const starts: Record<string, any>[] = [];
     for (let index = 0; index < 3; index += 1) {
       const response = await fetch(`${baseUrl}/api/codex/skills/process`, {

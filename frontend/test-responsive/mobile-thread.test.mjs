@@ -279,6 +279,7 @@ test('mobile Codex Log exposes execution-fenced cancel and stop actions', () => 
   assert.match(sharedCodexStatus, /terminal-button--stop' : 'terminal-button--send'/);
   assert.match(sharedThreadCss, /\.codex-log-status\s*{[^}]*grid-auto-flow:\s*column;[^}]*grid-auto-columns:\s*minmax\(0, 1fr\)/s);
   assert.doesNotMatch(sharedThreadCss, /\.codex-log-status\[data-run-status="pending"\]\s*{[^}]*grid-template-columns:/s);
+  assert.match(sharedThreadCss, /\.codex-log-status\[data-run-status="pending"\]\s*{[^}]*border-left-color:\s*#e8b35c/s);
   assert.match(sharedThreadCss, /\.thread-tab\[data-run-status="pending"\]::before\s*{[^}]*animation:\s*thread-codex-log-queued/s);
   assert.match(sharedThreadCss, /\.codex-log-queue-indicator i\s*{[^}]*animation:\s*codex-log-queue-dot/s);
   assert.match(sharedThreadCss, /\.codex-log-action-button\s*{[^}]*max-width:\s*64px;[^}]*height:\s*56px;/s);

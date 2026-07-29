@@ -8,7 +8,7 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { transcribeGitReviewVoiceController } from '../../src/business/git-review/controller/transcribe-git-review-voice-controller.js';
 import { applyLedgerMutation } from '../../src/business/ledger/helper/apply-ledger-mutation.js';
-import { createHttpServer } from '../../src/business/server/helper/create-http-server.js';
+import { createHttpServer } from '../../src/business/server/application/create-decision-os-server.js';
 import { migrateTaskCurrentState } from '../../src/business/task-state/helper/task-current-state-migration.js';
 
 test('transcribes Git review audio without creating a thread note', async () => {

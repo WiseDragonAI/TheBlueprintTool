@@ -11,7 +11,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHttpServer } from '../../src/business/server/helper/create-http-server.js';
+import { createHttpServer } from '../../src/business/server/application/create-decision-os-server.js';
 
 test('isolated server exposes the current checkout content-authoring module and application asset', async () => {
   const catalogRoot = mkdtempSync(join(tmpdir(), 'decision-os-current-frontend-'));
