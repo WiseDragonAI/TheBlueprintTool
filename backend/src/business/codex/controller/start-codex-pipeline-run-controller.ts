@@ -24,10 +24,8 @@ import {
   mutateCodexPipelineStore,
   readCodexPipelineStore,
 } from '../helper/codex-pipeline-store.js';
-import { scanCodexSkills } from '../helper/scan-codex-skills.js';
-import { scanPipelinePrompts } from '../helper/pipeline-prompt-library.js';
-import { runtimeServerRoot } from '../helper/server-skill-context.js';
 import { readScopedCodexPipelineStores, serverPipelineDecisionOsRoot } from '../helper/server-pipeline-catalog.js';
+import { availablePipelineContent } from '../helper/available-pipeline-content.js';
 import {
   maxConcurrentCodexProcesses,
   reassessPipelineAfterSkill,
@@ -51,25 +49,6 @@ import { taskExecutionNodeId, taskExecutionRouter, taskExecutionState } from '..
 import { resolvePipelineOutputParent } from '../helper/resolve-pipeline-output-parent.js';
 
 type AnyRecord = Record<string, unknown>;
-
-export function availablePipelineContent(input: {
-  decisionOsRoot: string;
-  runtime: AnyRecord;
-}): { names: string[]; kinds: Map<string, CodexContentKind> } {
-  const skills = scanCodexSkills({
-    workspaceRoot: dirname(input.decisionOsRoot),
-    serverRoot: runtimeServerRoot(input.runtime),
-  });
-  const prompts = scanPipelinePrompts(serverPipelineDecisionOsRoot(input.runtime, input.decisionOsRoot));
-  const kinds = new Map<string, CodexContentKind>([
-    ...skills.map((skill): [string, CodexContentKind] => [
-      skill.name,
-      skill.source === 'server' ? 'federated-skill' : 'workspace-skill',
-    ]),
-    ...prompts.map((prompt): [string, CodexContentKind] => [prompt.name, 'pipeline-prompt']),
-  ]);
-  return { names: [...kinds.keys()], kinds };
-}
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';

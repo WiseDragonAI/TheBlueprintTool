@@ -72,6 +72,8 @@ export type CodexPipelineStoreReadResult =
 
 const reviewedPipelineStoreScopes = new Set<string>();
 const unavailablePipelineStoreScopes = new Set<string>();
+const mutationWaitArray = new Int32Array(new SharedArrayBuffer(4));
+const mutationDeadlineMs = 5_000;
 
 export class CodexPipelineStoreCorruptionError extends Error {
   readonly code = 'codex_pipeline_store_corrupt';
@@ -171,6 +173,10 @@ function pipelineStoreBytes(store: CodexPipelineStore): string {
   return `${JSON.stringify(store, null, 2)}\n`;
 }
 
+function pipelineStoreRawBytes(store: AnyRecord): string {
+  return `${JSON.stringify(store, null, 2)}\n`;
+}
+
 export function codexPipelineStoreContentRevision(store: CodexPipelineStore): string {
   return createHash('sha256').update(pipelineStoreBytes(store)).digest('hex');
 }
@@ -178,17 +184,26 @@ export function codexPipelineStoreContentRevision(store: CodexPipelineStore): st
 function availablePipelineStore(
   input: CodexPipelineStoreInput,
   normalized: CodexPipelineStoreNormalization,
+  resolution = 'The Codex pipeline store was re-read and validated.',
 ): CodexPipelineStoreAvailable {
   const file = pipelineStoreFile(input.decisionOsRoot);
   const scope = pipelineStoreScope(file);
   if (!reviewedPipelineStoreScopes.has(scope) || unavailablePipelineStoreScopes.has(scope)) {
     const ledger = createRuntimeIncidentLedger({ decisionOsRoot: input.decisionOsRoot });
     const active = ledger.active(scope);
-    const resolved = active.length > 0
-      ? ledger.resolveScope(scope, 'The Codex pipeline store was re-read and validated.')
+    const requiresCatalogAuthority = active.some((incident) => (
+      incident.code === 'codex_pipeline_store_invalid'
+      && Array.isArray(incident.context.issueCodes)
+      && incident.context.issueCodes.includes('pipeline-content-kind-mismatch')
+    ));
+    // WHAT: A reader without the live content catalog may consume run state but cannot clear a discriminator incident.
+    // WHY: The scheduler previously treated the same invalid bytes as valid and erased the strict reader's pause every second.
+    const canResolve = input.availableContentKinds !== undefined || !requiresCatalogAuthority;
+    const resolved = active.length > 0 && canResolve
+      ? ledger.resolveScope(scope, resolution)
       : [];
     reviewedPipelineStoreScopes.add(scope);
-    if (active.length === 0 || resolved.length === active.length) unavailablePipelineStoreScopes.delete(scope);
+    if (active.length === 0 || (canResolve && resolved.length === active.length)) unavailablePipelineStoreScopes.delete(scope);
   }
   return { ...normalized, availability: 'available' };
 }
@@ -199,6 +214,7 @@ function unavailablePipelineStore(input: {
   error: unknown;
   unavailableCode: CodexPipelineStoreUnavailable['unavailableCode'];
   message: string;
+  context?: Record<string, unknown>;
 }): CodexPipelineStoreUnavailable {
   const file = pipelineStoreFile(input.storeInput.decisionOsRoot);
   const scope = pipelineStoreScope(file);
@@ -211,6 +227,7 @@ function unavailablePipelineStore(input: {
     context: {
       file,
       issueCodes: input.normalized.issues.map((entry) => entry.code),
+      ...input.context,
     },
   });
   reviewedPipelineStoreScopes.add(scope);
@@ -743,7 +760,142 @@ export function normalizeCodexPipelineStore(
   };
 }
 
+type PipelineContentKindRecovery =
+  | {
+      status: 'recovered';
+      normalization: CodexPipelineStoreNormalization;
+      archiveFile: string;
+      originalRevision: string;
+      repairedReferences: Array<{ stepId: string; skillId: string; skillName: string; from: string; to: CodexContentKind }>;
+    }
+  | { status: 'stale' }
+  | { status: 'failed'; error: unknown };
+
+function withPipelineStoreLock<T>(decisionOsRoot: string, operation: () => T): T {
+  mkdirSync(decisionOsRoot, { recursive: true });
+  const lockFile = resolve(decisionOsRoot, '.codex-pipelines.mutation.lock');
+  const deadline = Date.now() + mutationDeadlineMs;
+  let lockDescriptor = -1;
+  while (lockDescriptor < 0) {
+    try {
+      lockDescriptor = openSync(lockFile, 'wx');
+      writeFileSync(lockDescriptor, `${process.pid}\n`, 'utf8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if (Date.now() >= deadline) throw new CodexPipelineStoreBusyError(pipelineStoreFile(decisionOsRoot));
+      Atomics.wait(mutationWaitArray, 0, 0, 10);
+    }
+  }
+  try {
+    return operation();
+  } finally {
+    if (lockDescriptor >= 0) closeSync(lockDescriptor);
+    rmSync(lockFile, { force: true });
+  }
+}
+
+function archivePipelineStoreBytes(decisionOsRoot: string, bytes: string): { file: string; revision: string } {
+  const revision = createHash('sha256').update(bytes).digest('hex');
+  const archiveRoot = resolve(decisionOsRoot, 'codex-pipeline-recovery');
+  const file = resolve(archiveRoot, `${revision}.json`);
+  mkdirSync(archiveRoot, { recursive: true });
+  if (existsSync(file)) {
+    if (readFileSync(file, 'utf8') !== bytes) {
+      throw new Error(`Pipeline recovery archive hash collision: ${file}`);
+    }
+    return { file, revision };
+  }
+  const temporaryFile = resolve(archiveRoot, `.${revision}-${process.pid}-${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporaryFile, bytes, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    renameSync(temporaryFile, file);
+  } finally {
+    if (existsSync(temporaryFile)) rmSync(temporaryFile, { force: true });
+  }
+  return { file, revision };
+}
+
+/**
+ * WHAT: Repairs only stale pipeline content-kind discriminators using the live catalog, after archiving the exact invalid bytes.
+ * WHY: The discriminator is derived execution metadata; retaining a stale value blocks all pipeline work, while changing topology,
+ * prompt bytes, run manifests, unknown JSON, or another invalid structure would overwrite operator-owned durable state.
+ */
+function recoverPipelineContentKinds(input: CodexPipelineStoreInput, expectedBytes: string): PipelineContentKindRecovery {
+  try {
+    return withPipelineStoreLock(input.decisionOsRoot, () => {
+      const file = pipelineStoreFile(input.decisionOsRoot);
+      const currentBytes = existsSync(file) ? readFileSync(file, 'utf8') : '';
+      if (currentBytes !== expectedBytes) return { status: 'stale' as const };
+      const currentRaw = record(JSON.parse(currentBytes));
+      const current = normalizeCodexPipelineStore(currentRaw, input);
+      const blockers = current.issues.filter((entry) => writeBlockingIssueCodes.has(entry.code));
+      if (blockers.length === 0 || blockers.some((entry) => entry.code !== 'pipeline-content-kind-mismatch')) {
+        return { status: 'failed' as const, error: new Error('Pipeline store recovery requires discriminator-only blockers.') };
+      }
+      const availableContentKinds = new Map(input.availableContentKinds ?? []);
+      const repairedRaw = structuredClone(currentRaw);
+      const repairedReferences: Array<{
+        stepId: string;
+        skillId: string;
+        skillName: string;
+        from: string;
+        to: CodexContentKind;
+      }> = [];
+      for (const step of records(repairedRaw.steps)) {
+        const stepId = text(step.id);
+        for (const skill of records(step.skills)) {
+          const skillName = text(skill.skillName);
+          const availableKind = availableContentKinds.get(skillName);
+          const requestedKind = text(skill.contentKind);
+          if (!availableKind || requestedKind === availableKind) continue;
+          // WHAT: Prefer the discovered catalog kind for this identity and change only its saved discriminator.
+          // WHY: Filesystem-backed skill source and registered prompt ownership determine the executable content contract.
+          skill.contentKind = availableKind;
+          repairedReferences.push({
+            stepId,
+            skillId: text(skill.id),
+            skillName,
+            from: requestedKind,
+            to: availableKind,
+          });
+        }
+      }
+      const repaired = normalizeCodexPipelineStore(repairedRaw, input);
+      const repairedBlocker = codexPipelineStoreWriteBlocker(repaired);
+      if (repairedReferences.length !== blockers.length || repairedBlocker) {
+        return {
+          status: 'failed' as const,
+          error: new Error(repairedBlocker?.message ?? 'Pipeline store recovery did not repair every discriminator mismatch.'),
+        };
+      }
+      const archive = archivePipelineStoreBytes(input.decisionOsRoot, currentBytes);
+      const temporaryFile = resolve(input.decisionOsRoot, `.codex-pipelines-${process.pid}-${randomUUID()}.tmp`);
+      try {
+        if (readFileSync(file, 'utf8') !== expectedBytes) return { status: 'stale' as const };
+        writeFileSync(temporaryFile, pipelineStoreRawBytes(repairedRaw), { encoding: 'utf8', flag: 'wx' });
+        renameSync(temporaryFile, file);
+      } finally {
+        if (existsSync(temporaryFile)) rmSync(temporaryFile, { force: true });
+      }
+      return {
+        status: 'recovered' as const,
+        normalization: repaired,
+        archiveFile: archive.file,
+        originalRevision: archive.revision,
+        repairedReferences,
+      };
+    });
+  } catch (error) {
+    return { status: 'failed', error };
+  }
+}
+
 export function readCodexPipelineStore(input: CodexPipelineStoreInput): CodexPipelineStoreReadResult {
+  input = {
+    ...input,
+    availableSkillNames: input.availableSkillNames === undefined ? undefined : [...input.availableSkillNames],
+    availableContentKinds: input.availableContentKinds === undefined ? undefined : [...input.availableContentKinds],
+  };
   const file = pipelineStoreFile(input.decisionOsRoot);
   if (!existsSync(file)) return availablePipelineStore(input, normalizeCodexPipelineStore(undefined, input));
   let bytes = '';
@@ -762,6 +914,44 @@ export function readCodexPipelineStore(input: CodexPipelineStoreInput): CodexPip
       const unavailableCode = blocker.code === 'unsupported-store-version'
         ? 'codex_pipeline_store_unsupported_version'
         : 'codex_pipeline_store_invalid';
+      const blockers = normalized.issues.filter((entry) => writeBlockingIssueCodes.has(entry.code));
+      if (
+        input.availableContentKinds !== undefined
+        && blockers.length > 0
+        && blockers.every((entry) => entry.code === 'pipeline-content-kind-mismatch')
+      ) {
+        const recovery = recoverPipelineContentKinds(input, bytes);
+        if (recovery.status === 'stale') return readCodexPipelineStore(input);
+        if (recovery.status === 'recovered') {
+          unavailablePipelineStore({
+            storeInput: input,
+            normalized,
+            error: new CodexPipelineStoreCorruptionError(file, blocker.message),
+            unavailableCode,
+            message: blocker.message,
+            context: {
+              archiveFile: recovery.archiveFile,
+              originalRevision: recovery.originalRevision,
+              repairedReferences: recovery.repairedReferences,
+            },
+          });
+          return availablePipelineStore(
+            input,
+            recovery.normalization,
+            `Recovered ${recovery.repairedReferences.length} pipeline content-kind discriminator(s); preserved original bytes at ${recovery.archiveFile}.`,
+          );
+        }
+        return unavailablePipelineStore({
+          storeInput: input,
+          normalized,
+          error: new CodexPipelineStoreCorruptionError(file, blocker.message),
+          unavailableCode,
+          message: blocker.message,
+          context: {
+            recoveryError: recovery.error instanceof Error ? recovery.error.message : String(recovery.error),
+          },
+        });
+      }
       return unavailablePipelineStore({
         storeInput: input,
         normalized,
@@ -794,30 +984,13 @@ export function readCodexPipelineStore(input: CodexPipelineStoreInput): CodexPip
   }
 }
 
-const mutationWaitArray = new Int32Array(new SharedArrayBuffer(4));
-const mutationDeadlineMs = 5_000;
-
 function withPipelineStoreMutation(
   input: CodexPipelineStoreInput,
   mutation: (store: CodexPipelineStore) => unknown,
   options: { expectedBytes?: string } = {},
 ): CodexPipelineStoreNormalization {
   const file = pipelineStoreFile(input.decisionOsRoot);
-  mkdirSync(input.decisionOsRoot, { recursive: true });
-  const lockFile = resolve(input.decisionOsRoot, '.codex-pipelines.mutation.lock');
-  const deadline = Date.now() + mutationDeadlineMs;
-  let lockDescriptor = -1;
-  while (lockDescriptor < 0) {
-    try {
-      lockDescriptor = openSync(lockFile, 'wx');
-      writeFileSync(lockDescriptor, `${process.pid}\n`, 'utf8');
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      if (Date.now() >= deadline) throw new CodexPipelineStoreBusyError(file);
-      Atomics.wait(mutationWaitArray, 0, 0, 10);
-    }
-  }
-  try {
+  return withPipelineStoreLock(input.decisionOsRoot, () => {
     const currentBytes = existsSync(file) ? readFileSync(file, 'utf8') : null;
     if (options.expectedBytes !== undefined && currentBytes !== options.expectedBytes) {
       try {
@@ -849,10 +1022,7 @@ function withPipelineStoreMutation(
       if (existsSync(temporaryFile)) rmSync(temporaryFile, { force: true });
     }
     return normalized;
-  } finally {
-    if (lockDescriptor >= 0) closeSync(lockDescriptor);
-    rmSync(lockFile, { force: true });
-  }
+  });
 }
 
 export function mutateCodexPipelineStore(

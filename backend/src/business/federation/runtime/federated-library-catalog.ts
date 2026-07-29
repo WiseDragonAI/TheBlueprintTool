@@ -8,8 +8,8 @@ import {
   applyCodexSkillMetadataOwner,
   migrateCodexSkillMetadataOwner,
 } from '../../codex/helper/codex-skill-metadata-owner.js';
-import { readCodexSkillCatalog } from '../../codex/helper/codex-skill-library.js';
 import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
+import { availablePipelineContent } from '../../codex/helper/available-pipeline-content.js';
 
 type AnyRecord = Record<string, unknown>;
 type Skill = { name: string; favorite?: boolean; tags?: string[] };
@@ -52,13 +52,15 @@ export function createFederatedLibraryCatalog(input: {
   };
   const initialize = (): void => {
     invalidate();
-    availableSkillNames = readCodexSkillCatalog({
+    const available = availablePipelineContent({
       decisionOsRoot: input.masterDecisionOsRoot,
       runtime: input.runtime,
-    }).skills.map((skill) => skill.name);
+    });
+    availableSkillNames = available.names;
     ensureServerPipelines({
       serverDecisionOsRoot: input.masterDecisionOsRoot,
       availableSkillNames,
+      availableContentKinds: available.kinds,
     });
     migrateCodexSkillMetadataOwner({
       ownerDecisionOsRoot: input.masterDecisionOsRoot,

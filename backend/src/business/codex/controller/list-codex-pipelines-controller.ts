@@ -2,13 +2,10 @@
  * WHAT: Returns the normalized saved pipeline library for the active workspace.
  * WHY: Pipeline clients need ordered definitions plus repairable invalid-reference metadata.
  */
-import { dirname, resolve } from 'node:path';
-import { scanCodexSkills } from '../helper/scan-codex-skills.js';
-import { runtimeServerRoot } from '../helper/server-skill-context.js';
-import { readScopedCodexPipelineStores, serverPipelineDecisionOsRoot } from '../helper/server-pipeline-catalog.js';
-import { scanPipelinePrompts } from '../helper/pipeline-prompt-library.js';
-import type { CodexContentKind } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import { resolve } from 'node:path';
+import { readScopedCodexPipelineStores } from '../helper/server-pipeline-catalog.js';
 import { readCodexContentCatalog } from '../helper/codex-skill-library.js';
+import { availablePipelineContent } from '../helper/available-pipeline-content.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -18,17 +15,12 @@ export function listCodexPipelinesController(
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord };
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
-  const skills = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) });
-  const prompts = scanPipelinePrompts(serverPipelineDecisionOsRoot(runtime, decisionOsRoot));
-  const availableContentKinds = new Map<string, CodexContentKind>([
-    ...skills.map((skill): [string, CodexContentKind] => [skill.name, skill.source === 'server' ? 'federated-skill' : 'workspace-skill']),
-    ...prompts.map((prompt): [string, CodexContentKind] => [prompt.name, 'pipeline-prompt']),
-  ]);
+  const available = availablePipelineContent({ decisionOsRoot, runtime });
   const scoped = readScopedCodexPipelineStores({
     decisionOsRoot,
     runtime,
-    availableSkillNames: availableContentKinds.keys(),
-    availableContentKinds,
+    availableSkillNames: available.names,
+    availableContentKinds: available.kinds,
   });
   const invalidReferences = [
     ...scoped.server.invalidReferences,
