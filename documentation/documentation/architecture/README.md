@@ -49,7 +49,7 @@
 2. `backend/src/server.ts`
 3. `backend/src/business/server/helper/project-catalog.ts`
 4. `backend/src/business/server/helper/project-catalog-store.ts`
-5. `backend/src/business/server/helper/create-http-server.ts`
+5. `backend/src/business/server/application/create-decision-os-server.ts`
 6. `frontend/src/business/` and `frontend/src/runtime/`
 7. `package.json`, `frontend/package.json`, `backend/package.json`, and `ledger-cli/package.json`
 
@@ -57,6 +57,7 @@
 
 ## F. Detailed Architecture
 
-1. [Codex content authoring](./codex-content-authoring.md) defines owner-scoped skill, prompt, and Task-card Markdown APIs; direct Markdown routing; exact-byte Git recovery; cursor history; persistent CodeMirror sessions; immutable prompt snapshots; and federation publication.
+1. [HTTP server composition](./http-server-composition.md) defines the server lifecycle root, ordered request stages, capability runtime ownership, and failure-containment boundary.
+2. [Codex content authoring](./codex-content-authoring.md) defines owner-scoped skill, prompt, and Task-card Markdown APIs; direct Markdown routing; exact-byte Git recovery; cursor history; persistent CodeMirror sessions; immutable prompt snapshots; and federation publication.
 2. [Epoch-3 task state and federation](./epoch-3-task-state-and-federation.md) is the historical architecture and rollback reference for offline migration, structural entities, immutable content, durability, relay anti-entropy, derived remote stores, lazy content routing, and production diagnostics.
 3. [Epoch-4 task assignment, execution, and content](./epoch-4-task-assignment-execution-and-content.md) defines durable assignment, replicated execution, thread-note and Markdown consistency, immutable execution artifacts, in-place media references, and the recoverable node migration transaction.

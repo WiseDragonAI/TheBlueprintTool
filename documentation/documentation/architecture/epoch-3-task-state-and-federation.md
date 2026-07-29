@@ -138,6 +138,6 @@
 5. `backend/src/business/federation/helper/federation-task-state-replicator.ts`
 6. `backend/src/business/federation/helper/federation-content-store.ts`
 7. `backend/src/business/federation/helper/federation-content-scheduler.ts`
-8. `backend/src/business/server/helper/create-http-server.ts`
+8. `backend/src/business/server/application/create-decision-os-server.ts`
 9. `backend/test/unit/task-state/`
 10. `backend/test/unit/federation/`

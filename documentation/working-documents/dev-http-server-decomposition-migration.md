@@ -163,3 +163,36 @@ Readiness: `READY_FOR_TASK_GROUP_COMPLETENESS`
 ## N. Dispatch Readiness
 
 1. `ready`
+
+---
+
+## O. Implemented Ownership Map
+
+1. The former `5,682`-line helper is deleted. Its public entrypoint now lives at `server/application/create-decision-os-server.ts`.
+2. HTTP precedence is explicit in three bounded stages: global admission, project data, and project interaction.
+3. Project contexts, content ownership, runtime recovery, Codex process coordination, task execution presentation, card authoring, federation observations, federated libraries, project synchronization, delivery, and Node listener failure translation have capability-owned modules.
+4. Every new HTTP stage and extracted runtime is below `300` lines. The application file contains dependency construction, lifecycle order, and callback adaptation; it contains no copied route implementation.
+5. The repeatable structure audit reports the two pre-existing internal cycles and no cycle introduced by this migration.
+
+---
+
+## P. Verification Lessons
+
+1. Isolated worktrees require package dependency links before verification. A missing `frontend/node_modules` caused every frontend test to fail before application loading; it was an admission failure, not a product failure.
+2. Focused backend tests require `TSX_TSCONFIG_PATH` to point at the isolated worktree configuration. Without it, path aliases fail before the behavior under test.
+3. The shared-capacity test needed a release barrier instead of a short process timer; full-suite load could otherwise finish the first fake process before the second admission.
+4. Codex output tests had stale counts after immutable `decision_os.user_prompt` records became part of every JSONL presentation. Assertions now include that durable event.
+5. Typecheck after each ownership extraction caught behavior-preserving dependency mistakes before full-suite execution. The final complete backend suite passed `640` tests.
+
+---
+
+## Q. Final Verification Evidence
+
+1. Backend: typecheck passed; `640/640` tests passed.
+2. Frontend: typecheck passed; `604/604` tests passed.
+3. Ledger CLI: typecheck and build passed; `88/88` tests passed.
+4. Generator CLI: typecheck and build passed; `97/97` tests passed after restoring its ignored source fixture in the isolated worktree.
+5. Memory service: `4/4` tests passed.
+6. Federation Relay: typecheck passed; Termux relay `1/1` passed. The Cloudflare pool completed `9/9` assertions twice, then its pinned native `workerd` process segfaulted both times and Vitest reported one infrastructure error.
+7. Browser: the migration harness and the responsive application regression pass in focused runs. The full suite remains non-green because the existing hydrated-thread scenario blocks its own mocked refresh until the 30-second test timeout, the Done fixture renders no completed task, and the column-scroll scenario retains an open process after failure.
+8. Structure audit passed and reports no new dependency cycle.

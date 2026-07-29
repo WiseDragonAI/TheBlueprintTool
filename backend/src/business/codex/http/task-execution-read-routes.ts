@@ -4,7 +4,10 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ProjectTaskState } from '../../task-state/helper/project-task-state.js';
-import { resolveTaskLineage } from '../helper/task-execution-router.js';
+import {
+  resolveTaskLineage,
+  TaskExecutionAdmissionError,
+} from '../helper/task-execution-router.js';
 import { projectTaskExecutionState } from '../helper/project-task-execution-state.js';
 import { decodeRouteSegment } from '../../server/http/route-segment.js';
 import {
@@ -37,10 +40,18 @@ export async function handleTaskExecutionReadRoutes(input: {
       }));
       return HTTP_ROUTE_HANDLED;
     }
-    const taskId = resolveTaskLineage({
-      ledger: input.state.projection().ledger,
-      sourceCardId: requestedCardId,
-    }).taskId;
+    let taskId = requestedCardId;
+    try {
+      taskId = resolveTaskLineage({
+        ledger: input.state.projection().ledger,
+        sourceCardId: requestedCardId,
+      }).taskId;
+    } catch (error) {
+      if (!(error instanceof TaskExecutionAdmissionError) || error.code !== 'task_card_not_found') {
+        throw error;
+      }
+      // An optimistic or deleted card has no execution history. This read remains an empty projection.
+    }
     input.response.end(JSON.stringify(projectTaskExecutionState({
       taskId,
       state: input.state,
