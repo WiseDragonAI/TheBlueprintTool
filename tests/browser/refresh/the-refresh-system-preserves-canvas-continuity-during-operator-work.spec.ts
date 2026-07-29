@@ -157,7 +157,10 @@ test('The refresh system preserves canvas continuity during operator work.', { t
       page.locator('.thread-actions [data-action="process-thread-codex"]').click(),
     ]);
     assert.equal(startResponse.status(), 202, await startResponse.text());
-    assert.deepEqual(startRequest.postDataJSON(), {
+    const startPayload = startRequest.postDataJSON() as Record<string, unknown>;
+    assert.match(String(startPayload.requestId ?? ''), /^thread:/);
+    const { requestId: _requestId, ...startPayloadWithoutRequestId } = startPayload;
+    assert.deepEqual(startPayloadWithoutRequestId, {
       ledgerId: 'specs',
       threadId: targetThreadId,
       cardId: targetCardId,
@@ -223,7 +226,7 @@ test('The refresh system preserves canvas continuity during operator work.', { t
       effort: true,
       model: true,
       card: true,
-      focus: false,
+      focus: true,
     });
     await modelSelect.selectOption('gpt-5.3-codex');
     await page.waitForFunction(() => document.querySelector<HTMLElement>('.thread-actions [data-action="process-thread-codex"]')?.dataset.codexModel === 'gpt-5.3-codex');
@@ -248,16 +251,17 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     assertMutationTargetsOnlyCard(committedMutations[0], targetCardId);
     assert.deepEqual(committedMutations[0].geometry?.cards?.[targetCardId], contentSizedGeometry);
 
-    const cardBeforeDrag = await targetCard.boundingBox();
-    assert.ok(cardBeforeDrag, 'Expected target card geometry before drag');
+    const dragSurface = targetCard.locator('.ledger-card-title');
+    const cardBeforeDrag = await dragSurface.boundingBox();
+    assert.ok(cardBeforeDrag, 'Expected a non-control title surface before drag');
     const dragStart = {
       x: cardBeforeDrag.x + cardBeforeDrag.width / 2,
       y: cardBeforeDrag.y + cardBeforeDrag.height / 2,
     };
     await page.mouse.move(dragStart.x, dragStart.y);
+    const dragResponse = waitForNextGeometryResponse(page, server.url);
     await page.mouse.down();
     await page.mouse.move(dragStart.x + 96, dragStart.y + 32, { steps: 4 });
-    const dragResponse = waitForNextGeometryResponse(page, server.url);
     await page.mouse.up();
     assert.equal((await dragResponse).status(), 200);
     await waitFor(() => committedMutations.length >= 2, 'Timed out waiting for the drag geometry mutation');
@@ -275,9 +279,9 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     assert.ok(handleBox, 'Expected the selected target card to expose its southeast resize handle');
     const resizeStart = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
     await page.mouse.move(resizeStart.x, resizeStart.y);
+    const resizeResponse = waitForNextGeometryResponse(page, server.url);
     await page.mouse.down();
     await page.mouse.move(resizeStart.x + 64, resizeStart.y + 48, { steps: 4 });
-    const resizeResponse = waitForNextGeometryResponse(page, server.url);
     await page.mouse.up();
     assert.equal((await resizeResponse).status(), 200);
     await waitFor(() => committedMutations.length >= 3, 'Timed out waiting for the pointer-resize geometry mutation');
@@ -295,14 +299,18 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     await targetCard.click();
     await assertSelectedCard(page, targetCardId);
     const stateBeforeStaleResponse = await continuityState(page, targetCardId);
+    const staleBrowserResponse = page.waitForResponse((response) => (
+      response.request().method() === 'GET'
+      && new URL(response.url()).pathname.endsWith('/api/ledgers/specs/canvas')
+    ));
 
     releaseStaleResponse.resolve();
     await staleResponseDelivered.promise;
-    await page.waitForFunction(() => {
-      const telemetry = (window as Window & {
-        __coreTelemetry?: Array<{ name?: string; args?: { reason?: string } }>;
-      }).__coreTelemetry ?? [];
-      return telemetry.some((entry) => entry.name === 'active-ledger-reconciliation-rejected' && entry.args?.reason === 'server-revision');
+    const deliveredResponse = await staleBrowserResponse;
+    assert.equal(deliveredResponse.status(), 200);
+    await deliveredResponse.finished();
+    await page.evaluate(async () => {
+      await new Promise<void>((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame())));
     });
 
     const stateAfterStaleResponse = await continuityState(page, targetCardId);
@@ -313,12 +321,44 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     assert.equal(stateAfterStaleResponse.pointerActive, false);
     assert.ok(stateAfterStaleResponse.lastAppliedServerRevision > staleServerRevision);
     assert.equal(await controlsMatchCapturedReferences(page), true, 'Canvas reconciliations replaced unchanged thread controls');
+    const retainedThreadState = await page.evaluate((threadId) => {
+      const state = (window as Window & {
+        __coreState?: {
+          activeLedger?: { notes?: Record<string, Array<{ message?: string }>> };
+          threadDocumentsByScope?: Record<string, { notes?: Array<{ message?: string }> }>;
+        };
+      }).__coreState;
+      return {
+        activeNotes: state?.activeLedger?.notes?.[threadId]?.map((note) => note.message) ?? [],
+        documents: Object.entries(state?.threadDocumentsByScope ?? {}).map(([key, document]) => ({
+          key,
+          notes: document.notes?.map((note) => note.message) ?? [],
+        })),
+      };
+    }, targetThreadId);
+    assert.ok(
+      retainedThreadState.documents.some((document) => document.notes.includes('Browser lifecycle note.')),
+      `The verified thread-document cache lost its lifecycle note: ${JSON.stringify(retainedThreadState)}`,
+    );
 
     await page.keyboard.press('a');
     await modelSelect.waitFor({ state: 'visible' });
     assert.equal(await controlsMatchCapturedReferences(page), true, 'Reopening the unchanged thread remounted its controls');
     assert.equal(await modelSelect.inputValue(), 'gpt-5.3-codex');
-    assert.equal(await page.locator('.thread-note-list').getByText('Browser lifecycle note.', { exact: true }).count(), 1);
+    await page.locator('#thread-tab-thread').click();
+    const recoveredActiveNotes = await page.evaluate((threadId) => (
+      window.__coreState?.activeLedger?.notes?.[threadId]?.map((note: { message?: string }) => note.message) ?? []
+    ), targetThreadId);
+    assert.ok(
+      recoveredActiveNotes.includes('Browser lifecycle note.'),
+      `Reopening did not reinstall the verified thread document: ${JSON.stringify({ recoveredActiveNotes, retainedThreadState })}`,
+    );
+    const renderedLifecycleNoteCount = await page.locator('.thread-note-list')
+      .getByText('Browser lifecycle note.', { exact: true }).count();
+    assert.equal(renderedLifecycleNoteCount, 1, JSON.stringify({
+      threadId: await page.evaluate(() => window.__coreState?.threadId),
+      retainedThreadState,
+    }));
 
     const persistedLedger = JSON.parse(readFileSync(fixture.ledgerFile, 'utf8')) as LedgerDocument;
     const persistedTarget = persistedLedger.cards?.find((card) => card.id === targetCardId);

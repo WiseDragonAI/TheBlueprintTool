@@ -45,10 +45,16 @@ test('column scroll survives task refresh, in-app task return, and browser back'
 
     await page.waitForTimeout(250);
     const projectId = await page.locator(`${columnSelector('queue')} .control-task`).first().evaluate((row) => decodeURIComponent(String((row as HTMLElement).dataset.taskId).split('--')[0]));
+    const transition = await fetch(`${server.url}/p/${encodeURIComponent(projectId)}/decision-os/tasks`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'transition-card-lifecycle', cardId: 'queue-17', lifecycleStatus: 'backlog' }),
+    });
+    assert.equal(transition.ok, true, await transition.text());
     const refresh = await fetch(`${server.url}/p/${encodeURIComponent(projectId)}/decision-os/tasks`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'queue-17', title: 'Queue 17 refreshed', status: 'backlog' } }),
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'queue-17', title: 'Queue 17 refreshed' } }),
     });
     const refreshPayload = await refresh.json() as { ok?: boolean; changedCard?: { id?: string; title?: string; status?: string } };
     assert.equal(refresh.ok, true, JSON.stringify(refreshPayload));

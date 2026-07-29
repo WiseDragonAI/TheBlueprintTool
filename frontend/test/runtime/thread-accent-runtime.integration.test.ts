@@ -10,6 +10,10 @@ import { mergeLocalThreadNotes } from '../../src/runtime/ledger/helper/merge-loc
 import { state } from '../../src/runtime/state.js';
 import { colorToRgbChannels, lightenColorInHsv } from '../../src/runtime/thread/helper/color-to-rgb-channels.js';
 import { resolveThreadTargetAccent } from '../../src/runtime/thread/helper/resolve-thread-target-accent.js';
+import {
+  installThreadDocumentState,
+  restoreThreadDocumentsIntoLedger,
+} from '../../src/runtime/thread/helper/thread-document-state.js';
 
 const root = new URL('../../../', import.meta.url);
 
@@ -178,5 +182,79 @@ test('canvas projections without thread slices preserve the loaded conversation'
     assert.deepEqual(merged?.notes['thread-card-a'], [{ id: 'note-agent', role: 'agent', message: 'Persisted answer.' }]);
   } finally {
     state.activeLedger = previousLedger;
+  }
+});
+
+test('verified thread documents replace an older explicit canvas thread slice', () => {
+  const previousDocuments = state.threadDocumentsByScope;
+  try {
+    state.threadDocumentsByScope = {};
+    const scope = {
+      projectId: 'project-a',
+      replicaNodeId: 'node-a',
+      ledgerId: 'specs',
+      threadId: 'thread-card-a',
+      contentFile: '.decision-os/threads/specs/thread-card-a.md',
+    };
+    installThreadDocumentState(scope, {
+      contentFile: scope.contentFile,
+      notes: [{ id: 'note-new', role: 'agent', message: 'Newer verified answer.' }],
+      deletedNoteIds: [],
+    });
+    const ledger = {
+      notes: { [scope.threadId]: [] },
+      deletedNoteIds: { [scope.threadId]: [] },
+      threadFiles: { [scope.threadId]: scope.contentFile },
+    };
+
+    restoreThreadDocumentsIntoLedger({ ...scope, ledger });
+
+    assert.deepEqual(ledger.notes[scope.threadId], [
+      { id: 'note-new', role: 'agent', message: 'Newer verified answer.' },
+    ]);
+  } finally {
+    state.threadDocumentsByScope = previousDocuments;
+  }
+});
+
+test('active-thread restoration does not scan unrelated cached conversations', () => {
+  const previousDocuments = state.threadDocumentsByScope;
+  try {
+    state.threadDocumentsByScope = {};
+    const sharedScope = {
+      projectId: 'project-a',
+      replicaNodeId: 'node-a',
+      ledgerId: 'specs',
+    };
+    installThreadDocumentState({
+      ...sharedScope,
+      threadId: 'thread-card-a',
+      contentFile: '.decision-os/threads/specs/thread-card-a.md',
+    }, {
+      contentFile: '.decision-os/threads/specs/thread-card-a.md',
+      notes: [{ id: 'note-a', role: 'agent', message: 'Active answer.' }],
+      deletedNoteIds: [],
+    });
+    installThreadDocumentState({
+      ...sharedScope,
+      threadId: 'thread-card-b',
+      contentFile: '.decision-os/threads/specs/thread-card-b.md',
+    }, {
+      contentFile: '.decision-os/threads/specs/thread-card-b.md',
+      notes: [{ id: 'note-b', role: 'agent', message: 'Unrelated answer.' }],
+      deletedNoteIds: [],
+    });
+    const ledger = {
+      notes: { 'thread-card-a': [], 'thread-card-b': [] },
+      deletedNoteIds: { 'thread-card-a': [], 'thread-card-b': [] },
+      threadFiles: {},
+    };
+
+    restoreThreadDocumentsIntoLedger({ ...sharedScope, threadId: 'thread-card-a', ledger });
+
+    assert.equal(ledger.notes['thread-card-a'][0]?.message, 'Active answer.');
+    assert.deepEqual(ledger.notes['thread-card-b'], []);
+  } finally {
+    state.threadDocumentsByScope = previousDocuments;
   }
 });

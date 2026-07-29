@@ -494,6 +494,28 @@ test('event-triggered thread refresh rejects a causally stale task slice and acc
   assert.deepEqual(state.ledgerReconciliation.lastAppliedTaskClock, { workstation: 7, phone: 21 });
 });
 
+test('non-task thread refresh remains independent from the installed task clock', async () => {
+  installRuntimeDom();
+  resetRuntimeState();
+  state.ledgerReconciliation.lastAppliedTaskClock = { workstation: 7, phone: 20 };
+  const scope = {
+    projectId: '',
+    replicaNodeId: '',
+    ledgerId: 'specs',
+    threadId: 'thread-card-a',
+    contentFile: '.decision-os/threads/specs/thread-card-a.md',
+  };
+  globalThis.fetch = (async () => revisionResponse({
+    ...structuredClone(state.activeLedger),
+    notes: { 'thread-card-a': [{ id: 'note-specs', role: 'operator', message: 'Independent Specs note' }] },
+  }, 9)) as typeof fetch;
+  const { loadActiveThreadSlice } = await import('../../src/runtime/thread/effect/load-active-thread-slice.js');
+
+  assert.equal(await loadActiveThreadSlice(scope), true);
+  assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Independent Specs note');
+  assert.deepEqual(state.ledgerReconciliation.lastAppliedTaskClock, { workstation: 7, phone: 20 });
+});
+
 test('inactive SSE scopes are no-ops and a lifecycle thread event updates notes only', async () => {
   installRuntimeDom();
   resetRuntimeState();

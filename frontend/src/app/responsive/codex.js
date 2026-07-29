@@ -41,18 +41,36 @@ function serverSkillPath(skillName) { return `/api/codex/server-skills/${encodeU
 async function loadGlobalLibraries() {
   // Federation materializes skills first and pipelines second into the server-owned local stores.
   // Library views must never fan out to remote projects during an operator interaction.
-  const [serverSkills, serverPipelines] = await Promise.all([
+  const [serverSkillsResult, serverPipelinesResult] = await Promise.allSettled([
     jsonRequest('/api/codex/server-skills'),
     jsonRequest('/api/codex/server-pipelines')
   ]);
-  state.availableTags = [...new Set(serverSkills.availableTags || [])];
-  if (!state.availableTags.length) state.availableTags = [...skillCategories];
-  state.pipelineContent = (serverPipelines.availableContent || []).map((content) => ({ ...content, projects: state.projects }));
-  const serverSkillCatalog = (serverSkills.skills || []).map((skill) => ({ ...skill, projects: state.projects }));
-  state.skills = mergePipelinePromptsIntoSkillCatalog(serverSkillCatalog, state.pipelineContent);
-  state.pipelines = (serverPipelines.pipelines || []).map((pipeline) => ({ ...pipeline, scope: 'server', projectId: '', projectName: 'Server', projectColor: '#38d9e8', projects: state.projects }));
-  state.steps = (serverPipelines.steps || []).map((step) => ({ ...step, scope: 'server', projectId: '' }));
-  return { issues: serverPipelines.issues || [], failedProjects: 0 };
+  const failedSlices = [];
+  let issues = [];
+  if (serverSkillsResult.status === 'fulfilled') {
+    const serverSkills = serverSkillsResult.value;
+    state.availableTags = [...new Set(serverSkills.availableTags || [])];
+    if (!state.availableTags.length) state.availableTags = [...skillCategories];
+    const serverSkillCatalog = (serverSkills.skills || []).map((skill) => ({ ...skill, projects: state.projects }));
+    state.skills = mergePipelinePromptsIntoSkillCatalog(serverSkillCatalog, state.pipelineContent);
+  } else {
+    failedSlices.push('skills');
+  }
+  if (serverPipelinesResult.status === 'fulfilled') {
+    const serverPipelines = serverPipelinesResult.value;
+    const serverSkillCatalog = state.skills.filter((skill) => skill.contentKind !== 'pipeline-prompt');
+    state.pipelineContent = (serverPipelines.availableContent || []).map((content) => ({ ...content, projects: state.projects }));
+    state.skills = mergePipelinePromptsIntoSkillCatalog(serverSkillCatalog, state.pipelineContent);
+    state.pipelines = (serverPipelines.pipelines || []).map((pipeline) => ({ ...pipeline, scope: 'server', projectId: '', projectName: 'Server', projectColor: '#38d9e8', projects: state.projects }));
+    state.steps = (serverPipelines.steps || []).map((step) => ({ ...step, scope: 'server', projectId: '' }));
+    issues = serverPipelines.issues || [];
+  } else {
+    failedSlices.push('pipelines');
+  }
+  return { issues, failedProjects: 0, failedSlices };
+}
+function failedLibrarySlicesMessage(result) {
+  return result.failedSlices?.length ? `Could not refresh server ${result.failedSlices.join(' and ')}; retained the last loaded data.` : '';
 }
 function button(label, className, action) { const node = document.createElement('button'); node.type = 'button'; node.className = className; node.textContent = label; node.addEventListener('click', action); return node; }
 function processActionStatus() {
@@ -436,14 +454,14 @@ async function openSkills() {
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.processTab === 'skills')));
   el('.process-modal').showModal(); setMobileCodexView(document, 'library', { global: true, libraryTitle: 'Skill library' });
   message('.process-message', 'Loading skill library…');
-  try { const result = await loadGlobalLibraries(); renderProcessList(); if (result.failedProjects) message('.process-message', `${result.failedProjects} project libraries could not be loaded.`, true); }
+  try { const result = await loadGlobalLibraries(); renderProcessList(); const failure = failedLibrarySlicesMessage(result); if (failure) message('.process-message', failure, true); }
   catch (error) { message('.process-message', error.message, true); el('.process-library').replaceChildren(); }
 }
 async function openPipelines() {
   state.libraryScope = 'global'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';
   el('.pipelines-modal').showModal();
   message('.pipelines-message', 'Loading pipelines…');
-  try { const result = await loadGlobalLibraries(); renderPipelineLibrary(); message('.pipelines-message', result.failedProjects ? `${result.failedProjects} project libraries could not be loaded.` : (state.pipelines.length ? `${state.pipelines.length} pipelines` : 'No saved pipelines.'), result.failedProjects > 0); }
+  try { const result = await loadGlobalLibraries(); renderPipelineLibrary(); const failure = failedLibrarySlicesMessage(result); message('.pipelines-message', failure || (state.pipelines.length ? `${state.pipelines.length} pipelines` : 'No saved pipelines.'), Boolean(failure)); }
   catch (error) { message('.pipelines-message', error.message, true); el('.pipeline-library').replaceChildren(); }
 }
 async function resynchronizeGlobalLibraries(button, messageSelector, render) {
@@ -451,10 +469,11 @@ async function resynchronizeGlobalLibraries(button, messageSelector, render) {
   message(messageSelector, 'Synchronizing skills, then pipelines…');
   try {
     const result = await jsonRequest('/api/federation/libraries/synchronize', { method: 'POST' });
-    await loadGlobalLibraries();
+    const libraries = await loadGlobalLibraries();
     render();
     const peers = Number(result.synchronizedPeerCount || 0);
-    message(messageSelector, `Skills and pipelines synchronized with ${peers} online ${peers === 1 ? 'node' : 'nodes'}.`);
+    const failure = failedLibrarySlicesMessage(libraries);
+    message(messageSelector, failure || `Skills and pipelines synchronized with ${peers} online ${peers === 1 ? 'node' : 'nodes'}.`, Boolean(failure));
   } catch (error) {
     message(messageSelector, error.message, true);
   } finally {
