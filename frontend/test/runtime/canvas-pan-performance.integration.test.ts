@@ -793,6 +793,7 @@ test('manual runtime refresh preserves an active pan pointer and allows pan to c
   const { handlePointerUp } = await import('../../src/runtime/gesture/controller/handle-pointer-up.js');
 
   state.canvasMode = 'ledger';
+  state.projectId = 'project-legacy-route';
   state.activeTab = 'specs';
   state.activeLedgerId = 'specs';
   state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
@@ -838,6 +839,7 @@ test('manual runtime refresh preserves an active pan pointer and allows pan to c
   });
   await refresh;
 
+  assert.equal(state.projectId, 'project-legacy-route');
   assert.equal(state.pointer.intent, 'pan');
   handlePointerMove(canvasPointerEvent(130, 90));
 

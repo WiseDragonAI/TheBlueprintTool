@@ -394,7 +394,7 @@ test('Reusable step pipelines preserve defaults and publish visible execution pr
     await createPipelineAndSkillDefaults(page);
     await runDirectInheritedSkill(page);
     await page.evaluate(() => sessionStorage.setItem('decision-os.pipeline-browser-loads', '1'));
-    await runCancelRestartAndFailPipeline(page, resizedCardIds);
+    await runCancelRestartAndFailPipeline(page, resizedCardIds, fixture.launchFile);
 
     assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('decision-os.pipeline-browser-loads') ?? 0)), 1,
       'Pipeline progression must not reload the page.');
@@ -431,6 +431,7 @@ async function createPipelineAndSkillDefaults(page: Page): Promise<void> {
   const pickerBox = await skillPicker.boundingBox();
   assert.ok((pickerBox?.width ?? 0) >= 850, 'The dedicated skill picker must use the expanded modal width.');
   assert.ok((pickerBox?.height ?? 0) >= 780, 'The dedicated skill picker must use four-fifths of the 1000px viewport.');
+  await skillPicker.locator(`[data-codex-focus-key="picker-skill:${skillName}"]`).click();
   await skillPicker.getByRole('button', { name: 'Edit skill', exact: true }).click();
 
   const skillEditor = page.locator('.skill-library-editor-modal');
@@ -441,10 +442,17 @@ async function createPipelineAndSkillDefaults(page: Page): Promise<void> {
   await content.click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type('\nUse the configured defaults for this browser run.');
-  const saveResponsePromise = page.waitForResponse((response) =>
-    response.request().method() === 'PUT' && response.url().includes(`/api/codex/skill-library/${skillName}`));
+  const saveRequestPromise = page.waitForRequest((request) => request.method() === 'PUT');
   await skillEditor.getByRole('button', { name: 'Save new revision', exact: true }).click();
-  const saveResponse = await saveResponsePromise;
+  const saveRequest = await saveRequestPromise;
+  const projectId = await page.evaluate(() => String(window.__coreState?.projectId ?? ''));
+  assert.ok(projectId, 'The project-scoped skill save must retain its project identity.');
+  assert.equal(
+    new URL(saveRequest.url()).pathname,
+    `/p/${encodeURIComponent(projectId)}/api/codex/server-skills/${skillName}`,
+  );
+  const saveResponse = await saveRequest.response();
+  assert.ok(saveResponse, 'The server-owned skill save must return a response.');
   const savePayload = await saveResponse.json();
   assert.equal(saveResponse.status(), 200, JSON.stringify(savePayload));
   await skillEditor.getByText('Saved locally; publication failed: retry synchronization.', { exact: true }).waitFor({ state: 'visible' });
@@ -477,7 +485,14 @@ async function createPipelineAndSkillDefaults(page: Page): Promise<void> {
   assert.equal(await openStep.getByLabel('Model', { exact: true }).inputValue(), 'gpt-5.5');
   assert.equal(await openStep.getByLabel('Effort', { exact: true }).inputValue(), 'low');
 
+  const pipelineSaveResponse = page.waitForResponse((response) => (
+    response.request().method() === 'POST'
+    && new URL(response.url()).pathname.endsWith('/api/codex/pipelines')
+  ));
   await editor.getByRole('button', { name: 'Save pipeline', exact: true }).click();
+  const pipelineResponse = await pipelineSaveResponse;
+  const pipelineBody = await pipelineResponse.json();
+  assert.equal(pipelineResponse.status(), 201, JSON.stringify(pipelineBody));
   await editor.getByText('Pipeline saved.', { exact: true }).waitFor({ state: 'visible' });
   await editor.getByRole('button', { name: 'Close pipeline editor', exact: true }).click();
   await editor.waitFor({ state: 'hidden' });
@@ -514,39 +529,153 @@ async function runDirectInheritedSkill(page: Page): Promise<void> {
   assert.equal(await widget.locator('[data-codex-run-effort]').inputValue(), 'high');
 }
 
-async function runCancelRestartAndFailPipeline(page: Page, resizedCardIds: Set<string>): Promise<void> {
+async function runCancelRestartAndFailPipeline(
+  page: Page,
+  resizedCardIds: Set<string>,
+  launchFile: string,
+): Promise<void> {
   await openProcessCard(page);
   const process = page.locator('.process-modal');
   await process.getByRole('tab', { name: 'Pipelines', exact: true }).click();
   await process.locator('[data-process-pipeline-id]').filter({ hasText: 'Browser pipeline' }).click();
   await process.getByRole('button', { name: 'Run pipeline', exact: true }).click();
   await process.waitFor({ state: 'hidden' });
+  await page.waitForFunction((sourceId) => (
+    ['Inherit defaults', 'Explicit override'].every((stepName) => (
+      window.__coreState?.activeLedger?.cards?.some((card: Record<string, unknown>) => (
+        card.id !== sourceId
+        && card.codexPipelineName === 'Browser pipeline'
+        && card.codexPipelineStepName === stepName
+      ))
+    ))
+  ), sourceCardId);
+  await forcePipelineWidgetDetails(page);
 
-  const inheritedWidget = pipelineWidget(page, 'Browser pipeline', 'Inherit defaults');
-  const explicitWidget = pipelineWidget(page, 'Browser pipeline', 'Explicit override');
-  await inheritedWidget.waitFor({ state: 'visible' });
-  await explicitWidget.waitFor({ state: 'visible' });
-  assert.equal(await explicitWidget.locator('[data-codex-run-restart]').isHidden(), true);
+  try {
+    const inheritedWidget = pipelineWidget(page, 'Browser pipeline', 'Inherit defaults');
+    const explicitWidget = pipelineWidget(page, 'Browser pipeline', 'Explicit override');
+    await inheritedWidget.waitFor({ state: 'visible' });
+    await explicitWidget.waitFor({ state: 'visible' });
+    assert.equal(await explicitWidget.locator('[data-codex-run-restart]').isHidden(), true);
 
-  await inheritedWidget.locator('[data-codex-run-status]').filter({ hasText: 'COMPLETE' }).waitFor({ state: 'visible', timeout: 15_000 });
-  await explicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'RUNNING' }).waitFor({ state: 'visible', timeout: 15_000 });
-  assert.equal(await inheritedWidget.locator('[data-codex-run-model]').inputValue(), 'gpt-5.4');
-  assert.equal(await inheritedWidget.locator('[data-codex-run-effort]').inputValue(), 'high');
-  assert.equal(await explicitWidget.locator('[data-codex-run-model]').inputValue(), 'gpt-5.5');
-  assert.equal(await explicitWidget.locator('[data-codex-run-effort]').inputValue(), 'low');
-  const inheritedCardId = await cardIdForWidget(inheritedWidget);
-  await waitFor(() => resizedCardIds.has(inheritedCardId), `Expected completed step ${inheritedCardId} to resize after its lifecycle event.`);
+    await inheritedWidget.locator('[data-codex-run-status]').filter({ hasText: 'COMPLETE' }).waitFor({ state: 'visible', timeout: 15_000 });
+    const inheritedCardId = await cardIdForWidget(inheritedWidget);
+    await waitFor(() => resizedCardIds.has(inheritedCardId), `Expected completed step ${inheritedCardId} to resize after its lifecycle event.`);
+    await waitFor(() => {
+      const launches = readFileSync(launchFile, 'utf8').trim().split('\n').filter(Boolean)
+        .map((line) => JSON.parse(line) as LaunchRecord);
+      return launches.some((entry) => entry.step === 'Explicit override' && entry.call === 1);
+    }, 'Expected the first Explicit override child process to launch after inherited settlement.');
+    await forcePipelineWidgetDetails(page);
+    try {
+      await explicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'RUNNING' }).waitFor({ state: 'visible', timeout: 15_000 });
+    } catch {
+      const diagnostic = await page.evaluate(() => ({
+        widgets: [...document.querySelectorAll<HTMLElement>('.codex-run-widget')].map((widget) => ({
+          cardId: widget.dataset.codexCardId,
+          context: widget.querySelector<HTMLElement>('[data-codex-run-context]')?.innerText ?? '',
+          status: widget.querySelector<HTMLElement>('[data-codex-run-status]')?.innerText ?? '',
+          latest: widget.querySelector<HTMLElement>('[data-codex-run-latest]')?.innerText ?? '',
+        })),
+        telemetry: ((window as Window & {
+          __coreTelemetry?: Array<{ name?: string; args?: unknown }>;
+        }).__coreTelemetry ?? []).filter((entry) => entry.name?.startsWith('codex-pipeline-widget')).slice(-12),
+      }));
+      assert.fail(`Explicit pipeline widget did not reach RUNNING: ${JSON.stringify(diagnostic)}`);
+    }
+    assert.equal(await inheritedWidget.locator('[data-codex-run-model]').inputValue(), 'gpt-5.4');
+    assert.equal(await inheritedWidget.locator('[data-codex-run-effort]').inputValue(), 'high');
+    assert.equal(await explicitWidget.locator('[data-codex-run-model]').inputValue(), 'gpt-5.5');
+    assert.equal(await explicitWidget.locator('[data-codex-run-effort]').inputValue(), 'low');
+    const pipelineRunId = String(await explicitWidget.getAttribute('data-pipeline-run-id'));
+    assert.ok(pipelineRunId, 'The explicit step widget must retain its pipeline run identity.');
 
-  await explicitWidget.getByRole('button', { name: 'Stop Codex run', exact: true }).click();
-  await explicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'CANCELLED' }).waitFor({ state: 'visible', timeout: 15_000 });
-  await explicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).waitFor({ state: 'visible' });
-  await explicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).click();
+    const cancelResponse = page.waitForResponse((response) => (
+      response.request().method() === 'POST'
+      && new URL(response.url()).pathname.endsWith('/cancel')
+    ));
+    await explicitWidget.getByRole('button', { name: 'Stop Codex run', exact: true }).click();
+    assert.equal((await cancelResponse).status(), 202);
+    await waitFor(async () => {
+      const status = await page.evaluate(async (runId) => {
+        const { requestCodexPipelineRunStatus } = await import('/src/runtime/codex/effect/request-codex-pipeline-run-status.js');
+        return requestCodexPipelineRunStatus({
+          projectId: String(window.__coreState?.projectId ?? ''),
+          replicaNodeId: String(window.__coreState?.replicaNodeId ?? ''),
+          runId,
+        });
+      }, pipelineRunId);
+      return status.run?.status === 'cancelled';
+    }, 'Expected the accepted pipeline cancellation to settle durably.');
+    await forcePipelineWidgetDetails(page);
+    await explicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'CANCELLED' }).waitFor({ state: 'visible', timeout: 15_000 });
+    await forcePipelineWidgetDetails(page);
+    await explicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).waitFor({ state: 'visible' });
+    const restartResponse = page.waitForResponse((response) => (
+      response.request().method() === 'POST'
+      && new URL(response.url()).pathname.endsWith('/restart')
+    ));
+    await explicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).click();
+    const restartAccepted = await restartResponse;
+    const restartPayload = await restartAccepted.json() as { run?: { id?: string } };
+    assert.equal(restartAccepted.status(), 202, JSON.stringify(restartPayload));
+    const restartedPipelineRunId = String(restartPayload.run?.id ?? '');
+    assert.ok(restartedPipelineRunId, 'The restart response must expose the replacement pipeline run identity.');
+    assert.notEqual(restartedPipelineRunId, pipelineRunId);
+    await waitFor(async () => {
+      const status = await page.evaluate(async (runId) => {
+        const { requestCodexPipelineRunStatus } = await import('/src/runtime/codex/effect/request-codex-pipeline-run-status.js');
+        return requestCodexPipelineRunStatus({
+          projectId: String(window.__coreState?.projectId ?? ''),
+          replicaNodeId: String(window.__coreState?.replicaNodeId ?? ''),
+          runId,
+        });
+      }, restartedPipelineRunId);
+      return status.run?.status === 'failed';
+    }, 'Expected the restarted pipeline to settle at the forced second-step failure.');
+    await forcePipelineWidgetDetails(page);
 
-  const restartedInheritedWidget = pipelineWidget(page, 'Browser pipeline', 'Inherit defaults').last();
-  const restartedExplicitWidget = pipelineWidget(page, 'Browser pipeline', 'Explicit override').last();
-  await restartedInheritedWidget.locator('[data-codex-run-status]').filter({ hasText: 'COMPLETE' }).waitFor({ state: 'visible', timeout: 15_000 });
-  await restartedExplicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'FAILED' }).waitFor({ state: 'visible', timeout: 15_000 });
-  await restartedExplicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).waitFor({ state: 'visible' });
+    const restartedInheritedWidget = pipelineWidget(page, 'Browser pipeline', 'Inherit defaults').last();
+    const restartedExplicitWidget = pipelineWidget(page, 'Browser pipeline', 'Explicit override').last();
+    await restartedInheritedWidget.locator('[data-codex-run-status]').filter({ hasText: 'COMPLETE' }).waitFor({ state: 'visible', timeout: 15_000 });
+    await restartedExplicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'FAILED' }).waitFor({ state: 'visible', timeout: 15_000 });
+    await restartedExplicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).waitFor({ state: 'visible' });
+  } finally {
+    await page.evaluate(() => {
+      const browserWindow = window as Window & { __releasePipelineWidgetDetails?: () => void };
+      browserWindow.__releasePipelineWidgetDetails?.();
+      delete browserWindow.__releasePipelineWidgetDetails;
+    });
+  }
+}
+
+async function forcePipelineWidgetDetails(page: Page): Promise<void> {
+  await page.waitForFunction((sourceId) => {
+    const generatedCards = window.__coreState.activeLedger.cards
+      .filter((card: Record<string, unknown>) => (
+        card.id !== sourceId
+        && card.codexPipelineName === 'Browser pipeline'
+        && ['Inherit defaults', 'Explicit override'].includes(String(card.codexPipelineStepName ?? ''))
+      ));
+    return ['Inherit defaults', 'Explicit override'].every((stepName) => (
+      generatedCards.some((card: Record<string, unknown>) => card.codexPipelineStepName === stepName)
+    )) && generatedCards.every((card: Record<string, unknown>) => (
+      document.querySelector(`.card[data-card-id="${CSS.escape(String(card.id ?? ''))}"]`)
+    ));
+  }, sourceCardId);
+  await page.evaluate(async (sourceId) => {
+    const cardIds = window.__coreState.activeLedger.cards
+      .filter((card: Record<string, unknown>) => (
+        card.id !== sourceId
+        && card.codexPipelineName === 'Browser pipeline'
+        && ['Inherit defaults', 'Explicit override'].includes(String(card.codexPipelineStepName ?? ''))
+      ))
+      .map((card: Record<string, unknown>) => String(card.id ?? ''));
+    const { forceCardDetailsForMeasurement } = await import('/src/runtime/canvas/effect/sync-viewport-card-details.js');
+    const browserWindow = window as Window & { __releasePipelineWidgetDetails?: () => void };
+    browserWindow.__releasePipelineWidgetDetails?.();
+    browserWindow.__releasePipelineWidgetDetails = forceCardDetailsForMeasurement(cardIds);
+  }, sourceCardId);
 }
 
 function pipelineWidget(page: Page, pipelineName: string, stepName: string): Locator {

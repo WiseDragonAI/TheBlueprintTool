@@ -21,6 +21,28 @@ test('projects every catalog project as paused, unavailable, or available', () =
   assert.equal(rows[0].detail, 'Task state');
 });
 
+test('keeps a hosted project available when only its derived federation cache is paused', () => {
+  const diagnostics = {
+    pausedFederatedTaskProjectIds: ['hosted'],
+    incidents: [{
+      status: 'paused',
+      code: 'unsupported_task_current_state_format',
+      message: 'unsupported_task_current_state_format',
+      component: 'federation-task-state',
+      scope: 'federated-task-state:hosted',
+      occurrences: 1,
+      lastObservedAt: '2026-07-29T10:00:00.000Z',
+    }],
+  };
+  const [row] = projectRuntimeRows([
+    { id: 'hosted', name: 'Hosted project', available: true, replicas: [] },
+  ], diagnostics);
+  const [incident] = groupedActiveIncidents(diagnostics);
+  assert.equal(row.status, 'available');
+  assert.equal(row.detail, 'Local project available');
+  assert.equal(incident.interrupting, true);
+});
+
 test('groups active incidents by error and sums occurrences without retaining resolved history', () => {
   const groups = groupedActiveIncidents({
     pausedBackgroundComponents: ['scheduler'],

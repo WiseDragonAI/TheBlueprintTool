@@ -713,7 +713,7 @@ test('authoring dependencies, local assets, modal geometry, and responsive entry
   assert.match(css, /\.codex-editor-modal \.skill-editor-tag-choice\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--skill-category-color\);/s);
   assert.match(css, /--diffs-addition-color:\s*#38d9e8/);
   assert.match(css, /\.authored-revision-content\.is-single-column\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
-  assert.match(css, /\.skill-library-editor-body\s*\{[^}]*grid-template-rows:\s*max-content max-content minmax\(240px, 34vh\) minmax\(280px, max-content\)/s);
+  assert.match(css, /\.skill-library-editor-body\s*\{[^}]*grid-template-rows:\s*max-content max-content minmax\(280px, 1fr\)/s);
   assert.match(css, /\.skill-editor-owner-controls\s*\{[^}]*min-height:\s*max-content/s);
   assert.match(css, /--diffs-deletion-color:\s*#ff5f6d/);
   assert.match(responsiveBoot, /responsive-content-authoring-styles[^]*\/assets\/shared\/content-authoring\.css/);
