@@ -915,6 +915,25 @@
   text-transform: uppercase;
 }
 
+.codex-log-event.is-start-disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.codex-log-event.is-start-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.codex-log-event.is-start-disclosure > summary::before {
+  content: "+";
+  color: #69d7ff;
+  font-weight: 700;
+}
+
+.codex-log-event.is-start-disclosure[open] > summary::before {
+  content: "−";
+}
+
 .codex-log-event-body,
 .codex-log-event-body p {
   margin: 0;

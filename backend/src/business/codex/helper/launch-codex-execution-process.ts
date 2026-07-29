@@ -116,6 +116,10 @@ export async function launchCodexExecutionProcess(input: {
   }), 'utf8');
   const stdoutStartOffset = fileSize(input.stdoutFile);
   const stderrStartOffset = fileSize(input.stderrFile);
+  appendFileSync(input.stdoutFile, `${JSON.stringify({
+    type: 'decision_os.developer_prompt',
+    prompt: input.prompt,
+  })}\n`, 'utf8');
   const promptFile = `${input.stderrFile}.${input.executionId}.stdin`;
   writeFileSync(promptFile, input.prompt, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
   let stdinDescriptor: number | undefined;

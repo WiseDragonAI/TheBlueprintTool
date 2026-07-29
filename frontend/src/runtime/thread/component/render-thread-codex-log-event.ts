@@ -27,10 +27,13 @@ function renderTodoList(event: ThreadRunLogEvent): HTMLElement | null {
 }
 
 export function renderThreadCodexLogEvent(event: ThreadRunLogEvent): HTMLElement {
-  const article = document.createElement('article');
+  const startDisclosure = event.kind === 'run_status'
+    && (event.title === 'Thread started' || event.title === 'Turn started');
+  const article = document.createElement(startDisclosure ? 'details' : 'article');
   article.className = `codex-log-event is-${event.kind.replace(/[^a-z0-9_-]+/gi, '-')} is-${event.severity}`;
+  if (startDisclosure) article.classList.add('is-start-disclosure');
   article.dataset.eventKey = event.eventKey;
-  const heading = document.createElement('div');
+  const heading = document.createElement(startDisclosure ? 'summary' : 'div');
   heading.className = 'codex-log-event-heading';
   const title = document.createElement('strong');
   title.textContent = event.title || event.kind || event.type || 'Codex event';

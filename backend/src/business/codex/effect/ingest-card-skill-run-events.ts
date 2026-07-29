@@ -41,6 +41,7 @@ export function createCardSkillRunEventIngestor(input: {
   const decoder = new StringDecoder('utf8');
   const pendingEvents = new Map<number, NormalizedRunEvent>();
   const pendingPresentationEvents = new Map<number, NormalizedRunEvent>();
+  let developerPrompt = '';
   const batchDelayMs = Math.max(0, Number(input.batchDelayMs ?? 25));
   const presentationBatchDelayMs = Math.max(batchDelayMs, Number(input.presentationBatchDelayMs ?? 500));
   let nextLine = Math.max(0, Number(input.startLine ?? 0)) + 1;
@@ -108,7 +109,11 @@ export function createCardSkillRunEventIngestor(input: {
       // WHAT: Accept only object-shaped Codex events.
       // WHY: Scalars and arrays have no lifecycle event contract to persist.
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
-      const event = normalizeCardSkillRunEvent({ line, event: parsed as AnyRecord });
+      let event = normalizeCardSkillRunEvent({ line, event: parsed as AnyRecord });
+      if (event.type === 'decision_os.developer_prompt') developerPrompt = event.text;
+      else if (developerPrompt && (event.type === 'thread.started' || event.type === 'turn.started')) {
+        event = { ...event, text: developerPrompt };
+      }
       persistTelemetry(parsed as AnyRecord, event);
       if (event.type === 'turn.started') input.onTurnStarted?.(event, new Date().toISOString());
       if (event.kind === 'run_status' && (event.status === 'complete' || event.status === 'failed' || event.status === 'cancelled')) {

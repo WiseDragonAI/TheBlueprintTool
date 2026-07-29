@@ -8,11 +8,13 @@ class FakeElement {
   className = '';
   dataset: Record<string, string> = {};
   hidden = false;
+  open = false;
   textContent = '';
   attributes: Record<string, string> = {};
   classList = { add: (...names: string[]) => { this.className = [this.className, ...names].filter(Boolean).join(' '); } };
   constructor(public tagName: string) {}
   append(...nodes: FakeElement[]): void { this.children.push(...nodes); }
+  appendChild(node: FakeElement): FakeElement { this.children.push(node); return node; }
   setAttribute(name: string, value: string): void { this.attributes[name] = value; }
 }
 
@@ -23,7 +25,10 @@ function descendants(root: FakeElement): FakeElement[] {
 test('renders native todo-list rows with distinct pending and completed state', () => {
   const previousDocument = globalThis.document;
   try {
-    globalThis.document = { createElement: (tag: string) => new FakeElement(tag) } as unknown as Document;
+    globalThis.document = {
+      createElement: (tag: string) => new FakeElement(tag),
+      createTextNode: (text: string) => Object.assign(new FakeElement('#text'), { textContent: text }),
+    } as unknown as Document;
     const event = {
       runId: 'run-1', line: 1, source: 'jsonl', sourceLine: 1, type: 'item.updated', kind: 'todo_list',
       title: 'Todo list', text: '- [x] Inspect\n- [ ] Render', status: 'in_progress', itemId: 'todo-1',
@@ -37,6 +42,30 @@ test('renders native todo-list rows with distinct pending and completed state', 
     assert.deepEqual(list.children.map((row) => row.className), ['is-completed', 'is-pending']);
     assert.deepEqual(list.children.map((row) => row.children[1].textContent), ['Inspect', 'Render']);
     assert.deepEqual(list.children.map((row) => row.children[0].textContent), ['✓', '○']);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('renders thread and turn starts as closed prompt disclosures', () => {
+  const previousDocument = globalThis.document;
+  try {
+    globalThis.document = {
+      createElement: (tag: string) => new FakeElement(tag),
+      createTextNode: (text: string) => Object.assign(new FakeElement('#text'), { textContent: text }),
+    } as unknown as Document;
+    const event = {
+      runId: 'run-1', line: 2, source: 'jsonl', sourceLine: 2, type: 'turn.started', kind: 'run_status',
+      title: 'Turn started', text: '# Complete developer prompt', status: 'running', itemId: '',
+      tool: '', output: '', exitCode: '', severity: 'info', persist: true,
+      eventKey: 'run-1:event:turn-started', toolKey: '',
+    } satisfies ThreadRunLogEvent;
+    const rendered = renderThreadCodexLogEvent(event) as unknown as FakeElement;
+    assert.equal(rendered.tagName, 'details');
+    assert.equal(rendered.open, false);
+    assert.match(rendered.className, /is-start-disclosure/);
+    assert.equal(rendered.children[0].tagName, 'summary');
+    assert.equal(descendants(rendered).some((node) => node.textContent.includes('Complete developer prompt')), true);
   } finally {
     globalThis.document = previousDocument;
   }

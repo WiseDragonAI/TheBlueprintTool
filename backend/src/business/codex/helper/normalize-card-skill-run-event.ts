@@ -132,6 +132,21 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
   const itemType = String(item.type ?? '');
   const itemId = String(item.id ?? event.id ?? '');
   const status = String(item.status ?? event.status ?? '');
+  if (type === 'decision_os.developer_prompt') {
+    return normalizedJsonlEvent(line.line, {
+      type,
+      kind: 'diagnostic',
+      title: 'Developer prompt',
+      text: textBlock(event.prompt),
+      status: '',
+      itemId: '',
+      tool: '',
+      output: '',
+      exitCode: '',
+      severity: 'info',
+      persist: false,
+    });
+  }
   // WHAT: Map terminal turn lifecycle events to a stable run-status note.
   // WHY: Consumers should not depend on producer-specific fields for completion state.
   if (type === 'turn.completed') {

@@ -61,7 +61,11 @@ test('returns one exact snapshot with typed todos and no raw tool result bytes',
   const sentinel = `RAW_TOOL_RESULT_${'x'.repeat(250_000)}`;
   const first = record('execution-1', '2026-07-25T01:00:00.000Z');
   const second = record('execution-2', '2026-07-25T02:00:00.000Z');
+  const developerPrompt = '# Gate prompt\n\nUse the complete task context.';
   writeFileSync(jsonlFile, [
+    JSON.stringify({ type: 'decision_os.developer_prompt', prompt: developerPrompt }),
+    JSON.stringify({ type: 'thread.started', thread_id: 'provider-thread' }),
+    JSON.stringify({ type: 'turn.started' }),
     JSON.stringify({ type: 'item.started', item: { id: 'tool-1', type: 'command_execution', command: 'rg TODO', status: 'in_progress', aggregated_output: sentinel } }),
     JSON.stringify({ type: 'item.completed', item: { id: 'tool-1', type: 'command_execution', command: 'rg TODO', status: 'completed', exit_code: 0, aggregated_output: sentinel } }),
     JSON.stringify({ type: 'item.updated', item: { id: 'todo-1', type: 'todo_list', items: [{ text: 'Inspect', completed: true }, { text: 'Render', completed: false }] } }),
@@ -71,7 +75,7 @@ test('returns one exact snapshot with typed todos and no raw tool result bytes',
   ].join('\n'));
   writeFileSync(stderrFile, [
     `decision-os:codex-run-segment ${JSON.stringify({ runId: 'session-a', executionId: 'execution-1', startedAt: first.metadata.requestedAt, segment: 'start', startLine: 0 })}`,
-    `decision-os:codex-run-segment ${JSON.stringify({ runId: 'session-a', executionId: 'execution-2', startedAt: second.metadata.requestedAt, segment: 'continue', startLine: 5 })}`,
+    `decision-os:codex-run-segment ${JSON.stringify({ runId: 'session-a', executionId: 'execution-2', startedAt: second.metadata.requestedAt, segment: 'continue', startLine: 8 })}`,
   ].join('\n'));
   const records = [first, second];
   const state = {
@@ -105,6 +109,22 @@ test('returns one exact snapshot with typed todos and no raw tool result bytes',
     assert.equal(serialized.includes('Second execution message.'), false);
     assert.ok(serialized.length < 10_000);
     assert.deepEqual(result.presentation.events, [
+      {
+        id: 'run_status:event-8e7dbb6d1688139f',
+        kind: 'run_status',
+        title: 'Thread started',
+        status: 'running',
+        text: developerPrompt,
+        severity: 'info',
+      },
+      {
+        id: 'run_status:event-af7e4efa463e905e',
+        kind: 'run_status',
+        title: 'Turn started',
+        status: 'running',
+        text: developerPrompt,
+        severity: 'info',
+      },
       {
         id: 'tool_call:tool-1',
         kind: 'tool_call',

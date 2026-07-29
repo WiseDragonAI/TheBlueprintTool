@@ -85,8 +85,16 @@ function presentationEvent(event: NormalizedRunEvent): TaskExecutionPresentation
 export function taskExecutionPresentationEvents(events: NormalizedRunEvent[]): TaskExecutionPresentationEvent[] {
   const presented: TaskExecutionPresentationEvent[] = [];
   const lifecycleIndexes = new Map<string, number>();
+  let developerPrompt = '';
   for (const event of events) {
-    const item = presentationEvent(event);
+    if (event.type === 'decision_os.developer_prompt') {
+      developerPrompt = event.text;
+      continue;
+    }
+    const presentedEvent = developerPrompt && (event.type === 'thread.started' || event.type === 'turn.started')
+      ? { ...event, text: developerPrompt }
+      : event;
+    const item = presentationEvent(presentedEvent);
     if (!item) continue;
     const lifecycleKey = event.itemId && (item.kind === 'tool_call' || item.kind === 'file_change' || item.kind === 'todo_list')
       ? `${item.kind}:${event.itemId}`
