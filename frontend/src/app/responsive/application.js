@@ -94,6 +94,9 @@ const projectPresenceLabel = (project) => `${projectReplicas(project).filter((re
 const routeParts = () => parseProjectScope(location.pathname)?.segments ?? [];
 const creationModal = document.querySelector('.creation-modal');
 const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
+const deleteTaskCardTitle = deleteMasterTaskModal.querySelector('.delete-task-card-title');
+const deleteTaskCardMessage = deleteMasterTaskModal.querySelector('.delete-task-card-message');
+const confirmDeleteTaskCardButton = deleteMasterTaskModal.querySelector('.confirm-delete-master-task-button');
 const newTaskProjectModal = document.querySelector('.new-task-project-modal');
 const projectSettingsModal = document.querySelector('.project-settings-modal');
 const projectSettingsForm = document.querySelector('.project-settings-form');
@@ -2681,15 +2684,39 @@ function renderCard(card) {
     deleteButton.className = 'delete-master-task-button';
     deleteButton.textContent = 'Delete master task';
     deleteButton.addEventListener('click', () => {
-      deleteMasterTaskModal.dataset.cardId = String(card.id);
-      deleteMasterTaskModal.showModal();
+      openTaskCardDeletion({
+        cardId: String(card.id),
+        kind: 'master-task',
+      });
     });
     completion.append(delayButton, completionActions, deleteButton);
     overview.append(status, heading, subtasks, completion);
     // The relationship-backed task summary is the navigation surface for a master task.
     // Keep it ahead of the narrative so linked cards remain visible on long mobile cards.
     elements['card-body'].replaceChildren(overview, ...(persistenceFailure ? [persistenceFailure] : []), content);
-  } else elements['card-body'].replaceChildren(...(persistenceFailure ? [persistenceFailure] : []), content);
+  } else {
+    const subtaskActions = parentMaster ? document.createElement('section') : null;
+    if (subtaskActions) {
+      subtaskActions.className = 'subtask-actions';
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'delete-subtask-button';
+      deleteButton.textContent = 'Delete subtask';
+      deleteButton.addEventListener('click', () => {
+        openTaskCardDeletion({
+          cardId: String(card.id),
+          kind: 'subtask',
+          parentCardId: String(parentMaster.id),
+        });
+      });
+      subtaskActions.append(deleteButton);
+    }
+    elements['card-body'].replaceChildren(
+      ...(persistenceFailure ? [persistenceFailure] : []),
+      content,
+      ...(subtaskActions ? [subtaskActions] : []),
+    );
+  }
   initializeMobileCarousels(elements['card-body']);
   elements['card-view'].style.setProperty('--zone-color', cardAccent);
   elements['card-view'].style.setProperty('--accent', cardAccent);
@@ -2702,13 +2729,30 @@ function renderCard(card) {
   }
 }
 
+function openTaskCardDeletion({ cardId, kind, parentCardId = '' }) {
+  const subtask = kind === 'subtask';
+  deleteMasterTaskModal.dataset.cardId = cardId;
+  deleteMasterTaskModal.dataset.taskKind = subtask ? 'subtask' : 'master-task';
+  deleteMasterTaskModal.dataset.parentCardId = subtask ? parentCardId : '';
+  deleteTaskCardTitle.textContent = subtask ? 'Delete subtask?' : 'Delete master task?';
+  deleteTaskCardMessage.textContent = subtask
+    ? 'This permanently removes the subtask card and its link to the master task.'
+    : 'This permanently removes the master task card. Its linked subtask cards are kept.';
+  confirmDeleteTaskCardButton.textContent = subtask ? 'Delete subtask' : 'Delete master task';
+  deleteMasterTaskModal.showModal();
+}
+
 document.querySelector('.cancel-delete-master-task-button').addEventListener('click', () => deleteMasterTaskModal.close());
 document.querySelector('.confirm-delete-master-task-button').addEventListener('click', async (event) => {
   const button = event.currentTarget;
   const cardId = deleteMasterTaskModal.dataset.cardId;
   if (!cardId) return;
+  const subtask = deleteMasterTaskModal.dataset.taskKind === 'subtask';
+  const parentCardId = deleteMasterTaskModal.dataset.parentCardId;
+  const idleLabel = subtask ? 'Delete subtask' : 'Delete master task';
+  const deletionSourcePath = `${location.pathname}${location.search}${location.hash}`;
   button.disabled = true;
-  button.textContent = 'Deleting task…';
+  button.textContent = subtask ? 'Deleting subtask…' : 'Deleting task…';
   const scope = responsiveLedgerScope();
   const task = taskForCurrentRoute();
   const identity = task ? taskIdentity(task) : '';
@@ -2724,19 +2768,30 @@ document.querySelector('.confirm-delete-master-task-button').addEventListener('c
     },
     onRejected: (cause) => {
       rejectTaskIntent(identity, cause);
-      elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task deletion failed.';
+      elements['error-message'].textContent = cause instanceof Error
+        ? cause.message
+        : subtask ? 'Subtask deletion failed.' : 'Master task deletion failed.';
+      if (subtask && [cardId, parentCardId].includes(String(state.activeCardId))) {
+        navigate(deletionSourcePath);
+      }
     },
   });
   deleteMasterTaskModal.close();
-  navigate(controlRoomPath(state.controlTab), true);
+  if (subtask && parentCardId) {
+    document.querySelector('.back-to-zone-button').click();
+  } else {
+    navigate(controlRoomPath(state.controlTab), true);
+  }
   try {
     if (await committed) {
       if (identity) acknowledgeTaskIntent(identity);
-      void loadControlRoom({ force: true }).then(renderControlRoom).catch((error) => console.error('Task deletion confirmation failed.', error));
+      void loadControlRoom({ force: true }).then(() => {
+        if (!subtask) renderControlRoom();
+      }).catch((error) => console.error('Task deletion confirmation failed.', error));
     }
   } finally {
     button.disabled = false;
-    button.textContent = 'Delete master task';
+    button.textContent = idleLabel;
   }
 });
 

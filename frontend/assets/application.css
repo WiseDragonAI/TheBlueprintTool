@@ -371,7 +371,9 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .complete-master-task-manually-button { color: var(--accent); background: transparent; }
 .complete-master-task-pipeline-button { color: #07100c; background: var(--accent); }
 .complete-master-task-button:disabled { color: var(--muted); background: var(--panel); }
-.delete-master-task-button { width: 100%; min-height: 52px; margin-top: 12px; border-color: color-mix(in srgb, var(--danger), transparent 30%); color: var(--danger); background: transparent; font-weight: 800; }
+.subtask-actions { padding-top: 20px; border-top: 1px solid var(--line); }
+.delete-master-task-button, .delete-subtask-button { width: 100%; min-height: 52px; margin-top: 12px; border-color: color-mix(in srgb, var(--danger), transparent 30%); color: var(--danger); background: transparent; font-weight: 800; }
+.subtask-actions .delete-subtask-button { margin-top: 0; }
 .confirm-delete-master-task-button { border-color: color-mix(in srgb, var(--danger), transparent 30%) !important; color: var(--danger) !important; }
 @media (max-width: 759px) {
   .master-task-completion-actions { grid-template-columns: 1fr; }
