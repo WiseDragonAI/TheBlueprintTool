@@ -142,10 +142,12 @@ export function migrateLegacyProjectPipelines(input: {
 export function ensureServerPipelines(input: {
   serverDecisionOsRoot: string;
   availableSkillNames?: Iterable<string>;
+  availableContentKinds?: Iterable<readonly [string, CodexContentKind]>;
 }): { createdPipelineIds: string[] } {
   const normalized = readCodexPipelineStore({
     decisionOsRoot: input.serverDecisionOsRoot,
     availableSkillNames: input.availableSkillNames,
+    availableContentKinds: input.availableContentKinds,
   });
   assertCodexPipelineStoreAvailable(normalized);
   const builtIn = projectSynchronizationPipelineDefinition();
@@ -156,6 +158,7 @@ export function ensureServerPipelines(input: {
   mutateCodexPipelineStore({
     decisionOsRoot: input.serverDecisionOsRoot,
     availableSkillNames: input.availableSkillNames,
+    availableContentKinds: input.availableContentKinds,
     mutate: (store) => {
       if (store.pipelines.some((pipeline) => pipeline.id === builtIn.pipeline.id)) return store;
       created = true;

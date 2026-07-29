@@ -17,7 +17,8 @@ import {
 import { isAllowedCodexEffort, isAllowedCodexModel } from '../helper/resolve-codex-command.js';
 import { taskExecutionState } from '../helper/task-execution-runtime.js';
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
-import { availablePipelineContent, startPipelineRun } from './start-codex-pipeline-run-controller.js';
+import { startPipelineRun } from './start-codex-pipeline-run-controller.js';
+import { availablePipelineContent } from '../helper/available-pipeline-content.js';
 
 type AnyRecord = Record<string, unknown>;
 
