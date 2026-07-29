@@ -179,6 +179,11 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /renderMarkdown: renderLedgerCardMarkdown/);
   assert.match(script, /renderEditableSkillDocument\(\{/);
   assert.match(script, /onEdit: \(\) => editGlobalSkill\(record\)/);
+  assert.match(script, /codexSkillAuthoringProjectId\(record, state\.projectId\)/);
+  assert.match(script, /requestProjectId,[\s\S]*refreshProjectSkillAuthoring/);
+  assert.match(script, /const edit = button\(record\.contentKind === 'pipeline-prompt' \? 'Edit prompt' : 'Edit skill'/);
+  assert.match(script, /actions\.append\(tagsField, favorite, edit, status\)/);
+  assert.doesNotMatch(script, /card\.append\(node, renderSkillLibraryEditAction/);
   assert.match(script, /openSkillLibraryEditor\(\{/);
   assert.match(script, /openSkillLibraryCreator\(\{/);
   assert.doesNotMatch(script, /Select a project context before creating authored content\./);
@@ -200,6 +205,7 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(styles, /\.skill-favorite-toggle\[aria-pressed="true"\] \{[^}]*color: #fbbf24/);
   assert.match(styles, /\.skill-tag-choice\[aria-pressed="true"\]/);
   assert.match(styles, /\.codex-list-card \{[^}]*box-shadow/);
+  assert.match(styles, /\.skill-detail-edit \{[^}]*justify-self: start/);
   assert.match(styles, /\.codex-list-item \{[^}]*background: transparent;[^}]*box-shadow: none/);
   assert.match(styles, /\.skill-picker-list\.codex-list \{[^}]*display: flex;[^}]*flex-direction: column;[^}]*overflow-y: auto/);
   assert.match(styles, /\.skill-picker-list > \.codex-list-card \{[^}]*flex: 0 0 auto/);

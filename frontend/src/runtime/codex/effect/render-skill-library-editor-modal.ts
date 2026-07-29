@@ -15,6 +15,7 @@ import {
 } from '../../content-authoring/controller/text-file-editor-session.js';
 import { renderSkillRevisionDiff } from '../component/render-skill-revision-diff.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../helper/codex-run-options.js';
+import { decorateSkillCategoryLabel } from '../helper/skill-library-presentation.js';
 import { loadCodexSkillLibrary, type CodexSkillLibraryDetail } from './load-codex-skill-library.js';
 import {
   loadCodexSkillRevision,
@@ -100,7 +101,6 @@ type ModalShell = {
   title: HTMLElement;
   subtitle: HTMLElement;
   metadata: HTMLElement;
-  tabs: HTMLElement;
   controls: HTMLElement;
   editorPane: HTMLElement;
   editorLabel: HTMLElement;
@@ -240,9 +240,6 @@ function buildShell(): ModalShell | null {
   const body = document.createElement('section');
   body.className = 'skill-library-editor-body';
   const metadata = document.createElement('section');
-  const tabs = document.createElement('nav');
-  tabs.className = 'skill-editor-view-tabs';
-  tabs.setAttribute('aria-label', 'Authored file views');
   const controls = document.createElement('section');
   controls.className = 'skill-editor-owner-controls';
   const editorPane = document.createElement('section');
@@ -253,8 +250,8 @@ function buildShell(): ModalShell | null {
   editorPane.append(editorLabel, editorHost);
   const historyPane = document.createElement('section');
   historyPane.className = 'skill-history-pane';
-  historyPane.hidden = true;
-  body.append(metadata, tabs, controls, editorPane, historyPane);
+  historyPane.setAttribute('aria-label', 'Git revision history');
+  body.append(metadata, controls, editorPane, historyPane);
 
   const footer = document.createElement('footer');
   footer.className = 'codex-modal-actions';
@@ -264,7 +261,7 @@ function buildShell(): ModalShell | null {
   actions.className = 'skill-editor-footer-actions';
   footer.append(message, actions);
   skillLibraryEditorModal.replaceChildren(head, body, footer);
-  return { kicker, title, subtitle, metadata, tabs, controls, editorPane, editorLabel, editorHost, historyPane, message, actions };
+  return { kicker, title, subtitle, metadata, controls, editorPane, editorLabel, editorHost, historyPane, message, actions };
 }
 
 function showModal(): void {
@@ -365,7 +362,9 @@ function renderEditControls(target: HTMLElement, detail: CodexSkillLibraryDetail
   for (const tag of skillLibraryEditorState.availableTags) {
     const choice = button(tag, () => { void saveSkillLibraryTag(tag); }, 'skill-editor-tag-choice');
     choice.setAttribute('aria-pressed', String(detail.tags?.[0] === tag));
+    choice.setAttribute('aria-label', `Set ${tag} tag`);
     choice.disabled = skillLibraryEditorState.tagsSaving;
+    decorateSkillCategoryLabel(choice, tag);
     choices.append(choice);
   }
   tags.append(legend, choices);
@@ -405,25 +404,6 @@ function renderMetadata(target: HTMLElement, detail: CodexSkillLibraryDetail): v
   }
 }
 
-function renderTabs(target: HTMLElement, detail: CodexSkillLibraryDetail): void {
-  const history = detail.history ?? [];
-  for (const view of ['editor', 'history'] as const) {
-    const selected = skillLibraryEditorState.view === view;
-    const tab = button(view === 'editor' ? 'Editor' : `Revisions (${history.length}${skillLibraryEditorState.historyNextCursor ? '+' : ''})`, () => {
-      skillLibraryEditorState.view = view;
-      skillLibraryEditorState.error = '';
-      renderSkillLibraryEditorModal();
-      if (view === 'history') {
-        void initializeHistory().then(() => {
-          if (skillLibraryEditorState.detail?.history.length) void selectSkillRevision(skillLibraryEditorState.selectedRevisionIndex);
-        });
-      }
-    }, `process-mode-tab${selected ? ' is-selected' : ''}`);
-    tab.setAttribute('aria-pressed', String(selected));
-    target.append(tab);
-  }
-}
-
 function renderHistory(target: HTMLElement, detail: CodexSkillLibraryDetail): void {
   disposeHistory();
   renderAuthoredFileRevision({
@@ -434,6 +414,7 @@ function renderHistory(target: HTMLElement, detail: CodexSkillLibraryDetail): vo
     loading: skillLibraryEditorState.revisionLoading || skillLibraryEditorState.historyLoadingMore,
     hasOlderPage: Boolean(skillLibraryEditorState.historyNextCursor),
     filename: filename(),
+    showPreview: false,
     onSelect: (index) => { void selectSkillRevision(index); },
     onRequestOlderPage: () => { void loadOlderHistoryPage(); },
     mountPreview: (host, revision) => {
@@ -469,7 +450,6 @@ function syncShell(): void {
   shell.message.className = skillLibraryEditorState.error ? 'codex-form-error' : 'codex-form-notice';
   shell.message.textContent = skillLibraryEditorState.error || skillLibraryEditorState.notice;
   shell.metadata.replaceChildren();
-  shell.tabs.replaceChildren();
   shell.controls.replaceChildren();
   shell.actions.replaceChildren();
 
@@ -491,8 +471,7 @@ function syncShell(): void {
   } else {
     const detail = skillLibraryEditorState.detail;
     renderMetadata(shell.metadata, detail);
-    renderTabs(shell.tabs, detail);
-    if (skillLibraryEditorState.view === 'editor') renderEditControls(shell.controls, detail);
+    renderEditControls(shell.controls, detail);
     const favorite = button(
       skillLibraryEditorState.favoriteSaving ? 'Saving favorite…' : detail.favorite ? 'Remove from favorites' : 'Mark as favorite',
       () => { void toggleSkillLibraryFavorite(); },
@@ -506,17 +485,24 @@ function syncShell(): void {
       const retry = button('Retry Git revision', () => { void retrySkillLibraryRevision(); }, 'primary-action');
       retry.disabled = skillLibraryEditorState.saving;
       shell.actions.append(retry);
-    } else if (skillLibraryEditorState.view === 'editor') {
+    } else {
       const save = button(skillLibraryEditorState.saving ? 'Saving…' : 'Save new revision', () => { void saveSkillLibraryDraft(); }, 'primary-action');
       save.disabled = !detail.editable || skillLibraryEditorState.saving;
       shell.actions.append(save);
     }
   }
   shell.actions.append(button('Close', closeSkillLibraryEditor));
-  shell.editorPane.hidden = skillLibraryEditorState.view !== 'editor';
-  shell.historyPane.hidden = skillLibraryEditorState.view !== 'history';
-  if (skillLibraryEditorState.view === 'history' && skillLibraryEditorState.detail) {
+  shell.editorPane.hidden = false;
+  shell.historyPane.hidden = skillLibraryEditorState.mode !== 'edit' || !skillLibraryEditorState.detail;
+  if (!shell.historyPane.hidden && skillLibraryEditorState.detail) {
     renderHistory(shell.historyPane, skillLibraryEditorState.detail);
+    if ((skillLibraryEditorState.detail.history?.length ?? 0) > 0 && !skillLibraryEditorState.historyInitialized && !skillLibraryEditorState.historyLoadingMore) {
+      void initializeHistory().then(() => {
+        if (skillLibraryEditorState.detail?.history?.length && !skillLibraryEditorState.revisionDetail && !skillLibraryEditorState.revisionLoading) {
+          void selectSkillRevision(skillLibraryEditorState.selectedRevisionIndex);
+        }
+      });
+    }
   } else {
     disposeHistory();
     shell.historyPane.replaceChildren();

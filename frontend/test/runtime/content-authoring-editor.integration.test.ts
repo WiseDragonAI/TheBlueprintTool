@@ -568,7 +568,9 @@ test('Pierre 1.2.12 receives the adjacent patch and exposes red-blue non-color s
     assert.deepEqual(parsed, ['@@ -1 +1 @@\n-old\n+new', 'commit-a', true]);
     assert.ok(renderInput);
     const container = host.children[0];
-    assert.equal(container.style.values.get('--diffs-addition-color'), '#4d9cff');
+    assert.equal(container.style.values.get('--diffs-addition-color'), '#38d9e8');
+    assert.equal(container.style.values.get('--diffs-addition-color-override'), '#38d9e8');
+    assert.equal(container.style.values.get('--diffs-bg-addition-override'), 'rgba(56, 217, 232, 0.14)');
     assert.equal(container.style.values.get('--diffs-deletion-color'), '#ff5f6d');
     assert.match(container.getAttribute('aria-label') ?? '', /minus sign and red/);
     assert.match(container.getAttribute('aria-label') ?? '', /plus sign and blue/);
@@ -707,8 +709,13 @@ test('authoring dependencies, local assets, modal geometry, and responsive entry
   assert.match(vendorScript, /codemirror-6\.0\.2\.js/);
   assert.match(readFileSync(new URL('frontend/assets/vendor/codemirror-6.0.2.LICENSE', root), 'utf8'), /MIT License/);
   assert.match(readFileSync(new URL('frontend/assets/vendor/pierre-diffs-1.2.12.LICENSE', root), 'utf8'), /Apache License/);
-  assert.match(css, /\.skill-library-editor-modal\s*\{[^}]*width:\s*80vw;[^}]*height:\s*95vh;/s);
-  assert.match(css, /--diffs-addition-color:\s*#4d9cff/);
+  assert.match(css, /\.skill-library-editor-modal\s*\{[^}]*width:\s*min\(900px, calc\(100vw - 48px\)\);[^}]*max-width:\s*min\(900px, calc\(100vw - 48px\)\);[^}]*height:\s*95vh;/s);
+  assert.match(css, /\.codex-editor-modal \.skill-editor-tag-choice\s*\{[^}]*border:\s*1px solid color-mix\(in srgb, var\(--skill-category-color\), white 24%\);[^}]*background:\s*color-mix\(in srgb, var\(--skill-category-color\), transparent 82%\);/s);
+  assert.match(css, /\.codex-editor-modal \.skill-editor-tag-choice\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--skill-category-color\);/s);
+  assert.match(css, /--diffs-addition-color:\s*#38d9e8/);
+  assert.match(css, /\.authored-revision-content\.is-single-column\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
+  assert.match(css, /\.skill-library-editor-body\s*\{[^}]*grid-template-rows:\s*max-content max-content minmax\(240px, 34vh\) minmax\(280px, max-content\)/s);
+  assert.match(css, /\.skill-editor-owner-controls\s*\{[^}]*min-height:\s*max-content/s);
   assert.match(css, /--diffs-deletion-color:\s*#ff5f6d/);
   assert.match(responsiveBoot, /responsive-content-authoring-styles[^]*\/assets\/shared\/content-authoring\.css/);
   assert.match(sharedAuthoringCss, /@import url\('\.\.\/canvas\/dialogs\.css'\)/);
@@ -717,4 +724,5 @@ test('authoring dependencies, local assets, modal geometry, and responsive entry
   assert.match(responsive, /openSkillLibraryCreator\(\{/);
   assert.match(responsive, /openSkillLibraryEditor\(\{/);
   assert.match(responsive, /renderEditableSkillDocument\(\{/);
+  assert.match(readFileSync(new URL('frontend/src/runtime/codex/effect/render-skill-library-editor-modal.ts', root), 'utf8'), /decorateSkillCategoryLabel\(choice, tag\)/);
 });

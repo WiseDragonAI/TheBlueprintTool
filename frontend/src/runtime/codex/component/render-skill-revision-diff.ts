@@ -26,7 +26,12 @@ export async function renderSkillRevisionDiff(input: {
   container.className = 'skill-revision-pierre';
   container.setAttribute('role', 'group');
   container.setAttribute('aria-label', 'File changes. Removed lines use a minus sign and red. Added lines use a plus sign and blue.');
-  container.style.setProperty('--diffs-addition-color', '#4d9cff');
+  container.style.setProperty('--diffs-addition-color', '#38d9e8');
+  container.style.setProperty('--diffs-addition-color-override', '#38d9e8');
+  container.style.setProperty('--diffs-bg-addition-override', 'rgba(56, 217, 232, 0.14)');
+  container.style.setProperty('--diffs-bg-addition-emphasis-override', 'rgba(56, 217, 232, 0.22)');
+  container.style.setProperty('--diffs-fg-number-addition-override', '#38d9e8');
+  container.style.setProperty('--diffs-bg-addition-number-override', 'rgba(56, 217, 232, 0.18)');
   container.style.setProperty('--diffs-deletion-color', '#ff5f6d');
   input.host.replaceChildren(container);
   const renderer = new pierre.FileDiff({

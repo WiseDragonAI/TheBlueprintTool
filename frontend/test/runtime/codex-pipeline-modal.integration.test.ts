@@ -488,6 +488,84 @@ test('Process card derives source content, reloads skill defaults on reopen, and
   }
 });
 
+test('Process card opens pipeline prompts through the server-owned revision editor', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousLedger = state.activeLedger;
+  const previousProjectId = state.projectId;
+  const requestedUrls: string[] = [];
+  try {
+    state.projectId = 'project-a';
+    state.activeLedger = { cards: [{ id: 'card-source', comment: { what: 'Source content' } }] };
+    globalThis.fetch = (async (url: string) => {
+      requestedUrls.push(url);
+      if (url === '/api/codex/pipelines') {
+        return new Response(JSON.stringify({
+          ok: true,
+          pipelines: [pipeline],
+          steps,
+          availableContent: [...catalog, pipelinePrompt],
+          invalidReferences: [],
+          issues: [],
+        }), { status: 200 });
+      }
+      if (url === '/api/codex/skills') {
+        return new Response(JSON.stringify({ ok: true, skills: catalog }), { status: 200 });
+      }
+      if (url === '/api/codex/server-skills/pipeline-outline') {
+        return new Response(JSON.stringify({
+          ok: true,
+          availableTags: ['Automation'],
+          skill: {
+            ...pipelinePrompt,
+            markdown: '# Pipeline outline',
+            history: [{ commit: 'prompt-commit', authoredAt: timestamp, subject: 'Create prompt' }],
+          },
+        }), { status: 200 });
+      }
+      if (url.startsWith('/api/codex/server-skills/pipeline-outline/revisions?')) {
+        return new Response(JSON.stringify({
+          ok: true,
+          history: [{ commit: 'prompt-commit', authoredAt: timestamp, subject: 'Create prompt' }],
+          nextCursor: null,
+        }), { status: 200 });
+      }
+      if (url === '/api/codex/server-skills/pipeline-outline/revisions/prompt-commit') {
+        return new Response(JSON.stringify({
+          ok: true,
+          revision: {
+            commit: 'prompt-commit',
+            authoredAt: timestamp,
+            subject: 'Create prompt',
+            markdown: '# Pipeline outline',
+            patch: '@@ -0,0 +1 @@\n+# Pipeline outline',
+          },
+        }), { status: 200 });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    }) as typeof fetch;
+
+    await openCardProcessModal('card-source', 'skills');
+    const editPrompt = findByText(fakeDocument.processModal, 'Edit prompt')
+      .filter((element) => element.tagName === 'button');
+    assert.equal(editPrompt.length, 1);
+    editPrompt[0].trigger('click');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(skillLibraryEditorState.skillName, 'pipeline-outline');
+    assert.equal(skillLibraryEditorState.requestProjectId, '');
+    assert.match(fakeDocument.skillLibraryEditorModal.textContent, /pipeline-outline\.md/);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Editor').length, 0);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Revisions (1)').length, 0);
+    assert.match(fakeDocument.skillLibraryEditorModal.textContent, /Create prompt/);
+    assert.ok(requestedUrls.includes('/api/codex/server-skills/pipeline-outline'));
+    assert.equal(requestedUrls.some((url) => url.includes('/p/project-a/api/codex/skill-library/pipeline-outline')), false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    state.activeLedger = previousLedger;
+    state.projectId = previousProjectId;
+  }
+});
+
 test('Pipelines library renders loading, empty, error, and ordered expanded-step states', () => {
   Object.assign(pipelineLibraryState, { pipelines: [], steps: [], invalidReferences: [], issues: [], expandedPipelineId: '', loading: true, error: '' });
   renderPipelinesModal();
@@ -856,9 +934,11 @@ test('skill editor guards dirty close, returns focus, and navigates adjacent Git
       }), { status: 200 });
     }) as typeof fetch;
     await openSkillLibraryEditor({ skillName: 'analysis', requestProjectId: 'project-a' });
-    skillLibraryEditorState.historyInitialized = true;
-    findByText(fakeDocument.skillLibraryEditorModal, 'Revisions (2)')[0].trigger('click');
-    await selectSkillRevision(0);
+    for (let attempt = 0; attempt < 5 && skillLibraryEditorState.revisionDetail?.commit !== 'commit-new'; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Editor').length, 0);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Revisions (2)').length, 0);
     assert.equal(skillLibraryEditorState.revisionDetail?.commit, 'commit-new');
     const newer = findByText(fakeDocument.skillLibraryEditorModal, 'Newer')[0];
     const older = findByText(fakeDocument.skillLibraryEditorModal, 'Older')[0];
@@ -907,12 +987,14 @@ test('skill tag buttons save one value immediately and roll back a rejected opti
 
 test('modal sources retain loading, empty, read-only, and inherited-value states', () => {
   const process = source('frontend/src/runtime/codex/effect/render-card-process-modal.ts');
+  const editAction = source('frontend/src/runtime/codex/component/render-skill-library-edit-action.ts');
   const library = source('frontend/src/runtime/codex/effect/render-pipelines-modal.ts');
   const editor = source('frontend/src/runtime/codex/effect/render-pipeline-editor-modal.ts');
   assert.match(process, /Loading pipelines…/);
   assert.match(process, /No saved pipelines yet\./);
   assert.match(process, /Source card content is unavailable/);
-  assert.match(process, /skill\.readOnlyReason \|\| 'Read-only skill'/);
+  assert.match(process, /renderSkillLibraryEditAction/);
+  assert.match(editAction, /input\.readOnlyReason \|\| 'Read-only skill'/);
   assert.match(library, /pipeline\.stepIds\.forEach/);
   assert.match(library, /No saved pipelines yet\./);
   assert.match(library, /Could not load saved pipelines\./);

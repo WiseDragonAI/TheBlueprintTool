@@ -32,6 +32,7 @@ export function renderAuthoredFileRevision(input: {
   loading: boolean;
   hasOlderPage: boolean;
   filename: string;
+  showPreview?: boolean;
   onSelect: (index: number) => void;
   onRequestOlderPage: () => void;
   mountPreview: (host: HTMLElement, detail: AuthoredFileRevisionDetail) => void;
@@ -72,20 +73,24 @@ export function renderAuthoredFileRevision(input: {
   key.setAttribute('aria-label', 'Diff key: minus means removed in red; plus means added in blue');
   key.innerHTML = '<span class="is-removal">− Removed</span><span class="is-addition">+ Added</span>';
   const content = document.createElement('div');
-  content.className = 'authored-revision-content';
+  content.className = `authored-revision-content${input.showPreview === false ? ' is-single-column' : ''}`;
   if (input.loading || input.selectedDetail?.commit !== selected.commit) {
     content.textContent = 'Loading revision…';
   } else {
-    const preview = document.createElement('section');
-    preview.className = 'authored-revision-preview';
-    preview.setAttribute('role', 'region');
-    preview.setAttribute('aria-label', `${input.filename} full historical Markdown`);
     const diff = document.createElement('section');
     diff.className = 'skill-revision-viewport';
     diff.setAttribute('role', 'region');
     diff.setAttribute('aria-label', `${input.filename} changes introduced by revision ${selected.commit.slice(0, 12)}`);
-    content.append(preview, diff);
-    input.mountPreview(preview, input.selectedDetail);
+    if (input.showPreview === false) {
+      content.append(diff);
+    } else {
+      const preview = document.createElement('section');
+      preview.className = 'authored-revision-preview';
+      preview.setAttribute('role', 'region');
+      preview.setAttribute('aria-label', `${input.filename} full historical Markdown`);
+      content.append(preview, diff);
+      input.mountPreview(preview, input.selectedDetail);
+    }
     input.mountDiff(diff, input.selectedDetail);
   }
   browser.append(navigation, key, content);

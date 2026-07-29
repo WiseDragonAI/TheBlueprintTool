@@ -16,7 +16,9 @@ import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { processCardSkillController } from '../controller/process-card-skill-controller.js';
 import { renderCodexLibrary } from '../component/render-codex-library.js';
+import { renderSkillLibraryEditAction } from '../component/render-skill-library-edit-action.js';
 import { renderSkillLibraryItemContent } from '../component/render-skill-library-item-content.js';
+import { codexSkillAuthoringProjectId } from '../helper/codex-skill-authoring-path.js';
 import { colorForSkillTag, tagsForSkill } from '../helper/skill-library-presentation.js';
 import { mergePipelinePromptsIntoSkillCatalog } from '../helper/merge-pipeline-prompts-into-skill-catalog.js';
 import { codexEffortOptions, codexModelOptions } from '../helper/codex-run-options.js';
@@ -241,15 +243,14 @@ function renderSkillResult(skill: CodexSkillSummary): HTMLElement {
   defaults.className = 'process-result-metadata';
   defaults.textContent = `${skill.effectiveCodexModel} · ${skill.effectiveCodexEffort}`;
   select.replaceChildren(...renderSkillLibraryItemContent(skill), defaults);
-  const editCell = document.createElement('div');
-  editCell.className = 'process-skill-edit-cell';
-  if (skill.editable) {
-    editCell.append(button(skill.contentKind === 'pipeline-prompt' ? 'Edit prompt' : 'Edit skill', () => {
+  const editCell = renderSkillLibraryEditAction({
+    ...skill,
+    onEdit: () => {
       const generation = processLoadGeneration;
       const cardId = processModalState.cardId;
       void openSkillLibraryEditor({
         skillName: skill.name,
-        requestProjectId: state.projectId,
+        requestProjectId: codexSkillAuthoringProjectId(skill, state.projectId),
         onSaved: async () => {
           if (generation !== processLoadGeneration || cardId !== processModalState.cardId) return;
           await reloadProcessSkills();
@@ -260,13 +261,8 @@ function renderSkillResult(skill: CodexSkillSummary): HTMLElement {
           renderCardProcessModal();
         },
       });
-    }));
-  } else {
-    const reason = document.createElement('span');
-    reason.className = 'codex-readonly-reason';
-    reason.textContent = skill.readOnlyReason || 'Read-only skill';
-    editCell.append(reason);
-  }
+    },
+  });
   row.replaceChildren(select, editCell);
   return row;
 }

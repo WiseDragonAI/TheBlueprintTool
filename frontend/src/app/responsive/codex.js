@@ -172,6 +172,14 @@ async function refreshGlobalSkillAuthoring(savedSkill) {
   renderProcessList();
   if (!el('.process-detail').hidden) await renderProcessDetail(refreshed);
 }
+async function refreshProjectSkillAuthoring(savedSkill) {
+  state.skillDetails.clear();
+  await loadLibraries(state.projectId);
+  const refreshed = state.skills.find((skill) => skill.name === savedSkill.name) || savedSkill;
+  state.selected = refreshed;
+  renderProcessList();
+  if (!el('.process-detail').hidden) await renderProcessDetail(refreshed);
+}
 function createGlobalSkill() {
   openSkillLibraryCreator({
     requestProjectId: '',
@@ -187,6 +195,22 @@ function editGlobalSkill(record) {
     requestProjectId: '',
     onSaved: async (savedSkill) => { await refreshGlobalSkillAuthoring(savedSkill); },
     onSaveError: (error) => { message('.process-detail-message', error, true); },
+  });
+}
+function editSkillLibraryRecord(record) {
+  if (!record.editable) return;
+  const requestProjectId = codexSkillAuthoringProjectId(record, state.projectId);
+  void openSkillLibraryEditor({
+    skillName: record.name,
+    requestProjectId,
+    onSaved: async (savedSkill) => {
+      if (requestProjectId) await refreshProjectSkillAuthoring(savedSkill);
+      else await refreshGlobalSkillAuthoring(savedSkill);
+    },
+    onSaveError: (error) => {
+      const selector = el('.process-detail')?.hidden ? '.process-message' : '.process-detail-message';
+      message(selector, error, true);
+    },
   });
 }
 async function hydrateGlobalSkillDetail(record, container, generation) {
@@ -228,8 +252,10 @@ async function renderProcessDetail(record) {
       const favorite = button(record.favorite ? '★' : '☆', 'skill-favorite-toggle', () => { void toggleGlobalSkillFavorite(record); });
       favorite.setAttribute('aria-label', record.favorite ? 'Remove from favorites' : 'Add to favorites');
       favorite.setAttribute('aria-pressed', String(record.favorite === true));
+      const edit = button(record.contentKind === 'pipeline-prompt' ? 'Edit prompt' : 'Edit skill', 'codex-secondary skill-detail-edit', () => editGlobalSkill(record));
+      edit.hidden = record.editable !== true;
       const status = document.createElement('p'); status.className = 'codex-message process-detail-message'; status.setAttribute('role', 'status');
-      actions.append(tagsField, favorite, status);
+      actions.append(tagsField, favorite, edit, status);
       detail.append(scroll, actions);
       setMobileCodexView(document, 'detail', viewContext);
       await hydrateGlobalSkillDetail(record, scroll, generation);
@@ -242,7 +268,15 @@ async function renderProcessDetail(record) {
     const start = button('Start skill', 'primary-button process-start', () => startSkill(record, model.value, effort.value));
     start.disabled = !state.cardId;
     if (!state.cardId) start.title = 'Open a card to run this skill.';
-    detail.append(model, effort, start, processActionStatus());
+    const edit = button(record.contentKind === 'pipeline-prompt' ? 'Edit prompt' : 'Edit skill', 'codex-secondary skill-detail-edit', () => editSkillLibraryRecord(record));
+    edit.hidden = record.editable !== true;
+    detail.append(
+      model,
+      effort,
+      edit,
+      start,
+      processActionStatus(),
+    );
   } else {
     const steps = document.createElement('ol');
     for (const step of pipelineSteps(record)) { const item = document.createElement('li'); item.textContent = `${step.name}: ${step.skills.map((skill) => skill.skillName).join(', ') || 'No skills'}`; steps.append(item); }
@@ -618,4 +652,5 @@ import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-l
 import { setMobileCodexView } from './codex-view.js';
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
 import { mergePipelinePromptsIntoSkillCatalog } from '/src/runtime/codex/helper/merge-pipeline-prompts-into-skill-catalog.js';
+import { codexSkillAuthoringProjectId } from '/src/runtime/codex/helper/codex-skill-authoring-path.js';
 import { openSkillLibraryCreator, openSkillLibraryEditor } from '/src/runtime/codex/effect/render-skill-library-editor-modal.js';
