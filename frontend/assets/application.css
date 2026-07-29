@@ -94,7 +94,7 @@ button { color: inherit; }
 :where(button[aria-busy="true"], .is-loading)::after { content: ""; position: absolute; width: 16px; height: 16px; border: 2px solid var(--line-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 
 .app-shell { min-height: 100dvh; }
-.topbar {
+.application-topbar {
   position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px;
   min-height: 64px; padding: max(10px, env(safe-area-inset-top)) 14px 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
@@ -854,7 +854,7 @@ html[data-task-back-handoff="true"]::view-transition-new(root) { animation: task
     box-shadow: none;
   }
   .mobile-thread-inspector .thread-panel.agent-chat.phone { width: 100%; height: 100dvh; }
-  .topbar { padding-left: 24px; padding-right: 24px; }
+  .application-topbar { padding-left: 24px; padding-right: 24px; }
   .menu-button, .close-menu-button, .nav-scrim { display: none; }
   .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); }
   .ledger-nav { position: sticky; top: 64px; z-index: 10; width: auto; height: calc(100dvh - 64px); padding: 22px 14px; transform: none; }
