@@ -28,7 +28,7 @@ function boundedString(value: unknown, maximum = 32 * 1024): value is string {
   return typeof value === 'string' && value.length <= maximum;
 }
 
-function isPresentationEvent(value: unknown): value is TaskExecutionPresentationEvent {
+export function isTaskExecutionPresentationEvent(value: unknown): value is TaskExecutionPresentationEvent {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const event = value as Record<string, unknown>;
   if (!boundedString(event.id, 256)
@@ -69,7 +69,7 @@ export function isTaskExecutionPresentationUpdate(value: unknown): value is Task
   return typeof update.reset === 'boolean'
     && Array.isArray(update.events)
     && update.events.length <= 256
-    && update.events.every(isPresentationEvent);
+    && update.events.every(isTaskExecutionPresentationEvent);
 }
 
 export function applyTaskExecutionPresentationUpdate(

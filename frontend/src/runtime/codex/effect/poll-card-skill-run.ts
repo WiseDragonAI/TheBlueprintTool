@@ -8,7 +8,6 @@ import { requestCardSkillRunStatus, type CardSkillRunStatus, type CardSkillRunSu
 import { requestCardSkillRunCancel } from './request-card-skill-run-cancel.js';
 import { requestCardSkillRunContinue } from './request-card-skill-run-continue.js';
 import { activeCardCodexRunPreference } from '../helper/card-codex-run-preference.js';
-import { requestTaskExecutionPresentation } from './request-task-execution-state.js';
 import {
   requestCodexPipelineRunCancel,
   requestCodexPipelineRunRestart,
@@ -1090,33 +1089,6 @@ async function pollPipelineStep(poller: PipelineStepPoller): Promise<void> {
   if (status === 'running' && skill?.status === 'running') {
     poller.startedAtMs = timestampMs(skill.startedAt) || poller.startedAtMs || Date.now();
     schedulePipelineClock(poller);
-    if (!skill.logAvailable) {
-      paintPipelineError(poller, 'The active skill log is not available yet.', { keepCancel: result.canCancel });
-      schedulePipelinePoll(poller, 500);
-      return;
-    }
-    const presentation = await requestTaskExecutionPresentation({
-      projectId: poller.projectId,
-      replicaNodeId: poller.replicaNodeId,
-      executionId: skill.executionId,
-    });
-    if ('error' in presentation) {
-      paintPipelineError(poller, presentation.error || 'The active skill log could not be read.', { keepCancel: result.canCancel });
-      schedulePipelinePoll(poller);
-      return;
-    }
-    const counts = presentation.value.execution.counts;
-    const latest = presentation.value.events.at(-1);
-    setText(poller.element, '[data-codex-run-tools]', String(counts.tools));
-    setText(poller.element, '[data-codex-run-messages]', String(counts.messages + counts.thinking));
-    setText(poller.element, '[data-codex-run-files]', String(counts.files));
-    setText(
-      poller.element,
-      '[data-codex-run-latest]',
-      latest
-        ? latest.kind === 'tool_call' ? latest.command : latest.title || latest.kind
-        : 'Waiting for output',
-    );
   }
   const pipelineTerminal = result.run.status === 'complete' || result.run.status === 'failed' || result.run.status === 'cancelled';
   poller.terminal = pipelineTerminal;

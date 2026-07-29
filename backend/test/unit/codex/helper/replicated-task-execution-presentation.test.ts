@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyTaskExecutionPresentationUpdate,
+  isTaskExecutionPresentationEvent,
   isTaskExecutionPresentationUpdate,
   replicatedTaskExecutionPresentation,
 } from '@backend/business/codex/helper/replicated-task-execution-presentation.js';
@@ -63,6 +64,7 @@ test('rejects oversized presentation batches and projects replicated counts', ()
     events: Array.from({ length: 257 }, () => message),
   }), false);
   assert.equal(isTaskExecutionPresentationUpdate({ reset: false, events: [message, toolCompleted, subagent] }), true);
+  assert.equal(Array.from({ length: 257 }, () => message).every(isTaskExecutionPresentationEvent), true);
   const record = {
     metadata: {
       executionId: 'execution-a',

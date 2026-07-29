@@ -40,42 +40,53 @@ function createFileTail(input: {
   startOffset: number;
   onChunk: (chunk: Buffer) => void;
   onError: (error: unknown) => void;
-}): { drain(): void; stop(): void } {
+}): { drain(): Promise<void>; stop(): Promise<void> } {
   let offset = input.startOffset;
   let stopped = false;
-  let reading = false;
-  const drain = (): void => {
-    if (stopped || reading) return;
-    reading = true;
+  let activeDrain: Promise<void> | null = null;
+  const readAvailable = async (): Promise<void> => {
     try {
       const size = fileSize(input.path);
       if (size <= offset) return;
       const descriptor = openSync(input.path, 'r');
       try {
+        let bytesSinceYield = 0;
         while (offset < size) {
           const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, size - offset));
           const bytesRead = readSync(descriptor, chunk, 0, chunk.length, offset);
           if (bytesRead <= 0) break;
           offset += bytesRead;
+          bytesSinceYield += bytesRead;
           input.onChunk(chunk.subarray(0, bytesRead));
+          if (bytesSinceYield >= 256 * 1024 && offset < size) {
+            bytesSinceYield = 0;
+            await new Promise<void>((resolveYield) => setImmediate(resolveYield));
+          }
         }
       } finally {
         closeSync(descriptor);
       }
     } catch (error) {
       input.onError(error);
-    } finally {
-      reading = false;
     }
   };
-  const timer = setInterval(drain, 25);
+  const drain = (): Promise<void> => {
+    if (stopped) return Promise.resolve();
+    if (activeDrain) return activeDrain;
+    activeDrain = readAvailable().finally(() => {
+      activeDrain = null;
+    });
+    return activeDrain;
+  };
+  const timer = setInterval(() => void drain(), 25);
   timer.unref?.();
   return {
     drain,
-    stop() {
-      drain();
+    async stop() {
       stopped = true;
       clearInterval(timer);
+      await activeDrain;
+      await readAvailable();
     },
   };
 }
@@ -231,14 +242,13 @@ export async function launchCodexExecutionProcess(input: {
   let settled = false;
   let spawnReady = false;
   let pendingSettlement: CodexProcessSettlement | null = null;
-  const settle = (settlement: CodexProcessSettlement): void => {
+  const settle = async (settlement: CodexProcessSettlement): Promise<void> => {
     if (settled) return;
     settled = true;
     clearTimeout(executionDeadline);
     clearTimeout(forceStopDeadline);
     terminalReconciler.dispose();
-    stdoutTail.stop();
-    stderrTail.stop();
+    await Promise.all([stdoutTail.stop(), stderrTail.stop()]);
     try {
       flushCardSkillRunEventIngestor(ingestor, input.runId);
     } catch (error) {
@@ -247,7 +257,7 @@ export async function launchCodexExecutionProcess(input: {
     invokeCallback('settle-codex-process', () => input.onSettled(settlement));
   };
   const requestSettlement = (settlement: CodexProcessSettlement): void => {
-    if (spawnReady) settle(settlement);
+    if (spawnReady) void settle(settlement);
     else pendingSettlement ??= settlement;
   };
   child.once('error', (error) => requestSettlement({ kind: 'error', error, exitCode: null, terminalStatus, finishedAt: new Date().toISOString() }));
@@ -258,12 +268,11 @@ export async function launchCodexExecutionProcess(input: {
     clearTimeout(executionDeadline);
     clearTimeout(forceStopDeadline);
     terminalReconciler.dispose();
-    stdoutTail.stop();
-    stderrTail.stop();
+    await Promise.all([stdoutTail.stop(), stderrTail.stop()]);
     signalCodexProcessTree({ child, signal: 'SIGKILL' });
     throw error;
   }
   spawnReady = true;
-  if (pendingSettlement) settle(pendingSettlement);
+  if (pendingSettlement) void settle(pendingSettlement);
   return { child, startedAt };
 }
