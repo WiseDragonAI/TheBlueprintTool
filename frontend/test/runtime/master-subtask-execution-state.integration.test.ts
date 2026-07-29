@@ -19,6 +19,7 @@ test('active execution presentation is keyed by source subtask', () => {
     finishedAt: null,
     model: null,
     effort: null,
+    predecessorExecutionId: null,
     executorNodeId: 'workstation',
     revision: 2,
     queuePosition: phase === 'queued' ? 2 : null,

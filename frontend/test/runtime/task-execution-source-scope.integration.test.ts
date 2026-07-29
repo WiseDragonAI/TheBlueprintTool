@@ -22,6 +22,7 @@ function execution(executionId: string, sourceCardId: string, phase: TaskExecuti
     finishedAt: null,
     model: null,
     effort: null,
+    predecessorExecutionId: null,
     executorNodeId: 'workstation',
     revision: 2,
     queuePosition: phase === 'queued' ? 2 : null,

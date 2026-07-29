@@ -21,6 +21,7 @@ const presentationKinds = new Set([
   'tool_call',
   'file_change',
   'todo_list',
+  'subagent',
 ]);
 
 function boundedString(value: unknown, maximum = 32 * 1024): value is string {
@@ -53,6 +54,11 @@ function isPresentationEvent(value: unknown): value is TaskExecutionPresentation
         const entry = item as Record<string, unknown>;
         return boundedString(entry.text, 32 * 1024) && typeof entry.completed === 'boolean';
       });
+  }
+  if (event.kind === 'subagent') {
+    return boundedString(event.skillName, 4 * 1024)
+      && boundedString(event.model, 256)
+      && boundedString(event.effort, 256);
   }
   return boundedString(event.text);
 }

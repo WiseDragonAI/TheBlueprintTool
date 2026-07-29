@@ -48,6 +48,27 @@ function presentationId(event: NormalizedRunEvent): string {
   return `${event.kind}:event-${digest}`;
 }
 
+function commandFlag(command: string, name: string): string {
+  const match = command.match(new RegExp(`(?:^|\\s)--${name}\\s+(?:'([^']*)'|"([^"]*)"|([^\\s'"]+))`));
+  return String(match?.[1] ?? match?.[2] ?? match?.[3] ?? '').trim();
+}
+
+function queuedSubagent(event: NormalizedRunEvent): TaskExecutionPresentationEvent | null {
+  if (event.kind !== 'tool_call' || !/\bledger-cli\s+queue-skill\b/.test(event.tool)) return null;
+  const skillName = commandFlag(event.tool, 'skill');
+  if (!skillName) return null;
+  return {
+    id: `subagent:${event.itemId || presentationId(event)}`,
+    kind: 'subagent',
+    title: `Subagent · ${skillName}`,
+    status: event.status,
+    severity: event.severity,
+    skillName,
+    model: commandFlag(event.tool, 'model'),
+    effort: commandFlag(event.tool, 'effort'),
+  };
+}
+
 function presentationEvent(event: NormalizedRunEvent): TaskExecutionPresentationEvent | null {
   const base = {
     id: presentationId(event),
@@ -94,18 +115,22 @@ export function taskExecutionPresentationEvents(events: NormalizedRunEvent[]): T
     const presentedEvent = developerPrompt && (event.type === 'thread.started' || event.type === 'turn.started')
       ? { ...event, text: developerPrompt }
       : event;
-    const item = presentationEvent(presentedEvent);
-    if (!item) continue;
-    const lifecycleKey = event.itemId && (item.kind === 'tool_call' || item.kind === 'file_change' || item.kind === 'todo_list')
-      ? `${item.kind}:${event.itemId}`
-      : '';
-    // WHAT: Replace lifecycle updates in their original chronological position.
-    // WHY: Started, updated, and completed records describe one operator-visible tool or todo snapshot.
-    const existingIndex = lifecycleKey ? lifecycleIndexes.get(lifecycleKey) : undefined;
-    if (existingIndex !== undefined) presented[existingIndex] = item;
-    else {
-      if (lifecycleKey) lifecycleIndexes.set(lifecycleKey, presented.length);
-      presented.push(item);
+    // WHAT: Add a typed subagent card beside the underlying tool call.
+    // WHY: The inventory needs the launch contract while tool counts must continue to include the real CLI invocation.
+    const items = [queuedSubagent(presentedEvent), presentationEvent(presentedEvent)]
+      .filter((item): item is TaskExecutionPresentationEvent => Boolean(item));
+    for (const item of items) {
+      const lifecycleKey = event.itemId && (item.kind === 'tool_call' || item.kind === 'file_change' || item.kind === 'todo_list' || item.kind === 'subagent')
+        ? `${item.kind}:${event.itemId}`
+        : '';
+      // WHAT: Replace lifecycle updates in their original chronological position.
+      // WHY: Started, updated, and completed records describe one operator-visible tool, subagent, or todo snapshot.
+      const existingIndex = lifecycleKey ? lifecycleIndexes.get(lifecycleKey) : undefined;
+      if (existingIndex !== undefined) presented[existingIndex] = item;
+      else {
+        if (lifecycleKey) lifecycleIndexes.set(lifecycleKey, presented.length);
+        presented.push(item);
+      }
     }
   }
   return presented;

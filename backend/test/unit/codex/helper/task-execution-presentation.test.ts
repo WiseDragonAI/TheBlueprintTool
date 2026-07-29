@@ -69,13 +69,15 @@ test('returns one exact snapshot with typed todos and no raw tool result bytes',
     JSON.stringify({ type: 'item.started', item: { id: 'tool-1', type: 'command_execution', command: 'rg TODO', status: 'in_progress', aggregated_output: sentinel } }),
     JSON.stringify({ type: 'item.completed', item: { id: 'tool-1', type: 'command_execution', command: 'rg TODO', status: 'completed', exit_code: 0, aggregated_output: sentinel } }),
     JSON.stringify({ type: 'item.updated', item: { id: 'todo-1', type: 'todo_list', items: [{ text: 'Inspect', completed: true }, { text: 'Render', completed: false }] } }),
+    JSON.stringify({ type: 'item.started', item: { id: 'subagent-1', type: 'command_execution', command: "ledger-cli queue-skill --skill product-analysis --model gpt-5.6-luna --effort low", status: 'in_progress' } }),
+    JSON.stringify({ type: 'item.completed', item: { id: 'subagent-1', type: 'command_execution', command: "ledger-cli queue-skill --skill product-analysis --model gpt-5.6-luna --effort low", status: 'completed', exit_code: 0, aggregated_output: 'Queued product-analysis.' } }),
     JSON.stringify({ type: 'item.completed', item: { id: 'message-1', type: 'agent_message', text: 'First execution message.' } }),
     JSON.stringify({ type: 'item.completed', item: { id: 'comment-1', type: 'comment', text: 'Execution comment.' } }),
     JSON.stringify({ type: 'item.completed', item: { id: 'message-2', type: 'agent_message', text: 'Second execution message.' } }),
   ].join('\n'));
   writeFileSync(stderrFile, [
     `decision-os:codex-run-segment ${JSON.stringify({ runId: 'session-a', executionId: 'execution-1', startedAt: first.metadata.requestedAt, segment: 'start', startLine: 0 })}`,
-    `decision-os:codex-run-segment ${JSON.stringify({ runId: 'session-a', executionId: 'execution-2', startedAt: second.metadata.requestedAt, segment: 'continue', startLine: 8 })}`,
+    `decision-os:codex-run-segment ${JSON.stringify({ runId: 'session-a', executionId: 'execution-2', startedAt: second.metadata.requestedAt, segment: 'continue', startLine: 10 })}`,
   ].join('\n'));
   const records = [first, second];
   const state = {
@@ -140,6 +142,25 @@ test('returns one exact snapshot with typed todos and no raw tool result bytes',
         title: 'Todo list',
         status: 'in_progress',
         items: [{ text: 'Inspect', completed: true }, { text: 'Render', completed: false }],
+        severity: 'info',
+      },
+      {
+        id: 'subagent:subagent-1',
+        kind: 'subagent',
+        title: 'Subagent · product-analysis',
+        status: 'completed',
+        severity: 'info',
+        skillName: 'product-analysis',
+        model: 'gpt-5.6-luna',
+        effort: 'low',
+      },
+      {
+        id: 'tool_call:subagent-1',
+        kind: 'tool_call',
+        title: 'ledger-cli queue-skill --skill product-analysis --model gpt-5.6-luna --effort low',
+        command: 'ledger-cli queue-skill --skill product-analysis --model gpt-5.6-luna --effort low',
+        status: 'completed',
+        exitCode: '0',
         severity: 'info',
       },
       {
