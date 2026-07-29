@@ -609,6 +609,7 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .mobile-thread-inspector .thread-heading { grid-template-rows: 44px 44px; gap: 12px; }
 .mobile-thread-inspector .thread-heading[data-codex-running="true"] { grid-template-rows: 44px; gap: 0; }
 .mobile-thread-inspector .thread-toolbar { display: flex; justify-content: flex-end; gap: 8px; min-width: 0; min-height: 44px; }
+.mobile-thread-inspector .thread-fullscreen { display: none; }
 .mobile-thread-inspector .thread-tabs { height: 44px; padding: 0; }
 .mobile-thread-inspector .thread-tab { height: 44px; padding-inline: 9px; line-height: 44px; }
 .thread-close-button { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 auto; border: 1px solid rgba(255,255,255,.14); border-radius: 2px; color: #d7dee6; background: #181818; font-size: 22px; cursor: pointer; }

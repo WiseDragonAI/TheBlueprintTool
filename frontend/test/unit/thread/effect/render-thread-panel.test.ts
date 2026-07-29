@@ -170,6 +170,9 @@ function installDom(): { root: FakeElement; heading: FakeElement; codexLog: Fake
   const shell = fakeElement('main', 'shell');
   const target = fakeElement('div', 'thread-target');
   const heading = fakeElement('div', 'thread-heading');
+  const fullscreen = fakeElement('button', 'thread-fullscreen');
+  fullscreen.dataset.action = 'toggle-thread-fullscreen';
+  heading.append(fullscreen);
   const logPanel = fakeElement('section', 'thread-log-panel');
   const logScroll = fakeElement('div', 'thread-log-scroll');
   const codexLog = fakeElement('div', 'thread-codex-log');
@@ -432,6 +435,31 @@ test('thread selection persists the complete default pair and synchronizes a mou
     assert.equal(root.querySelector('.thread-panel')?.hidden, true);
   } finally {
     globalThis.fetch = previousFetch;
+  }
+});
+
+test('thread fullscreen toggles the inspector width without replacing the active log', async () => {
+  const { root, codexLog } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { toggleThreadPanelFullscreen } = await import('../../../../src/runtime/thread/effect/apply-thread-panel-fullscreen.js');
+  const panel = root.querySelector('.panel') as FakeElement;
+  const button = root.querySelector('[data-action="toggle-thread-fullscreen"]') as FakeElement;
+  try {
+    state.threadPanelFullscreen = false;
+
+    toggleThreadPanelFullscreen();
+
+    assert.equal(panel.classList.contains('is-thread-fullscreen'), true);
+    assert.equal(button.title, 'Restore thread panel');
+    assert.equal(root.querySelector('.thread-codex-log'), codexLog);
+
+    toggleThreadPanelFullscreen();
+
+    assert.equal(panel.classList.contains('is-thread-fullscreen'), false);
+    assert.equal(button.title, 'Expand thread panel');
+    assert.equal(root.querySelector('.thread-codex-log'), codexLog);
+  } finally {
+    state.threadPanelFullscreen = false;
   }
 });
 
