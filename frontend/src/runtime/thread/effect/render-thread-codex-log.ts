@@ -26,6 +26,7 @@ import { threadCodexSessionDeletionState } from '../../codex/controller/delete-t
 
 type HistoryEntry = { sessionId: string; executionId: string };
 type DisclosureByThread = Record<string, Record<string, boolean>>;
+type DisclosureSnapshot = Map<string, boolean>;
 
 function recordState(name: string): Record<string, any> {
   // WHAT: Repair presentation state maps when restoring a pre-cutover browser session.
@@ -38,6 +39,28 @@ function disclosureState(name: string, threadId: string): Record<string, boolean
   const byThread = recordState(name) as DisclosureByThread;
   if (!byThread[threadId] || typeof byThread[threadId] !== 'object') byThread[threadId] = {};
   return byThread[threadId];
+}
+
+function disclosureKey(details: HTMLDetailsElement): string {
+  if (details.dataset.eventKey) return `event:${details.dataset.eventKey}`;
+  if (details.dataset.toolGroupKey) return `tool-group:${details.dataset.toolGroupKey}`;
+  if (details.dataset.toolEventKey) return `tool:${details.dataset.toolEventKey}`;
+  return '';
+}
+
+function captureDisclosureSnapshot(root: HTMLElement): DisclosureSnapshot {
+  return new Map(
+    [...root.querySelectorAll<HTMLDetailsElement>('details')]
+      .map((details) => [disclosureKey(details), details.open] as const)
+      .filter(([key]) => Boolean(key)),
+  );
+}
+
+function restoreDisclosureSnapshot(root: HTMLElement, snapshot: DisclosureSnapshot): void {
+  for (const details of root.querySelectorAll<HTMLDetailsElement>('details')) {
+    const key = disclosureKey(details);
+    if (key && snapshot.has(key)) details.open = Boolean(snapshot.get(key));
+  }
 }
 
 function selectedThreadCard(threadId: string): Record<string, unknown> | null {
@@ -154,6 +177,7 @@ function renderTool(event: TaskExecutionToolEvent, threadId: string): HTMLElemen
   const rows = disclosureState('threadToolRowDisclosureByThreadId', threadId);
   const details = document.createElement('details');
   details.className = 'codex-tool-call';
+  details.dataset.toolEventKey = event.id;
   details.dataset.runStatus = event.status || 'pending';
   details.open = Boolean(rows[event.id]);
   details.addEventListener('toggle', () => { rows[event.id] = details.open; });
@@ -285,6 +309,7 @@ function renderQueuedWaiting(queuePosition: number | null): HTMLElement {
 export function renderThreadCodexLog(): void {
   const root = document.querySelector('.thread-codex-log') as HTMLElement | null;
   if (!root) return;
+  const disclosureSnapshot = captureDisclosureSnapshot(root);
   const threadId = String(state.threadId ?? '');
   const card = selectedThreadCard(threadId);
   root.replaceChildren();
@@ -411,4 +436,5 @@ export function renderThreadCodexLog(): void {
       threadId,
     }));
   }
+  restoreDisclosureSnapshot(root, disclosureSnapshot);
 }

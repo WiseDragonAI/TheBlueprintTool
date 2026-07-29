@@ -26,6 +26,7 @@ type FakeElement = {
   children: FakeElement[];
   classList: { toggle(name: string, force?: boolean): boolean; add(...names: string[]): void; remove(...names: string[]): void; contains(name: string): boolean };
   append(...nodes: FakeElement[]): void;
+  prepend(...nodes: FakeElement[]): void;
   appendChild(node: FakeElement): FakeElement;
   replaceChildren(...nodes: FakeElement[]): void;
   querySelector(selector: string): FakeElement | null;
@@ -117,6 +118,13 @@ function fakeElement(tagName = 'div', className = ''): FakeElement {
         if (node.parentElement) node.parentElement.children = node.parentElement.children.filter((child) => child !== node);
         node.parentElement = element;
         element.children.push(node);
+      }
+    },
+    prepend(...nodes: FakeElement[]) {
+      for (const node of [...nodes].reverse()) {
+        if (node.parentElement) node.parentElement.children = node.parentElement.children.filter((child) => child !== node);
+        node.parentElement = element;
+        element.children.unshift(node);
       }
     },
     appendChild(node: FakeElement) {
@@ -821,6 +829,95 @@ test('Codex Log counts continuations as separate runs with execution-scoped metr
     state.activeLedger = null;
     state.threadSelectedRunIdByThreadId = {};
     state.threadSelectedExecutionIdByThreadId = {};
+    state.threadTaskExecutionStateByThreadId = {};
+    state.threadExecutionPresentationByThreadId = {};
+  }
+});
+
+test('live Codex Log events preserve the viewport and every disclosure state', async () => {
+  const { root, codexLog } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadCodexLog } = await import('../../../../src/runtime/thread/effect/render-thread-codex-log.js');
+  const { renderThreadCodexLogUpdate } = await import('../../../../src/runtime/thread/effect/render-thread-codex-log-update.js');
+  const threadId = 'thread-card-live-interaction';
+  const execution = executionState({
+    executionId: 'execution-live-interaction',
+    sessionId: 'codex-skill-live-interaction',
+    phase: 'running',
+  });
+  const prompt = {
+    id: 'prompt',
+    kind: 'run_status',
+    title: 'User prompt',
+    text: 'Inspect the current task.',
+    status: 'running',
+    severity: 'info',
+  };
+  const tool = {
+    id: 'tool-one',
+    kind: 'tool_call',
+    title: 'Inspect',
+    command: 'rg current task',
+    status: 'completed',
+    exitCode: '0',
+    severity: 'info',
+  };
+  try {
+    state.activeTab = 'specs';
+    state.activeLedger = {
+      cards: [{ id: 'card-live-interaction', title: 'Live interaction' }],
+      annotations: [],
+      relationships: [],
+      notes: { [threadId]: [] },
+    };
+    state.threadId = threadId;
+    state.threadPanelOpen = true;
+    state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
+    state.threadLogFollowBottomByThreadId = { [threadId]: false };
+    state.threadTaskExecutionStateByThreadId = {
+      [threadId]: taskExecutionSummary(
+        'card-live-interaction',
+        [{ sessionId: execution.sessionId, executions: [execution] }],
+        [execution.executionId],
+      ),
+    };
+    state.threadExecutionPresentationByThreadId = {
+      [threadId]: executionPresentation(execution, [prompt, tool]),
+    };
+
+    renderThreadCodexLog();
+    const promptDisclosure = codexLog.querySelector('[data-event-key="prompt"]') as FakeElement & { open: boolean };
+    const toolDisclosure = codexLog.querySelector('[data-tool-event-key="tool-one"]') as FakeElement & { open: boolean };
+    promptDisclosure.open = true;
+    toolDisclosure.open = true;
+    const viewport = root.querySelector('.thread-log-scroll') as FakeElement;
+    viewport.scrollTop = 240;
+    viewport.scrollHeight = 1_200;
+    viewport.clientHeight = 400;
+
+    state.threadExecutionPresentationByThreadId[threadId] = executionPresentation(execution, [
+      prompt,
+      tool,
+      {
+        id: 'message',
+        kind: 'agent_message',
+        title: 'Codex message',
+        text: 'A new event arrived.',
+        status: '',
+        severity: 'info',
+      },
+    ]);
+    renderThreadCodexLogUpdate();
+
+    assert.equal(viewport.scrollTop, 240);
+    assert.equal((codexLog.querySelector('[data-event-key="prompt"]') as FakeElement & { open: boolean }).open, true);
+    assert.equal((codexLog.querySelector('[data-tool-event-key="tool-one"]') as FakeElement & { open: boolean }).open, true);
+  } finally {
+    state.threadId = '';
+    state.activeLedger = null;
+    state.threadPanelOpen = false;
+    state.threadActiveTabByThreadId = {};
+    state.threadLogFollowBottomByThreadId = {};
     state.threadTaskExecutionStateByThreadId = {};
     state.threadExecutionPresentationByThreadId = {};
   }
