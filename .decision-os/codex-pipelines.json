@@ -256,6 +256,14 @@
       "updatedAt": "2026-07-29T02:38:19.859Z",
       "kind": "pipeline-prompt",
       "contentFile": "pipeline-prompts/CLI_TOOLS.md"
+    },
+    {
+      "id": "GateTest",
+      "description": "Gate test",
+      "createdAt": "2026-07-29T02:39:48.866Z",
+      "updatedAt": "2026-07-29T02:39:48.866Z",
+      "kind": "pipeline-prompt",
+      "contentFile": "pipeline-prompts/GateTest.md"
     }
   ],
   "activeWorkspaceRun": null
