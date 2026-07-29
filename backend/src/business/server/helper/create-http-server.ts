@@ -948,9 +948,50 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     externalRunningCount: scheduledCodexRunningProcessCount,
   });
   const globalCodexRunningProcessCount = (): number => scheduledCodexRunningProcessCount() + sharedCodexCapacitySlots.reservedCount();
+  type CodexSchedulerContext = { root: string; runtime: AnyRecord };
+  const codexSchedulerContexts = (): CodexSchedulerContext[] => [
+    ...[...projectContexts.entries()].map(([root, context]) => ({ root, runtime: context.runtime })),
+    ...federatedSchedulerContexts.values(),
+  ];
+  const inspectCodexSchedulerContext = <Value>(
+    candidate: CodexSchedulerContext,
+    operation: string,
+    inspect: () => Value,
+  ): Value | null => {
+    if (candidate.runtime.codexRuntimePaused === true) return null;
+    try {
+      return inspect();
+    } catch (error) {
+      // WHAT: Contain queue-inspection failures to the project runtime that owns the unreadable state.
+      // WHY: A repaired pipeline store resolves its own incident, while a derived global scheduler
+      // pause survives and starves every healthy project despite available process capacity.
+      const report = candidate.runtime.onCodexBackgroundError;
+      if (typeof report === 'function') {
+        try {
+          report({
+            operation,
+            error,
+            context: {
+              projectId: String(candidate.runtime.projectId ?? ''),
+              decisionOsRoot: candidate.root,
+              ...(error instanceof RuntimeScopePausedError ? { upstreamScope: error.scope } : {}),
+            },
+          });
+        } catch {
+          // Diagnostics must not convert a contained inspection failure into a global scheduler failure.
+        }
+      }
+      return null;
+    }
+  };
   const globalCodexQueuePosition = (id: string): number => {
-    const pending = [...projectContexts.entries()].flatMap(([root, context], rootOrder) => pendingCodexProcessEntries(root, context.runtime)
-      .map((entry) => ({ ...entry, order: rootOrder * 2_000_000 + entry.order })))
+    const pending = codexSchedulerContexts().flatMap((candidate, rootOrder) => (
+      inspectCodexSchedulerContext(
+        candidate,
+        'inspect-project-codex-queue-position',
+        () => pendingCodexProcessEntries(candidate.root, candidate.runtime),
+      ) ?? []
+    ).map((entry) => ({ ...entry, order: rootOrder * 2_000_000 + entry.order })))
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.order - right.order);
     const index = pending.findIndex((entry) => entry.id === id);
     return index < 0 ? 1 : index + 1;
@@ -968,17 +1009,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         await Promise.resolve();
         capacity = globalCodexProcessCapacity();
         while (globalCodexRunningProcessCount() < capacity) {
-          const candidate = [...projectContexts.entries()]
-            .map(([root, context]) => ({ root, context, createdAt: nextPendingCodexProcessCreatedAt(root, context.runtime) }))
-            .concat([...federatedSchedulerContexts.values()].map(({ root, runtime: scopedRuntime }) => ({
-              root,
-              context: { runtime: scopedRuntime } as ProjectContext,
-              createdAt: nextPendingCodexProcessCreatedAt(root, scopedRuntime),
-            })))
-            .filter((entry): entry is { root: string; context: ProjectContext; createdAt: string } => entry.context.runtime.codexRuntimePaused !== true && Boolean(entry.createdAt))
+          const candidate = codexSchedulerContexts()
+            .map((entry) => ({
+              ...entry,
+              createdAt: inspectCodexSchedulerContext(
+                entry,
+                'inspect-project-codex-queue',
+                () => nextPendingCodexProcessCreatedAt(entry.root, entry.runtime),
+              ),
+            }))
+            .filter((entry): entry is CodexSchedulerContext & { createdAt: string } => Boolean(entry.createdAt))
             .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
           if (!candidate) break;
-          const result = await scheduleCodexProcesses({ decisionOsRoot: candidate.root, runtime: candidate.context.runtime, launchLimit: 1 });
+          const result = await scheduleCodexProcesses({ decisionOsRoot: candidate.root, runtime: candidate.runtime, launchLimit: 1 });
           const localLaunches = Array.isArray(result.launched) ? result.launched as AnyRecord[] : [];
           launched.push(...localLaunches);
           if (localLaunches.length === 0 || result.ok === false) break;

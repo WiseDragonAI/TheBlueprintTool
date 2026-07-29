@@ -325,6 +325,128 @@ test('task-state journal write failure preserves invalid bytes and pauses only i
   }
 });
 
+test('invalid project pipeline store pauses only its Codex runtime while global scheduling stays available', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'decision-os-pipeline-store-scheduler-containment-'));
+  const frontendRoot = join(home, 'frontend');
+  const projectRoots = [
+    { root: join(home, 'healthy'), projectId: 'healthy-project' },
+    { root: join(home, 'invalid'), projectId: 'invalid-project' },
+  ];
+  mkdirSync(join(home, '.decision-os'), { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  for (const project of projectRoots) {
+    const decisionOsRoot = join(project.root, '.decision-os');
+    mkdirSync(decisionOsRoot, { recursive: true });
+    writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: project.projectId }));
+    writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+      ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+    }));
+    writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+      cards: [],
+      annotations: [],
+      relationships: [],
+      notes: {},
+      threadFiles: {},
+    }));
+    writeFileSync(join(decisionOsRoot, 'codex-pipelines.json'), JSON.stringify({
+      version: 1,
+      pipelines: [],
+      steps: [],
+      runs: [],
+      skillLibrary: [],
+      authoredContent: [],
+      activeWorkspaceRun: null,
+    }));
+  }
+
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({
+    action_payload: {
+      port: 0,
+      host: '127.0.0.1',
+      cwd: home,
+      decisionOsFrontendRoot: frontendRoot,
+    },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const invalidStore = join(projectRoots[1].root, '.decision-os', 'codex-pipelines.json');
+
+  try {
+    writeFileSync(invalidStore, JSON.stringify({
+      version: 1,
+      pipelines: [],
+      steps: [],
+      runs: [],
+      skillLibrary: [],
+      authoredContent: [{ kind: 'skill', id: 'invalid id', name: 'Invalid' }],
+      activeWorkspaceRun: null,
+    }));
+    await waitUntil(async () => {
+      const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
+        pausedBackgroundComponents: string[];
+      };
+      return health.pausedBackgroundComponents.includes('codex-runtime:invalid-project');
+    });
+
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
+      status: string;
+      pausedBackgroundComponents: string[];
+    };
+    assert.equal(health.status, 'degraded');
+    assert.equal(health.pausedBackgroundComponents.includes('codex-process-scheduler'), false);
+    assert.equal(health.pausedBackgroundComponents.includes('codex-runtime:healthy-project'), false);
+    assert.equal((await fetch(`${baseUrl}/`)).status, 200);
+    assert.equal((await fetch(`${baseUrl}/api/federation/nodes`)).status, 200);
+
+    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`)
+      .then((response) => response.json()) as {
+        incidents: Array<{ scope: string; operation: string; context: Record<string, unknown> }>;
+      };
+    const contained = incidents.incidents.find((incident) => (
+      incident.scope === 'background:codex-runtime:invalid-project'
+      && incident.operation === 'inspect-project-codex-queue'
+    ));
+    assert.equal(contained?.context.projectId, 'invalid-project');
+    assert.equal(contained?.context.decisionOsRoot, join(projectRoots[1].root, '.decision-os'));
+    assert.equal(
+      contained?.context.upstreamScope,
+      `codex-pipeline-store:${join(projectRoots[1].root, '.decision-os', 'codex-pipelines.json')}`,
+    );
+
+    writeFileSync(invalidStore, JSON.stringify({
+      version: 1,
+      pipelines: [],
+      steps: [],
+      runs: [],
+      skillLibrary: [],
+      authoredContent: [],
+      activeWorkspaceRun: null,
+    }));
+    const resume = await fetch(`${baseUrl}/api/diagnostics/runtime/resume`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scope: 'background:codex-runtime:invalid-project',
+        resolution: 'Pipeline store corrected and revalidated.',
+      }),
+    });
+    assert.equal(resume.status, 200);
+    const resumed = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
+      pausedBackgroundComponents: string[];
+    };
+    assert.equal(resumed.pausedBackgroundComponents.includes('codex-runtime:invalid-project'), false);
+    assert.equal(resumed.pausedBackgroundComponents.includes('codex-process-scheduler'), false);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('keeps diagnostics online and pauses task admission for an interrupted epoch-4 transaction', async () => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-runtime-migration-admission-'));
   const decisionOsRoot = join(home, '.decision-os');
