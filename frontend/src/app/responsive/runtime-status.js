@@ -22,7 +22,6 @@ function projectPauseReasons(projectId, diagnostics) {
   const reasons = [];
   if (activeIncidents(diagnostics).some((incident) => incident.scope === 'server-runtime')) reasons.push('Server runtime');
   if (asSet(diagnostics?.pausedTaskProjectIds).has(projectId)) reasons.push('Task state');
-  if (asSet(diagnostics?.pausedFederatedTaskProjectIds).has(projectId)) reasons.push('Federated task state');
   if (asSet(diagnostics?.pausedProjectWatcherIds).has(projectId)) reasons.push('Project watcher');
   if (asSet(diagnostics?.pausedProjectRuntimeIds).has(projectId)) reasons.push('Project runtime');
   for (const component of asArray(diagnostics?.pausedBackgroundComponents).map(String)) {

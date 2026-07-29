@@ -57,5 +57,5 @@ test('decision-os-server launcher forwards supervisor termination signals to its
   assert.match(source, /for \(const signal of \['SIGTERM', 'SIGINT', 'SIGHUP'\]\)/);
   assert.match(source, /process\.once\(signal, \(\) => \{/);
   assert.match(source, /child\.kill\(signal\)/);
-  assert.match(source, /child\.once\('exit', \(code, signal\) => \{/);
+  assert.match(source, /activeChild\.once\('exit', \(code, signal\) => \{/);
 });

@@ -86,10 +86,72 @@ test('launcher serves durable diagnostics after its server child exits', async (
   const incidents = diagnostics.incidents as Array<Record<string, unknown>>;
   assert.equal(incidents[0]?.scope, 'server-launcher');
   assert.equal(incidents[0]?.code, 'server_child_exited');
+  assert.equal((incidents[0]?.context as Record<string, unknown>)?.restartAttempts, 3);
+  assert.deepEqual((incidents[0]?.context as Record<string, unknown>)?.restartDelaysMs, [100, 200, 400]);
   assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 503);
   const persisted = JSON.parse(readFileSync(resolve(workspace, '.decision-os/runtime-incidents.json'), 'utf8')) as { incidents: Array<{ id: string }> };
   assert.equal(persisted.incidents[0]?.id, incidents[0]?.id);
   assert.equal(child.exitCode, null, 'the launcher must remain alive while diagnostics are serving');
+});
+
+test('launcher restarts one transiently failed child before opening emergency mode', async (context) => {
+  const repositoryRoot = resolve(import.meta.dirname, '../../..');
+  const fixtureRepository = mkdtempSync(resolve(tmpdir(), 'decision-os-launcher-restart-repository-'));
+  const workspace = mkdtempSync(resolve(tmpdir(), 'decision-os-launcher-restart-workspace-'));
+  mkdirSync(resolve(fixtureRepository, 'bin'), { recursive: true });
+  mkdirSync(resolve(fixtureRepository, 'backend/src'), { recursive: true });
+  mkdirSync(resolve(workspace, '.decision-os'), { recursive: true });
+  copyFileSync(resolve(repositoryRoot, 'bin/decision-os-server.mjs'), resolve(fixtureRepository, 'bin/decision-os-server.mjs'));
+  copyFileSync(resolve(repositoryRoot, 'bin/decision-os-launcher-emergency.mjs'), resolve(fixtureRepository, 'bin/decision-os-launcher-emergency.mjs'));
+  symlinkSync(resolve(repositoryRoot, 'backend/node_modules'), resolve(fixtureRepository, 'backend/node_modules'), 'dir');
+  writeFileSync(resolve(fixtureRepository, 'backend/tsconfig.json'), JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext' } }));
+  writeFileSync(
+    resolve(fixtureRepository, 'backend/src/server.ts'),
+    "import { readFileSync, writeFileSync } from 'node:fs';\n"
+      + "import { createServer } from 'node:http';\n"
+      + "import { resolve } from 'node:path';\n"
+      + "const file = resolve(process.cwd(), '.decision-os', 'launcher-attempts');\n"
+      + "let attempt = 0; try { attempt = Number(readFileSync(file, 'utf8')); } catch {}\n"
+      + "attempt += 1; writeFileSync(file, String(attempt));\n"
+      + "if (attempt === 1) process.exit(17);\n"
+      + "createServer((_request, response) => { response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ ok: true, attempt })); }).listen(Number(process.env.PORT), String(process.env.HOST));\n",
+  );
+  const port = await freePort();
+  const child = spawn(process.execPath, [resolve(fixtureRepository, 'bin/decision-os-server.mjs')], {
+    cwd: workspace,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      HOST: '127.0.0.1',
+      DECISION_OS_LAUNCHER_MAX_RESTARTS: '2',
+      DECISION_OS_LAUNCHER_RESTART_DELAY_MS: '10',
+      DECISION_OS_LAUNCHER_STABILITY_MS: '1000',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  context.after(async () => {
+    if (child.exitCode === null) {
+      const exited = new Promise<void>((resolveExit) => child.once('exit', () => resolveExit()));
+      child.kill('SIGTERM');
+      await Promise.race([exited, new Promise<void>((resolveTimeout) => setTimeout(resolveTimeout, 2_000))]);
+    }
+    rmSync(fixtureRepository, { recursive: true, force: true });
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  let health: Record<string, unknown> | null = null;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/api/health`);
+      if (response.ok) health = await response.json() as Record<string, unknown>;
+      if (health) break;
+    } catch {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 20));
+    }
+  }
+  assert.deepEqual(health, { ok: true, attempt: 2 });
+  assert.equal(readFileSync(resolve(workspace, '.decision-os', 'launcher-attempts'), 'utf8'), '2');
+  assert.throws(() => readFileSync(resolve(workspace, '.decision-os/runtime-incidents.json'), 'utf8'));
 });
 
 test('launcher preserves an intentional zero-code server restart exit', async () => {

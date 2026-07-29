@@ -51,3 +51,33 @@ test('preserves an invalid incident ledger and records the corruption before acc
   ledger.record({ scope: 'project:a', component: 'task-state', operation: 'recover', error: new Error('collision') });
   assert.deepEqual(ledger.active().map((incident) => incident.code), ['runtime_incident_ledger_corrupt', 'collision']);
 });
+
+test('retains incidents that own live pauses before newer diagnostic history', (context) => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-runtime-incidents-protected-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  let tick = 0;
+  const protectedScopes = new Set(['project-task-state:protected']);
+  const ledger = createRuntimeIncidentLedger({
+    decisionOsRoot: root,
+    maxIncidents: 10,
+    protectedScopes: () => protectedScopes,
+    now: () => new Date(Date.UTC(2026, 6, 22, 0, 0, tick++)),
+  });
+  const protectedIncident = ledger.record({
+    scope: 'project-task-state:protected',
+    component: 'task-state',
+    operation: 'open',
+    error: new Error('protected_failure'),
+  });
+  for (let index = 0; index < 20; index += 1) {
+    ledger.record({
+      scope: `http-request:${index}`,
+      component: 'http-server',
+      operation: 'handle',
+      error: new Error(`request_failure_${index}`),
+    });
+  }
+  const snapshot = ledger.snapshot();
+  assert.equal(snapshot.incidents.length, 10);
+  assert.equal(snapshot.incidents.some((incident) => incident.id === protectedIncident.id), true);
+});

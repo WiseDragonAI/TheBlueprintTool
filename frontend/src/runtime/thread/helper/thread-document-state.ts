@@ -35,11 +35,17 @@ export function restoreThreadDocumentsIntoLedger(input: {
   projectId: string;
   replicaNodeId: string;
   ledgerId: string;
+  threadId?: string;
   ledger: AnyRecord | null | undefined;
 }): void {
   if (!input.ledger || typeof input.ledger !== 'object' || Array.isArray(input.ledger)) return;
   const prefix = [input.projectId, input.replicaNodeId, input.ledgerId].map(keyPart).join('/');
-  for (const [key, document] of Object.entries(store())) {
+  const documents = store();
+  const exactKey = input.threadId ? `${prefix}/${keyPart(input.threadId)}` : '';
+  const entries = exactKey
+    ? (documents[exactKey] ? [[exactKey, documents[exactKey]] as const] : [])
+    : Object.entries(documents);
+  for (const [key, document] of entries) {
     if (!key.startsWith(`${prefix}/`)) continue;
     const threadId = decodeURIComponent(key.slice(prefix.length + 1));
     const existingNotes = Array.isArray(input.ledger.notes?.[threadId]) ? input.ledger.notes[threadId] as AnyRecord[] : [];
