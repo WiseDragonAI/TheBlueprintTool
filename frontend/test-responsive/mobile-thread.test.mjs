@@ -261,7 +261,7 @@ test('mobile thread history and async refreshes are owned by the active presenta
   assert.match(refresh, /loadActiveThreadSlice\(scope, \{ allowMissingContentFile: true \}\)/);
   assert.match(source, /bumpThreadPresentationGeneration\(\)/);
   assert.match(source, /if \(!payload\.threadId[\s\S]*return;/);
-  assert.doesNotMatch(source, /eventSource\.addEventListener\('card-content-change', refresh\)/);
+  assert.match(source, /eventSource\.addEventListener\('card-content-change', refresh\)/);
 });
 
 test('mobile Codex Log exposes execution-fenced cancel and stop actions', () => {

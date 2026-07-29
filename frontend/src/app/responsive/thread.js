@@ -487,6 +487,7 @@ function subscribeEvents() {
     void recoverActiveThreadHydration('thread-content-event');
   };
   eventSource.addEventListener('ledger-content-change', refresh);
+  eventSource.addEventListener('card-content-change', refresh);
 }
 
 function unsubscribeEvents() {

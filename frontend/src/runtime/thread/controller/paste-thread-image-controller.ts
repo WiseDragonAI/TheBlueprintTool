@@ -2,12 +2,13 @@
  * WHAT: Uploads pasted clipboard images and records them as markdown thread notes.
  * WHY: Visual context should live in the same patchable thread markdown as text and voice notes.
  */
-import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
 import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { appendOptimisticThreadNote } from '../effect/append-optimistic-thread-note.js';
+import { commitPendingThreadMessage } from '../effect/commit-pending-thread-message.js';
 import { patchOptimisticThreadNote } from '../effect/patch-optimistic-thread-note.js';
+import { persistPendingThreadMessage } from '../effect/persist-pending-thread-message.js';
 
 type ThreadImageUploadResponse = {
   ok?: boolean;
@@ -59,17 +60,36 @@ export async function pasteThreadImageController(event: ClipboardEvent): Promise
     return true;
   }
   if (localPreview) URL.revokeObjectURL(localPreview);
-  patchOptimisticThreadNote({ threadId, noteId, body: markdown, status: 'committing image' });
-  const committed = await sendActiveLedgerMutation({
-    action: 'append-note',
-    note: { id: noteId, threadId, body: markdown }
-  });
+  let pending;
+  try {
+    // WHAT: Admit the uploaded image note through the same durable receipt as text.
+    // WHY: A backend rejection or reload must retain the exact markdown and retry identity.
+    pending = persistPendingThreadMessage({
+      projectId: String(state.projectId ?? ''),
+      replicaNodeId: String(state.replicaNodeId ?? ''),
+      ledgerId: currentLedgerStateId(),
+      threadId,
+      noteId,
+      body: markdown,
+    });
+  } catch (error) {
+    patchOptimisticThreadNote({
+      threadId,
+      noteId,
+      body: markdown,
+      status: 'image note persistence failed',
+      error: `Image note recovery is blocked locally (${error instanceof Error ? error.message : String(error)}).`,
+      optimistic: true,
+    });
+    return true;
+  }
   patchOptimisticThreadNote({
     threadId,
     noteId,
-    status: committed ? '' : 'image note commit failed',
-    error: committed ? '' : 'Backend did not confirm the image note.',
-    optimistic: !committed
+    body: markdown,
+    status: 'committing image',
+    pendingMessageId: noteId,
   });
+  await commitPendingThreadMessage(pending);
   return true;
 }

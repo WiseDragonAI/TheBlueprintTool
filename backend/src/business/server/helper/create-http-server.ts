@@ -2074,6 +2074,37 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       for (const sourceReplicaId of new Set(heads.map((head) => head.sourceReplicaId))) {
         federationContentStore.applyManifest(sourceReplicaId, { version: 1, projectId, generatedAt: new Date().toISOString(), complete: false, resources: heads.filter((head) => head.sourceReplicaId === sourceReplicaId).map(({ sourceReplicaId: _sourceReplicaId, ...head }) => head) });
       }
+      const localProject = projectCatalogStore.projects().find((project) => project.id === projectId && project.available);
+      const context = localProject ? projectContexts.get(localProject.decisionOsRoot) : null;
+      if (localProject && context) {
+        for (const key of keys) {
+          const scoped = resolveCardContentChange({
+            decisionOsRoot: localProject.decisionOsRoot,
+            taskProjection: () => projectTaskStates.get(projectId)?.projection().ledger ?? null,
+            change: {
+              contentFile: key,
+              file: resolve(localProject.decisionOsRoot, key.replace(/^\/?\.decision-os\//, '')),
+              kind: key.includes('/threads/') ? 'thread-content' : 'card-content',
+            },
+          });
+          if (!scoped) continue;
+          const invalidationRevision = context.revisions.advance(scoped.ledgerId);
+          const message = `event: card-content-change\ndata: ${JSON.stringify({
+            ...scoped,
+            remote: true,
+            projectId,
+            nodeId: from,
+            invalidationRevision,
+          })}\n\n`;
+          // WHAT: Publish the exact replicated Markdown owner to the hosted project's stream.
+          // WHY: An open thread must rehydrate when its causal resource head changes remotely.
+          for (const client of context.clients) {
+            try { client.write(message); } catch {
+              // A disconnected client cannot fail replicated state installation.
+            }
+          }
+        }
+      }
       controlRoomProjectionStore?.invalidate(projectId, delta.entities);
       for (const executionId of new Set(delta.entities.filter((entity) => entity.entityType === 'execution').map((entity) => entity.entityId))) {
         const executionState = executionStateForProject(projectId, from);

@@ -120,6 +120,11 @@ test('browser inputs route ledger commands through runtime controllers before se
   const pendingNoteCommit = source('frontend/src/runtime/thread/effect/commit-pending-thread-message.ts');
   assert.match(pendingNoteCommit, /sendActiveLedgerMutationResult/);
 
+  const pastedImage = source('frontend/src/runtime/thread/controller/paste-thread-image-controller.ts');
+  assert.match(pastedImage, /fetch\('\/api\/thread-image-upload'/);
+  assert.match(pastedImage, /persistPendingThreadMessage/);
+  assert.match(pastedImage, /commitPendingThreadMessage/);
+
   const fileUpload = source('frontend/src/runtime/thread/controller/upload-thread-file-controller.ts');
   assert.match(fileUpload, /fetch\('\/api\/thread-file-upload'/);
   assert.match(fileUpload, /sendActiveLedgerMutation\(\{[\s\S]*action: 'append-note'/);
