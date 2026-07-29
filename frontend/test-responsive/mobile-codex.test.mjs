@@ -20,9 +20,8 @@ test('mobile card detail exposes processing and both process libraries', () => {
   assert.match(html, /data-process-tab="pipelines"/);
   assert.match(mobile, /setMobileCodexContext\(\{ projectId: state\.resourceProjectId, ledgerId: state\.activeLedgerId, cardId: state\.activeCardId \}\)/);
   assert.match(script, /projectScopedRequestPath\(url, projectId\)/);
-  assert.match(script, /state\.pipelineContent\.filter\(\(content\) => content\.contentKind === 'pipeline-prompt'\)/);
-  assert.match(script, /if \(!mergedSkills\.has\(content\.name\)\) mergedSkills\.set\(content\.name, content\)/);
-  assert.match(script, /state\.skills = \[\.\.\.mergedSkills\.values\(\)\]/);
+  assert.match(script, /mergePipelinePromptsIntoSkillCatalog\(directSkills, state\.pipelineContent\)/);
+  assert.match(script, /mergePipelinePromptsIntoSkillCatalog\(serverSkillCatalog, state\.pipelineContent\)/);
   assert.match(script, /ledgerId: launch\.ledgerId, cardId: launch\.cardId, skillName: skill\.name/);
   assert.match(script, /ledgerId: launch\.ledgerId, sourceCardId: launch\.cardId, pipelineId: pipeline\.id/);
 });
@@ -107,7 +106,8 @@ test('global skills and pipelines read only the connection-synchronized local se
   assert.match(script, /jsonRequest\('\/api\/codex\/server-skills'\)/);
   assert.doesNotMatch(script, /Promise\.allSettled\(state\.projects\.map/);
   assert.match(script, /Library views must never fan out to remote projects/);
-  assert.match(script, /state\.skills = \(serverSkills\.skills \|\| \[\]\)/);
+  assert.match(script, /const serverSkillCatalog = \(serverSkills\.skills \|\| \[\]\)/);
+  assert.match(script, /mergePipelinePromptsIntoSkillCatalog\(serverSkillCatalog, state\.pipelineContent\)/);
   assert.match(script, /failedProjects: 0/);
   assert.doesNotMatch(script, /Choose the project whose (?:skill library|pipelines)/);
 });

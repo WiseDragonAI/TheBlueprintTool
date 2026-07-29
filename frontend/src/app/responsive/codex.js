@@ -27,10 +27,7 @@ async function loadLibraries(projectId = state.projectId) {
   const project = state.projects.find((entry) => entry.id === projectId);
   const directSkills = (Array.isArray(skills.skills) ? skills.skills : []).map((skill) => ({ ...skill, projects: project ? [project] : [] }));
   state.pipelineContent = (Array.isArray(pipelines.availableContent) ? pipelines.availableContent : []).map((content) => ({ ...content, projects: project ? [project] : [] }));
-  const mergedSkills = new Map(directSkills.map((skill) => [skill.name, skill]));
-  state.pipelineContent.filter((content) => content.contentKind === 'pipeline-prompt')
-    .forEach((content) => { if (!mergedSkills.has(content.name)) mergedSkills.set(content.name, content); });
-  state.skills = [...mergedSkills.values()];
+  state.skills = mergePipelinePromptsIntoSkillCatalog(directSkills, state.pipelineContent);
   state.availableTags = Array.isArray(skills.availableTags) && skills.availableTags.length ? skills.availableTags : [...skillCategories];
   state.pipelines = (Array.isArray(pipelines.pipelines) ? pipelines.pipelines : []).map((pipeline) => ({ ...pipeline, projectId, projectName: project?.name || '', projectColor: project?.color || '#20242b' }));
   state.steps = (Array.isArray(pipelines.steps) ? pipelines.steps : []).map((step) => ({ ...step, projectId }));
@@ -50,8 +47,9 @@ async function loadGlobalLibraries() {
   ]);
   state.availableTags = [...new Set(serverSkills.availableTags || [])];
   if (!state.availableTags.length) state.availableTags = [...skillCategories];
-  state.skills = (serverSkills.skills || []).map((skill) => ({ ...skill, projects: state.projects }));
   state.pipelineContent = (serverPipelines.availableContent || []).map((content) => ({ ...content, projects: state.projects }));
+  const serverSkillCatalog = (serverSkills.skills || []).map((skill) => ({ ...skill, projects: state.projects }));
+  state.skills = mergePipelinePromptsIntoSkillCatalog(serverSkillCatalog, state.pipelineContent);
   state.pipelines = (serverPipelines.pipelines || []).map((pipeline) => ({ ...pipeline, scope: 'server', projectId: '', projectName: 'Server', projectColor: '#38d9e8', projects: state.projects }));
   state.steps = (serverPipelines.steps || []).map((step) => ({ ...step, scope: 'server', projectId: '' }));
   return { issues: serverPipelines.issues || [], failedProjects: 0 };
@@ -619,4 +617,5 @@ import { renderCodexLibrary } from '/src/runtime/codex/component/render-codex-li
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { setMobileCodexView } from './codex-view.js';
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
+import { mergePipelinePromptsIntoSkillCatalog } from '/src/runtime/codex/helper/merge-pipeline-prompts-into-skill-catalog.js';
 import { openSkillLibraryCreator, openSkillLibraryEditor } from '/src/runtime/codex/effect/render-skill-library-editor-modal.js';

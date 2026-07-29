@@ -18,6 +18,7 @@ import { processCardSkillController } from '../controller/process-card-skill-con
 import { renderCodexLibrary } from '../component/render-codex-library.js';
 import { renderSkillLibraryItemContent } from '../component/render-skill-library-item-content.js';
 import { colorForSkillTag, tagsForSkill } from '../helper/skill-library-presentation.js';
+import { mergePipelinePromptsIntoSkillCatalog } from '../helper/merge-pipeline-prompts-into-skill-catalog.js';
 import { codexEffortOptions, codexModelOptions } from '../helper/codex-run-options.js';
 import { loadCodexPipelines, type CodexPipelineContentSummary } from './load-codex-pipelines.js';
 import { loadCodexSkillsResult, type CodexSkillSummary } from './load-codex-skills.js';
@@ -140,17 +141,6 @@ function directContentKind(skill: CodexSkillSummary): CodexContentKind {
   if (skill.contentKind === 'pipeline-prompt' || skill.source === 'pipeline-prompt') return 'pipeline-prompt';
   if (skill.contentKind === 'workspace-skill' || skill.source !== 'server') return 'workspace-skill';
   return 'federated-skill';
-}
-
-function cardProcessContent(
-  skills: readonly CodexSkillSummary[],
-  pipelineContent: readonly CodexPipelineContentSummary[],
-): CodexSkillSummary[] {
-  const merged = new Map(skills.map((skill) => [skill.name, skill]));
-  for (const content of pipelineContent) {
-    if (content.contentKind === 'pipeline-prompt' && !merged.has(content.name)) merged.set(content.name, content);
-  }
-  return [...merged.values()];
 }
 
 function pipelineReferences(pipelineId: string): readonly CodexPipelineInvalidReference[] {
@@ -573,7 +563,7 @@ export async function openCardProcessModal(cardId: string, initialMode: ProcessM
   processModalState.loadingPipelines = false;
   processModalState.loadingSkills = false;
   processModalState.pipelineContent = [...library.availableContent];
-  processModalState.skills = cardProcessContent(skillCatalog.skills, library.availableContent);
+  processModalState.skills = mergePipelinePromptsIntoSkillCatalog(skillCatalog.skills, library.availableContent);
   processModalState.skillCatalogError = skillCatalog.ok ? '' : skillCatalog.error || 'Could not load Codex skills.';
   if (library.ok) {
     processModalState.pipelines = library.pipelines;
@@ -651,7 +641,7 @@ export async function resynchronizeProcessLibraries(): Promise<boolean> {
   processModalState.loadingPipelines = false;
   processModalState.loadingSkills = false;
   processModalState.pipelineContent = [...library.availableContent];
-  processModalState.skills = cardProcessContent(skillCatalog.skills, library.availableContent);
+  processModalState.skills = mergePipelinePromptsIntoSkillCatalog(skillCatalog.skills, library.availableContent);
   processModalState.skillCatalogError = skillCatalog.ok ? '' : skillCatalog.error || 'Could not load Codex skills.';
   processModalState.pipelines = library.pipelines;
   processModalState.steps = library.steps;
@@ -768,7 +758,7 @@ export async function reloadProcessSkills(): Promise<void> {
   if (generation !== processLoadGeneration || cardId !== processModalState.cardId) return;
   const selectedName = processModalState.selectedSkillName;
   if (library.ok) processModalState.pipelineContent = [...library.availableContent];
-  processModalState.skills = cardProcessContent(result.skills, library.ok ? library.availableContent : processModalState.pipelineContent);
+  processModalState.skills = mergePipelinePromptsIntoSkillCatalog(result.skills, library.ok ? library.availableContent : processModalState.pipelineContent);
   processModalState.skillCatalogError = result.ok ? '' : result.error || 'Could not load Codex skills.';
   processModalState.loadingSkills = false;
   const nextSelection = processModalState.skills.find((skill) => skill.name === selectedName) ?? processModalState.skills[0];
