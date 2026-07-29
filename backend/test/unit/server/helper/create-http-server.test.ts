@@ -62,6 +62,34 @@ test('create-http-server serves shared TypeScript modules through their browser 
   }
 });
 
+test('create-http-server serves the System status application route', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-system-status-route-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html><title>System status</title>');
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({
+    action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/status`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
+    assert.match(await response.text(), /System status/);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test('create-http-server acknowledges a manual restart before invoking the supervisor exit hook', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-server-restart-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
