@@ -118,6 +118,9 @@ function createPromptRepository(input: {
     'FULL_THREAD',
     '{{FULL_THREAD}}',
     '',
+    'FILE_MAP',
+    '{{FILE_MAP}}',
+    '',
     'PREVIOUS_SKILL_RESULT',
     '{{PREVIOUS_SKILL_RESULT}}',
     '',
@@ -348,6 +351,7 @@ test('pipeline prompt construction injects runtime variables into only the autho
     '# Dynamic gate',
     'MASTER={{MASTER_TASK}}',
     'THREAD={{FULL_THREAD}}',
+    'FILES={{FILE_MAP}}',
     'PREVIOUS={{PREVIOUS_SKILL_RESULT}}',
     'CONTEXT={{EXECUTION_CONTEXT}}',
   ].join('\n');
@@ -375,6 +379,7 @@ test('pipeline prompt construction injects runtime variables into only the autho
       card: { id: 'master-task', title: 'Master task', markdown: '# Master task\n\nComplete objective.' },
       thread: { id: 'thread-master-task', markdown: '# OPERATOR\n\nContinue the iteration.' },
     },
+    fileMap: '.\n└── backend/\n    └── src/\n        └── server.ts',
     projectId: 'project-a',
     ledgerId: 'tasks',
     executionId: 'execution-a',
@@ -382,6 +387,7 @@ test('pipeline prompt construction injects runtime variables into only the autho
   assert.equal(prompt.startsWith('# Dynamic gate\n'), true);
   assert.match(prompt, /Complete objective\./);
   assert.match(prompt, /Continue the iteration\./);
+  assert.match(prompt, /FILES=\.\n└── backend\/\n    └── src\/\n        └── server\.ts/);
   assert.match(prompt, /PREVIOUS=# Worker result[\s\S]*Verified analysis\./);
   assert.match(prompt, /"projectId": "project-a"/);
   assert.match(prompt, /"executionId": "execution-a"/);
@@ -400,8 +406,11 @@ test('a running pipeline prompt queues one worker then returns with the latest t
   const taskThreadId = `thread-${taskCardId}`;
   const taskCardFile = join(fixture.decisionOsRoot, 'cards', 'tasks', `${taskCardId}.md`);
   const taskThreadFile = join(fixture.decisionOsRoot, 'threads', 'tasks', `${taskThreadId}.md`);
+  const sourceFile = join(fixture.workspace, 'src', 'dynamic-gate.ts');
   mkdirSync(join(taskCardFile, '..'), { recursive: true });
   mkdirSync(join(taskThreadFile, '..'), { recursive: true });
+  mkdirSync(join(sourceFile, '..'), { recursive: true });
+  writeFileSync(sourceFile, 'export const dynamicGate = true;\n');
   writeFileSync(join(fixture.decisionOsRoot, 'state.json'), JSON.stringify({
     ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
   }, null, 2));
@@ -581,6 +590,7 @@ test('a running pipeline prompt queues one worker then returns with the latest t
     assert.match(returningInput, /# Master objective[\s\S]*Implement the dynamic gate\./);
     assert.match(returningInput, /Start from the complete task conversation\./);
     assert.match(returningInput, /This latest operator message must reach the returning gate\./);
+    assert.match(returningInput, /FILE_MAP[\s\S]*src\/[\s\S]*dynamic-gate\.ts/);
     assert.match(returningInput, /PREVIOUS_SKILL_RESULT[\s\S]*WORKER_RESULT/);
     assert.match(returningInput, new RegExp(`"threadId": "${taskThreadId}"`));
     const firstEnvironment = JSON.parse(readFileSync(`${started.run.outputFile}.env.json`, 'utf8')) as Record<string, unknown>;

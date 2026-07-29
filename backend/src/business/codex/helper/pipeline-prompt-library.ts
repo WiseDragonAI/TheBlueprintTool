@@ -15,6 +15,7 @@ const promptVariable = /\{\{\s*([A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?)\
 export const pipelinePromptRuntimeVariables = new Set([
   'MASTER_TASK',
   'FULL_THREAD',
+  'FILE_MAP',
   'PREVIOUS_SKILL_RESULT',
   'EXECUTION_CONTEXT',
 ]);
