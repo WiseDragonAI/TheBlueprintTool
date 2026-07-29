@@ -543,6 +543,8 @@ function normalizeRuns(raw: unknown, issues: CodexPipelineStoreIssue[]): CodexPi
     normalized.push({
       id,
       restartOfPipelineRunId: nullableText(input.restartOfPipelineRunId),
+      queuedAfterExecutionId: nullableText(input.queuedAfterExecutionId),
+      initialInputCardId: nullableText(input.initialInputCardId),
       pipelineId: nullableText(input.pipelineId),
       pipelineName: text(input.pipelineName),
       temporary: input.temporary === true,

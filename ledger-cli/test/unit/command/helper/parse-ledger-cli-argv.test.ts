@@ -31,6 +31,21 @@ test('parse-ledger-cli-argv parses project and master-task creation commands', (
   });
 });
 
+test('parse-ledger-cli-argv parses dynamic skill queue commands', () => {
+  const command = parseLedgerCliArgv([
+    'queue-skill',
+    '--skill', 'analysis',
+    '--model', 'gpt-5.6-sol',
+    '--effort', 'ultra',
+  ]);
+  assert.equal(command.mode, 'queue-skill');
+  assert.deepEqual(command.queueSkillOperation, {
+    skillName: 'analysis',
+    codexModel: 'gpt-5.6-sol',
+    codexEffort: 'ultra',
+  });
+});
+
 test('parse-ledger-cli-argv parses targeted ledger mutations', () => {
   const command = parseLedgerCliArgv([
     'mutate',

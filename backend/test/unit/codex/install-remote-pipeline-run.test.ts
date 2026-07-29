@@ -151,6 +151,39 @@ test('installs one validated remote pipeline topology with executor-local artifa
 
     removeInstalledRemotePipelineRun({ decisionOsRoot, runId: run.id });
     assert.deepEqual(JSON.parse(readFileSync(join(decisionOsRoot, 'codex-pipelines.json'), 'utf8')).runs, []);
+
+    const dynamicRun: CodexPipelineRun = {
+      ...run,
+      id: 'pipeline-dynamic',
+      queuedAfterExecutionId: 'execution-gate',
+      initialInputCardId: 'gate-output',
+    };
+    const dynamicRequests = [createTaskExecutionLaunchRequest({
+      ...requests[0],
+      requestId: 'pipeline:pipeline-dynamic:execution-remote',
+      pipelineRunId: dynamicRun.id,
+      predecessorExecutionId: 'execution-gate',
+    })];
+    const dynamic = installRemotePipelineRun({
+      decisionOsRoot,
+      runtime,
+      run: dynamicRun,
+      requests: dynamicRequests,
+    });
+    assert.equal(dynamic.installed, true);
+    assert.equal(dynamic.run.queuedAfterExecutionId, 'execution-gate');
+    assert.equal(dynamic.run.initialInputCardId, 'gate-output');
+    assert.throws(() => installRemotePipelineRun({
+      decisionOsRoot,
+      runtime,
+      run: { ...dynamicRun, id: 'pipeline-dynamic-invalid' },
+      requests: [createTaskExecutionLaunchRequest({
+        ...dynamicRequests[0],
+        requestId: 'pipeline:pipeline-dynamic-invalid:execution-remote',
+        pipelineRunId: 'pipeline-dynamic-invalid',
+        predecessorExecutionId: null,
+      })],
+    }), /task_execution_pipeline_manifest_topology_mismatch/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

@@ -41,6 +41,8 @@ export function createCodexPipelineRunManifest(input: {
   firstOutputSubtaskPosition: number;
   ledgerPath: string;
   restartOfPipelineRunId?: string | null;
+  queuedAfterExecutionId?: string | null;
+  initialInputCardId?: string | null;
   reservedRunId?: string;
   reservedFirstExecutionId?: string;
   admittedPromptSnapshots?: ReadonlyMap<string, AdmittedPipelinePromptSnapshot>;
@@ -126,6 +128,8 @@ export function createCodexPipelineRunManifest(input: {
   return {
     id: runId,
     restartOfPipelineRunId: input.restartOfPipelineRunId ?? null,
+    queuedAfterExecutionId: input.queuedAfterExecutionId ?? null,
+    initialInputCardId: input.initialInputCardId ?? null,
     pipelineId: input.definition.pipelineId,
     pipelineName: input.definition.pipelineName,
     temporary: input.definition.temporary,

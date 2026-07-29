@@ -16,6 +16,8 @@ import {
 } from '../../../src/business/codex/helper/task-execution-router.js';
 import { createProjectTaskState, type ProjectTaskState } from '../../../src/business/task-state/helper/project-task-state.js';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
+import type { CodexPipelineRun } from '../../../../shared/schemas/codex-pipeline-types.js';
+import { cancelPipelineDependents } from '../../../src/business/codex/helper/codex-pipeline-runner.js';
 
 type Fixture = { root: string; state: ProjectTaskState };
 
@@ -326,6 +328,109 @@ test('admits a complete pipeline topology before publishing schedulable callback
   assert.equal(callbackSnapshots.length, 3);
   assert.deepEqual(callbackSnapshots[0], ['queued', 'queued', 'queued']);
   assert.deepEqual(callbackSnapshots.at(-1), ['queued', 'queued', 'queued']);
+});
+
+test('admits a dynamic pipeline whose declared external predecessor is the active caller', async (context) => {
+  const workstation = fixture('workstation');
+  context.after(() => dispose(workstation));
+  const router = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => workstation.state,
+    localNodeId: () => 'workstation',
+    peer: () => null,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+  });
+  await router.route(request({
+    requestId: 'request-gate',
+    executionId: 'execution-gate',
+    sessionId: 'session-gate',
+    kind: 'pipeline-skill',
+    pipelineRunId: 'pipeline-gate',
+    pipelineStepId: 'step-gate',
+    pipelineSkillRunId: 'skill-gate',
+  }));
+  await workstation.state.executions.transition('execution-gate', { phase: 'starting' });
+  await workstation.state.executions.transition('execution-gate', { phase: 'running' });
+  const topology = ['work', 'gate'].map((suffix, index) => request({
+    requestId: `request-dynamic-${suffix}`,
+    executionId: `execution-dynamic-${suffix}`,
+    sessionId: `session-dynamic-${suffix}`,
+    kind: 'pipeline-skill',
+    pipelineRunId: 'pipeline-dynamic',
+    pipelineStepId: `step-dynamic-${suffix}`,
+    pipelineSkillRunId: `skill-dynamic-${suffix}`,
+    predecessorExecutionId: index === 0 ? 'execution-gate' : 'execution-dynamic-work',
+  }));
+  const now = '2026-07-23T01:02:00.000Z';
+  const run: CodexPipelineRun = {
+    id: 'pipeline-dynamic',
+    restartOfPipelineRunId: null,
+    queuedAfterExecutionId: 'execution-gate',
+    initialInputCardId: 'gate-output',
+    pipelineId: null,
+    pipelineName: 'Dynamic work then gate',
+    temporary: true,
+    executionMode: 'local',
+    ledgerId: 'tasks',
+    sourceCardId: 'child',
+    sourceCardTitle: 'Child',
+    outputParentCardId: 'master',
+    status: 'pending',
+    steps: topology.map((launch, index) => ({
+      id: launch.pipelineStepId!,
+      stepId: launch.pipelineStepId!,
+      name: index === 0 ? 'Work' : 'Gate',
+      purpose: '',
+      outputCardId: `output-${index + 1}`,
+      outputSubtaskPosition: index,
+      status: 'pending',
+      startedAt: null,
+      finishedAt: null,
+      error: '',
+      skills: [{
+        id: `run-skill-${index + 1}`,
+        pipelineSkillId: launch.pipelineSkillRunId!,
+        skillName: index === 0 ? 'analysis' : 'gate',
+        contentKind: 'federated-skill',
+        runId: launch.sessionId,
+        executionId: launch.executionId,
+        status: 'pending',
+        codexModel: 'gpt-5.6-sol',
+        codexEffort: 'medium',
+        stdoutFile: `/tmp/${launch.sessionId}.jsonl`,
+        stderrFile: `/tmp/${launch.sessionId}.log`,
+        startedAt: null,
+        finishedAt: null,
+        error: '',
+      }],
+    })),
+    createdAt: now,
+    updatedAt: now,
+    startedAt: null,
+    finishedAt: null,
+    resumedAt: null,
+    error: '',
+  };
+
+  const receipts = await router.routeBatch(topology, { pipelineRun: run });
+
+  assert.deepEqual(receipts.map((receipt) => receipt.phase), ['queued', 'queued']);
+  assert.equal(workstation.state.executions.find('execution-gate')?.lifecycle.phase, 'running');
+  assert.equal(workstation.state.executions.find('execution-dynamic-work')?.metadata.predecessorExecutionId, 'execution-gate');
+  await workstation.state.executions.transition('execution-gate', {
+    phase: 'failed',
+    error: { code: 'gate_failed', message: 'Gate failed.' },
+  });
+  await cancelPipelineDependents({
+    runtime: { taskExecutionState: workstation.state },
+    pipelineRunId: 'pipeline-gate',
+    executionId: 'execution-gate',
+  });
+  assert.deepEqual(
+    ['execution-dynamic-work', 'execution-dynamic-gate']
+      .map((executionId) => workstation.state.executions.find(executionId)?.lifecycle.phase),
+    ['cancelled', 'cancelled'],
+  );
 });
 
 test('a failed queued-state commit publishes no direct Run scheduler callback', async (context) => {

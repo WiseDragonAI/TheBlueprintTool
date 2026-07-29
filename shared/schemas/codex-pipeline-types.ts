@@ -112,6 +112,10 @@ export type CodexPipelineRunStep = {
 export type CodexPipelineRun = {
   readonly id: string;
   readonly restartOfPipelineRunId?: string | null;
+  /** External execution that must succeed before this immutable run can start. */
+  readonly queuedAfterExecutionId?: string | null;
+  /** Existing card whose settled Markdown is the first skill's direct input. */
+  readonly initialInputCardId?: string | null;
   readonly pipelineId: string | null;
   readonly pipelineName: string;
   readonly temporary: boolean;

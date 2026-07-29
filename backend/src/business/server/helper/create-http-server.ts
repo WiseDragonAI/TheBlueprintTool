@@ -53,6 +53,7 @@ import { startCodexPipelineRunController } from '../../codex/controller/start-co
 import { readCodexPipelineRunController } from '../../codex/controller/read-codex-pipeline-run-controller.js';
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
+import { queueCodexSkillAfterExecutionController } from '../../codex/controller/queue-codex-skill-after-execution-controller.js';
 import { recoverTaskExecutions } from '../../codex/helper/recover-task-executions.js';
 import { stopAdoptedTaskExecutionMonitors } from '../../codex/helper/monitor-adopted-task-execution.js';
 import {
@@ -4549,6 +4550,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       })();
       const result = await startCodexPipelineRunController({
         action_payload: { ...runPayload, onLedgerChange: publishLedgerContentChange },
+        runtime_state: requestRuntime,
+      });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/executions/') && url.endsWith('/queue-skill') && request.method === 'POST') {
+      assertCodexRuntimeAvailable(requestRuntime);
+      const executionId = decodeRouteSegment(url.slice('/api/codex/executions/'.length, -'/queue-skill'.length));
+      const bodyBuffer = await readRequestBuffer(request);
+      const queuePayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const result = await queueCodexSkillAfterExecutionController({
+        action_payload: { ...queuePayload, executionId, onLedgerChange: publishLedgerContentChange },
         runtime_state: requestRuntime,
       });
       response.setHeader('content-type', 'application/json');

@@ -398,7 +398,10 @@ export function createTaskExecutionRouter(input: {
     localAdmissionTail = result.then(() => undefined, () => undefined);
     return result;
   };
-  const admitLocalBatchNow = async (requests: TaskExecutionLaunchRequest[]): Promise<TaskExecutionReceipt[]> => {
+  const admitLocalBatchNow = async (
+    requests: TaskExecutionLaunchRequest[],
+    context?: TaskExecutionBatchContext,
+  ): Promise<TaskExecutionReceipt[]> => {
     if (!Array.isArray(requests) || requests.length === 0) {
       throw new TaskExecutionAdmissionError('task_execution_topology_empty', 400);
     }
@@ -428,6 +431,25 @@ export function createTaskExecutionRouter(input: {
     }
     const taskIds = new Set(resolved.map((entry) => entry.taskId));
     if (taskIds.size !== 1) throw new TaskExecutionAdmissionError('task_execution_topology_task_mismatch', 400);
+    const externalPredecessorId = requests[0].predecessorExecutionId
+      && !executionIds.has(requests[0].predecessorExecutionId)
+      ? requests[0].predecessorExecutionId
+      : null;
+    if (externalPredecessorId) {
+      const predecessor = state.executions.find(externalPredecessorId);
+      if (
+        !context?.pipelineRun
+        || context.pipelineRun.id !== pipelineRunId
+        || context.pipelineRun.queuedAfterExecutionId !== externalPredecessorId
+        || !predecessor
+        || predecessor.metadata.taskId !== resolved[0].taskId
+        || !sourceCardIds.has(predecessor.metadata.sourceCardId)
+      ) {
+        throw new TaskExecutionAdmissionError('task_execution_external_predecessor_invalid', 409, {
+          predecessorExecutionId: externalPredecessorId,
+        });
+      }
+    }
     const byExecutionId = new Map(requests.map((request) => [request.executionId, request]));
     for (const request of requests) {
       if (request.predecessorExecutionId
@@ -463,6 +485,7 @@ export function createTaskExecutionRouter(input: {
     const concurrent = resolved[0].taskId
       ? state.executions.byTaskId(resolved[0].taskId).filter((record) => (
         !executionIds.has(record.metadata.executionId)
+        && record.metadata.executionId !== externalPredecessorId
         && activePhases.has(record.lifecycle.phase)
         && sourceCardIds.has(record.metadata.sourceCardId)
         && !(record.metadata.kind === 'pipeline-skill' && record.metadata.pipelineRunId === pipelineRunId)
@@ -535,8 +558,11 @@ export function createTaskExecutionRouter(input: {
       throw failure;
     }
   };
-  const localBatchAdmission = (requests: TaskExecutionLaunchRequest[]): Promise<TaskExecutionReceipt[]> => {
-    const result = localAdmissionTail.then(() => admitLocalBatchNow(requests));
+  const localBatchAdmission = (
+    requests: TaskExecutionLaunchRequest[],
+    context?: TaskExecutionBatchContext,
+  ): Promise<TaskExecutionReceipt[]> => {
+    const result = localAdmissionTail.then(() => admitLocalBatchNow(requests, context));
     localAdmissionTail = result.then(() => undefined, () => undefined);
     return result;
   };
@@ -575,7 +601,7 @@ export function createTaskExecutionRouter(input: {
     const uniqueDestinations = [...new Set(destinations)];
     if (uniqueDestinations.length !== 1) throw new TaskExecutionAdmissionError('task_execution_topology_executor_mismatch', 409);
     const assignedNodeId = uniqueDestinations[0];
-    if (assignedNodeId === localNodeId) return localBatchAdmission(requests);
+    if (assignedNodeId === localNodeId) return localBatchAdmission(requests, context);
     if (!input.peer(assignedNodeId)?.online) {
       throw new TaskExecutionAdmissionError(
         'assigned_node_unreachable',

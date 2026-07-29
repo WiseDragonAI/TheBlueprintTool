@@ -36,6 +36,8 @@ function topology(run: CodexPipelineRun): string {
   return JSON.stringify({
     id: run.id,
     restartOfPipelineRunId: run.restartOfPipelineRunId ?? null,
+    queuedAfterExecutionId: run.queuedAfterExecutionId ?? null,
+    initialInputCardId: run.initialInputCardId ?? null,
     pipelineId: run.pipelineId,
     pipelineName: run.pipelineName,
     temporary: run.temporary,
@@ -96,7 +98,9 @@ function assertPendingManifest(run: CodexPipelineRun, requests: TaskExecutionLau
       || request.ownerCardId !== step.outputCardId
       || request.model !== skill.codexModel
       || request.effort !== skill.codexEffort
-      || request.predecessorExecutionId !== (index === 0 ? null : flattened[index - 1].skill.executionId)) {
+      || request.predecessorExecutionId !== (index === 0
+        ? run.queuedAfterExecutionId ?? null
+        : flattened[index - 1].skill.executionId)) {
       throw new Error('task_execution_pipeline_manifest_topology_mismatch');
     }
   }
