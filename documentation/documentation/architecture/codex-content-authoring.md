@@ -179,8 +179,10 @@
 1. Authored Git uses `runBoundedProcess()` with finite deadlines, bounded stdout and stderr, cancellation, process identity, `SIGTERM` then timed `SIGKILL`, terminal settlement, and runtime-incident context.
 2. Slow Git and contained authoring failures do not stop unrelated HTTP routes, projects, task state, health, diagnostics, and federation traffic.
 3. Recovery records are owner-bound, bounded, and path-internal. API responses omit repository roots, temporary indexes, recovery-file paths, and physical content paths.
-4. Invalid pipeline-store bytes remain byte-identical, pause only their owning content scope, record a runtime incident, and remain excluded from catalog, execution, import, and export until explicit validated recovery.
-5. Stable shared content errors are:
+4. Invalid JSON, unsupported versions, structural errors, ambiguous references, and mixed validation failures remain byte-identical, pause only their owning pipeline-store scope, record a runtime incident, and remain excluded from catalog mutation, execution admission, import, and export until explicit validated recovery.
+5. A `pipeline-content-kind-mismatch` is automatically recoverable only when every write-blocking issue is that discriminator mismatch and the live catalog resolves every referenced identity. Recovery archives the exact original bytes under `.decision-os/codex-pipeline-recovery/<sha256>.json`, changes only each stale `contentKind`, atomically installs the revalidated store, and resolves the incident with the archive revision plus repaired identities.
+6. Catalog discovery is the discriminator authority: server-owned skills resolve to `federated-skill`, other agent-visible skills resolve to `workspace-skill`, and registered pipeline prompts take precedence over same-name skills. Catalog-free readers cannot resolve a discriminator incident.
+7. Stable shared content errors are:
    1. `browser_path_forbidden` — `422`
    2. `invalid_content_identity` — `422`
    3. `invalid_content_kind` — `422`
@@ -201,6 +203,6 @@
    18. `invalid_revision_retry` — `422`
    19. `content_reload_failed` — `500`
    20. `git_revision_failed` — `503` unless the contained Git owner supplied a more specific status
-6. Direct owner routing uses `markdown_editor_target_not_found` with `404` and `markdown_editor_target_ambiguous` with `409`.
-7. Task-card owner errors are listed in section D. Malformed legacy route parameters and metadata-only payload fields that have no stable code remain HTTP `400` text validation responses.
-8. Production admission, delivery recovery, and rollback are owned by [Production Delivery Protocol](../../procedure/deployment/production-delivery-protocol.md). Canary evidence is owned by [Canary Skill Authoring Dev Environment](../../procedure/deployment/canary-skill-authoring-dev-environment.md).
+8. Direct owner routing uses `markdown_editor_target_not_found` with `404` and `markdown_editor_target_ambiguous` with `409`.
+9. Task-card owner errors are listed in section D. Malformed legacy route parameters and metadata-only payload fields that have no stable code remain HTTP `400` text validation responses.
+10. Production admission, delivery recovery, and rollback are owned by [Production Delivery Protocol](../../procedure/deployment/production-delivery-protocol.md). Canary evidence is owned by [Canary Skill Authoring Dev Environment](../../procedure/deployment/canary-skill-authoring-dev-environment.md).

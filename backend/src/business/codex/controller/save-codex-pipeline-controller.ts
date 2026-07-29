@@ -2,14 +2,12 @@
  * WHAT: Creates or updates one saved pipeline and its reusable step definitions.
  * WHY: The library API must persist ordered definitions while retaining stale references for operator repair.
  */
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import type { CodexContentKind, CodexPipeline, CodexPipelineSkill, CodexPipelineStep } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { codexPipelineStoreWriteBlocker, mutateCodexPipelineStore, readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { isAllowedCodexEffort, isAllowedCodexModel } from '../helper/resolve-codex-command.js';
-import { scanCodexSkills } from '../helper/scan-codex-skills.js';
-import { scanPipelinePrompts } from '../helper/pipeline-prompt-library.js';
-import { runtimeServerRoot } from '../helper/server-skill-context.js';
 import { serverPipelineDecisionOsRoot } from '../helper/server-pipeline-catalog.js';
+import { availablePipelineContent } from '../helper/available-pipeline-content.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -115,16 +113,12 @@ export function saveCodexPipelineController(
   const timestamp = new Date().toISOString();
   const parsedSteps = parseSteps(payload.steps, timestamp);
   if (parsedSteps.error) return parsedSteps.error;
-  const availableSkills = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) });
-  const availablePrompts = scanPipelinePrompts(serverPipelineDecisionOsRoot(runtime, requestDecisionOsRoot));
-  const availableContentKinds = new Map<string, CodexContentKind>([
-    ...availableSkills.map((skill): [string, CodexContentKind] => [
-      skill.name,
-      skill.source === 'server' ? 'federated-skill' : 'workspace-skill',
-    ]),
-    ...availablePrompts.map((prompt): [string, CodexContentKind] => [prompt.name, 'pipeline-prompt']),
-  ]);
-  const availableSkillNames = [...availableContentKinds.keys()];
+  const available = availablePipelineContent({
+    decisionOsRoot: requestDecisionOsRoot,
+    runtime,
+  });
+  const availableContentKinds = available.kinds;
+  const availableSkillNames = available.names;
   for (const step of parsedSteps.steps ?? []) {
     for (const skill of step.skills) {
       const availableKind = availableContentKinds.get(skill.skillName);

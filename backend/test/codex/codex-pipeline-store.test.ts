@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -157,6 +158,128 @@ test('pipeline content kinds and prompt file references normalize into one conta
   assert.deepEqual(rejected.store.authoredContent, []);
 });
 
+test('catalog-backed reads archive invalid bytes and repair only stale content-kind discriminators', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-pipeline-kind-recovery-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const file = pipelineStoreFile(decisionOsRoot);
+  const raw = {
+    version: 2,
+    pipelines: [{ id: 'quality', name: 'Quality', purpose: '', stepIds: ['quality-step'], createdAt: 'one', updatedAt: 'one' }],
+    steps: [{
+      id: 'quality-step',
+      name: 'Quality',
+      purpose: '',
+      skills: [{
+        id: 'quality-skill',
+        skillName: 'code-quality-improver',
+        contentKind: 'federated-skill',
+        codexModel: null,
+        codexEffort: null,
+      }],
+      createdAt: 'one',
+      updatedAt: 'one',
+    }],
+    runs: [],
+    skillLibrary: [],
+    authoredContent: [],
+    activeWorkspaceRun: null,
+  };
+  try {
+    mkdirSync(decisionOsRoot, { recursive: true });
+    const invalidBytes = `${JSON.stringify(raw, null, 2)}\n`;
+    writeFileSync(file, invalidBytes);
+
+    const recovered = readCodexPipelineStore({
+      decisionOsRoot,
+      availableSkillNames: ['code-quality-improver'],
+      availableContentKinds: [['code-quality-improver', 'workspace-skill']],
+    });
+
+    assert.equal(recovered.availability, 'available');
+    assert.equal(recovered.store.steps[0].skills[0].contentKind, 'workspace-skill');
+    const repairedRaw = JSON.parse(readFileSync(file, 'utf8')) as typeof raw;
+    assert.deepEqual(repairedRaw, {
+      ...raw,
+      steps: [{
+        ...raw.steps[0],
+        skills: [{
+          ...raw.steps[0].skills[0],
+          contentKind: 'workspace-skill',
+        }],
+      }],
+    });
+    const revision = createHash('sha256').update(invalidBytes).digest('hex');
+    const archiveFile = join(decisionOsRoot, 'codex-pipeline-recovery', `${revision}.json`);
+    assert.equal(readFileSync(archiveFile, 'utf8'), invalidBytes);
+    const incidentDocument = JSON.parse(readFileSync(join(decisionOsRoot, 'runtime-incidents.json'), 'utf8')) as Record<string, any>;
+    const incident = incidentDocument.incidents.find((entry: Record<string, any>) => entry.code === 'codex_pipeline_store_invalid');
+    assert.equal(incident.status, 'resolved');
+    assert.equal(incident.context.archiveFile, archiveFile);
+    assert.equal(incident.context.originalRevision, revision);
+    assert.deepEqual(incident.context.repairedReferences, [{
+      stepId: 'quality-step',
+      skillId: 'quality-skill',
+      skillName: 'code-quality-improver',
+      from: 'federated-skill',
+      to: 'workspace-skill',
+    }]);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('failed discriminator recovery preserves invalid bytes and catalog-free reads cannot clear its incident', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-pipeline-kind-recovery-failure-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const file = pipelineStoreFile(decisionOsRoot);
+  const invalidBytes = `${JSON.stringify({
+    version: 2,
+    pipelines: [],
+    steps: [{
+      id: 'prompt-step',
+      name: 'Prompt',
+      purpose: '',
+      skills: [{
+        id: 'prompt-skill',
+        skillName: 'review-output',
+        contentKind: 'federated-skill',
+        codexModel: null,
+        codexEffort: null,
+      }],
+      createdAt: 'one',
+      updatedAt: 'one',
+    }],
+    runs: [],
+    skillLibrary: [],
+    authoredContent: [],
+    activeWorkspaceRun: null,
+  }, null, 2)}\n`;
+  try {
+    mkdirSync(decisionOsRoot, { recursive: true });
+    writeFileSync(file, invalidBytes);
+    writeFileSync(join(decisionOsRoot, 'codex-pipeline-recovery'), 'archive path is unavailable');
+
+    const failed = readCodexPipelineStore({
+      decisionOsRoot,
+      availableSkillNames: ['review-output'],
+      availableContentKinds: [['review-output', 'pipeline-prompt']],
+    });
+    assert.equal(failed.availability, 'unavailable');
+    assert.equal(readFileSync(file, 'utf8'), invalidBytes);
+
+    const catalogFree = readCodexPipelineStore({ decisionOsRoot });
+    assert.equal(catalogFree.availability, 'available');
+    const incidentFile = join(decisionOsRoot, 'runtime-incidents.json');
+    const activeDocument = JSON.parse(readFileSync(incidentFile, 'utf8')) as Record<string, any>;
+    const active = activeDocument.incidents.find((entry: Record<string, any>) => entry.id === failed.incidentId);
+    assert.equal(active.status, 'paused');
+    assert.match(active.context.recoveryError, /EEXIST|not a directory/i);
+    assert.equal(readFileSync(file, 'utf8'), invalidBytes);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('valid version-1 stores migrate atomically once while invalid and future bytes remain unchanged', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-pipeline-store-v2-'));
   const decisionOsRoot = join(workspace, '.decision-os');
@@ -203,6 +326,51 @@ test('valid version-1 stores migrate atomically once while invalid and future by
       return true;
     });
     assert.equal(readFileSync(file, 'utf8'), future);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('server startup migration assigns version-1 content kinds from the canonical catalog', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-pipeline-startup-kind-migration-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const file = pipelineStoreFile(decisionOsRoot);
+  try {
+    mkdirSync(decisionOsRoot, { recursive: true });
+    writeFileSync(file, `${JSON.stringify({
+      version: 1,
+      pipelines: [{ id: 'quality', name: 'Quality', purpose: '', stepIds: ['quality-step'], createdAt: 'one', updatedAt: 'one' }],
+      steps: [{
+        id: 'quality-step',
+        name: 'Quality',
+        purpose: '',
+        skills: [{
+          id: 'quality-skill',
+          skillName: 'code-quality-improver',
+          codexModel: null,
+          codexEffort: null,
+        }],
+        createdAt: 'one',
+        updatedAt: 'one',
+      }],
+      runs: [],
+      skillLibrary: [],
+      authoredContent: [],
+      activeWorkspaceRun: null,
+    }, null, 2)}\n`);
+
+    ensureServerPipelines({
+      serverDecisionOsRoot: decisionOsRoot,
+      availableSkillNames: ['code-quality-improver'],
+      availableContentKinds: [['code-quality-improver', 'workspace-skill']],
+    });
+
+    const migrated = JSON.parse(readFileSync(file, 'utf8')) as Record<string, any>;
+    assert.equal(migrated.version, 2);
+    assert.equal(
+      migrated.steps.find((step: Record<string, any>) => step.id === 'quality-step').skills[0].contentKind,
+      'workspace-skill',
+    );
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
