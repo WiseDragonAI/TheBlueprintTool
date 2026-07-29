@@ -3,27 +3,20 @@
  * WHY: Ledger IO, SSE publication, and Codex process callbacks share one server lifecycle for the active workspace.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, resolve } from 'node:path';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { resolveDecisionOsRoot } from '../helper/resolve-decision-os-root.js';
 import { normalizeLedgerNotes } from '../helper/normalize-ledger-notes.js';
+import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '../../ledger/helper/card-content-file.js';
 import { stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
 import { resolveCardContentChange, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 import { watchProjectFiles } from '../../refresh/helper/watch-project-files.js';
-import { applyLedgerMutation, type LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { createLedgerRevisionTracker } from '../helper/create-ledger-revision-tracker.js';
-import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
 import { readCodexPipelineRunController } from '../../codex/controller/read-codex-pipeline-run-controller.js';
-import { unifiedCodexQueuePosition } from '../../codex/helper/codex-process-scheduler.js';
-import {
-  taskExecutionNodeId,
-  taskExecutionState,
-} from '../../codex/helper/task-execution-runtime.js';
-import { buildTaskExecutionPresentation } from '../../codex/helper/task-execution-presentation.js';
-import { taskExecutionPresentationHttpResult } from '../../codex/helper/task-execution-presentation-http-result.js';
+import { taskExecutionState } from '../../codex/helper/task-execution-runtime.js';
 import { replicatedCardSkillRunStatus } from '../../codex/helper/replicated-card-skill-run-status.js';
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { TaskEntityChange } from '../../task-state/helper/task-current-state-types.js';
@@ -32,7 +25,7 @@ import { createProjectCatalogStore } from '../helper/project-catalog-store.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from '../helper/project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
 import { createControlRoomProjectionStore } from '../helper/control-room-projection-store.js';
-import { ledgerCardProjection, ledgerThreadProjection } from '../helper/ledger-read-models.js';
+import { ledgerThreadProjection } from '../helper/ledger-read-models.js';
 import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
 import { createFederationTaskStateReplicator } from '../../federation/helper/federation-task-state-replicator.js';
 import { createFederationContentReplicaStore } from '../../federation/helper/federation-content-replica-store.js';
@@ -98,6 +91,8 @@ import { handleRemoteProjectGateway } from '../../federation/http/remote-project
 import { createFederatedExecutionObservationHandler } from '../../federation/runtime/federated-execution-observation-handler.js';
 import { createProjectRuntimeRegistry } from '../runtime/project-runtime-registry.js';
 import { createRuntimeRecoveryService } from '../runtime/runtime-recovery-service.js';
+import { createCardAuthoringRuntime } from '../../ledger/runtime/card-authoring-runtime.js';
+import { createTaskExecutionPresentationReader } from '../../codex/runtime/task-execution-presentation-reader.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -1015,94 +1010,25 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
     const publishCardContentChange = context.publishCard;
     const publishLedgerContentChange = context.publishLedger;
     const localProject = activeProject ?? projectCatalog().find((project) => project.decisionOsRoot === decisionOsRoot);
-    const ledgerAuthoringDocument = (ledgerId: string): { ledger: AnyRecord; ledgerPath: string } | null => {
-      const registered = readCanonicalDecisionOsState({
-        action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json') },
-      }).ledgers.find((entry) => entry.id === ledgerId);
-      if (!registered) return null;
-      const ledgerPath = resolve(decisionOsRoot, registered.ledgerFile.replace(/^\.decision-os\//, ''));
-      if (ledgerId === tasksLedgerId && localProject) {
-        return { ledger: structuredClone(taskStateForProject(localProject).projection().ledger), ledgerPath };
-      }
-      if (!existsSync(ledgerPath)) return null;
-      return { ledger: JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord, ledgerPath };
-    };
+    const cardAuthoringRuntime = createCardAuthoringRuntime({
+      contentDrain: federationContentScheduler?.drain ?? null,
+      contentStore: federationContentStore,
+      decisionOsRoot,
+      invalidateProject: (projectId, changes) => controlRoomProjectionStore?.invalidate(
+        projectId,
+        changes ? [...changes] as TaskEntityChange[] : undefined,
+      ),
+      localProject,
+      publishContentChange: () => federation.publishContentChange(),
+      revisions: ledgerRevisions,
+      stateForProject: taskStateForProject,
+      watcher: context.watcher,
+    });
     const cardContentRoute = await handleCardContentRoutes({
       decisionOsRoot,
-      loadLedger: ledgerAuthoringDocument,
+      loadLedger: cardAuthoringRuntime.loadLedger,
       localProject,
-      patchCard: async ({ cardId, ledgerId, markdown, mutationId }) => {
-        if (!localProject) throw new Error('The card is not locally owned.');
-        const latest = ledgerAuthoringDocument(ledgerId);
-        if (!latest) throw new Error('The ledger disappeared before the card mutation.');
-        const before = structuredClone(latest.ledger);
-        const after = structuredClone(latest.ledger);
-        const mutation: LedgerMutation = {
-          action: 'patch-card',
-          mutationId,
-          cardPatch: { id: cardId, description: markdown },
-        };
-        if (ledgerId === tasksLedgerId) {
-          await materializeTaskMutationInputs({
-            projectId: localProject.id,
-            decisionOsRoot,
-            ledger: before,
-            mutation,
-            store: taskStateForProject(localProject).store,
-            contentStore: federationContentStore,
-            drain: federationContentScheduler?.drain ?? null,
-          });
-        }
-        const applied = applyLedgerMutation({
-          decisionOsRoot,
-          ledgerPath: latest.ledgerPath,
-          ledger: after,
-          mutation,
-        });
-        if (applied.error) {
-          throw new Error(String(applied.error.body.error ?? 'The card mutation was rejected.'));
-        }
-        if (ledgerId === tasksLedgerId) {
-          const committed = await taskStateForProject(localProject).executeMutation(
-            mutation,
-            before,
-            after,
-            applied.changedContentFiles,
-          );
-          if (committed.changed) {
-            controlRoomProjectionStore?.invalidate(localProject.id, committed.localChanges);
-          }
-          const taskClock = taskStateForProject(localProject).store.clientClock();
-          return {
-            changedCard: ledgerCardProjection({
-              decisionOsRoot,
-              ledgerId,
-              ledger: committed.ledger,
-              cardId,
-            }),
-            taskClock,
-            receipt: {
-              mutationId,
-              clock: taskClock,
-              entities: committed.localChanges,
-            },
-          };
-        }
-        context.watcher.ignoreNext(latest.ledgerPath);
-        writeFileSync(latest.ledgerPath, JSON.stringify(after, null, 2));
-        context.watcher.refreshOwnership();
-        controlRoomProjectionStore?.invalidate(localProject.id);
-        federation.publishContentChange();
-        ledgerRevisions.advance(ledgerId);
-        return {
-          changedCard: ledgerCardProjection({
-            decisionOsRoot,
-            ledgerId,
-            ledger: after,
-            cardId,
-          }),
-        };
-      },
+      patchCard: cardAuthoringRuntime.patchCard,
       request,
       requestUrl,
       response,
@@ -1110,93 +1036,19 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
       url,
     });
     if (cardContentRoute.handled) return;
-    const taskExecutionReadRoute = await handleTaskExecutionReadRoutes({
-      presentation: async (executionId) => {
-        const state = taskExecutionState(requestRuntime);
-        const execution = state?.executions.find(executionId) ?? null;
-        if (!state || !execution) {
-          return {
-            statusCode: 404,
-            body: JSON.stringify({ ok: false, error: 'task_execution_not_found', executionId }),
-          };
-        }
-        const executorNodeId = execution.lifecycle.executorNodeId;
-        const localExecutorNodeId = taskExecutionNodeId(requestRuntime);
-        if (executorNodeId !== localExecutorNodeId) {
-          const projection = executionPresentations.presentation(
-            execution.metadata.projectId,
-            executionId,
-            executorNodeId,
-          );
-          if (!projection?.hydrated) {
-            const hydrated = executionPresentations.locallyHydrated(state, execution);
-            if (hydrated) {
-              executionPresentations.setHydrated(
-                execution.metadata.projectId,
-                executionId,
-                executorNodeId,
-                hydrated.events,
-              );
-              return { statusCode: 200, body: JSON.stringify(hydrated) };
-            }
-            const remote = await executionPresentations.remotePresentation({
-              projectId: execution.metadata.projectId,
-              execution,
-              request,
-              response,
-            });
-            return 'presentation' in remote
-              ? {
-                statusCode: 200,
-                body: JSON.stringify(executionPresentations.replicated(execution, {
-                  events: remote.presentation.events,
-                  hydrated: true,
-                })),
-              }
-              : { statusCode: remote.statusCode, body: remote.body };
-          }
-          return {
-            statusCode: 200,
-            body: JSON.stringify(executionPresentations.replicated(execution, projection)),
-          };
-        }
-        const presentationRuntime = federatedSchedulerContexts.get(executionId)?.runtime
-          ?? requestRuntime;
-        const projection = executionPresentations.presentation(
-          execution.metadata.projectId,
-          executionId,
-          localExecutorNodeId,
-        );
-        const result = projection?.hydrated
-          ? {
-            ok: true as const,
-            presentation: executionPresentations.replicated(execution, projection),
-          }
-          : buildTaskExecutionPresentation({
-            executionId,
-            state,
-            runtime: presentationRuntime,
-          });
-        if ('presentation' in result && !projection?.hydrated) {
-          executionPresentations.setHydrated(
-            execution.metadata.projectId,
-            executionId,
-            localExecutorNodeId,
-            result.presentation.events,
-          );
-        }
-        const http = taskExecutionPresentationHttpResult(executionId, result);
-        return { statusCode: http.statusCode, body: http.body };
-      },
-      queuePosition: (record) => unifiedCodexQueuePosition({
-        decisionOsRoot: String(requestRuntime.decisionOsRoot ?? ''),
-        id: record?.metadata.executionId ?? '',
-        createdAt: record?.metadata.requestedAt ?? '',
-        runtime: requestRuntime,
-      }),
+    const presentationReader = createTaskExecutionPresentationReader({
+      presentationRegistry: executionPresentations,
       request,
       response,
-      state: taskExecutionState(requestRuntime),
+      runtime: requestRuntime,
+      runtimeForExecution: (executionId) => federatedSchedulerContexts.get(executionId)?.runtime ?? null,
+    });
+    const taskExecutionReadRoute = await handleTaskExecutionReadRoutes({
+      presentation: presentationReader.presentation,
+      queuePosition: presentationReader.queuePosition,
+      request,
+      response,
+      state: presentationReader.state,
       url,
     });
     if (taskExecutionReadRoute.handled) return;
