@@ -105,7 +105,7 @@ test('description editing opens the shared CodeMirror modal and keeps wheel even
 
 test('local app and asset routes are served without browser cache ambiguity', () => {
   const specs = source('documentation/specs.json');
-  const server = source('backend/src/business/server/helper/create-http-server.ts');
+  const server = source('backend/src/business/server/http/static-application-handler.ts');
 
   assert.match(specs, /3c1d8f6b/);
   assert.match(server, /response\.setHeader\('cache-control', 'no-store'\)/);

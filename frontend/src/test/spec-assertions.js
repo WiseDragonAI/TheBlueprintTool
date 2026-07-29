@@ -10,7 +10,7 @@ const specById = new Map((specs.cards ?? []).map((card) => [card.id, card]));
 const html = readFileSync('frontend/index.html', 'utf8');
 const css = readRuntimeSource('frontend/assets');
 const runtime = readRuntimeSource('frontend/src/runtime');
-const backendServer = readFileSync('backend/src/business/server/helper/create-http-server.ts', 'utf8');
+const backendServer = readRuntimeSource('backend/src/business');
 const packageJson = readFileSync('package.json', 'utf8');
 
 export async function assertFrontendSpec(title, specId, domain) {

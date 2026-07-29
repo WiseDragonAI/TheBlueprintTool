@@ -567,22 +567,36 @@ export function createTaskExecutionRouter(input: {
     return result;
   };
 
-  const route = async (request: TaskExecutionLaunchRequest): Promise<TaskExecutionReceipt> => {
+  const resolveDestination = (request: TaskExecutionLaunchRequest): {
+    taskId: string;
+    assignedNodeId: string;
+    localNodeId: string;
+    local: boolean;
+  } => {
     assertLaunchRequest(request);
     if (request.projectId !== input.projectId) throw new TaskExecutionAdmissionError('task_execution_project_mismatch', 400);
-    const state = input.state();
     const localNodeId = input.localNodeId();
-    const resolved = resolveTask({ state, request, localNodeId });
-    if (resolved.assignedNodeId === localNodeId) return localAdmission(request);
-    if (!input.peer(resolved.assignedNodeId)?.online) {
+    const resolved = resolveTask({ state: input.state(), request, localNodeId });
+    return {
+      taskId: resolved.taskId,
+      assignedNodeId: resolved.assignedNodeId,
+      localNodeId,
+      local: resolved.assignedNodeId === localNodeId,
+    };
+  };
+
+  const route = async (request: TaskExecutionLaunchRequest): Promise<TaskExecutionReceipt> => {
+    const destination = resolveDestination(request);
+    if (destination.local) return localAdmission(request);
+    if (!input.peer(destination.assignedNodeId)?.online) {
       throw new TaskExecutionAdmissionError(
         'assigned_node_unreachable',
         503,
-        { assignedNodeId: resolved.assignedNodeId },
-        `Assigned node ${resolved.assignedNodeId} is unreachable.`,
+        { assignedNodeId: destination.assignedNodeId },
+        `Assigned node ${destination.assignedNodeId} is unreachable.`,
       );
     }
-    return input.dispatchRemote(resolved.assignedNodeId, request);
+    return input.dispatchRemote(destination.assignedNodeId, request);
   };
   const routeBatch = async (
     requests: TaskExecutionLaunchRequest[],
@@ -619,7 +633,7 @@ export function createTaskExecutionRouter(input: {
     return input.dispatchRemoteBatch(assignedNodeId, requests, context);
   };
 
-  return { route, routeBatch, admitLocal: localAdmission, admitLocalBatch: localBatchAdmission };
+  return { resolveDestination, route, routeBatch, admitLocal: localAdmission, admitLocalBatch: localBatchAdmission };
 }
 
 export type TaskExecutionRouter = ReturnType<typeof createTaskExecutionRouter>;

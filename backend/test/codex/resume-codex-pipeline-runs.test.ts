@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
 import { taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';

@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
 

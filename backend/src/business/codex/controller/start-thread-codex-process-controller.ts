@@ -182,6 +182,100 @@ export async function startThreadCodexProcessController(input: { action_payload?
       runtime_state: runtime,
     });
   }
+  const runId = reservedRunId || `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  const executionId = reservedExecutionId || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  const runDirectoryRef = `.decision-os/runs/codex-skills/${safeSegment(ledgerStem(ledgerPath))}`;
+  const runDirectory = resolve(decisionOsRoot, runDirectoryRef.replace(/^\.decision-os\//, ''));
+  const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
+  const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
+  const runSummaryRef = `${runDirectoryRef}/${safeSegment(runId)}.md`;
+  const runSummaryFile = resolve(decisionOsRoot, runSummaryRef.replace(/^\.decision-os\//, ''));
+  let queueExecution: (() => Promise<AnyRecord>) | null = null;
+  if (!epoch4Dispatch) {
+    const selection = resolveCodexCommand({
+      workspaceRoot,
+      runtime,
+      codexModel: requestedCodexModel,
+      codexEffort: requestedCodexEffort,
+      developerInstructions: '',
+    });
+    const launchRequest = createTaskExecutionLaunchRequest({
+      requestId: optionalText(payload.requestId),
+      executionId,
+      projectId: String(runtime.projectId ?? ''),
+      ledgerId,
+      sessionId: runId,
+      sourceCardId: cardId,
+      ownerCardId: cardId,
+      kind: 'thread',
+      model: selection.model,
+      effort: selection.effort,
+    });
+    queueExecution = async (): Promise<AnyRecord> => {
+      try {
+        const receipt = await router!.route(launchRequest);
+        const run = {
+          id: runId,
+          executionId: receipt.executionId,
+          skillName: 'decision-os-thread',
+          kind: 'thread',
+          ledgerId,
+          sourceCardId: cardId,
+          sourceCardTitle: String(source.title ?? cardId),
+          sourceThreadId: threadId,
+          outputCardId: cardId,
+          outputFile: runSummaryFile,
+          stdoutFile,
+          stderrFile,
+          codexModel: selection.model,
+          codexEffort: selection.effort,
+          pid: 0,
+          status: 'pending',
+          createdAt: receipt.requestedAt,
+          startedAt: null,
+        };
+        updateRuntimeRun(runtime, runId, run);
+        notifyRuntimeCallback(runtime.onCodexRunAccepted, {
+          ledgerId,
+          cardId,
+          threadId,
+          runId,
+          executionId: receipt.executionId,
+          status: 'pending',
+          executorNodeId: receipt.executorNodeId,
+        });
+        return {
+          ok: true,
+          statusCode: 202,
+          receipt,
+          run: publicRun(run),
+          queued: true,
+          queuePosition: receipt.executorNodeId === taskExecutionNodeId(runtime)
+            ? unifiedCodexQueuePosition({ decisionOsRoot, id: receipt.executionId, createdAt: receipt.requestedAt, runtime })
+            : null,
+          maxConcurrentCodexProcesses: Number(runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object'
+            ? (runtime.decisionOsSettings as AnyRecord).maxConcurrentCodexProcesses ?? 1
+            : 1),
+        };
+      } catch (error) {
+        if (error instanceof TaskExecutionAdmissionError) {
+          return { ok: false, statusCode: error.statusCode, error: error.code, context: error.context, runId, executionId };
+        }
+        throw error;
+      }
+    };
+    try {
+      const destination = router!.resolveDestination(launchRequest);
+      // WHAT: Send remote work to its assignment before touching executor-local content.
+      // WHY: Only the selected executor can validate and materialize its mutable launch inputs.
+      if (!destination.local) return queueExecution();
+    } catch (error) {
+      if (error instanceof TaskExecutionAdmissionError) {
+        return { ok: false, statusCode: error.statusCode, error: error.code, context: error.context, runId, executionId };
+      }
+      throw error;
+    }
+  }
   const sourceComment = source.comment && typeof source.comment === 'object' && !Array.isArray(source.comment)
     ? source.comment as AnyRecord
     : {};
@@ -241,86 +335,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     return { ok: false, statusCode: 503, error: error instanceof Error ? error.message : String(error), cardId, threadId };
   }
   if (!sourceCardFile || !sourceThreadFile) return { ok: false, statusCode: 500, error: 'Could not resolve card or thread markdown file.', cardId, threadId };
-  const runId = reservedRunId || `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
-  const executionId = reservedExecutionId || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
-  const runDirectoryRef = `.decision-os/runs/codex-skills/${safeSegment(ledgerStem(ledgerPath))}`;
-  const runDirectory = resolve(decisionOsRoot, runDirectoryRef.replace(/^\.decision-os\//, ''));
-  const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
-  const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
-  const runSummaryRef = `${runDirectoryRef}/${safeSegment(runId)}.md`;
-  const runSummaryFile = resolve(decisionOsRoot, runSummaryRef.replace(/^\.decision-os\//, ''));
-  if (!epoch4Dispatch) {
-    const selection = resolveCodexCommand({
-      workspaceRoot,
-      runtime,
-      codexModel: requestedCodexModel,
-      codexEffort: requestedCodexEffort,
-      developerInstructions: '',
-    });
-    const launchRequest = createTaskExecutionLaunchRequest({
-      requestId: optionalText(payload.requestId),
-      executionId,
-      projectId: String(runtime.projectId ?? ''),
-      ledgerId,
-      sessionId: runId,
-      sourceCardId: cardId,
-      ownerCardId: cardId,
-      kind: 'thread',
-      model: selection.model,
-      effort: selection.effort,
-    });
-    try {
-      const receipt = await router!.route(launchRequest);
-      const run = {
-        id: runId,
-        executionId: receipt.executionId,
-        skillName: 'decision-os-thread',
-        kind: 'thread',
-        ledgerId,
-        sourceCardId: cardId,
-        sourceCardTitle: String(source.title ?? cardId),
-        sourceThreadId: threadId,
-        outputCardId: cardId,
-        outputFile: runSummaryFile,
-        stdoutFile,
-        stderrFile,
-        codexModel: selection.model,
-        codexEffort: selection.effort,
-        pid: 0,
-        status: 'pending',
-        createdAt: receipt.requestedAt,
-        startedAt: null,
-      };
-      updateRuntimeRun(runtime, runId, run);
-      notifyRuntimeCallback(runtime.onCodexRunAccepted, {
-        ledgerId,
-        cardId,
-        threadId,
-        runId,
-        executionId: receipt.executionId,
-        status: 'pending',
-        executorNodeId: receipt.executorNodeId,
-      });
-      return {
-        ok: true,
-        statusCode: 202,
-        receipt,
-        run: publicRun(run),
-        queued: true,
-        queuePosition: receipt.executorNodeId === taskExecutionNodeId(runtime)
-          ? unifiedCodexQueuePosition({ decisionOsRoot, id: receipt.executionId, createdAt: receipt.requestedAt, runtime })
-          : null,
-        maxConcurrentCodexProcesses: Number(runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object'
-          ? (runtime.decisionOsSettings as AnyRecord).maxConcurrentCodexProcesses ?? 1
-          : 1),
-      };
-    } catch (error) {
-      if (error instanceof TaskExecutionAdmissionError) {
-        return { ok: false, statusCode: error.statusCode, error: error.code, context: error.context, runId, executionId };
-      }
-      throw error;
-    }
-  }
+  if (!epoch4Dispatch) return queueExecution!();
   mkdirSync(runDirectory, { recursive: true });
   writeFileSync(runSummaryFile, [`# Thread Codex Run`, '', 'Status: processing', `Source card: ${String(source.title ?? cardId)}`, `Source thread: ${threadId}`, `Codex run: ${runId}`].join('\n'), 'utf8');
 

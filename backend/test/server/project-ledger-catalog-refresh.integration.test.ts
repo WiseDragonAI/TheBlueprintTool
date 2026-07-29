@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 
 test('refreshes catalog ledgers after a registered project state change', async () => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-project-ledger-refresh-'));

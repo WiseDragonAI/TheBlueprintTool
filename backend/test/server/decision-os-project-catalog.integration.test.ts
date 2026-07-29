@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 
 function createProject(root: string, path: string, title: string): void {
   const directory = join(root, path, '.decision-os');

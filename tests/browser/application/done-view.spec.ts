@@ -7,7 +7,7 @@ import { resolve, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { chromium } from '@playwright/test';
-import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 
 test('Done is a one-column project-first archive sorted by completion date', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-done-view-'));

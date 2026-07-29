@@ -158,6 +158,83 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   }
 
   const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime }) as AnyRecord & { cards?: AnyRecord[] };
+  const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+  if (!card) return fail(404, 'Run card not found.', { cardId });
+  const executionHistory = taskExecutionState(runtime)?.executions.bySessionId(runId) ?? [];
+  const previousExecution = executionHistory
+    .filter((candidate) => candidate.metadata.executionId !== executionId)
+    .sort((left, right) => right.metadata.requestedAt.localeCompare(left.metadata.requestedAt))[0] ?? null;
+  const executionMetadata = executionHistory.find((candidate) => candidate.metadata.executionId === executionId)?.metadata
+    ?? previousExecution?.metadata;
+  const codexModel = requestedCodexModel || optionalText(card.codexRunModel) || optionalText(executionMetadata?.model);
+  const codexEffort = requestedCodexEffort || optionalText(card.codexRunEffort) || optionalText(executionMetadata?.effort);
+
+  if (!epoch4Dispatch) {
+    const selection = resolveCodexCommand({ workspaceRoot, runtime, codexModel, codexEffort });
+    const launchRequest = createTaskExecutionLaunchRequest({
+      requestId: optionalText(payload.requestId),
+      executionId,
+      projectId: String(runtime.projectId ?? ''),
+      ledgerId,
+      sessionId: runId,
+      sourceCardId: cardId,
+      ownerCardId: cardId,
+      kind: 'continuation',
+      model: selection.model,
+      effort: selection.effort,
+    });
+    try {
+      const destination = router!.resolveDestination(launchRequest);
+      if (!destination.local) {
+        // WHAT: Route a remote continuation before inspecting executor-local artifacts.
+        // WHY: The requesting node must not require the assigned node's mutable run files.
+        const receipt = await router!.route(launchRequest);
+        const retainedRun = runtimeRuns(runtime)[runId] ?? {};
+        const admitted = {
+          id: runId,
+          executionId: receipt.executionId,
+          ledgerId,
+          outputCardId: cardId,
+          sourceCardTitle: String(card.title ?? cardId),
+          outputFile: outputFileForRunCard({ ledger, decisionOsRoot, cardId }),
+          stdoutFile: optionalText(retainedRun.stdoutFile),
+          stderrFile: optionalText(retainedRun.stderrFile),
+          codexModel: selection.model,
+          codexEffort: selection.effort,
+          pid: 0,
+          status: 'pending',
+          createdAt: receipt.requestedAt,
+          startedAt: null,
+          continuedAt: null,
+        };
+        updateRuntimeRun(runtime, runId, admitted);
+        notifyRuntimeCallback(runtime.onCodexRunAccepted, {
+          ledgerId,
+          cardId,
+          outputCardId: cardId,
+          threadId: `thread-${cardId}`,
+          runId,
+          executionId: receipt.executionId,
+          status: 'pending',
+          executorNodeId: receipt.executorNodeId,
+        });
+        return {
+          ok: true,
+          statusCode: 202,
+          receipt,
+          run: publicRun(admitted),
+          queued: true,
+          queuePosition: null,
+        };
+      }
+    } catch (error) {
+      if (error instanceof TaskExecutionAdmissionError) {
+        return fail(error.statusCode, error.code, { context: error.context, executionId });
+      }
+      throw error;
+    }
+  }
+
   const runFiles = resolveCardSkillRunFiles({ ledger, decisionOsRoot, ledgerPath, cardId, runId });
   const { runDirectory, stdoutFile, stderrFile } = runFiles;
   const sessionId = readRunSessionId(stdoutFile);
@@ -168,10 +245,6 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     return fail(404, 'Run not found on card.', { cardId });
   }
   const continuation = threadMessagesAfterLastCodexEvent({ ledger, decisionOsRoot, cardId, runId, traceId });
-  const executionHistory = taskExecutionState(runtime)?.executions.bySessionId(runId) ?? [];
-  const previousExecution = executionHistory
-    .filter((candidate) => candidate.metadata.executionId !== executionId)
-    .sort((left, right) => right.metadata.requestedAt.localeCompare(left.metadata.requestedAt))[0] ?? null;
   const interrupted = !previousExecution || previousExecution.lifecycle.phase !== 'succeeded';
   const messages = continuation.messages.length > 0
     ? continuation.messages
@@ -186,11 +259,6 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     : outputFileForRunCard({ ledger, decisionOsRoot, cardId });
   if (!outputFile) return fail(500, 'Run output card content file was not found.', { cardId });
   if (newSession && !existsSync(outputFile)) return fail(500, 'Run output card content file was not found.', { cardId, outputFile });
-  const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
-  const executionMetadata = executionHistory.find((candidate) => candidate.metadata.executionId === executionId)?.metadata
-    ?? previousExecution?.metadata;
-  const codexModel = requestedCodexModel || optionalText(card?.codexRunModel) || optionalText(executionMetadata?.model);
-  const codexEffort = requestedCodexEffort || optionalText(card?.codexRunEffort) || optionalText(executionMetadata?.effort);
 
   const command = newSession
     ? resolveCodexCommand({ workspaceRoot, runtime, codexModel, codexEffort })
@@ -203,7 +271,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       ledgerFile: ledgerPath,
       runId,
       cardId,
-      cardTitle: String(card?.title ?? cardId),
+      cardTitle: String(card.title ?? cardId),
       outputFile,
       outputMarkdown: readFileSync(outputFile, 'utf8'),
       context: buildCardLaunchContext({
@@ -237,7 +305,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
         executionId: receipt.executionId,
         ledgerId,
         outputCardId: cardId,
-        sourceCardTitle: String(card?.title ?? cardId),
+        sourceCardTitle: String(card.title ?? cardId),
         outputFile,
         stdoutFile,
         stderrFile,
@@ -288,7 +356,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     executionId,
     ledgerId,
     outputCardId: cardId,
-    sourceCardTitle: String(card?.title ?? cardId),
+    sourceCardTitle: String(card.title ?? cardId),
     outputFile,
     stdoutFile,
     stderrFile,
@@ -318,7 +386,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     stderrFile,
     segment: newSession ? 'restart' : 'continue',
     startLine: eventStartLine,
-    metadata: { sourceCardTitle: String(card?.title ?? cardId), codexModel: command.model, codexEffort: command.effort },
+    metadata: { sourceCardTitle: String(card.title ?? cardId), codexModel: command.model, codexEffort: command.effort },
     onSpawn: async (child, continuedAt) => {
       const processStartTime = codexProcessIdentity(child.pid ?? 0);
       const state = taskExecutionState(runtime);

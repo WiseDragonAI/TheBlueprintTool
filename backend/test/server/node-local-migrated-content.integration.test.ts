@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { createHttpServer } from '../../src/business/server/helper/create-http-server.js';
+import { createHttpServer } from '../../src/business/server/application/create-decision-os-server.js';
 import { migrateTaskCurrentState } from '../../src/business/task-state/helper/task-current-state-migration.js';
 import { createTaskCurrentStateStore } from '../../src/business/task-state/helper/task-current-state-store.js';
 

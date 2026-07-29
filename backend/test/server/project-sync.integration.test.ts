@@ -7,7 +7,7 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { createHttpServer } from '../../src/business/server/helper/create-http-server.js';
+import { createHttpServer } from '../../src/business/server/application/create-decision-os-server.js';
 
 function git(root: string, ...args: string[]): void {
   execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' });
