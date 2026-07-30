@@ -100,7 +100,7 @@
       "x": 8563.44620036609,
       "y": -1074.5771873692875,
       "w": 1067,
-      "h": 3734,
+      "h": 4262,
       "status": "todo",
       "comment": {
         "contentFile": ".decision-os/cards/ux/card-codex-skill-1783675746962-60884f4b.md"
@@ -111,8 +111,8 @@
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/ux/codex-skill-1783685269400-40d079f1.md",
       "imageSizes": {
         ".decision-os/thread-images/thread-card-codex-skill-1783675746962-60884f4b/codex-log-corrected.png": {
-          "width": 220,
-          "height": 367
+          "width": 583,
+          "height": 972
         }
       },
       "codexRunModel": "gpt-5.6-sol",
