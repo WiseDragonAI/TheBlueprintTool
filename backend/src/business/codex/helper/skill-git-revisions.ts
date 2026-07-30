@@ -9,10 +9,12 @@ import {
   commitAuthoredFileRevision,
   readAuthoredFileRevisionContent,
   readAuthoredFileRevisionHistory,
+  readCurrentAuthoredFileRevisionContent,
   retryAuthoredFileRevision,
   type AuthoredFileConfirmation,
   type AuthoredFileRevision,
   type AuthoredFileRevisionHistoryPage,
+  type AuthoredFileRevisionSnapshot,
   type AuthoredGitFailurePoint,
 } from '../../content-authoring/helper/authored-file-git-revisions.js';
 import { acquireRepositoryMutationLock } from '../../content-authoring/helper/repository-mutation-lock.js';
@@ -28,6 +30,7 @@ export type SkillGitRevisionDetail = SkillGitRevision & {
 };
 
 export type SkillGitHistoryPage = AuthoredFileRevisionHistoryPage;
+export type SkillGitRevisionSnapshot = AuthoredFileRevisionSnapshot;
 export type SkillGitFailurePoint = AuthoredGitFailurePoint | 'commit';
 
 function ownerId(file: string): string {
@@ -140,4 +143,8 @@ export async function readSkillGitRevision(file: string, commit: string, signal?
     parentCommit: olderCommit,
     successorCommit: newerCommit,
   };
+}
+
+export async function readCurrentSkillGitRevision(file: string, signal?: AbortSignal): Promise<SkillGitRevisionSnapshot> {
+  return await readCurrentAuthoredFileRevisionContent({ file, signal });
 }
