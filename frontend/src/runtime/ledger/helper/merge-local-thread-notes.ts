@@ -3,6 +3,7 @@
  * WHY: Server refreshes can be stale while note upload or transcription reconciliation is still in flight.
  */
 import { state } from '../../state.js';
+import { shouldApplyVoiceServerNote } from '../../voice/helper/voice-transcription-lifecycle.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { normalizeDeletedNoteIds } from './normalize-deleted-note-ids.js';
 
@@ -64,6 +65,23 @@ export function mergeLocalThreadNotes(
       // WHAT: Preserve every loaded thread note when the incoming canvas projection intentionally omits thread slices.
       // WHY: A ledger lifecycle refresh must not erase the independently loaded active conversation.
       if (incomingIncludesThreadSlice && !localNote?.optimistic) continue;
+      const localVoiceUploadId = String(localNote.localVoiceUploadId ?? '').trim();
+      if (
+        incomingIncludesThreadSlice
+        && existingIndex >= 0
+        && localNote.optimistic === true
+        && localVoiceUploadId
+        && shouldApplyVoiceServerNote(localNote, merged[existingIndex])
+      ) {
+        // WHAT: Install a forward same-ID server voice lifecycle while retaining browser-owned cleanup state.
+        // WHY: The generic optimistic overlay otherwise restores the stale uploading placeholder over its durable transcript.
+        merged[existingIndex] = {
+          ...merged[existingIndex],
+          localVoiceUploadId,
+          optimistic: false
+        };
+        continue;
+      }
       if (existingIndex >= 0) merged[existingIndex] = { ...merged[existingIndex], ...localNote };
       else merged.push(localNote);
     }
