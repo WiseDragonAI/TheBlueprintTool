@@ -9,11 +9,18 @@ import {
   scheduleCodexProcesses,
 } from '../helper/codex-process-scheduler.js';
 import { createCodexCapacitySlots } from '../helper/codex-capacity-slots.js';
+import {
+  scheduleCodexRuntime,
+  scheduleCodexRuntimeTimer,
+} from '../helper/codex-runtime-run-store.js';
 import { RuntimeScopePausedError } from '../../server/helper/runtime-incident-ledger.js';
 import type { IncidentSupervisor } from '../../server/runtime/incident-supervisor.js';
 
 type AnyRecord = Record<string, unknown>;
 type SchedulerContext = { root: string; runtime: AnyRecord };
+type DeferredPipelineStoreInspection = { scope: string; retryAt: number };
+
+const pipelineStoreStabilityDelayMs = 1_000;
 
 export function createCodexProcessCoordinator(input: {
   contexts: () => SchedulerContext[];
@@ -47,6 +54,42 @@ export function createCodexProcessCoordinator(input: {
   const runningCount = (): number => (
     scheduledRunningCount() + sharedCapacitySlots.reservedCount()
   );
+  const deferredPipelineStoreInspections = new Map<string, DeferredPipelineStoreInspection>();
+  const deferPipelineStorePause = (
+    candidate: SchedulerContext,
+    error: unknown,
+  ): boolean => {
+    // WHAT: Defer only a pipeline-store pause raised while the scheduler is reading one project queue.
+    // WHY: Other runtime-scope failures have no atomic external-writer recovery contract and must remain immediately contained.
+    if (!(error instanceof RuntimeScopePausedError) || !error.scope.startsWith('codex-pipeline-store:')) {
+      return false;
+    }
+    const current = deferredPipelineStoreInspections.get(candidate.root);
+    // WHAT: Start one bounded stability window for a newly observed upstream store incident.
+    // WHY: Git checkout and another non-atomic external writer can expose incomplete JSON briefly despite canonical app writes being atomic.
+    if (!current || current.scope !== error.scope) {
+      const retryAt = Date.now() + pipelineStoreStabilityDelayMs;
+      deferredPipelineStoreInspections.set(candidate.root, { scope: error.scope, retryAt });
+      scheduleCodexRuntimeTimer(
+        candidate.runtime,
+        'pipeline-store-stability-reinspection',
+        pipelineStoreStabilityDelayMs,
+        'reinspect-project-codex-pipeline-store',
+        () => scheduleCodexRuntime(
+          candidate.runtime,
+          'reinspect-project-codex-pipeline-store',
+          { projectId: String(candidate.runtime.projectId ?? ''), decisionOsRoot: candidate.root },
+        ),
+        { projectId: String(candidate.runtime.projectId ?? ''), decisionOsRoot: candidate.root },
+      );
+      return true;
+    }
+    // WHAT: Keep the queue closed without promoting the upstream incident before its bounded re-read is due.
+    // WHY: Concurrent queue-position reads must not shorten the stability window and recreate the false durable pause.
+    if (Date.now() < current.retryAt) return true;
+    deferredPipelineStoreInspections.delete(candidate.root);
+    return false;
+  };
   const inspect = <Value>(
     candidate: SchedulerContext,
     operation: string,
@@ -54,8 +97,13 @@ export function createCodexProcessCoordinator(input: {
   ): Value | null => {
     if (candidate.runtime.codexRuntimePaused === true) return null;
     try {
-      return read();
+      const result = read();
+      deferredPipelineStoreInspections.delete(candidate.root);
+      return result;
     } catch (error) {
+      // WHAT: Suppress the downstream runtime pause only during the single pipeline-store stability window.
+      // WHY: The upstream incident already blocks execution and preserves evidence while the scheduler performs its bounded re-read.
+      if (deferPipelineStorePause(candidate, error)) return null;
       const report = candidate.runtime.onCodexBackgroundError;
       if (typeof report === 'function') {
         try {
