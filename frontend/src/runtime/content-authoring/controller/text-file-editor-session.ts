@@ -6,6 +6,9 @@ import {
   mountCodeMirrorFileEditor,
   type CodeMirrorFileEditor,
 } from '../../codex/component/codemirror-file-editor.js';
+import { deriveAuthoredFileDiff } from '../helper/derive-authored-file-diff.js';
+import { normalizeAuthoredFileDiff } from '../helper/normalize-authored-file-diff.js';
+import type { AuthoredFileRevisionSnapshot } from '../helper/authored-file-revision-snapshot.js';
 
 export type TextFileEditorRecovery = {
   recoveryToken: string;
@@ -21,6 +24,8 @@ export type TextFileEditorSessionState = {
   readOnly: boolean;
   recovery: TextFileEditorRecovery;
   selectedRevision: string | null;
+  snapshot: AuthoredFileRevisionSnapshot | null;
+  conflictSnapshot: AuthoredFileRevisionSnapshot | null;
 };
 
 export type TextFileEditorSession = {
@@ -32,8 +37,9 @@ export type TextFileEditorSession = {
   setReadOnly(readOnly: boolean): void;
   setRecovery(recovery: TextFileEditorRecovery): void;
   setSelectedRevision(commit: string | null): void;
-  markSaved(markdown: string, revision: string): void;
-  reloadAuthoritative(markdown: string, revision: string): void;
+  markSaved(markdown: string, revision: string, snapshot?: AuthoredFileRevisionSnapshot): void;
+  reloadAuthoritative(markdown: string, revision: string, snapshot?: AuthoredFileRevisionSnapshot): void;
+  setConflictSnapshot(snapshot: AuthoredFileRevisionSnapshot | null): void;
   mountPreview(input: {
     parent: HTMLElement;
     filename: string;
@@ -59,6 +65,7 @@ export async function createTextFileEditorSession(input: {
   filename: string;
   markdown: string;
   loadedRevision: string;
+  snapshot?: AuthoredFileRevisionSnapshot | null;
   readOnly: boolean;
   returnFocusTo?: HTMLElement | null;
   onChange?: (markdown: string) => void;
@@ -79,12 +86,64 @@ export async function createTextFileEditorSession(input: {
     readOnly: input.readOnly,
     recovery: null,
     selectedRevision: null,
+    snapshot: input.snapshot ?? null,
+    conflictSnapshot: null,
   };
   let disposed = false;
   let previewGeneration = 0;
+  let diffGeneration = 0;
+  let diffTimer: ReturnType<typeof setTimeout> | null = null;
+  let diffAbort: AbortController | null = null;
   let preview: CodeMirrorFileEditor | null = null;
   const emit = (): void => input.onStateChange?.({ ...state });
-  const editable = await mountEditor({
+  let editable: CodeMirrorFileEditor;
+  const scheduleDiff = (markdown: string, immediate = false): void => {
+    const snapshot = state.snapshot;
+    if (!snapshot) return;
+    if (diffTimer) clearTimeout(diffTimer);
+    diffAbort?.abort();
+    const generation = ++diffGeneration;
+    diffAbort = new AbortController();
+    const identity = `${snapshot.commit}:${snapshot.olderCommit ?? 'root'}:${snapshot.contentRevision}`;
+    const run = async (): Promise<void> => {
+      diffTimer = null;
+      try {
+        const result = await deriveAuthoredFileDiff({
+          generation,
+          identity,
+          filename: input.filename,
+          baseMarkdown: snapshot.baseMarkdown,
+          draftMarkdown: markdown,
+          baseKey: snapshot.olderCommit ?? 'root',
+          draftKey: `${snapshot.contentRevision}:${generation}:${markdown.length}`,
+          signal: diffAbort?.signal,
+        });
+        if (
+          disposed
+          || generation !== diffGeneration
+          || result.identity !== identity
+          || editable.value() !== markdown
+        ) return;
+        editable.installAuthoredFileDiff(normalizeAuthoredFileDiff({
+          identity,
+          document: markdown,
+          metadata: result.metadata,
+        }));
+      } catch (error) {
+        if ((error as { name?: string }).name !== 'AbortError' && generation === diffGeneration) {
+          console.error('Authored Markdown diff derivation failed.', {
+            filename: input.filename,
+            generation,
+            identity,
+            error,
+          });
+          editable.clearAuthoredFileDiff(identity);
+        }
+      }
+    };
+    diffTimer = setTimeout(() => { void run(); }, immediate ? 0 : 150);
+  };
+  editable = await mountEditor({
     parent: input.parent,
     filename: input.filename,
     language: 'markdown',
@@ -93,6 +152,7 @@ export async function createTextFileEditorSession(input: {
     revision: input.loadedRevision,
     onChange: (markdown) => {
       state.draft = markdown;
+      scheduleDiff(markdown);
       input.onChange?.(markdown);
     },
     onDirtyChange: (dirty) => {
@@ -100,6 +160,7 @@ export async function createTextFileEditorSession(input: {
       emit();
     },
   });
+  scheduleDiff(input.markdown, true);
   const events = input.events === undefined
     ? ((globalThis.window && typeof globalThis.window.addEventListener === 'function') ? globalThis.window : null)
     : input.events;
@@ -145,20 +206,36 @@ export async function createTextFileEditorSession(input: {
       state.selectedRevision = commit;
       emit();
     },
-    markSaved: (markdown, revision) => {
+    markSaved: (markdown, revision, snapshot) => {
       state.draft = markdown;
       state.loadedRevision = revision;
       state.recovery = null;
+      state.snapshot = snapshot ?? state.snapshot;
+      state.conflictSnapshot = null;
+      input.markdown = markdown;
+      input.loadedRevision = revision;
       editable.markSaved(markdown);
       editable.setIdentity(input.filename, revision);
+      scheduleDiff(markdown, true);
       emit();
     },
-    reloadAuthoritative: (markdown, revision) => {
+    reloadAuthoritative: (markdown, revision, snapshot) => {
       state.draft = markdown;
       state.loadedRevision = revision;
       state.recovery = null;
+      state.snapshot = snapshot ?? state.snapshot;
+      state.conflictSnapshot = null;
+      input.markdown = markdown;
+      input.loadedRevision = revision;
+      diffAbort?.abort();
+      editable.clearAuthoredFileDiff();
       editable.replaceDocument(markdown, revision);
+      scheduleDiff(markdown, true);
       input.onChange?.(markdown);
+      emit();
+    },
+    setConflictSnapshot: (snapshot) => {
+      state.conflictSnapshot = snapshot;
       emit();
     },
     mountPreview: async (previewInput) => {
@@ -187,6 +264,11 @@ export async function createTextFileEditorSession(input: {
       if (disposed) return;
       disposed = true;
       previewGeneration += 1;
+      diffGeneration += 1;
+      if (diffTimer) clearTimeout(diffTimer);
+      diffTimer = null;
+      diffAbort?.abort();
+      diffAbort = null;
       events?.removeEventListener('beforeunload', beforeUnload);
       events?.removeEventListener('popstate', popState);
       preview?.destroy();

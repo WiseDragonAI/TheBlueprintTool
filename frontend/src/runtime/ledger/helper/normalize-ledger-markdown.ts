@@ -3,5 +3,36 @@
  * WHY: Agent/CLI notes can arrive with escaped newline sequences that should behave like typed markdown lines.
  */
 export function normalizeLedgerMarkdown(markdown: string): string {
-  return markdown.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n?/g, '\n');
+  return normalizeLedgerMarkdownWithSourceMap(markdown).markdown;
+}
+
+export function normalizeLedgerMarkdownWithSourceMap(source: string): {
+  markdown: string;
+  sourceOffset(normalizedOffset: number): number;
+} {
+  let markdown = '';
+  const boundaries = [0];
+  for (let index = 0; index < source.length;) {
+    let consumed = 1;
+    let value = source[index];
+    if (source.startsWith('\\r\\n', index)) {
+      consumed = 4;
+      value = '\n';
+    } else if (source.startsWith('\\n', index)) {
+      consumed = 2;
+      value = '\n';
+    } else if (source.startsWith('\r\n', index)) {
+      consumed = 2;
+      value = '\n';
+    } else if (source[index] === '\r') {
+      value = '\n';
+    }
+    markdown += value;
+    index += consumed;
+    boundaries.push(index);
+  }
+  return {
+    markdown,
+    sourceOffset: (normalizedOffset) => boundaries[Math.max(0, Math.min(normalizedOffset, boundaries.length - 1))],
+  };
 }

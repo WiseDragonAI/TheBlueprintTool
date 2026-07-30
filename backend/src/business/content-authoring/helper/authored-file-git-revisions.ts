@@ -42,10 +42,20 @@ export type AuthoredFileRevision = {
 };
 
 export type AuthoredFileRevisionContent = AuthoredFileRevision & {
+  contentRevision: string;
   markdown: string;
+  baseMarkdown: string;
   patch: string;
   olderCommit: string | null;
   newerCommit: string | null;
+};
+
+export type AuthoredFileRevisionSnapshot = {
+  contentRevision: string;
+  commit: string;
+  olderCommit: string | null;
+  baseMarkdown: string;
+  markdown: string;
 };
 
 export type AuthoredFileRevisionHistoryPage = {
@@ -788,12 +798,36 @@ export async function readAuthoredFileRevisionContent(input: {
     throw new Error(`read-older-to-selected-diff: ${boundedGitError(patchResult)}`);
   }
   const { path: _path, ...revision } = selected;
+  const markdown = await immutableContent(context, selected, input.signal);
+  const baseMarkdown = older
+    ? await immutableContent(context, older, input.signal)
+    : '';
   return {
     ...revision,
-    markdown: await immutableContent(context, selected, input.signal),
+    contentRevision: sha256AuthoredBytes(markdown),
+    markdown,
+    baseMarkdown,
     patch: patchResult.stdout,
     olderCommit: older?.commit ?? null,
     newerCommit: newer?.commit ?? null,
+  };
+}
+
+export async function readCurrentAuthoredFileRevisionContent(input: {
+  file: string;
+  signal?: AbortSignal;
+}): Promise<AuthoredFileRevisionSnapshot> {
+  const { context, entries } = await completeHistory(input.file, input.signal);
+  const selected = entries[0];
+  if (!selected) throw new Error('The authored owner has no committed revision history.');
+  const older = entries[1] ?? null;
+  const markdown = readFileSync(resolve(input.file), 'utf8');
+  return {
+    contentRevision: sha256AuthoredBytes(markdown),
+    commit: selected.commit,
+    olderCommit: older?.commit ?? null,
+    baseMarkdown: older ? await immutableContent(context, older, input.signal) : '',
+    markdown,
   };
 }
 
