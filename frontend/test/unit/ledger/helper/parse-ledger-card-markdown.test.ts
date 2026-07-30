@@ -150,3 +150,37 @@ test('parse-ledger-card-markdown parses a card questionnaire directive', () => {
 test('parse-ledger-card-markdown leaves unsafe questionnaire identifiers inert', () => {
   assert.equal(parseLedgerCardMarkdown('::questions[Unsafe](questions:?id=../../outside)')[0]?.kind, 'paragraph');
 });
+
+test('parse-ledger-card-markdown retains original-byte spans without changing the enumerable render model', () => {
+  const markdown = '## Heading\\n\\n- first\n- **second**';
+  const blocks = parseLedgerCardMarkdown(markdown);
+  assert.deepEqual(blocks, [
+    { kind: 'heading', level: 2, children: [{ kind: 'text', text: 'Heading' }] },
+    {
+      kind: 'list',
+      ordered: false,
+      start: 1,
+      items: [
+        [{ kind: 'text', text: 'first' }],
+        [{ kind: 'strong', text: 'second' }],
+      ],
+    },
+  ]);
+  assert.deepEqual(
+    blocks.map(({ from, to }) => ({ from, to })),
+    [
+      { from: 0, to: 10 },
+      { from: 14, to: markdown.length },
+    ],
+  );
+  const list = blocks[1];
+  assert.equal(list.kind, 'list');
+  const inlineSpans = list.items.flat() as Array<{ from?: number; to?: number }>;
+  assert.deepEqual(
+    inlineSpans.map(({ from, to }) => ({ from, to })),
+    [
+      { from: 16, to: 21 },
+      { from: 24, to: 34 },
+    ],
+  );
+});

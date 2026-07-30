@@ -1,10 +1,10 @@
 /**
- * WHAT: Proves direct Markdown owner routing and Task-card authoring on the registered 50151 canary.
+ * WHAT: Proves direct Markdown owner routing and Task-card authoring on an isolated local server.
  * WHY: Static checks cannot prove redirects, persistent CodeMirror gestures, optimistic saves, recovery, or history.
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { chromium, type Browser, type Page, type Route } from '@playwright/test';
@@ -30,7 +30,7 @@ function directMarkdownUrl(file: string): string {
 }
 
 function git(args: string[]): string {
-  return execFileSync('git', args, { cwd: proofRoot, encoding: 'utf8' }).trim();
+  return execFileSync('git', args, { cwd: join(proofRoot, '.decision-os'), encoding: 'utf8' }).trim();
 }
 
 async function jsonRequest(url: string, init?: RequestInit): Promise<{ response: Response; body: Record<string, any> }> {
@@ -40,7 +40,7 @@ async function jsonRequest(url: string, init?: RequestInit): Promise<{ response:
 }
 
 function armOneShotReferenceFailure(): void {
-  const hooks = join(proofRoot, '.git/g12-hooks');
+  const hooks = join(proofRoot, '.decision-os/.git/g12-hooks');
   const hook = join(hooks, 'reference-transaction');
   mkdirSync(hooks, { recursive: true });
   writeFileSync(hook, [
@@ -64,7 +64,7 @@ async function editor(page: Page) {
 }
 
 test('absolute card and thread Markdown routes resolve without exposing paths', { ...canaryOnly, timeout: 30_000 }, async () => {
-  assert.equal(canaryUrl, 'http://127.0.0.1:50151', 'DECISION_OS_URL must select the registered canary.');
+  assert.match(canaryUrl, /^http:\/\/127\.0\.0\.1:\d+$/, 'DECISION_OS_URL must select an isolated local proof server.');
   assert.equal(existsSync(cardFile), true);
   assert.equal(existsSync(threadFile), true);
 
@@ -99,8 +99,29 @@ test('absolute card and thread Markdown routes resolve without exposing paths', 
 });
 
 test('Task Markdown editor proves gestures, optimistic persistence, conflict, recovery, and history', { ...canaryOnly, timeout: 150_000 }, async () => {
-  assert.equal(canaryUrl, 'http://127.0.0.1:50151', 'DECISION_OS_URL must select the registered canary.');
+  assert.match(canaryUrl, /^http:\/\/127\.0\.0\.1:\d+$/, 'DECISION_OS_URL must select an isolated local proof server.');
   mkdirSync(evidenceRoot, { recursive: true });
+  const diffProofMarker = `Unified diff addition ${Date.now()}.`;
+  const diffProofBase = `${readFileSync(cardFile, 'utf8').trimEnd()}
+
+## Unified diff proof
+
+Stable source-positioned semantics.
+
+Remove this internal proof line.
+
+::questions[Unified proof](questions:?id=unified-proof)
+
+Remove this end-of-file proof line.
+`;
+  writeFileSync(cardFile, diffProofBase);
+  git(['add', cardFile]);
+  git(['commit', '-m', 'Prepare unified editor proof base']);
+  writeFileSync(cardFile, `${diffProofBase
+    .replace('Remove this internal proof line.\n\n', `${diffProofMarker}\n\n`)
+    .replace('\nRemove this end-of-file proof line.\n', '\n')}`);
+  git(['add', cardFile]);
+  git(['commit', '-m', 'Prepare unified editor proof revision']);
   let browser: Browser | undefined;
   try {
     browser = await chromium.launch({
@@ -128,8 +149,32 @@ test('Task Markdown editor proves gestures, optimistic persistence, conflict, re
     const geometry = await modal.evaluate((element) => {
       return { width: element.offsetWidth, height: element.offsetHeight, viewportWidth: innerWidth, viewportHeight: innerHeight };
     });
-    assert.ok(Math.abs(geometry.width - geometry.viewportWidth * 0.8) <= 2, JSON.stringify(geometry));
+    assert.ok(Math.abs(geometry.width - Math.min(900, geometry.viewportWidth - 48)) <= 2, JSON.stringify(geometry));
     assert.ok(Math.abs(geometry.height - geometry.viewportHeight * 0.95) <= 2, JSON.stringify(geometry));
+    await modal.getByRole('button', { name: 'Find', exact: true }).click();
+    const diffSearch = modal.getByRole('textbox', { name: 'Find', exact: true });
+    await diffSearch.fill(diffProofMarker);
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    const authoredAddition = modal.locator('.cm-authored-addition');
+    const authoredDeletion = modal.locator('.cm-authored-deletion');
+    try {
+      await authoredAddition.waitFor({ state: 'visible' });
+      await authoredDeletion.waitFor({ state: 'visible' });
+    } catch (error) {
+      assert.fail(JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        pageErrors,
+        consoleErrors,
+        httpErrors,
+      }));
+    }
+    assert.ok((await authoredAddition.count()) >= 1);
+    assert.ok((await authoredDeletion.count()) >= 1);
+    assert.equal(await authoredAddition.getAttribute('aria-label'), 'Added Markdown');
+    assert.match(await authoredDeletion.getAttribute('aria-label') ?? '', /Removed Markdown:/);
+    assert.match(await authoredDeletion.textContent() ?? '', /Remove this/);
+    await page.screenshot({ path: join(evidenceRoot, 'card-editor-unified-diff.png'), fullPage: false });
     await page.screenshot({ path: join(evidenceRoot, 'card-editor-desktop.png'), fullPage: false });
 
     const content = modal.locator('.cm-content');
@@ -178,6 +223,10 @@ test('Task Markdown editor proves gestures, optimistic persistence, conflict, re
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     modal = await editor(page);
+    await modal.getByRole('button', { name: 'Find', exact: true }).click();
+    await modal.getByRole('textbox', { name: 'Find', exact: true }).fill(optimisticMarker);
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
     assert.match(await modal.locator('.cm-content').textContent() ?? '', new RegExp(optimisticMarker));
 
     const beforeConflict = await jsonRequest(apiPath(`/api/ledgers/tasks/cards/${proofCardId}`));
@@ -229,7 +278,7 @@ test('Task Markdown editor proves gestures, optimistic persistence, conflict, re
     const persistedAfterRetry = await jsonRequest(apiPath(`/api/ledgers/tasks/cards/${proofCardId}`));
     assert.equal(persistedAfterRetry.response.headers.get('x-decision-os-task-clock'), taskClockAfterFailure);
     assert.match(String(persistedAfterRetry.body.comment.what), new RegExp(recoveryMarker));
-    assert.equal(existsSync(join(proofRoot, '.git/g12-hooks/reference-transaction')), false);
+    assert.equal(existsSync(join(proofRoot, '.decision-os/.git/g12-hooks/reference-transaction')), false);
 
     await modal.getByRole('button', { name: 'History', exact: true }).click();
     const historyRegion = modal.getByRole('region', { name: /full historical Markdown/ });

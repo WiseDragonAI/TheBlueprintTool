@@ -99,7 +99,7 @@
 
 3. The endpoint validates local ownership, the `1,000,000`-byte ceiling, optimistic revision, staged-path protection, and repository mutation ownership.
 4. `patch-card` is the sole Task-card Markdown authority. The endpoint verifies the exact mutation receipt, Task clock, changed-card entity, content head, and reloaded card projection before creating the Git revision.
-5. Success returns `{ok, statusCode, card, contentRevision, gitRevision, taskClock, receipt}` for Task cards. The focused commit contains only the card Markdown; runtime task-state objects and thread files are excluded.
+5. Success returns `{ok, statusCode, card, contentRevision, gitRevision, snapshot, taskClock, receipt}` for Task cards. `snapshot` contains `{contentRevision, commit, olderCommit, baseMarkdown, markdown}` after the focused Git revision settles. The focused commit contains only the card Markdown; runtime task-state objects and thread files are excluded.
 6. If Task mutation succeeds and Git creation fails, the card bytes, task content head, Task clock, receipt, and federation publication remain authoritative. HTTP `503 git_revision_pending_recovery` returns top-level `authoredBytesPreserved: true`, `gitRevisionCreated: false`, `contentRevision`, `recoveryToken`, and `incidentId`.
 7. Retry with `POST /p/:projectId/api/ledgers/:ledgerId/cards/:cardId/revisions/retry` and `{recoveryToken, contentRevision}`. It commits the confirmed current bytes without issuing a second `patch-card`.
 8. Card save and retry use the same `409 content_revision_conflict`, `409 authored_path_staged`, and `423 repository_mutation_locked` semantics as skill and prompt owners.
@@ -113,9 +113,9 @@
 2. Task-card history is `GET /p/:projectId/api/ledgers/:ledgerId/cards/:cardId/revisions?cursor=<cursor>&limit=<1-200>`.
 3. Skill and prompt history returns newest-first top-level `history` plus `nextCursor`. Task-card history returns `{history: {revisions, nextCursor}}`. The Git owner traverses complete `git log --follow` history without a fixed total cap; clients continue until the applicable `nextCursor` is `null`.
 4. Each entry contains full commit SHA, author and committer names, emails and timestamps, subject, and parents. Physical paths are omitted.
-5. Skill or prompt revision content is `GET /p/:projectId/api/codex/skill-library/:name/revisions/:commit`. Task-card revision content is `GET /p/:projectId/api/ledgers/:ledgerId/cards/:cardId/revisions/:commit`.
+5. Skill or prompt revision content is `GET /p/:projectId/api/codex/skill-library/:name/revisions/:commit`. Task-card revision content is `GET /p/:projectId/api/ledgers/:ledgerId/cards/:cardId/revisions/:commit`; the literal `current` returns the complete current snapshot used for editable diff admission.
 6. Revision reads accept only a full commit that belongs to the current owner's complete rename-following history. Membership is immutable and cannot be expanded with a browser-supplied path.
-7. A revision detail contains full historical `markdown`, the patch from the immediately older affecting revision to the selected revision, `olderCommit`, and `newerCommit`. The oldest revision is compared with an empty file.
+7. A revision detail contains full historical `markdown`, SHA-256 `contentRevision`, complete `baseMarkdown`, the patch from the immediately older affecting revision to the selected revision, `olderCommit`, and `newerCommit`. The oldest revision is compared with empty base bytes.
 8. Selecting history is read-only. No automatic restore occurs. A future restore must submit selected bytes through a new optimistic-concurrency save and create a new revision.
 9. Imported federated skills expose current content only on the importing node. Their complete Git history remains on the owning repository.
 
@@ -146,9 +146,14 @@
 4. Read-only mode disables document mutation, Undo, Redo, and Save. Find, wrapping, selection, copy, focus navigation, history navigation, and preview remain available.
 5. Explicit close, Escape, browser Back, route change, and `beforeunload` consult the same dirty state. A dirty session requires discard confirmation; a clean close disposes the views and returns focus to the initiating control.
 6. Desktop geometry is exactly `80vw` by `95vh`. The responsive inset rule keeps the dialog within the mobile viewport and makes the editor body scroll internally.
-7. `@pierre/diffs@1.2.12` renders the adjacent patch with red removals and blue additions. Minus and plus signs, line numbers, `Removed` and `Added` labels, revision text, focus order, region labels, and group labels preserve meaning without color.
-8. `frontend/src/runtime/codex/component/codemirror-file-editor.ts` contains the required future-use comment for a thread-attached file owner.
-9. The deferred attachment adapter must resolve attachment identity and file authorization on the backend, then pass confirmed Markdown bytes into the same CodeMirror boundary. Attachment mutation is not implemented, and the browser never submits an attachment path.
+7. The editable Task-card surface uses `@pierre/diffs@1.2.12` only through `parseDiffFromFile()` in the dedicated local Worker bundle. Pierre shadow DOM, `FileDiff`, syntax highlighting, and interaction managers never enter the editor.
+8. The session admits one complete snapshot identity, debounces derivation for `150 ms`, owns one generation, rejects obsolete results, enforces a `2,000 ms` deadline, and terminates the Worker on success, failure, cancellation, replacement, reload, and disposal.
+9. One CodeMirror `StateField` owns diff mapping and presentation. Additions are document decorations; removals are accessible block widgets anchored without adding removed bytes to `EditorState.doc`. Editing a hunk withdraws all presentation for that hunk in the same transaction; edits outside a hunk map it through the transaction.
+10. A successful save installs the returned snapshot. HTTP `409` preserves the local draft and records the server snapshot. An exact active-card refresh reloads a clean editor and exposes a conflict without remounting a dirty editor. Authoritative reload uses `EditorView.setState()` to clear obsolete history while preserving valid selection, scroll, focus, compartments, theme, toolbar, and DOM ownership.
+11. Canonical Markdown semantics are source-positioned decorations over the same document. They do not create rendered-card DOM parity; detached `renderLedgerCardMarkdown()` output remains outside the editor acceptance boundary.
+12. Added and removed changes use blue and red tokens plus explicit `Added Markdown` and `Removed Markdown` labels. Color is not the sole change identity.
+13. `frontend/src/runtime/codex/component/codemirror-file-editor.ts` contains the required future-use comment for a thread-attached file owner.
+14. The deferred attachment adapter must resolve attachment identity and file authorization on the backend, then pass confirmed Markdown bytes into the same CodeMirror boundary. Attachment mutation is not implemented, and the browser never submits an attachment path.
 
 ---
 

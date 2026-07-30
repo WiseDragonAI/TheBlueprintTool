@@ -26,6 +26,7 @@ import {
 } from '../helper/content-event-payload.js';
 import { installVoiceTranscriptionRecoveryListeners, reconcilePendingVoiceTranscriptions, reconcileVoiceTranscription } from '../../voice/effect/reconcile-voice-transcription.js';
 import { projectReplicaRequestPath } from '../../project/helper/project-request-scope.js';
+import { refreshActiveLedgerCardEditor } from '../../content-authoring/controller/ledger-card-editor.js';
 
 export {
   flushPendingLedgerContentRefresh,
@@ -133,6 +134,14 @@ export function subscribeLedgerContentEvents(): void {
     if (!acceptLedgerInvalidationRevision(Number(payload.invalidationRevision ?? 0))) {
       telemetry('content-invalidation-ignored', { reason: 'stale-revision', revision: payload.invalidationRevision ?? 0 });
       return;
+    }
+    const changedCardId = changedCardIdForContentFile(String(payload.contentFile ?? ''));
+    if (changedCardId) {
+      void refreshActiveLedgerCardEditor({
+        projectId: scope.projectId,
+        ledgerId: String(payload.ledgerId ?? '').trim(),
+        cardId: changedCardId,
+      });
     }
     requestLedgerContentRefresh('card-content-change', { contentFile: payload.contentFile });
   });

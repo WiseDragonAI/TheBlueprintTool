@@ -16,6 +16,7 @@ import {
   commitAuthoredFileRevision,
   readAuthoredFileRevisionContent,
   readAuthoredFileRevisionHistory,
+  readCurrentAuthoredFileRevisionContent,
   retryAuthoredFileRevision,
   sha256AuthoredBytes,
   type AuthoredGitFailurePoint,
@@ -287,6 +288,8 @@ test('history cursor traverses more than 500 affecting commits, follows rename, 
       commit: revisions.at(-1)!.commit,
     });
     assert.equal(oldest.markdown, 'revision 0\n');
+    assert.equal(oldest.baseMarkdown, '');
+    assert.equal(oldest.contentRevision, sha256AuthoredBytes('revision 0\n'));
     assert.equal(oldest.olderCommit, null);
     assert.match(oldest.patch, /^\+revision 0$/m);
     assert.doesNotMatch(oldest.patch, /uncommitted bytes/);
@@ -296,8 +299,16 @@ test('history cursor traverses more than 500 affecting commits, follows rename, 
       commit: revisions.at(-2)!.commit,
     });
     assert.equal(selected.markdown, 'revision 1\n');
+    assert.equal(selected.baseMarkdown, 'revision 0\n');
     assert.match(selected.patch, /^-revision 0$/m);
     assert.match(selected.patch, /^\+revision 1$/m);
+
+    const current = await readCurrentAuthoredFileRevisionContent({ file: newFile });
+    assert.equal(current.markdown, 'uncommitted bytes\n');
+    assert.equal(current.contentRevision, sha256AuthoredBytes('uncommitted bytes\n'));
+    assert.equal(current.commit, revisions[0].commit);
+    assert.equal(current.olderCommit, revisions[1].commit);
+    assert.equal(current.baseMarkdown, 'revision 500\n');
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }

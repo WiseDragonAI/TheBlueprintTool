@@ -1379,6 +1379,65 @@
   overflow: hidden;
 }
 
+.cm-authored-addition {
+  border-left: 2px solid #4d9cff;
+  background: color-mix(in srgb, #4d9cff, transparent 84%);
+}
+
+.cm-authored-deletion {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  box-sizing: border-box;
+  max-width: 100%;
+  border-left: 2px solid #ff5f6d;
+  background: color-mix(in srgb, #ff5f6d, transparent 86%);
+  color: color-mix(in srgb, #ff5f6d, white 20%);
+  padding: 3px 10px;
+  white-space: pre-wrap;
+}
+
+.cm-authored-deletion-label {
+  flex: 0 0 auto;
+  color: #ff5f6d;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.cm-authored-deletion-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cm-ledger-heading {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.cm-ledger-strong {
+  font-weight: 700;
+}
+
+.cm-ledger-emphasis {
+  font-style: italic;
+}
+
+.cm-ledger-code,
+.cm-ledger-code-block {
+  color: color-mix(in srgb, var(--text), var(--accent) 24%);
+}
+
+.cm-ledger-link,
+.cm-ledger-image {
+  text-decoration: underline;
+}
+
+.cm-ledger-quote {
+  color: color-mix(in srgb, var(--muted), var(--text) 30%);
+}
+
 .skill-codemirror-host {
   min-height: 0;
   overflow: hidden;

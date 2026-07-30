@@ -37,6 +37,11 @@ await build({
 });
 await build({
   ...common,
+  entryPoints: [new URL('../src/runtime/content-authoring/worker/authored-file-diff-worker.ts', import.meta.url).pathname],
+  outfile: new URL('../assets/vendor/pierre-diff-worker-1.2.12.js', import.meta.url).pathname,
+});
+await build({
+  ...common,
   entryPoints: [new URL('pierre-vendor-entry.ts', import.meta.url).pathname],
   outfile: new URL('../assets/vendor/pierre-diffs-1.2.12.js', import.meta.url).pathname,
 });
