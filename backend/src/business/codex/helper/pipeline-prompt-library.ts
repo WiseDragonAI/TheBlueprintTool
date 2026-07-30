@@ -1,6 +1,6 @@
 /**
- * WHAT: Stores pipeline-only prompts outside every Codex skill discovery root.
- * WHY: Pipeline prompts must be explicit injections, never naturally visible agent skills.
+ * WHAT: Compiles registered prompt graphs and renders typed runtime tokens for pipeline skills and direct Codex runs.
+ * WHY: SYSTEM_PROMPT, SKILL, and CODEX_RUN must share one single-pass template authority without entering skill discovery.
  */
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
@@ -12,6 +12,48 @@ import type { CodexAuthoredContentRecord } from '../../../../../shared/schemas/c
 const maximumPromptBytes = 1_000_000;
 const safePromptName = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?$/;
 const promptVariable = /\{\{\s*([A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?)\s*\}\}/g;
+const runtimeToken = /<([A-Z][A-Z0-9_]*)>/g;
+export const pipelinePromptSyntaxVersion = 2 as const;
+export const pipelinePromptRuntimeTokenNames = [
+  'PLATFORM',
+  'SKILL_NAME',
+  'PIPELINE_RUN_ID',
+  'PIPELINE_NAME',
+  'LEDGER_FILE',
+  'SOURCE_CARD_ID',
+  'SOURCE_CARD_TITLE',
+  'STEP_ID',
+  'STEP_TITLE',
+  'STEP_INPUT_CARD_ID',
+  'STEP_INPUT_CARD_CONTENT',
+  'OUTPUT_PARENT_CARD_ID',
+  'OUTPUT_CARD_ID',
+  'OUTPUT_SUBTASK_POSITION',
+  'OUTPUT_MARKDOWN_FILE',
+  'SERVER_SKILL_CONTEXT',
+  'MASTER_TASK',
+  'SUB_CONTEXT',
+  'FULL_THREAD',
+  'FILE_MAP',
+  'PREVIOUS_SKILL_RESULT',
+  'EXECUTION_CONTEXT',
+  'PROJECT_ID',
+  'CARD_ID',
+  'THREAD_ID',
+  'RUN_SKILL_POLICY',
+  'PROTECTED_GIT_PATCH',
+] as const;
+export type PipelinePromptRuntimeToken = typeof pipelinePromptRuntimeTokenNames[number];
+export type PipelinePromptRuntimeProvider = () => string;
+export type PipelinePromptRuntimeContext = {
+  readonly [Token in PipelinePromptRuntimeToken]: PipelinePromptRuntimeProvider;
+};
+const pipelinePromptRuntimeTokenSet = new Set<string>(pipelinePromptRuntimeTokenNames);
+
+/**
+ * Version-1 prompts used double braces for both prompt references and runtime data.
+ * Keep this set only for persisted runs without a syntaxVersion discriminator.
+ */
 export const pipelinePromptRuntimeVariables = new Set([
   'MASTER_TASK',
   'SUB_CONTEXT',
@@ -40,6 +82,60 @@ export function assertPipelinePromptName(name: string): string {
 
 export function pipelinePromptTemplateVariables(markdown: string): string[] {
   return [...new Set([...markdown.matchAll(promptVariable)].map((match) => match[1]))];
+}
+
+export function pipelinePromptRuntimeTokens(markdown: string): PipelinePromptRuntimeToken[] {
+  const names = [...new Set([...markdown.matchAll(runtimeToken)].map((match) => match[1]))];
+  const unknown = names.find((name) => !pipelinePromptRuntimeTokenSet.has(name));
+  if (unknown) throw new Error(`Unknown pipeline prompt runtime token <${unknown}>.`);
+  return names as PipelinePromptRuntimeToken[];
+}
+
+export function createPipelinePromptRuntimeContext(
+  providers: { readonly [Token in PipelinePromptRuntimeToken]: PipelinePromptRuntimeProvider },
+): PipelinePromptRuntimeContext {
+  const values = new Map<PipelinePromptRuntimeToken, string>();
+  return Object.fromEntries(pipelinePromptRuntimeTokenNames.map((name) => [
+    name,
+    () => {
+      if (!values.has(name)) values.set(name, String(providers[name]()));
+      return values.get(name)!;
+    },
+  ])) as PipelinePromptRuntimeContext;
+}
+
+export function compilePipelinePromptGraph(input: {
+  roots: readonly string[];
+  resolve: (name: string) => string | null;
+}): { developerPromptSnapshot: string; dependencies: string[] } {
+  const dependencies: string[] = [];
+  const expanded = new Map<string, string>();
+  const compile = (name: string, stack: readonly string[]): string => {
+    if (stack.includes(name)) throw new Error(`Pipeline prompt template cycle: ${[...stack, name].join(' -> ')}.`);
+    const cached = expanded.get(name);
+    if (cached !== undefined) return cached;
+    const markdown = input.resolve(name);
+    if (markdown === null) throw new Error(`Pipeline prompt template "${name}" was not found.`);
+    dependencies.push(name);
+    const compiled = markdown.replace(promptVariable, (_token, referenceName: string) =>
+      compile(referenceName, [...stack, name]));
+    expanded.set(name, compiled);
+    return compiled;
+  };
+  const developerPromptSnapshot = input.roots.map((name) => compile(name, [])).join('\n\n');
+  if (Buffer.byteLength(developerPromptSnapshot, 'utf8') > maximumPromptBytes) {
+    throw new Error('Compiled pipeline developer prompt exceeds the 1,000,000 byte limit.');
+  }
+  return { developerPromptSnapshot, dependencies };
+}
+
+export function renderPipelineDeveloperPrompt(
+  developerPromptSnapshot: string,
+  context: PipelinePromptRuntimeContext,
+): string {
+  const required = pipelinePromptRuntimeTokens(developerPromptSnapshot);
+  const values = new Map(required.map((name) => [name, context[name]()]));
+  return developerPromptSnapshot.replace(runtimeToken, (_token, name: PipelinePromptRuntimeToken) => values.get(name)!);
 }
 
 export function expandPipelinePromptTemplates(input: {

@@ -56,16 +56,16 @@ function record(executionId: string, requestedAt: string) {
   };
 }
 
-test('collapses legacy captured prompts and both start records into one user prompt card', () => {
+test('presents the captured developer prompt separately from provider start records', () => {
   const events = [
     { type: 'decision_os.developer_prompt', prompt: 'Legacy captured prompt.' },
     { type: 'thread.started' },
     { type: 'turn.started' },
   ].map((event, index) => normalizeCardSkillRunEvent({ line: index + 1, event }));
   assert.deepEqual(taskExecutionPresentationEvents(events), [{
-    id: 'run_status:user-prompt',
+    id: 'run_status:developer-prompt',
     kind: 'run_status',
-    title: 'User prompt',
+    title: 'Developer prompt',
     status: 'running',
     text: 'Legacy captured prompt.',
     severity: 'info',

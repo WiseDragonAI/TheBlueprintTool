@@ -154,13 +154,22 @@
 
 ## H. Prompt Snapshot Admission
 
-1. `availablePipelineContent()` admits a selected `pipeline-prompt` once before execution side effects.
-2. Admission requires the registered prompt record and Markdown to be present, contained, tracked, clean relative to `HEAD`, kind-matched, payload-bounded, and reachable from the owning repository commit.
-3. The immutable run manifest records `contentKind`, SHA-256 `contentRevision`, `contentCommit`, and `promptSnapshot`.
-4. The local runner injects that exact snapshot once into the selected step and never re-reads working-tree prompt bytes.
-5. Authenticated remote run installation carries the same snapshot and validates kind, revision, commit, size, and manifest identity. The executor stores it only with that run's immutable evidence.
-6. Prompt bytes never enter `.skills`, natural skill resolution, direct skill launch, server or workspace skill discovery, cloud-agent catalogs, federation manifests, federation snapshots, and the federation library cache.
-7. Missing, dirty, uncommitted, disappeared, stale-store, revision-mismatched, and kind-mismatched prompt content rejects the run before local scheduling and before remote installation.
+1. `pipeline-prompt-library.ts` owns recursive prompt-reference parsing, graph compilation, strict runtime-token discovery, memoized runtime providers, and single-pass rendering.
+2. `{{PROMPT_NAME}}` expands a registered prompt during immutable admission. `<[A-Z][A-Z0-9_]*>` injects execution data immediately before launch. Injected values are never scanned again, and lowercase angle text remains literal.
+3. The required default graphs are:
+   1. Normal skill — `SYSTEM_PROMPT` followed by `SKILL`.
+   2. Authored gate — `SYSTEM_PROMPT` followed by the selected authored prompt.
+   3. Direct card and thread run — `SYSTEM_PROMPT` followed by `CODEX_RUN`.
+4. Admission recursively includes every dependency. Each record and Markdown file must be present, contained, tracked, clean relative to `HEAD`, kind-matched, payload-bounded, and committed in the owner repository.
+5. Every new pipeline execution persists `syntaxVersion: 2`, exact compiled `developerPromptSnapshot`, SHA-256 `developerPromptRevision`, and `developerPromptCommit`.
+6. Pipeline launch uses the fixed user turn `Execute this admitted Decision OS pipeline stage.` Direct card launch and fresh-session recovery keep card, thread, and execution context in their user prompts. These process launches serialize the compiled snapshot as the exact Codex `developer_instructions`.
+7. Initial and fresh-session process evidence records `decision_os.developer_prompt` and `decision_os.user_prompt` separately. A continuation on the retained Codex session records its new user prompt without resending developer instructions.
+8. Runtime providers gather only referenced values. `FILE_MAP`, conversation hydration, direct-run protected Git patch capture, and optional server skill context remain lazy.
+9. Unknown uppercase runtime tokens, missing prompt references, cycles, dirty content, uncommitted content, disappeared files, stale registration, revision mismatch, and kind mismatch reject execution before process launch.
+10. Authenticated remote installation transports and validates the same developer-prompt envelope. The executor never rereads editable prompt files.
+11. Existing persisted runs without `syntaxVersion` remain version 1 and use the legacy `{{runtime}}` renderer. New admission accepts version 2 syntax exclusively.
+12. Prompt bytes never enter `.skills`, natural skill discovery, server and workspace skill discovery, cloud-agent catalogs, federation manifests, federation snapshots, and the federation library cache.
+13. The complete creation, variable, verification, and recovery procedure is [Default Prompt Library](../../procedure/implementation/default-prompt-library.md).
 
 ---
 

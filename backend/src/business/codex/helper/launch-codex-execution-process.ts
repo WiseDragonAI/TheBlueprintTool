@@ -102,6 +102,7 @@ export async function launchCodexExecutionProcess(input: {
   executionId: string;
   command: CodexCommand;
   env: NodeJS.ProcessEnv;
+  developerPrompt?: string;
   prompt: string;
   stdoutFile: string;
   stderrFile: string;
@@ -127,6 +128,12 @@ export async function launchCodexExecutionProcess(input: {
   }), 'utf8');
   const stdoutStartOffset = fileSize(input.stdoutFile);
   const stderrStartOffset = fileSize(input.stderrFile);
+  if (input.developerPrompt !== undefined) {
+    appendFileSync(input.stdoutFile, `${JSON.stringify({
+      type: 'decision_os.developer_prompt',
+      prompt: input.developerPrompt,
+    })}\n`, 'utf8');
+  }
   appendFileSync(input.stdoutFile, `${JSON.stringify({
     type: 'decision_os.user_prompt',
     prompt: input.prompt,

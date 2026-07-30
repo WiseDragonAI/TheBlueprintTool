@@ -24,6 +24,11 @@ import { persistLedgerProjection } from '@backend/business/task-state/helper/per
 import { hasLedgerProjectionSource, readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-process.js';
+import { serverPipelineDecisionOsRoot } from '../helper/server-pipeline-catalog.js';
+import {
+  admitPipelineDeveloperPrompt,
+  PipelinePromptAdmissionError,
+} from '../helper/pipeline-prompt-snapshot.js';
 import {
   commitTaskExecutionSettlement,
   taskExecutionSettlementTimestamp,
@@ -336,11 +341,42 @@ export async function startThreadCodexProcessController(input: { action_payload?
   }
   if (!sourceCardFile || !sourceThreadFile) return { ok: false, statusCode: 500, error: 'Could not resolve card or thread markdown file.', cardId, threadId };
   if (!epoch4Dispatch) return queueExecution!();
+  let developerPromptEvidence: Awaited<ReturnType<typeof admitPipelineDeveloperPrompt>>;
+  try {
+    // WHAT: Admit SYSTEM_PROMPT plus CODEX_RUN on the assigned executor before creating run artifacts.
+    // WHY: A queued or remotely assigned card run must launch from one clean committed prompt graph, never mutable hard-coded instructions.
+    developerPromptEvidence = await admitPipelineDeveloperPrompt({
+      ownerDecisionOsRoot: serverPipelineDecisionOsRoot(runtime, decisionOsRoot),
+      roots: ['SYSTEM_PROMPT', 'CODEX_RUN'],
+    });
+  } catch (error) {
+    if (error instanceof PipelinePromptAdmissionError) {
+      return {
+        ok: false,
+        statusCode: error.statusCode,
+        code: error.code,
+        retryable: error.statusCode >= 500,
+        error: error.message,
+        cardId,
+        threadId,
+      };
+    }
+    return {
+      ok: false,
+      statusCode: 503,
+      code: 'pipeline_prompt_admission_failed',
+      retryable: true,
+      error: error instanceof Error ? error.message : String(error),
+      cardId,
+      threadId,
+    };
+  }
   mkdirSync(runDirectory, { recursive: true });
   writeFileSync(runSummaryFile, [`# Thread Codex Run`, '', 'Status: processing', `Source card: ${String(source.title ?? cardId)}`, `Source thread: ${threadId}`, `Codex run: ${runId}`].join('\n'), 'utf8');
 
   const cardMarkdown = readFileSync(sourceCardFile, 'utf8');
   const prompt = buildThreadCodexPrompt({
+    developerPromptSnapshot: developerPromptEvidence.developerPromptSnapshot,
     workspaceRoot,
     projectId: String(runtime.projectId ?? ''),
     ledgerFile: ledgerPath,
@@ -370,6 +406,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     codexModel: requestedCodexModel,
     codexEffort: requestedCodexEffort,
     developerInstructions: prompt.developerInstructions,
+    exactDeveloperInstructions: true,
   });
   const createdAt = new Date().toISOString();
   projectCardCodexRun({
@@ -430,6 +467,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
       command: attemptCommand,
       env: decisionOsCodexEnvironment({ runtime, decisionOsRoot, ledgerFile: ledgerPath }),
       prompt: taskInput,
+      developerPrompt: prompt.developerInstructions,
       stdoutFile,
       stderrFile,
       segment,

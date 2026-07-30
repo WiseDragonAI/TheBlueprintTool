@@ -114,9 +114,9 @@ export function taskExecutionPresentationEvents(events: NormalizedRunEvent[]): T
       const prompt = presentationEvent({
         ...event,
         kind: 'run_status',
-        title: 'User prompt',
+        title: event.type === 'decision_os.developer_prompt' ? 'Developer prompt' : 'User prompt',
         status: 'running',
-        itemId: 'user-prompt',
+        itemId: event.type === 'decision_os.developer_prompt' ? 'developer-prompt' : 'user-prompt',
       });
       if (prompt) presented.push(prompt);
       continue;

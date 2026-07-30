@@ -33,6 +33,7 @@ The structure follows the proven workstation model used by `Senior`, `DroidFleet
 14. [Epoch-4 task assignment, execution, and content architecture](./documentation/architecture/epoch-4-task-assignment-execution-and-content.md)
 15. [Epoch-4 Workstation cutover and thread consistency postmortem](./postmortem/epoch-4-workstation-cutover-2026-07-24.md)
 16. [Restore an accidentally tombstoned Epoch-4 note](./procedure/tasks/restore-accidentally-tombstoned-note.md)
+17. [Create and operate the default prompt library](./procedure/implementation/default-prompt-library.md)
 
 ---
 

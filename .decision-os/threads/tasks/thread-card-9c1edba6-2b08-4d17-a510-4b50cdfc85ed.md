@@ -1,0 +1,4 @@
+# OPERATOR
+<!-- decision-os:note {"id":"note-1785294037258-373f8112e67d4","timestamp":"2026-07-29T03:00:37.300Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.worktrees/dev/.decision-os/voice-uploads/voice-1785294037299-6f88dddf-b6d5-469a-9c1c-0efcb48d14b3.wav","status":"transcribed","transcriptionStartedAt":"2026-07-29T03:00:37.323Z","uploadReceivedAt":"2026-07-29T03:00:37.299Z","audioPersistedAt":"2026-07-29T03:00:37.299Z","acceptedAt":"2026-07-29T03:00:37.299Z","providerStartedAt":"2026-07-29T03:00:37.323Z","providerSettledAt":"2026-07-29T03:00:38.431Z","completedAt":"2026-07-29T03:00:38.453Z","codexQueueRequestId":"voice:note-1785294037258-373f8112e67d4","codexQueueLaunchMode":"run","codexQueueCardId":"card-9c1edba6-2b08-4d17-a510-4b50cdfc85ed","revision":4} -->
+
+Je vais faire un test pour voir si ça marche comme je l'attends.

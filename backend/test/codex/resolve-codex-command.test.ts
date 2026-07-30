@@ -56,7 +56,17 @@ test('resolveCodexCommand honors an explicit executable setting', () => {
       runtime: { decisionOsSettings: { codexBin: bin, codexModel: 'gpt-5.4', codexReasoningEffort: 'low' } },
       developerInstructions,
     });
-    assert.equal(decodedDeveloperInstructions(scopedCommand.args), `${commitTraceabilityInstructions}\n${developerInstructions}`);
+    assert.equal(
+      decodedDeveloperInstructions(scopedCommand.args),
+      `${commitTraceabilityInstructions}\n${developerInstructions}`,
+    );
+    const exactCommand = resolveCodexCommand({
+      workspaceRoot: workspace,
+      runtime: {},
+      developerInstructions,
+      exactDeveloperInstructions: true,
+    });
+    assert.equal(decodedDeveloperInstructions(exactCommand.args), developerInstructions);
     assert.equal(scopedCommand.args.filter((argument) => argument.startsWith('developer_instructions=')).length, 1);
     assert.equal(scopedCommand.args.filter((argument) => argument === '-c').length, 2);
   } finally {

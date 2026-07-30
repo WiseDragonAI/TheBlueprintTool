@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { executePipelineSkillInWorkspace } from '../../codex/helper/codex-pipeline-runner.js';
+import type { CodexPipelineRunSkill } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { ProjectSyncRole } from '../helper/project-sync-types.js';
 import type { RepositorySyncStatus } from '../helper/repository-sync-status.js';
 
@@ -17,6 +18,7 @@ export function executeProjectSyncPipelineSkill(input: {
   nodeId: string;
   initiatorNodeId: string;
   role: ProjectSyncRole;
+  pipelineSkill: CodexPipelineRunSkill;
   requiredSha?: string;
   snapshot: RepositorySyncStatus;
   codexRunId: string;
@@ -33,6 +35,7 @@ export function executeProjectSyncPipelineSkill(input: {
     decisionOsRoot: resolve(input.projectRoot, '.decision-os'),
     runtime: input.runtime,
     skillName: skillForRole[input.role],
+    pipelineSkill: input.pipelineSkill,
     skillRunId: input.codexRunId,
     executionId: input.executionId,
     stdoutFile: input.stdoutFile,

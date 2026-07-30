@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 /**
  * WHAT: Prints a complete code, test, or documentation map for one optional top-level domain.
- * WHY: The injected FILE_MAP stays compact while exact repository paths remain one command away.
+ * WHY: FILE_MAP executes the compact default while exact repository paths remain one command away.
  */
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildQueryFileMap } from '../shared/meaningful-file-map.mjs';
+import {
+  buildInjectedFileMap,
+  buildQueryFileMap,
+} from '../shared/meaningful-file-map.mjs';
 
 export function runFileMapCli(args, workspaceRoot = process.cwd()) {
+  if (args.length === 0) return buildInjectedFileMap(workspaceRoot);
   if (args.length < 1 || args.length > 2) {
     throw new Error('usage: tools/map.mjs <c|t|d> [domain]');
   }

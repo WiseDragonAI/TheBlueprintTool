@@ -1,9 +1,33 @@
 /**
- * WHAT: Builds a compact runtime contract and the current thread payload for Codex.
- * WHY: Repository AGENTS.md owns general policy; launch instructions contain only Decision OS mechanics.
+ * WHAT: Renders the admitted SYSTEM_PROMPT plus CODEX_RUN graph and builds the current thread user payload.
+ * WHY: Direct Codex runs must use the same registered, single-pass prompt compiler as pipeline executions.
  */
 import { readProtectedGitPatch } from '../../git-review/helper/git-review-patch.js';
+import {
+  createPipelinePromptRuntimeContext,
+  renderPipelineDeveloperPrompt,
+} from './pipeline-prompt-library.js';
+import { decisionOsRuntimePlatform } from './resolve-codex-command.js';
+
+function runSkillPolicy(disallowSkills: boolean | undefined): string {
+  return disallowSkills
+    ? '- Do not invoke or use any skill for this run. Execute the operator request directly.\n'
+    : '';
+}
+
+function protectedGitPatch(workspaceRoot: string): string {
+  const patch = readProtectedGitPatch(workspaceRoot);
+  return patch ? [
+    '',
+    '- Git-index protection: the staged patch below is operator-approved. Do not modify, unstage, or overwrite these lines.',
+    '```diff',
+    patch,
+    '```',
+  ].join('\n') : '';
+}
+
 export function buildThreadCodexPrompt(input: {
+  developerPromptSnapshot: string;
   workspaceRoot: string;
   projectId: string;
   ledgerFile: string;
@@ -19,32 +43,39 @@ export function buildThreadCodexPrompt(input: {
   context: Record<string, unknown>;
   disallowSkills?: boolean;
 }): { developerInstructions: string; taskContext: string } {
-  const protectedPatch = readProtectedGitPatch(input.workspaceRoot);
-  const developerInstructions = [
-    'Decision OS card run:',
-    `- Project: \`${input.projectId}\`.`,
-    '- `ledger-cli` writes only; use `master-task-apply`.',
-    '- One `master-task-progress --plan-stdin --json`; replicated lifecycle and positioned `subtask` relationships are authoritative.',
-    '- Keep the master-task body a living strategic summary for a CTO, never as a run log, implementation inventory, or verification report; replace the complete body with the current strategic state.',
-    '- Use letter-prefixed H2 sections, --- between sections, numbered list items.',
-    '- Present one credible path and why it advances the objective.',
-    '- Include global context and objective; verified current state; strategic constraints and choices; current decision or blocker. Keep relationship membership and lifecycle state out of Markdown.',
-    '- Omit test counts, routine verification results, file inventories, commits, pushes, process narration, and implementation chronology; never expose raw UUIDs, run IDs, card IDs, thread IDs, relationship IDs, hashes, encoded project IDs, or timestamps.',
-    '- Master-task rendered-output gate: inspect the complete rendered summary. Do not submit a partially compliant summary.',
-    '- The thread reply is a separate CTO-facing iteration record: very short numbered bullets with no heading or section for material outcomes from this iteration.',
-    '- Never include raw UUIDs or other opaque internal identifiers in the reply; name the human-readable subject and outcome instead. Do not include analysis, rationale, process narration, implementation inventory, the full-task summary, or implicit workflow actions. Put all reasoning and complete task state in the master-task body.',
-    '- Never close or mark the master task done from a normal card run except by direct operator action or an explicitly invoked closeout skill.',
-    ...(input.disallowSkills ? ['- Do not invoke or use any skill for this run. Execute the operator request directly.'] : []),
-    `- \`ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`.`,
-    `- \`ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id ${input.threadId} --message-stdin\`.`,
-    '- Follow the workspace `AGENTS.md` Markdown contract.',
-    ...(protectedPatch ? [
-      '- Git-index protection: the staged patch below is operator-approved. Do not modify, unstage, or overwrite these lines.',
-      '```diff',
-      protectedPatch,
-      '```',
-    ] : []),
-  ].join('\n');
+  const empty = () => '';
+  const developerInstructions = renderPipelineDeveloperPrompt(
+    input.developerPromptSnapshot,
+    createPipelinePromptRuntimeContext({
+      PLATFORM: () => decisionOsRuntimePlatform(),
+      SKILL_NAME: empty,
+      PIPELINE_RUN_ID: empty,
+      PIPELINE_NAME: empty,
+      LEDGER_FILE: () => input.ledgerFile,
+      SOURCE_CARD_ID: () => input.cardId,
+      SOURCE_CARD_TITLE: () => input.cardTitle,
+      STEP_ID: empty,
+      STEP_TITLE: empty,
+      STEP_INPUT_CARD_ID: () => input.cardId,
+      STEP_INPUT_CARD_CONTENT: () => input.cardMarkdown,
+      OUTPUT_PARENT_CARD_ID: () => input.cardId,
+      OUTPUT_CARD_ID: () => input.cardId,
+      OUTPUT_SUBTASK_POSITION: empty,
+      OUTPUT_MARKDOWN_FILE: () => input.runSummaryFile,
+      SERVER_SKILL_CONTEXT: empty,
+      MASTER_TASK: () => input.cardMarkdown,
+      SUB_CONTEXT: empty,
+      FULL_THREAD: () => input.threadMarkdown,
+      FILE_MAP: empty,
+      PREVIOUS_SKILL_RESULT: empty,
+      EXECUTION_CONTEXT: () => JSON.stringify(input.context, null, 2),
+      PROJECT_ID: () => input.projectId,
+      CARD_ID: () => input.cardId,
+      THREAD_ID: () => input.threadId,
+      RUN_SKILL_POLICY: () => runSkillPolicy(input.disallowSkills),
+      PROTECTED_GIT_PATCH: () => protectedGitPatch(input.workspaceRoot),
+    }),
+  );
 
   const taskContext = [
     'Execute the operator request from this Decision OS thread.',

@@ -1,6 +1,6 @@
 /**
- * WHAT: Continues an existing card-scoped Codex skill run with newer thread messages.
- * WHY: A durable run id must resume its captured session and recover with a new session only when that id is missing.
+ * WHAT: Continues an existing card run and re-admits SYSTEM_PROMPT plus CODEX_RUN when recovery requires a fresh session.
+ * WHY: A durable run id must resume its captured session while every replacement process retains committed prompt authority.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
@@ -9,6 +9,7 @@ import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/re
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildCardSkillContinuePrompt } from '../helper/build-card-skill-continue-prompt.js';
 import { buildCardLaunchContext } from '../helper/build-card-launch-context.js';
+import { buildThreadCodexPrompt } from '../helper/build-thread-codex-prompt.js';
 import { codexRunExecutionFinishedMarker } from '../helper/codex-run-segment-marker.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand } from '../helper/resolve-codex-command.js';
@@ -21,6 +22,11 @@ import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files
 import { hasLedgerProjectionSource, readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-process.js';
+import {
+  admitPipelineDeveloperPrompt,
+  PipelinePromptAdmissionError,
+} from '../helper/pipeline-prompt-snapshot.js';
+import { serverPipelineDecisionOsRoot } from '../helper/server-pipeline-catalog.js';
 import {
   commitTaskExecutionSettlement,
   taskExecutionSettlementTimestamp,
@@ -260,8 +266,67 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   if (!outputFile) return fail(500, 'Run output card content file was not found.', { cardId });
   if (newSession && !existsSync(outputFile)) return fail(500, 'Run output card content file was not found.', { cardId, outputFile });
 
+  const outputMarkdown = newSession ? readFileSync(outputFile, 'utf8') : '';
+  const continuationThreadMarkdown = messages
+    .map((message) => `# ${String(message.role ?? '').toLowerCase() === 'agent' ? 'AGENT' : 'OPERATOR'}\n\n${String(message.message ?? message.body ?? '')}`)
+    .join('\n\n');
+  const launchContext = newSession ? buildCardLaunchContext({
+    projectId: String(runtime.projectId ?? ''),
+    ledgerId,
+    cardId,
+    threadId: `thread-${cardId}`,
+    ledger,
+    cardMarkdown: outputMarkdown,
+    threadMarkdown: continuationThreadMarkdown,
+  }) : undefined;
+  let developerPrompt: string | undefined;
+  if (newSession) {
+    try {
+      // WHAT: Re-admit SYSTEM_PROMPT plus CODEX_RUN before replacing a missing direct-run Codex session.
+      // WHY: Recovery is a new process launch and must retain the same committed developer-prompt authority as the initial run.
+      const evidence = await admitPipelineDeveloperPrompt({
+        ownerDecisionOsRoot: serverPipelineDecisionOsRoot(runtime, decisionOsRoot),
+        roots: ['SYSTEM_PROMPT', 'CODEX_RUN'],
+      });
+      developerPrompt = buildThreadCodexPrompt({
+        developerPromptSnapshot: evidence.developerPromptSnapshot,
+        workspaceRoot,
+        projectId: String(runtime.projectId ?? ''),
+        ledgerFile: ledgerPath,
+        cardId,
+        cardTitle: String(card.title ?? cardId),
+        cardMarkdownFile: outputFile,
+        cardMarkdown: outputMarkdown,
+        threadId: `thread-${cardId}`,
+        threadMarkdownFile: '',
+        threadMarkdown: continuationThreadMarkdown,
+        runSummaryFile: outputFile,
+        operatorNoteTimestamp: '',
+        context: launchContext!,
+        disallowSkills,
+      }).developerInstructions;
+    } catch (error) {
+      if (error instanceof PipelinePromptAdmissionError) {
+        return fail(error.statusCode, error.message, {
+          code: error.code,
+          retryable: error.statusCode >= 500,
+        });
+      }
+      return fail(503, error instanceof Error ? error.message : String(error), {
+        code: 'pipeline_prompt_admission_failed',
+        retryable: true,
+      });
+    }
+  }
   const command = newSession
-    ? resolveCodexCommand({ workspaceRoot, runtime, codexModel, codexEffort })
+    ? resolveCodexCommand({
+        workspaceRoot,
+        runtime,
+        codexModel,
+        codexEffort,
+        developerInstructions: developerPrompt,
+        exactDeveloperInstructions: true,
+      })
     : resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel, codexEffort });
   const prompt = buildCardSkillContinuePrompt({
     messages,
@@ -273,16 +338,8 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       cardId,
       cardTitle: String(card.title ?? cardId),
       outputFile,
-      outputMarkdown: readFileSync(outputFile, 'utf8'),
-      context: buildCardLaunchContext({
-        projectId: String(runtime.projectId ?? ''),
-        ledgerId,
-        cardId,
-        threadId: `thread-${cardId}`,
-        ledger,
-        cardMarkdown: readFileSync(outputFile, 'utf8'),
-        threadMarkdown: messages.map((message) => `# ${String(message.role ?? '').toLowerCase() === 'agent' ? 'AGENT' : 'OPERATOR'}\n\n${String(message.message ?? message.body ?? '')}`).join('\n\n'),
-      }),
+      outputMarkdown,
+      context: launchContext!,
     } : undefined,
   });
   if (!epoch4Dispatch) {
@@ -382,6 +439,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     command,
     env: decisionOsCodexEnvironment({ runtime, decisionOsRoot, ledgerFile: ledgerPath }),
     prompt,
+    developerPrompt,
     stdoutFile,
     stderrFile,
     segment: newSession ? 'restart' : 'continue',

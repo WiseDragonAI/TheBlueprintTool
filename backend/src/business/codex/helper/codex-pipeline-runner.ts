@@ -22,8 +22,12 @@ import { buildMeaningfulFileMap } from './build-meaningful-file-map.js';
 import { buildCardLaunchContext } from './build-card-launch-context.js';
 import { buildPipelineSubtaskContext } from './build-pipeline-subtask-context.js';
 import { isCodexThreadArtifactNote } from './is-codex-thread-artifact-note.js';
+import {
+  createPipelinePromptRuntimeContext,
+  type PipelinePromptRuntimeContext,
+} from './pipeline-prompt-library.js';
 import { assertPipelineRunSkillPromptEvidence } from './pipeline-prompt-snapshot.js';
-import { resolveCodexCommand } from './resolve-codex-command.js';
+import { decisionOsRuntimePlatform, resolveCodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 import { resolveServerSkillContext } from './server-skill-context.js';
 import { hasLedgerProjectionSource, readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
@@ -52,6 +56,7 @@ import {
 
 type AnyRecord = Record<string, unknown>;
 type TerminalStatus = 'complete' | 'failed' | 'cancelled';
+const pipelineTurnTrigger = 'Execute this admitted Decision OS pipeline stage.';
 type FederatedPipelineExecutor = {
   executor: NonNullable<CodexPipelineRunSkill['executor']>;
   execute: (skill: CodexPipelineRunSkill) => Promise<Record<string, unknown>>;
@@ -188,6 +193,134 @@ function pipelinePromptConversationContext(input: {
       threadMarkdown: notes.length > 0 ? formatThreadMarkdown(notes) : '',
     }),
   };
+}
+
+function serverSkillRuntimeContext(serverSkill: { markdown: string; packageRoot: string } | null): string {
+  return serverSkill ? [
+    '',
+    `Decision OS server skill package: ${serverSkill.packageRoot}`,
+    'Apply the following exact SKILL.md instructions. Read referenced files from that package only when the instructions require them.',
+    '```markdown',
+    serverSkill.markdown,
+    '```',
+  ].join('\n') : '';
+}
+
+export function createPipelineSkillRuntimeContext(input: {
+  workspaceRoot: string;
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+  ledgerContext?: PipelineLedgerContext;
+  ledgerFile: string;
+  skillName: string;
+  pipelineRunId: string;
+  pipelineName: string;
+  sourceCardId: string;
+  sourceCardTitle: string;
+  stepId: string;
+  stepTitle: string;
+  stepInputCardId: string;
+  stepInputCardContent: string;
+  outputParentCardId: string;
+  outputCardId: string;
+  outputSubtaskPosition: number;
+  outputMarkdownFile: string;
+  taskCardId?: string;
+  taskThreadId?: string;
+  taskConversationContext?: AnyRecord;
+  subtaskContext?: string;
+  executionId?: string;
+  projectId?: string;
+  ledgerId?: string;
+  serverSkill?: { markdown: string; packageRoot: string } | null | (() => { markdown: string; packageRoot: string } | null);
+  executionContext?: AnyRecord;
+}): PipelinePromptRuntimeContext {
+  let conversation: { threadId: string; context: AnyRecord; subtaskContext: string } | null | undefined;
+  const resolveConversation = (): { threadId: string; context: AnyRecord; subtaskContext: string } | null => {
+    if (conversation !== undefined) return conversation;
+    if (input.taskConversationContext) {
+      conversation = {
+        threadId: input.taskThreadId ?? String((input.taskConversationContext.thread as AnyRecord | undefined)?.id ?? ''),
+        context: input.taskConversationContext,
+        subtaskContext: input.subtaskContext ?? '',
+      };
+      return conversation;
+    }
+    conversation = input.ledgerContext && input.taskCardId
+      ? pipelinePromptConversationContext({
+          context: input.ledgerContext,
+          decisionOsRoot: input.decisionOsRoot,
+          runtime: input.runtime,
+          taskCardId: input.taskCardId,
+        })
+      : null;
+    return conversation;
+  };
+  const card = (): AnyRecord => {
+    const value = resolveConversation()?.context.card;
+    return value && typeof value === 'object' ? value as AnyRecord : {};
+  };
+  const thread = (): AnyRecord => {
+    const value = resolveConversation()?.context.thread;
+    return value && typeof value === 'object' ? value as AnyRecord : {};
+  };
+  const previousSkillResult = input.stepInputCardId === input.outputParentCardId
+    ? 'No preceding skill result exists; this gate was launched from the canonical task.'
+    : input.stepInputCardContent;
+  const executionContext = input.executionContext ?? {
+    projectId: input.projectId ?? '',
+    ledgerId: input.ledgerId ?? '',
+    ledgerFile: input.ledgerFile,
+    masterTaskId: input.outputParentCardId,
+    masterTaskTitle: () => String(card().title ?? ''),
+    threadId: () => input.taskThreadId ?? resolveConversation()?.threadId ?? String(thread().id ?? ''),
+    pipelineRunId: input.pipelineRunId,
+    pipelineName: input.pipelineName,
+    executionId: input.executionId ?? '',
+    sourceCardId: input.sourceCardId,
+    sourceCardTitle: input.sourceCardTitle,
+    stepId: input.stepId,
+    stepTitle: input.stepTitle,
+    inputCardId: input.stepInputCardId,
+    output: {
+      parentCardId: input.outputParentCardId,
+      cardId: input.outputCardId,
+      subtaskPosition: input.outputSubtaskPosition,
+      markdownFile: input.outputMarkdownFile,
+    },
+  };
+  return createPipelinePromptRuntimeContext({
+    PLATFORM: () => decisionOsRuntimePlatform(),
+    SKILL_NAME: () => input.skillName,
+    PIPELINE_RUN_ID: () => input.pipelineRunId,
+    PIPELINE_NAME: () => input.pipelineName,
+    LEDGER_FILE: () => input.ledgerFile,
+    SOURCE_CARD_ID: () => input.sourceCardId,
+    SOURCE_CARD_TITLE: () => input.sourceCardTitle,
+    STEP_ID: () => input.stepId,
+    STEP_TITLE: () => input.stepTitle,
+    STEP_INPUT_CARD_ID: () => input.stepInputCardId,
+    STEP_INPUT_CARD_CONTENT: () => input.stepInputCardContent,
+    OUTPUT_PARENT_CARD_ID: () => input.outputParentCardId,
+    OUTPUT_CARD_ID: () => input.outputCardId,
+    OUTPUT_SUBTASK_POSITION: () => String(input.outputSubtaskPosition),
+    OUTPUT_MARKDOWN_FILE: () => input.outputMarkdownFile,
+    SERVER_SKILL_CONTEXT: () => serverSkillRuntimeContext(
+      typeof input.serverSkill === 'function' ? input.serverSkill() : input.serverSkill ?? null,
+    ),
+    MASTER_TASK: () => String(card().markdown ?? ''),
+    SUB_CONTEXT: () => resolveConversation()?.subtaskContext ?? '',
+    FULL_THREAD: () => String(thread().markdown ?? ''),
+    FILE_MAP: () => buildMeaningfulFileMap(input.workspaceRoot),
+    PREVIOUS_SKILL_RESULT: () => previousSkillResult,
+    EXECUTION_CONTEXT: () => JSON.stringify(executionContext, (_key, value) =>
+      typeof value === 'function' ? value() : value, 2),
+    PROJECT_ID: () => input.projectId ?? '',
+    CARD_ID: () => input.outputParentCardId,
+    THREAD_ID: () => input.taskThreadId ?? resolveConversation()?.threadId ?? '',
+    RUN_SKILL_POLICY: () => '',
+    PROTECTED_GIT_PATCH: () => '',
+  });
 }
 
 export function outputFileForPipelineCard(context: PipelineLedgerContext, decisionOsRoot: string, cardId: string): string {
@@ -404,32 +537,16 @@ export async function spawnPipelineSkillProcess(input: {
     context,
     decisionOsRoot: input.decisionOsRoot,
   });
-  const command = resolveCodexCommand({
-    workspaceRoot,
-    runtime: input.runtime,
-    codexModel: input.skill.codexModel,
-    codexEffort: input.skill.codexEffort,
-  });
   assertPipelineRunSkillPromptEvidence(input.skill);
   const contentKind = input.skill.contentKind;
   if (!contentKind) throw new Error('pipeline_prompt_snapshot_kind_mismatch');
-  const taskConversation = contentKind === 'pipeline-prompt'
-    ? pipelinePromptConversationContext({
-        context,
-        decisionOsRoot: input.decisionOsRoot,
-        runtime: input.runtime,
-        taskCardId: input.pipelineRun.outputParentCardId,
-      })
-    : null;
-  const fileMap = contentKind === 'pipeline-prompt' ? buildMeaningfulFileMap(workspaceRoot) : '';
-  const prompt = buildPipelineSkillPrompt({
+  const runtimeContext = createPipelineSkillRuntimeContext({
+    workspaceRoot,
+    decisionOsRoot: input.decisionOsRoot,
+    runtime: input.runtime,
+    ledgerContext: context,
+    taskCardId: input.pipelineRun.outputParentCardId,
     skillName: input.skill.skillName,
-    contentKind,
-    ...(contentKind === 'pipeline-prompt' ? {
-      contentRevision: input.skill.contentRevision,
-      contentCommit: input.skill.contentCommit,
-      promptSnapshot: input.skill.promptSnapshot,
-    } : {}),
     ledgerFile: context.ledgerPath,
     pipelineRunId: input.pipelineRun.id,
     pipelineName: input.pipelineRun.pipelineName,
@@ -443,18 +560,42 @@ export async function spawnPipelineSkillProcess(input: {
     outputCardId: input.step.outputCardId,
     outputSubtaskPosition: input.step.outputSubtaskPosition,
     outputMarkdownFile: outputFile,
-    fileMap,
-    subtaskContext: taskConversation?.subtaskContext ?? '',
     projectId: String(input.runtime.projectId ?? ''),
     ledgerId: input.pipelineRun.ledgerId,
     executionId: input.skill.executionId,
-    ...(taskConversation ? {
-      taskThreadId: taskConversation.threadId,
-      taskConversationContext: taskConversation.context,
-    } : {}),
-    serverSkill: contentKind === 'pipeline-prompt'
+    serverSkill: () => contentKind === 'pipeline-prompt'
       ? null
-      : resolveServerSkillContext({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, skillName: input.skill.skillName }),
+      : resolveServerSkillContext({
+          decisionOsRoot: input.decisionOsRoot,
+          runtime: input.runtime,
+          skillName: input.skill.skillName,
+        }),
+  });
+  const renderedPrompt = buildPipelineSkillPrompt({
+    skillName: input.skill.skillName,
+    contentKind,
+    runtimeContext,
+    ...(input.skill.syntaxVersion === 2 ? {
+      syntaxVersion: input.skill.syntaxVersion,
+      developerPromptSnapshot: input.skill.developerPromptSnapshot,
+      developerPromptRevision: input.skill.developerPromptRevision,
+      developerPromptCommit: input.skill.developerPromptCommit,
+    } : input.skill.contentKind === 'pipeline-prompt' ? {
+      contentRevision: input.skill.contentRevision,
+      contentCommit: input.skill.contentCommit,
+      promptSnapshot: input.skill.promptSnapshot,
+    } : {}),
+  });
+  const developerPrompt = input.skill.syntaxVersion === 2 ? renderedPrompt : undefined;
+  const userPrompt = input.skill.syntaxVersion === 2 ? pipelineTurnTrigger : renderedPrompt;
+  const command = resolveCodexCommand({
+    workspaceRoot,
+    runtime: input.runtime,
+    codexModel: input.skill.codexModel,
+    codexEffort: input.skill.codexEffort,
+    ...(developerPrompt !== undefined
+      ? { developerInstructions: developerPrompt, exactDeveloperInstructions: true }
+      : {}),
   });
 
   mkdirSync(dirname(input.skill.stdoutFile), { recursive: true });
@@ -476,7 +617,8 @@ export async function spawnPipelineSkillProcess(input: {
       ledgerFile: context.ledgerPath,
       executionId: input.skill.executionId,
     }),
-    prompt,
+    developerPrompt,
+    prompt: userPrompt,
     stdoutFile: input.skill.stdoutFile,
     stderrFile: input.skill.stderrFile,
     segment: 'start',
@@ -877,6 +1019,7 @@ export async function executePipelineSkillInWorkspace(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
   skillName: string;
+  pipelineSkill: CodexPipelineRunSkill;
   skillRunId: string;
   ledgerFile: string;
   context: AnyRecord;
@@ -892,15 +1035,63 @@ export async function executePipelineSkillInWorkspace(input: {
     skillName: input.skillName,
   });
   if (!serverSkill) throw new Error(`Server pipeline skill is unavailable: ${input.skillName}.`);
-  const command = resolveCodexCommand({ workspaceRoot: input.workspaceRoot, runtime: input.runtime });
-  const prompt = [
-    serverSkill.markdown,
-    '',
-    '## Injected execution context',
-    '',
-    'Execute this pipeline step in the current repository. Treat this JSON as authoritative runtime input:',
-    JSON.stringify(input.context, null, 2),
-  ].join('\n');
+  assertPipelineRunSkillPromptEvidence(input.pipelineSkill);
+  const masterTask = input.context.masterTask && typeof input.context.masterTask === 'object'
+    ? input.context.masterTask as AnyRecord
+    : {};
+  const inputContent = JSON.stringify(input.context, null, 2);
+  const outputMarkdownFile = resolve(input.decisionOsRoot, 'project-sync', 'codex-runs', `${input.skillRunId}.md`);
+  mkdirSync(dirname(outputMarkdownFile), { recursive: true });
+  const runtimeContext = createPipelineSkillRuntimeContext({
+    workspaceRoot: input.workspaceRoot,
+    decisionOsRoot: input.decisionOsRoot,
+    runtime: input.runtime,
+    ledgerFile: input.ledgerFile,
+    skillName: input.skillName,
+    pipelineRunId: String(input.context.pipelineRunId ?? ''),
+    pipelineName: 'Project synchronization',
+    sourceCardId: String(masterTask.cardId ?? ''),
+    sourceCardTitle: 'Project synchronization',
+    stepId: String(input.context.role ?? input.skillName),
+    stepTitle: String(input.context.role ?? input.skillName),
+    stepInputCardId: String(masterTask.cardId ?? ''),
+    stepInputCardContent: inputContent,
+    outputParentCardId: String(masterTask.cardId ?? ''),
+    outputCardId: String(masterTask.cardId ?? ''),
+    outputSubtaskPosition: 0,
+    outputMarkdownFile,
+    executionId: input.executionId,
+    projectId: String(masterTask.projectId ?? input.runtime.projectId ?? ''),
+    ledgerId: String(masterTask.ledgerId ?? ''),
+    serverSkill,
+    executionContext: input.context,
+  });
+  const developerPrompt = buildPipelineSkillPrompt({
+    skillName: input.skillName,
+    contentKind: input.pipelineSkill.contentKind ?? 'federated-skill',
+    runtimeContext,
+    ...(input.pipelineSkill.syntaxVersion === 2 ? {
+      syntaxVersion: input.pipelineSkill.syntaxVersion,
+      developerPromptSnapshot: input.pipelineSkill.developerPromptSnapshot,
+      developerPromptRevision: input.pipelineSkill.developerPromptRevision,
+      developerPromptCommit: input.pipelineSkill.developerPromptCommit,
+    } : input.pipelineSkill.contentKind === 'pipeline-prompt' ? {
+      contentRevision: input.pipelineSkill.contentRevision,
+      contentCommit: input.pipelineSkill.contentCommit,
+      promptSnapshot: input.pipelineSkill.promptSnapshot,
+    } : {}),
+  });
+  const versionTwo = input.pipelineSkill.syntaxVersion === 2;
+  const userPrompt = versionTwo ? pipelineTurnTrigger : developerPrompt;
+  const command = resolveCodexCommand({
+    workspaceRoot: input.workspaceRoot,
+    runtime: input.runtime,
+    codexModel: input.pipelineSkill.codexModel,
+    codexEffort: input.pipelineSkill.codexEffort,
+    ...(versionTwo
+      ? { developerInstructions: developerPrompt, exactDeveloperInstructions: true }
+      : {}),
+  });
   const stdoutFile = input.stdoutFile ?? resolve(input.decisionOsRoot, 'project-sync', 'codex-runs', `${input.skillRunId}.jsonl`);
   const stderrFile = input.stderrFile ?? resolve(input.decisionOsRoot, 'project-sync', 'codex-runs', `${input.skillRunId}.log`);
   mkdirSync(dirname(stdoutFile), { recursive: true });
@@ -912,10 +1103,20 @@ export async function executePipelineSkillInWorkspace(input: {
     // streams; replacing that validation would weaken the Git verification boundary.
     const maximumOutputBytes = 8 * 1024 * 1024;
     const executionTimeoutMs = codexExecutionTimeoutMs(input.runtime);
+    if (versionTwo) {
+      appendFileSync(stdoutFile, `${JSON.stringify({
+        type: 'decision_os.developer_prompt',
+        prompt: developerPrompt,
+      })}\n`, 'utf8');
+    }
+    appendFileSync(stdoutFile, `${JSON.stringify({
+      type: 'decision_os.user_prompt',
+      prompt: userPrompt,
+    })}\n`, 'utf8');
     const stdoutOffset = existsSync(stdoutFile) ? statSync(stdoutFile).size : 0;
     const stderrOffset = existsSync(stderrFile) ? statSync(stderrFile).size : 0;
     const promptFile = `${stderrFile}.${input.executionId ?? input.skillRunId}.stdin`;
-    writeFileSync(promptFile, prompt, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    writeFileSync(promptFile, userPrompt, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
     let stdinDescriptor: number | undefined;
     let stdoutDescriptor: number | undefined;
     let stderrDescriptor: number | undefined;

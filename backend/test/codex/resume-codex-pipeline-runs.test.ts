@@ -15,6 +15,7 @@ import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/busine
 import { taskExecutionNodeId, taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
+import { installPipelinePromptFixture } from '../support/pipeline-prompt-fixture.js';
 
 // WHAT: Pins the startup-resume fixture to one explicit execution owner.
 // WHY: Resume intentionally schedules only durable successors owned by the current node.
@@ -87,6 +88,9 @@ test('cancellation stops downstream work and restart preserves prior artifacts i
     'let prompt = "";',
     'process.stdin.on("data", (chunk) => { prompt += chunk; });',
     'process.stdin.on("end", () => {',
+    '  const args = process.argv.slice(2);',
+    '  const developerArgument = args.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    '  if (developerArgument) prompt = JSON.parse(developerArgument.slice("developer_instructions=".length));',
     '  const skill = (prompt.match(/Current skill: (.+)/) || [])[1] || "missing";',
     `  const count = Number(readFileSync(${JSON.stringify(countFile)}, "utf8")) + 1;`,
     `  writeFileSync(${JSON.stringify(countFile)}, String(count));`,
@@ -112,6 +116,7 @@ test('cancellation stops downstream work and restart preserves prior artifacts i
       runs: [], skillLibrary: [], activeWorkspaceRun: null,
     },
   });
+  installPipelinePromptFixture({ workspace, decisionOsRoot });
   process.env.CODEX_BIN = fakeCodex;
   const runtime: Record<string, unknown> = { decisionOsRoot };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
@@ -263,6 +268,7 @@ test('server startup schedules the queued replicated successor without mutating 
       skillLibrary: [], activeWorkspaceRun: 'pipeline-resume',
     },
   });
+  installPipelinePromptFixture({ workspace, decisionOsRoot });
   const runtime: Record<string, unknown> = {
     decisionOsRoot,
     decisionOsSettings: { federationNodeId: EXECUTOR_NODE_ID },

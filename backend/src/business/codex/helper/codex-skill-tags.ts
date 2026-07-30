@@ -3,6 +3,7 @@
  * WHY: Skill metadata must not create categories outside the library's fixed taxonomy.
  */
 export const codexSkillTags = [
+  'System',
   'Architecture',
   'Implementation',
   'Interface',

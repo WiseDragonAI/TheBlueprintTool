@@ -13,6 +13,7 @@ import type { AddressInfo } from 'node:net';
 import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
+import { installPipelinePromptFixture } from '../support/pipeline-prompt-fixture.js';
 
 // WHAT: Pins the startup-recovery fixture to one explicit execution owner.
 // WHY: Recovery intentionally schedules only durable records owned by the current node.
@@ -92,6 +93,10 @@ test('server startup schedules a queued replicated execution discovered after an
   const previousCodexBin = process.env.CODEX_BIN;
   const home = mkdtempSync(join(tmpdir(), 'decision-os-restart-queue-'));
   const masterDecisionOsRoot = createProject(home, null, 'master-project');
+  installPipelinePromptFixture({
+    workspace: home,
+    decisionOsRoot: masterDecisionOsRoot,
+  });
   createProject(join(home, 'a-empty'), null, 'empty-project');
   const queuedProject = join(home, 'b-queued');
   const executionId = 'execution-queued';

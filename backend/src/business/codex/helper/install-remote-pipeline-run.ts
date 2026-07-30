@@ -59,7 +59,12 @@ function topology(run: CodexPipelineRun): string {
         pipelineSkillId: skill.pipelineSkillId,
         skillName: skill.skillName,
         contentKind: skill.contentKind,
-        ...(skill.contentKind === 'pipeline-prompt' ? {
+        ...(skill.syntaxVersion === 2 ? {
+          syntaxVersion: skill.syntaxVersion,
+          developerPromptSnapshot: skill.developerPromptSnapshot,
+          developerPromptRevision: skill.developerPromptRevision,
+          developerPromptCommit: skill.developerPromptCommit,
+        } : skill.contentKind === 'pipeline-prompt' ? {
           contentRevision: skill.contentRevision,
           contentCommit: skill.contentCommit,
           promptSnapshot: skill.promptSnapshot,
@@ -116,7 +121,12 @@ function assertExecutorCanRun(input: {
     serverRoot: runtimeServerRoot(input.runtime),
   }).map((skill) => skill.name));
   for (const skill of input.run.steps.flatMap((step) => step.skills)) {
-    if (skill.contentKind === 'pipeline-prompt') {
+    if (skill.syntaxVersion === 2) {
+      assertPipelineRunSkillPromptEvidence(skill);
+      if (skill.contentKind !== 'pipeline-prompt' && !availableSkills.has(skill.skillName)) {
+        throw new Error(`task_execution_pipeline_skill_unavailable:${skill.skillName}`);
+      }
+    } else if (skill.contentKind === 'pipeline-prompt') {
       assertPipelinePromptRunSkillSnapshot(skill);
     } else if (!availableSkills.has(skill.skillName)) {
       throw new Error(`task_execution_pipeline_skill_unavailable:${skill.skillName}`);

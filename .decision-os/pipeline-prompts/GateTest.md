@@ -5,10 +5,10 @@ Read the context, run a product_analysis skill in a sub agent in low effort gpt 
 
 Then update the master-task using the exec-summary skill.
 
-{{MASTER_TASK}}
+<MASTER_TASK>
 
-{{FULL_THREAD}}
+<FULL_THREAD>
 
-{{PREVIOUS_SKILL_RESULT}}
+<PREVIOUS_SKILL_RESULT>
 
-{{EXECUTION_CONTEXT}}
+<EXECUTION_CONTEXT>

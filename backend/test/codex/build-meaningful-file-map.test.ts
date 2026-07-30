@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   buildMeaningfulFileMap,
-  meaningfulGitPaths,
 } from '@backend/business/codex/helper/build-meaningful-file-map.js';
+import { meaningfulGitPaths } from '../../../shared/meaningful-file-map.mjs';
 import { runFileMapCli } from '../../../tools/map.mjs';
 
 function write(workspace: string, relativeFile: string, content = ''): void {
@@ -74,9 +74,6 @@ test('injected file map cuts tests and documentation, ranks five code files per 
       ' backend ctd',
       ' docs d',
       ' tests t',
-      'QUERY',
-      ' tools/map.mjs <c|t|d> [domain]',
-      ' c=code t=test d=doc; domain optional; CODE=top5/dir by LOC',
       'CODE',
       '.',
       ' .gitignore',
@@ -130,7 +127,8 @@ test('injected file map cuts tests and documentation, ranks five code files per 
       '    one.ts',
     ].join('\n'));
     assert.throws(() => runFileMapCli(['c', 'missing'], workspace), /unknown domain: missing/);
-    assert.throws(() => runFileMapCli([], workspace), /usage: tools\/map\.mjs <c\|t\|d> \[domain\]/);
+    assert.equal(runFileMapCli([], workspace), buildMeaningfulFileMap(workspace));
+    assert.throws(() => runFileMapCli(['unknown'], workspace), /usage: tools\/map\.mjs <c\|t\|d> \[domain\]/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -141,7 +139,7 @@ test('meaningful file map stays failsafe outside a Git work tree', () => {
   try {
     assert.equal(
       buildMeaningfulFileMap(workspace),
-      'DOMAINS\n (unavailable)\nQUERY\n tools/map.mjs <c|t|d> [domain]\n c=code t=test d=doc; domain optional; CODE=top5/dir by LOC\nCODE\n.\n (file map unavailable)',
+      'DOMAINS\n (unavailable)\nCODE\n.\n (file map unavailable)',
     );
   } finally {
     rmSync(workspace, { recursive: true, force: true });

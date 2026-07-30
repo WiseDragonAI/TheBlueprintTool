@@ -15,6 +15,7 @@ import { taskExecutionProcess, taskExecutionProcesses } from '@backend/business/
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
 import type { TaskProjectionCommand } from '@backend/business/task-state/helper/task-mutation-command.js';
+import { installPipelinePromptFixture } from '../support/pipeline-prompt-fixture.js';
 
 function fixture() {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-authoritative-run-'));
@@ -28,6 +29,7 @@ function fixture() {
   const threadRef = `.decision-os/threads/specs/${threadId}.md`;
   mkdirSync(join(decisionOsRoot, 'cards', 'specs'), { recursive: true });
   mkdirSync(join(decisionOsRoot, 'threads', 'specs'), { recursive: true });
+  installPipelinePromptFixture({ workspace, decisionOsRoot });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }],
   }));
@@ -400,10 +402,10 @@ test('execution remains non-terminal until immutable artifacts are finalized', a
     });
     assert.equal(settling.ok, true);
     assert.equal(settling.phase, 'running');
-    assert.equal(settling.lineCount, 2);
+    assert.equal(settling.lineCount, 3);
     assert.deepEqual(
       (settling.events as Array<Record<string, unknown>>).map((event) => event.type),
-      ['decision_os.user_prompt', 'thread.started'],
+      ['decision_os.developer_prompt', 'decision_os.user_prompt', 'thread.started'],
     );
 
     releaseFinalization();

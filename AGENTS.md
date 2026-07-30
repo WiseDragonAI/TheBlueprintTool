@@ -229,16 +229,31 @@ Ctrl+V  Paste the copied selection.
 Ctrl+D  Resize selected cards to their content and selected zones to contained cards.
 ```
 
+## Iteration Worktree and Integration Policy
+
+- **Default execution boundary:** Every implementation iteration, including code, tests, documentation, configuration, and operational tooling, must use a dedicated feature branch in an isolated worktree under `<repo>/.worktrees/`, based on the current `dev` branch. Do not edit `dev` or `main` directly by default.
+- **Baseline resolution:** Before editing, fetch `dev`, verify the selected baseline, inspect the target checkout and registered worktrees, and preserve all unrelated staged, tracked, untracked, runtime, and evidence state.
+- **Autonomous `dev` integration:** An agent is authorized to commit the iteration, merge its feature branch into `dev` with a merge commit, push `dev`, then remove the worktree and delete the merged feature branch without additional operator approval only after all of these gates pass:
+  1. Required focused checks and repository verification pass under the repository test policy.
+  2. The complete worktree diff and changed-path inventory have been reviewed.
+  3. Every changed path and hunk belongs to the current iteration.
+  4. The resulting behavior matches the operator's stated intent and the operator-validated specifications.
+  5. Unrelated changes and protected staged hunks are excluded.
+- **Failed gate:** If any integration gate fails, keep the feature branch and worktree intact, report the exact blocker, and do not merge.
+- **Explicit operator exceptions:** The operator may explicitly direct the current iteration to run directly on `dev`, directly on `main`, or in a dedicated worktree based on `main`. The exception applies only to that stated iteration and must never be inferred from the current checkout, a clean primary checkout, urgency, or a prior exception.
+- **Main protection:** Without an explicit operator exception, an agent must not implement on `main`, create an iteration worktree from `main`, merge an iteration into `main`, or use the primary checkout as an uncommitted handoff location.
+
 ## Commit Hygiene
 
 - Never finish a feature with implementation changes left uncommitted.
 - After implementing and verifying a feature, create focused commits before reporting the feature complete.
+- Every implementation commit must include the iteration's intended Decision OS card and thread Markdown changes under `.decision-os/cards/**` and `.decision-os/threads/**`. Do not leave those documentation changes untracked or defer them to a later cleanup commit.
 - Every agent-authored commit, including a merge commit, must have a concise subject and a non-empty body.
 - The commit body must contain a `WHAT:` paragraph identifying the changed behavior, documentation, data contract, or operational boundary.
 - The commit body must contain a `WHY:` paragraph recording the incident, invariant, operator decision, or verified need that required the change.
 - After committing, verify the complete message with `git show -s --format=%B HEAD` before pushing.
-- After creating the final commit for completed work, always push the current branch to `origin` before reporting completion.
-- When work changes server files or launches tests, create an isolated worktree under `<repo>/.worktrees/` before editing or testing. Commit the completed change in that worktree, merge the feature branch into the primary checkout with a merge commit, then remove the worktree and delete the merged feature branch. Never leave test worktrees or their build artifacts behind.
+- After creating the final merge commit for completed work, push `dev` to `origin` before reporting completion.
+- Never leave completed iteration worktrees, merged feature branches, or their build artifacts behind.
 - When the operator asks to push committed work, push with the Wise SSH key:
 
 ```bash
@@ -252,7 +267,7 @@ GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 - Treat creation and publication as two separate required steps. `create-card`, `create-task-intake`, and `create-master-task` are locally held until an `append-note` content contribution activates the task identity.
 - After creation, append one truthful `agent` note to the new task thread, verify that `.decision-os/task-state/<projectId>/local/held/<taskId>.json` is absent, and inspect federation replication status before reporting the task synchronized.
 - Commit only the intended versioned task card/thread Markdown and related source changes. Do not stage runtime task-state, voice uploads, run artifacts, caches, settings, or unrelated operator changes.
-- Use a focused commit with the required `WHAT:` and `WHY:` body, verify the complete message, and push the current branch to `origin` with the Wise SSH key.
+- Use a focused commit with the required `WHAT:` and `WHY:` body, verify the complete message, then follow the default `dev` integration and push policy with the Wise SSH key.
 
 ## Debugging
 

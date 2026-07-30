@@ -36,6 +36,7 @@ import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js'
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import {
   admitPipelinePromptSnapshots,
+  assertPipelineDeveloperPromptEnvelope,
   assertPipelinePromptRunSkillSnapshot,
   type AdmittedPipelinePromptSnapshot,
   PipelinePromptAdmissionError,
@@ -153,7 +154,11 @@ export async function startPipelineRun(input: {
       if (!configured) {
         return { ok: false, statusCode: 400, error: 'Pipeline prompt snapshot override has no matching prompt.', skillName };
       }
-      assertPipelinePromptRunSkillSnapshot(snapshot);
+      if ('syntaxVersion' in snapshot && snapshot.syntaxVersion === 2) {
+        assertPipelineDeveloperPromptEnvelope(snapshot);
+      } else {
+        assertPipelinePromptRunSkillSnapshot(snapshot);
+      }
     }
     admittedPromptSnapshots = await admitPipelinePromptSnapshots({
       ownerDecisionOsRoot: serverPipelineDecisionOsRoot(input.runtime, input.decisionOsRoot),

@@ -11,6 +11,7 @@ import type {
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import {
+  assertPipelineDeveloperPromptEnvelope,
   assertPipelinePromptRunSkillSnapshot,
   type AdmittedPipelinePromptSnapshot,
 } from '../helper/pipeline-prompt-snapshot.js';
@@ -134,13 +135,23 @@ export async function queueCodexSkillAfterExecutionController(
   }
   const promptSnapshotOverrides = new Map<string, AdmittedPipelinePromptSnapshot>();
   if (callerContentKind === 'pipeline-prompt') {
-    assertPipelinePromptRunSkillSnapshot(current.skill);
-    promptSnapshotOverrides.set(current.skill.skillName, {
-      contentKind: 'pipeline-prompt',
-      contentRevision: current.skill.contentRevision,
-      contentCommit: current.skill.contentCommit,
-      promptSnapshot: current.skill.promptSnapshot,
-    });
+    if (current.skill.syntaxVersion === 2) {
+      assertPipelineDeveloperPromptEnvelope(current.skill);
+      promptSnapshotOverrides.set(current.skill.skillName, {
+        syntaxVersion: 2,
+        developerPromptSnapshot: current.skill.developerPromptSnapshot,
+        developerPromptRevision: current.skill.developerPromptRevision,
+        developerPromptCommit: current.skill.developerPromptCommit,
+      });
+    } else {
+      assertPipelinePromptRunSkillSnapshot(current.skill);
+      promptSnapshotOverrides.set(current.skill.skillName, {
+        contentKind: 'pipeline-prompt',
+        contentRevision: current.skill.contentRevision,
+        contentCommit: current.skill.contentCommit,
+        promptSnapshot: current.skill.promptSnapshot,
+      });
+    }
   }
   const now = new Date().toISOString();
   const selectedSkill = {

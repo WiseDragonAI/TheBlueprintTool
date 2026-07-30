@@ -72,6 +72,13 @@ type CodexPipelineRunSkillBase = {
   readonly startedAt: string | null;
   readonly finishedAt: string | null;
   readonly error: string;
+  readonly syntaxVersion?: 2;
+  readonly contentRevision?: string;
+  readonly contentCommit?: string;
+  readonly promptSnapshot?: string;
+  readonly developerPromptSnapshot?: string;
+  readonly developerPromptRevision?: string;
+  readonly developerPromptCommit?: string;
   readonly executor?: {
     readonly kind: 'federated';
     readonly nodeId: string;
@@ -80,19 +87,27 @@ type CodexPipelineRunSkillBase = {
   };
 };
 
+export type CodexDeveloperPromptEnvelopeV2 = {
+  readonly syntaxVersion: 2;
+  readonly developerPromptSnapshot: string;
+  readonly developerPromptRevision: string;
+  readonly developerPromptCommit: string;
+};
+
 export type CodexPipelineRunSkill =
   | (CodexPipelineRunSkillBase & {
       /** Version-1 run evidence without a discriminator remains readable as an agent skill. */
       readonly contentKind?: 'federated-skill' | 'workspace-skill';
-      readonly contentRevision?: never;
-      readonly contentCommit?: never;
-      readonly promptSnapshot?: never;
     })
   | (CodexPipelineRunSkillBase & {
+      /** Version-1 authored prompt evidence retains the legacy double-brace runtime renderer. */
       readonly contentKind: 'pipeline-prompt';
       readonly contentRevision: string;
       readonly contentCommit: string;
       readonly promptSnapshot: string;
+    })
+  | (CodexPipelineRunSkillBase & CodexDeveloperPromptEnvelopeV2 & {
+      readonly contentKind: CodexContentKind;
     });
 
 export type CodexPipelineRunStep = {
@@ -199,6 +214,7 @@ export type CodexPipelineStoreIssueCode =
   | 'invalid-pipeline-content-kind'
   | 'pipeline-content-kind-mismatch'
   | 'invalid-pipeline-prompt-snapshot'
+  | 'invalid-developer-prompt-envelope'
   | 'invalid-authored-content-id'
   | 'duplicate-authored-content-id'
   | 'invalid-authored-content-kind'

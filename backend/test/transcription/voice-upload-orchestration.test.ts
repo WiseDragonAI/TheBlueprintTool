@@ -16,6 +16,7 @@ import {
 } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 import type { TaskProjectionCommand } from '@backend/business/task-state/helper/task-mutation-command.js';
+import { installPipelinePromptFixture } from '../support/pipeline-prompt-fixture.js';
 
 const executionPhases = ['preparing', 'queued', 'starting', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled', 'interrupted'] as const;
 
@@ -310,6 +311,10 @@ test('voice upload transcribes on the backend and starts Codex when the card has
   const fakeCodex = join(workspace, 'fake-codex.mjs');
   const inputFile = join(workspace, 'codex-input.txt');
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  installPipelinePromptFixture({
+    workspace,
+    decisionOsRoot: join(workspace, '.decision-os'),
+  });
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
   }, null, 2));
@@ -507,13 +512,17 @@ test('voice Pipeline mode starts the pipeline configured in Settings', async () 
       runs: [], skillLibrary: [], activeWorkspaceRun: null
     }
   });
+  installPipelinePromptFixture({ workspace, decisionOsRoot });
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
     'import { writeFileSync } from "node:fs";',
     'let input = "";',
     'process.stdin.on("data", (chunk) => { input += chunk; });',
     'process.stdin.on("end", () => {',
-    '  const output = (input.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    '  const args = process.argv.slice(2);',
+    '  const developerArgument = args.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    '  const developerPrompt = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : input;',
+    '  const output = (developerPrompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
     '  if (output.trim()) writeFileSync(output.trim(), "# Pipeline result\\n");',
     '  console.log(JSON.stringify({ type: "turn.completed" }));',
     '});'

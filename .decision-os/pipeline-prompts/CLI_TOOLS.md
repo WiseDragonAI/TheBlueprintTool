@@ -23,6 +23,17 @@ ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id <maste
 
 `card-read` discovers the local project and ledger from the running Decision OS catalog and returns the selected card body plus its full thread as Markdown.
 
+## Inspect repository maps
+
+```sh
+tools/map.mjs
+tools/map.mjs c [domain]
+tools/map.mjs t [domain]
+tools/map.mjs d [domain]
+```
+
+No argument prints the compact code map. A domain is an optional top-level folder.
+
 ## Answer the operator
 
 ```sh

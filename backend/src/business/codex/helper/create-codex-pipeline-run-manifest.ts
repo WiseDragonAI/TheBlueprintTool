@@ -14,7 +14,7 @@ import type {
 import { resolveCodexPipelineRunDirectory } from './resolve-codex-pipeline-run-directory.js';
 import { resolveSkillRunOptions } from './resolve-codex-command.js';
 import {
-  assertPipelinePromptRunSkillSnapshot,
+  assertPipelineRunSkillPromptEvidence,
   type AdmittedPipelinePromptSnapshot,
 } from './pipeline-prompt-snapshot.js';
 
@@ -105,20 +105,15 @@ export function createCodexPipelineRunManifest(input: {
           finishedAt: null as null,
           error: '',
         };
-        if (skill.contentKind === 'pipeline-prompt') {
-          const snapshot = input.admittedPromptSnapshots?.get(skill.skillName);
-          if (!snapshot) throw new Error('pipeline_prompt_snapshot_missing');
-          const admitted: CodexPipelineRunSkill = {
-            ...base,
-            ...snapshot,
-          };
-          assertPipelinePromptRunSkillSnapshot(admitted);
-          return admitted;
-        }
-        return {
+        const evidence = input.admittedPromptSnapshots?.get(skill.skillName);
+        if (!evidence) throw new Error('pipeline_developer_prompt_snapshot_missing');
+        const admitted: CodexPipelineRunSkill = {
           ...base,
           contentKind: skill.contentKind,
-        } satisfies CodexPipelineRunSkill;
+          ...evidence,
+        } as CodexPipelineRunSkill;
+        assertPipelineRunSkillPromptEvidence(admitted);
+        return admitted;
       }),
       startedAt: null,
       finishedAt: null,

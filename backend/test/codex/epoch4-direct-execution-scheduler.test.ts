@@ -14,6 +14,7 @@ import { createTaskExecutionRouter } from '@backend/business/codex/helper/task-e
 import { taskExecutionProcesses } from '@backend/business/codex/helper/task-execution-runtime.js';
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 import type { TaskProjectionCommand } from '@backend/business/task-state/helper/task-mutation-command.js';
+import { installPipelinePromptFixture } from '../support/pipeline-prompt-fixture.js';
 
 async function waitFor(predicate: () => boolean, label: string): Promise<void> {
   const deadline = Date.now() + 5_000;
@@ -36,6 +37,7 @@ test('offline local direct retry spawns one child and reaches terminal replicate
   const spawnMarker = join(workspace, 'fake-codex-spawns.txt');
   mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
   mkdirSync(join(decisionOsRoot, 'threads', 'tasks'), { recursive: true });
+  installPipelinePromptFixture({ workspace, decisionOsRoot });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
     ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
   }));
@@ -279,6 +281,7 @@ test('running-state persistence failure after spawn kills the child and settles 
   const fakeCodex = join(workspace, 'fake-codex.mjs');
   mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
   mkdirSync(join(decisionOsRoot, 'threads', 'tasks'), { recursive: true });
+  installPipelinePromptFixture({ workspace, decisionOsRoot });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
     ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
   }));

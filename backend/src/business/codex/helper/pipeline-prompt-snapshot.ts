@@ -1,6 +1,6 @@
 /**
- * WHAT: Admits one clean committed pipeline-prompt snapshot and validates transported snapshots.
- * WHY: Pipeline-only instructions must cross local and remote execution solely as immutable run evidence.
+ * WHAT: Admits clean committed prompt graphs for pipeline skills and direct Codex runs, then validates transported evidence.
+ * WHY: SYSTEM_PROMPT, SKILL, authored gates, and CODEX_RUN must cross execution boundaries as exact immutable snapshots.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -12,6 +12,7 @@ import {
 } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type {
+  CodexDeveloperPromptEnvelopeV2,
   CodexPipelineStep,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { resolveRepositoryContext } from '../../content-authoring/helper/repository-mutation-lock.js';
@@ -22,10 +23,10 @@ import {
   pipelineStoreFile,
 } from './codex-pipeline-store.js';
 import {
-  expandPipelinePromptTemplates,
+  compilePipelinePromptGraph,
+  pipelinePromptSyntaxVersion,
   pipelinePromptFile,
   pipelinePromptRoot,
-  pipelinePromptRuntimeVariables,
   pipelinePromptTemplateVariables,
   validatePipelinePromptMarkdown,
 } from './pipeline-prompt-library.js';
@@ -34,12 +35,18 @@ type AnyRecord = Record<string, unknown>;
 
 export const maximumPipelinePromptSnapshotBytes = 1_000_000;
 
-export type AdmittedPipelinePromptSnapshot = {
+export type AdmittedLegacyPipelinePromptSnapshot = {
   contentKind: 'pipeline-prompt';
   contentRevision: string;
   contentCommit: string;
   promptSnapshot: string;
 };
+
+export type AdmittedPipelinePromptSnapshot =
+  | AdmittedLegacyPipelinePromptSnapshot
+  | CodexDeveloperPromptEnvelopeV2;
+
+export type AdmittedPipelineDeveloperPrompt = CodexDeveloperPromptEnvelopeV2;
 
 export class PipelinePromptAdmissionError extends Error {
   constructor(
@@ -73,12 +80,16 @@ function decodePrompt(bytes: Buffer): string {
   }
 }
 
-function assertSnapshotShape(input: {
+type LegacySnapshotInput = {
   contentKind?: unknown;
   contentRevision?: unknown;
   contentCommit?: unknown;
   promptSnapshot?: unknown;
-}): asserts input is AdmittedPipelinePromptSnapshot {
+};
+
+function assertSnapshotShape(
+  input: LegacySnapshotInput,
+): asserts input is LegacySnapshotInput & AdmittedLegacyPipelinePromptSnapshot {
   if (input.contentKind !== 'pipeline-prompt') {
     throw new PipelinePromptAdmissionError(
       'pipeline_prompt_snapshot_kind_mismatch',
@@ -128,23 +139,105 @@ function assertSnapshotShape(input: {
   }
 }
 
+type DeveloperPromptEnvelopeInput = {
+  syntaxVersion?: unknown;
+  developerPromptSnapshot?: unknown;
+  developerPromptRevision?: unknown;
+  developerPromptCommit?: unknown;
+};
+
+function assertDeveloperPromptEnvelopeShape(input: DeveloperPromptEnvelopeInput): void {
+  if (input.syntaxVersion !== pipelinePromptSyntaxVersion) {
+    throw new PipelinePromptAdmissionError(
+      'pipeline_developer_prompt_version_invalid',
+      400,
+      'Pipeline developer prompt syntax version is invalid.',
+    );
+  }
+  if (typeof input.developerPromptSnapshot !== 'string' || !input.developerPromptSnapshot.trim()) {
+    throw new PipelinePromptAdmissionError(
+      'pipeline_developer_prompt_snapshot_missing',
+      400,
+      'Pipeline developer prompt snapshot is missing.',
+    );
+  }
+  const bytes = Buffer.from(input.developerPromptSnapshot, 'utf8');
+  if (bytes.byteLength > maximumPipelinePromptSnapshotBytes) {
+    throw new PipelinePromptAdmissionError(
+      'pipeline_developer_prompt_snapshot_oversized',
+      400,
+      'Pipeline developer prompt snapshot exceeds the 1,000,000 byte limit.',
+    );
+  }
+  if (
+    typeof input.developerPromptRevision !== 'string'
+    || !/^[a-f0-9]{64}$/.test(input.developerPromptRevision)
+    || sha256(bytes) !== input.developerPromptRevision
+  ) {
+    throw new PipelinePromptAdmissionError(
+      'pipeline_developer_prompt_revision_mismatch',
+      400,
+      'Pipeline developer prompt snapshot does not match its admitted SHA-256 revision.',
+    );
+  }
+  if (typeof input.developerPromptCommit !== 'string' || !/^[a-f0-9]{40,64}$/.test(input.developerPromptCommit)) {
+    throw new PipelinePromptAdmissionError(
+      'pipeline_developer_prompt_commit_invalid',
+      400,
+      'Pipeline developer prompt snapshot has no valid owning Git commit.',
+    );
+  }
+}
+
+export function assertPipelineDeveloperPromptEnvelope(
+  evidence: DeveloperPromptEnvelopeInput,
+): void {
+  assertDeveloperPromptEnvelopeShape(evidence);
+}
+
 export function assertPipelinePromptRunSkillSnapshot(
-  skill: {
-    contentKind?: unknown;
-    contentRevision?: unknown;
-    contentCommit?: unknown;
-    promptSnapshot?: unknown;
-  },
-): asserts skill is AdmittedPipelinePromptSnapshot {
-  assertSnapshotShape(skill);
+  skill: unknown,
+): asserts skill is AdmittedLegacyPipelinePromptSnapshot {
+  if (!skill || typeof skill !== 'object' || Array.isArray(skill)) {
+    throw new PipelinePromptAdmissionError(
+      'pipeline_prompt_snapshot_missing',
+      400,
+      'Pipeline prompt snapshot is missing.',
+    );
+  }
+  assertSnapshotShape(skill as LegacySnapshotInput);
 }
 
 export function assertPipelineRunSkillPromptEvidence(skill: {
+  syntaxVersion?: unknown;
+  developerPromptSnapshot?: unknown;
+  developerPromptRevision?: unknown;
+  developerPromptCommit?: unknown;
   contentKind?: unknown;
   contentRevision?: unknown;
   contentCommit?: unknown;
   promptSnapshot?: unknown;
 }): void {
+  if (skill.syntaxVersion !== undefined) {
+    assertDeveloperPromptEnvelopeShape(skill);
+    if (skill.contentKind !== 'pipeline-prompt'
+      && skill.contentKind !== 'federated-skill'
+      && skill.contentKind !== 'workspace-skill') {
+      throw new PipelinePromptAdmissionError(
+        'pipeline_prompt_snapshot_kind_mismatch',
+        400,
+        'Pipeline run skill content kind is missing or invalid.',
+      );
+    }
+    if (skill.contentRevision !== undefined || skill.contentCommit !== undefined || skill.promptSnapshot !== undefined) {
+      throw new PipelinePromptAdmissionError(
+        'pipeline_prompt_snapshot_kind_mismatch',
+        400,
+        'Version-1 prompt evidence cannot be attached to a version-2 developer prompt.',
+      );
+    }
+    return;
+  }
   if (skill.contentKind === 'pipeline-prompt') {
     assertSnapshotShape(skill);
     return;
@@ -240,21 +333,22 @@ function samePipelinePromptRegistration(left: AnyRecord | undefined, right: AnyR
   );
 }
 
-export async function admitPipelinePromptSnapshots(input: {
+type DeveloperPromptGraphRequest = {
+  key: string;
+  roots: readonly string[];
+};
+
+async function admitPipelineDeveloperPromptGraphs(input: {
   ownerDecisionOsRoot: string;
-  steps: readonly CodexPipelineStep[];
+  graphs: readonly DeveloperPromptGraphRequest[];
   signal?: AbortSignal;
   /** Test-only race injection after exact bytes are captured and before Git identity is resolved. */
   beforeGitValidation?: (context: { name: string; promptFile: string; storeFile: string }) => void | Promise<void>;
 }): Promise<Map<string, AdmittedPipelinePromptSnapshot>> {
-  const requestedPromptNames = [...new Set(input.steps
-    .flatMap((step) => step.skills)
-    .filter((skill) => skill.contentKind === 'pipeline-prompt')
-    .map((skill) => skill.skillName))];
-  const promptNames = [...requestedPromptNames];
+  if (input.graphs.length === 0) return new Map();
+  const promptNames = [...new Set(input.graphs.flatMap((graph) => [...graph.roots]))];
   const queuedPromptNames = new Set(promptNames);
-  const admitted = new Map<string, AdmittedPipelinePromptSnapshot>();
-  if (promptNames.length === 0) return admitted;
+  const admittedPrompts = new Map<string, Extract<AdmittedPipelinePromptSnapshot, { contentKind: 'pipeline-prompt' }>>();
 
   const ownerDecisionOsRoot = resolve(input.ownerDecisionOsRoot);
   const storeFile = pipelineStoreFile(ownerDecisionOsRoot);
@@ -388,7 +482,7 @@ export async function admitPipelinePromptSnapshots(input: {
       );
     }
     for (const variable of pipelinePromptTemplateVariables(promptSnapshot)) {
-      if (pipelinePromptRuntimeVariables.has(variable) || queuedPromptNames.has(variable)) continue;
+      if (queuedPromptNames.has(variable)) continue;
       queuedPromptNames.add(variable);
       promptNames.push(variable);
     }
@@ -530,17 +624,15 @@ export async function admitPipelinePromptSnapshots(input: {
       promptSnapshot,
     };
     assertSnapshotShape(snapshot);
-    admitted.set(name, snapshot);
+    admittedPrompts.set(name, snapshot);
   }
-  for (const name of requestedPromptNames) {
-    const snapshot = admitted.get(name);
-    if (!snapshot) continue;
-    let expanded: string;
+  const admitted = new Map<string, AdmittedPipelinePromptSnapshot>();
+  for (const graph of input.graphs) {
+    let compiled: ReturnType<typeof compilePipelinePromptGraph>;
     try {
-      expanded = expandPipelinePromptTemplates({
-        markdown: snapshot.promptSnapshot,
-        stack: [name],
-        resolve: (templateName) => admitted.get(templateName)?.promptSnapshot ?? null,
+      compiled = compilePipelinePromptGraph({
+        roots: graph.roots,
+        resolve: (name) => admittedPrompts.get(name)?.promptSnapshot ?? null,
       });
     } catch (error) {
       throw new PipelinePromptAdmissionError(
@@ -549,13 +641,64 @@ export async function admitPipelinePromptSnapshots(input: {
         error instanceof Error ? error.message : String(error),
       );
     }
-    const resolved = {
-      ...snapshot,
-      contentRevision: sha256(expanded),
-      promptSnapshot: expanded,
+    const commits = new Set(compiled.dependencies.map((name) => admittedPrompts.get(name)?.contentCommit).filter(Boolean));
+    if (commits.size !== 1) {
+      throw new PipelinePromptAdmissionError(
+        'pipeline_prompt_commit_conflict',
+        409,
+        `Pipeline prompt dependencies for ${graph.key} do not share one owning Git commit.`,
+      );
+    }
+    const evidence: AdmittedPipelineDeveloperPrompt = {
+      syntaxVersion: pipelinePromptSyntaxVersion,
+      developerPromptSnapshot: compiled.developerPromptSnapshot,
+      developerPromptRevision: sha256(compiled.developerPromptSnapshot),
+      developerPromptCommit: [...commits][0]!,
     };
-    assertSnapshotShape(resolved);
-    admitted.set(name, resolved);
+    assertDeveloperPromptEnvelopeShape(evidence);
+    admitted.set(graph.key, evidence);
   }
   return admitted;
+}
+
+export async function admitPipelineDeveloperPrompt(input: {
+  ownerDecisionOsRoot: string;
+  roots: readonly string[];
+  signal?: AbortSignal;
+  /** Test-only race injection after exact bytes are captured and before Git identity is resolved. */
+  beforeGitValidation?: (context: { name: string; promptFile: string; storeFile: string }) => void | Promise<void>;
+}): Promise<AdmittedPipelineDeveloperPrompt> {
+  const key = input.roots.join('+');
+  const admitted = await admitPipelineDeveloperPromptGraphs({
+    ...input,
+    graphs: [{ key, roots: input.roots }],
+  });
+  const evidence = admitted.get(key);
+  if (!evidence || !('syntaxVersion' in evidence)) {
+    throw new PipelinePromptAdmissionError(
+      'pipeline_developer_prompt_snapshot_missing',
+      409,
+      'The admitted developer prompt graph produced no version-2 evidence.',
+    );
+  }
+  return evidence;
+}
+
+export async function admitPipelinePromptSnapshots(input: {
+  ownerDecisionOsRoot: string;
+  steps: readonly CodexPipelineStep[];
+  signal?: AbortSignal;
+  /** Test-only race injection after exact bytes are captured and before Git identity is resolved. */
+  beforeGitValidation?: (context: { name: string; promptFile: string; storeFile: string }) => void | Promise<void>;
+}): Promise<Map<string, AdmittedPipelinePromptSnapshot>> {
+  const requestedSkills = [...new Map(input.steps
+    .flatMap((step) => step.skills)
+    .map((skill) => [skill.skillName, skill] as const)).values()];
+  return admitPipelineDeveloperPromptGraphs({
+    ...input,
+    graphs: requestedSkills.map((skill) => ({
+      key: skill.skillName,
+      roots: ['SYSTEM_PROMPT', skill.contentKind === 'pipeline-prompt' ? skill.skillName : 'SKILL'],
+    })),
+  });
 }

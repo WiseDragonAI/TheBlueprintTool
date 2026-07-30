@@ -474,6 +474,36 @@
       "defaultCodexModel": null,
       "defaultCodexEffort": null,
       "updatedAt": "2026-07-29T03:23:17.362Z"
+    },
+    {
+      "skillName": "SYSTEM_PROMPT",
+      "favorite": false,
+      "tags": [
+        "System"
+      ],
+      "defaultCodexModel": null,
+      "defaultCodexEffort": null,
+      "updatedAt": "2026-07-30T19:52:05.291Z"
+    },
+    {
+      "skillName": "SKILL",
+      "favorite": false,
+      "tags": [
+        "System"
+      ],
+      "defaultCodexModel": null,
+      "defaultCodexEffort": null,
+      "updatedAt": "2026-07-30T19:52:05.360Z"
+    },
+    {
+      "skillName": "CODEX_RUN",
+      "favorite": false,
+      "tags": [
+        "System"
+      ],
+      "defaultCodexModel": null,
+      "defaultCodexEffort": null,
+      "updatedAt": "2026-07-30T19:52:05.424Z"
     }
   ],
   "authoredContent": [
@@ -500,6 +530,30 @@
       "updatedAt": "2026-07-29T03:23:17.362Z",
       "kind": "pipeline-prompt",
       "contentFile": "pipeline-prompts/GateTest.md"
+    },
+    {
+      "id": "SYSTEM_PROMPT",
+      "description": "Decision OS pipeline developer instructions shared by every admitted execution.",
+      "createdAt": "2026-07-30T18:35:20.643Z",
+      "updatedAt": "2026-07-30T18:35:20.643Z",
+      "kind": "pipeline-prompt",
+      "contentFile": "pipeline-prompts/SYSTEM_PROMPT.md"
+    },
+    {
+      "id": "SKILL",
+      "description": "Decision OS runtime wrapper for admitted pipeline skill executions.",
+      "createdAt": "2026-07-30T18:35:20.643Z",
+      "updatedAt": "2026-07-30T18:35:20.643Z",
+      "kind": "pipeline-prompt",
+      "contentFile": "pipeline-prompts/SKILL.md"
+    },
+    {
+      "id": "CODEX_RUN",
+      "description": "Decision OS developer instructions for direct card and thread Codex runs.",
+      "createdAt": "2026-07-30T19:34:37.599Z",
+      "updatedAt": "2026-07-30T19:38:07.412Z",
+      "kind": "pipeline-prompt",
+      "contentFile": "pipeline-prompts/CODEX_RUN.md"
     }
   ],
   "activeWorkspaceRun": null

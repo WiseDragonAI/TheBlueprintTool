@@ -1,20 +1,26 @@
 /**
- * WHAT: Supplies the compact Git-visible code map used by authored pipeline prompts.
- * WHY: The shared map contract keeps prompt injection and the on-demand CLI consistent.
+ * WHAT: Executes the bounded file-map CLI for the FILE_MAP runtime variable.
+ * WHY: Prompt injection and on-demand repository queries must use one map implementation.
  */
-import {
-  buildInjectedFileMap,
-  meaningfulGitPaths as sharedMeaningfulGitPaths,
-} from '../../../../../shared/meaningful-file-map.mjs';
+import { execFileSync } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export function meaningfulGitPaths(workspaceRoot: string): string[] {
-  return sharedMeaningfulGitPaths(workspaceRoot);
-}
+const fileMapCli = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../tools/map.mjs');
+const maximumFileMapBytes = 1024 * 1024;
+const fileMapTimeoutMs = 10_000;
 
 export function buildMeaningfulFileMap(workspaceRoot: string): string {
   try {
-    return buildInjectedFileMap(workspaceRoot);
+    return execFileSync(process.execPath, [fileMapCli], {
+      cwd: workspaceRoot,
+      encoding: 'buffer',
+      timeout: fileMapTimeoutMs,
+      maxBuffer: maximumFileMapBytes,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).toString('utf8').trimEnd();
   } catch {
-    return 'DOMAINS\n (unavailable)\nQUERY\n tools/map.mjs <c|t|d> [domain]\n c=code t=test d=doc; domain optional; CODE=top5/dir by LOC\nCODE\n.\n (file map unavailable)';
+    return 'DOMAINS\n (unavailable)\nCODE\n.\n (file map unavailable)';
   }
 }

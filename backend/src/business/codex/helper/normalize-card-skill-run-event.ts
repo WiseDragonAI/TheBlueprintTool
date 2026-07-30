@@ -136,7 +136,7 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
     return normalizedJsonlEvent(line.line, {
       type,
       kind: 'diagnostic',
-      title: 'User prompt',
+      title: type === 'decision_os.developer_prompt' ? 'Developer prompt' : 'User prompt',
       text: textBlock(event.prompt),
       status: '',
       itemId: '',

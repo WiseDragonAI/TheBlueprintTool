@@ -146,6 +146,13 @@ test('every Git creation boundary preserves bytes and index, persists an inciden
           recoveryToken,
         });
         assert.equal(git(fixture.root, ['rev-parse', 'HEAD']), recovered.commit);
+        assert.equal(git(fixture.root, ['show', '-s', '--format=%B', 'HEAD']), [
+          'Create prompt review',
+          '',
+          'WHAT: Version the confirmed authored files as one focused revision.',
+          '',
+          'WHY: Decision OS authored content requires exact-byte Git evidence without staging unrelated work.',
+        ].join('\n'));
         assert.deepEqual(git(fixture.root, ['diff', '--cached', '--name-only']).split('\n'), ['operator.txt']);
         assert.equal(git(fixture.root, ['status', '--short', '--', '.decision-os']), '');
         assert.equal(existsSync(resolve(context.commonDirectory, 'decision-os', 'authored-revision-recovery', `${recoveryToken}.json`)), false);

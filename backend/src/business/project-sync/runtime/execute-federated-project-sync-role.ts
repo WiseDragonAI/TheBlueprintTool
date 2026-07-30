@@ -133,6 +133,7 @@ export async function executeFederatedProjectSyncRole(input: {
           nodeId: input.localNodeId,
           initiatorNodeId: String(body.initiatorNodeId ?? ''),
           role,
+          pipelineSkill: plannedSkill,
           requiredSha: String(body.requiredSha ?? '') || undefined,
           snapshot,
           codexRunId: plannedSkill.runId,

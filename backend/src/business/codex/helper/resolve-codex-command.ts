@@ -46,15 +46,15 @@ export function decisionOsRuntimePlatform(nodePlatform: NodeJS.Platform = proces
   throw new RangeError(`Unsupported Decision OS runtime platform: ${nodePlatform}`);
 }
 
-function codexDeveloperInstructions(customInstructions?: string): string {
+function codexDeveloperInstructions(customInstructions?: string, exact = false): string {
   const baseInstructions = [
     `platform: ${decisionOsRuntimePlatform()}`,
     'Git commits you create, including merges, require a concise subject and body:',
     '- WHAT: changed boundary.',
     '- WHY: reason and decision evidence.',
   ].join('\n');
-  const custom = String(customInstructions ?? '').trim();
-  return custom ? `${baseInstructions}\n${custom}` : baseInstructions;
+  if (customInstructions === undefined) return baseInstructions;
+  return exact ? String(customInstructions) : `${baseInstructions}\n${String(customInstructions).trim()}`;
 }
 
 function settingsRecord(runtime: AnyRecord): AnyRecord {
@@ -176,9 +176,19 @@ export function resolveSkillRunOptions(input: {
   return { codexModel: command.model, codexEffort: command.effort };
 }
 
-export function resolveCodexCommand(input: { workspaceRoot: string; runtime: AnyRecord; codexModel?: unknown; codexEffort?: unknown; developerInstructions?: string }): CodexCommand {
+export function resolveCodexCommand(input: {
+  workspaceRoot: string;
+  runtime: AnyRecord;
+  codexModel?: unknown;
+  codexEffort?: unknown;
+  developerInstructions?: string;
+  exactDeveloperInstructions?: boolean;
+}): CodexCommand {
   const selection = resolveCodexSelection(input);
-  const developerInstructionArgs = ['-c', `developer_instructions=${JSON.stringify(codexDeveloperInstructions(input.developerInstructions))}`];
+  const developerInstructionArgs = ['-c', `developer_instructions=${JSON.stringify(codexDeveloperInstructions(
+    input.developerInstructions,
+    input.exactDeveloperInstructions === true,
+  ))}`];
   return {
     command: selection.command,
     args: [

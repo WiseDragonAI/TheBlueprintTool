@@ -60,7 +60,7 @@ function manifest(): CodexPipelineRun {
         error: '',
       }],
     }],
-  };
+  } as CodexPipelineRun;
 }
 
 function promptManifest(overrides: Record<string, unknown> = {}): CodexPipelineRun {
@@ -80,7 +80,28 @@ function promptManifest(overrides: Record<string, unknown> = {}): CodexPipelineR
         ...overrides,
       })),
     })),
-  };
+  } as CodexPipelineRun;
+}
+
+function developerPromptManifest(overrides: Record<string, unknown> = {}): CodexPipelineRun {
+  const developerPromptSnapshot = 'platform: <PLATFORM>\n\n# Admitted developer prompt';
+  const run = manifest();
+  return {
+    ...run,
+    steps: run.steps.map((step) => ({
+      ...step,
+      skills: step.skills.map((skill) => ({
+        ...skill,
+        skillName: 'remote-prompt',
+        contentKind: 'pipeline-prompt' as const,
+        syntaxVersion: 2 as const,
+        developerPromptSnapshot,
+        developerPromptRevision: createHash('sha256').update(developerPromptSnapshot).digest('hex'),
+        developerPromptCommit: 'b'.repeat(40),
+        ...overrides,
+      })),
+    })),
+  } as CodexPipelineRun;
 }
 
 test('installs one validated remote pipeline topology with executor-local artifact paths', () => {
@@ -281,6 +302,63 @@ test('installs an authenticated immutable prompt snapshot without writing any sk
       }),
       requests,
     }), /task_execution_pipeline_manifest_conflict/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('remote installation preserves and validates the exact version-2 developer prompt envelope', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-remote-developer-prompt-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  try {
+    mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+    writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+      ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+    }));
+    writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+      cards: [
+        { id: 'master', title: 'Master' },
+        { id: 'output-card', title: 'Output', comment: { contentFile: '.decision-os/cards/tasks/output-card.md' } },
+      ],
+      annotations: [],
+      relationships: [],
+    }));
+    writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'output-card.md'), '\n');
+    const run = developerPromptManifest();
+    const requests = [createTaskExecutionLaunchRequest({
+      requestId: 'pipeline:pipeline-remote:execution-remote',
+      executionId: 'execution-remote',
+      projectId: 'project-a',
+      ledgerId: 'tasks',
+      sessionId: 'skill-run',
+      sourceCardId: 'master',
+      ownerCardId: 'output-card',
+      kind: 'pipeline-skill',
+      requestedAt: run.createdAt,
+      model: 'gpt-5.6-sol',
+      effort: 'medium',
+      pipelineRunId: run.id,
+      pipelineStepId: run.steps[0].id,
+      pipelineSkillRunId: 'skill-run',
+    })];
+    const installed = installRemotePipelineRun({
+      decisionOsRoot,
+      runtime: {
+        readTaskLedgerProjection: () => JSON.parse(readFileSync(join(decisionOsRoot, 'tasks.json'), 'utf8')),
+      },
+      run,
+      requests,
+    });
+    const stored = installed.run.steps[0].skills[0];
+    assert.equal(stored.syntaxVersion, 2);
+    assert.equal(stored.developerPromptSnapshot, 'platform: <PLATFORM>\n\n# Admitted developer prompt');
+    assert.equal(existsSync(join(decisionOsRoot, 'pipeline-prompts')), false);
+    assert.throws(() => installRemotePipelineRun({
+      decisionOsRoot: join(workspace, 'invalid', '.decision-os'),
+      runtime: {},
+      run: developerPromptManifest({ developerPromptRevision: 'c'.repeat(64) }),
+      requests,
+    }), /pipeline_developer_prompt_revision_mismatch/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

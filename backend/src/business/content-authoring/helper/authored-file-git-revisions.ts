@@ -496,7 +496,14 @@ async function commitUnderLock(input: {
         GIT_COMMITTER_NAME: 'Decision OS',
         GIT_COMMITTER_EMAIL: 'decision-os@localhost',
       },
-      input: `${input.subject.trim()}\n`,
+      input: [
+        input.subject.trim(),
+        '',
+        'WHAT: Version the confirmed authored files as one focused revision.',
+        '',
+        'WHY: Decision OS authored content requires exact-byte Git evidence without staging unrelated work.',
+        '',
+      ].join('\n'),
       signal: input.signal,
     });
 

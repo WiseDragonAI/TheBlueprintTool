@@ -109,6 +109,7 @@ const writeBlockingIssueCodes = new Set([
   'invalid-pipeline-content-kind',
   'pipeline-content-kind-mismatch',
   'invalid-pipeline-prompt-snapshot',
+  'invalid-developer-prompt-envelope',
   'invalid-authored-content-id',
   'duplicate-authored-content-id',
   'invalid-authored-content-kind',
@@ -448,6 +449,38 @@ function normalizeRunSkill(
     error: text(input.error),
     ...(executor ? { executor } : {}),
   };
+  if (input.syntaxVersion === 2) {
+    const contentKind = text(input.contentKind);
+    const developerPromptSnapshot = typeof input.developerPromptSnapshot === 'string'
+      ? input.developerPromptSnapshot
+      : '';
+    const developerPromptRevision = text(input.developerPromptRevision);
+    const developerPromptCommit = text(input.developerPromptCommit);
+    if (
+      !contentKindSet.has(contentKind)
+      || !developerPromptSnapshot.trim()
+      || !/^[a-f0-9]{64}$/.test(developerPromptRevision)
+      || createHash('sha256').update(developerPromptSnapshot).digest('hex') !== developerPromptRevision
+      || !/^[a-f0-9]{40,64}$/.test(developerPromptCommit)
+    ) {
+      issues.push(issue({
+        code: 'invalid-developer-prompt-envelope',
+        message: `Pipeline run skill ${base.id} has incomplete immutable developer-prompt evidence.`,
+        stepId,
+        skillId: base.id,
+        skillName: base.skillName,
+        runId,
+      }));
+    }
+    return {
+      ...base,
+      contentKind: contentKindSet.has(contentKind) ? contentKind as CodexContentKind : 'federated-skill',
+      syntaxVersion: 2,
+      developerPromptSnapshot,
+      developerPromptRevision,
+      developerPromptCommit,
+    };
+  }
   if (input.contentKind === 'pipeline-prompt') {
     if (!text(input.contentRevision) || !text(input.contentCommit) || typeof input.promptSnapshot !== 'string') {
       issues.push(issue({

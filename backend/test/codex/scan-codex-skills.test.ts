@@ -6,10 +6,47 @@ import { join } from 'node:path';
 import { scanCodexSkills } from '@backend/business/codex/helper/scan-codex-skills.js';
 import { resolveServerSkillContext } from '@backend/business/codex/helper/server-skill-context.js';
 import { buildPipelineSkillPrompt } from '@backend/business/codex/helper/build-pipeline-skill-prompt.js';
+import { createPipelinePromptRuntimeContext } from '@backend/business/codex/helper/pipeline-prompt-library.js';
 import { sha256AuthoredBytes } from '@backend/business/content-authoring/helper/authored-file-git-revisions.js';
 
 function skillMarkdown(name: string, description: string, body = '# Instructions\n\nDo the work.'): string {
   return ['---', `name: ${name}`, `description: ${description}`, '---', '', body, ''].join('\n');
+}
+
+function promptRuntimeContext(input: {
+  skillName: string;
+  serverSkillContext?: string;
+}) {
+  const empty = () => '';
+  return createPipelinePromptRuntimeContext({
+    PLATFORM: () => 'linux',
+    SKILL_NAME: () => input.skillName,
+    PIPELINE_RUN_ID: () => 'run',
+    PIPELINE_NAME: () => 'Pipeline',
+    LEDGER_FILE: () => '/ledger.json',
+    SOURCE_CARD_ID: () => 'source',
+    SOURCE_CARD_TITLE: () => 'Source',
+    STEP_ID: () => 'step',
+    STEP_TITLE: () => 'Step',
+    STEP_INPUT_CARD_ID: () => 'input',
+    STEP_INPUT_CARD_CONTENT: () => 'Input',
+    OUTPUT_PARENT_CARD_ID: () => 'master',
+    OUTPUT_CARD_ID: () => 'output',
+    OUTPUT_SUBTASK_POSITION: () => '4',
+    OUTPUT_MARKDOWN_FILE: () => '/output.md',
+    SERVER_SKILL_CONTEXT: () => input.serverSkillContext ?? '',
+    MASTER_TASK: empty,
+    SUB_CONTEXT: empty,
+    FULL_THREAD: empty,
+    FILE_MAP: empty,
+    PREVIOUS_SKILL_RESULT: empty,
+    EXECUTION_CONTEXT: empty,
+    PROJECT_ID: empty,
+    CARD_ID: empty,
+    THREAD_ID: empty,
+    RUN_SKILL_POLICY: empty,
+    PROTECTED_GIT_PATCH: empty,
+  });
 }
 
 test('scanCodexSkills classifies sources, preserves precedence, and returns stable editability metadata', () => {
@@ -106,10 +143,19 @@ test('one server skill wins in every managed project and supplies exact run inst
     });
     assert.deepEqual(context, { markdown, packageRoot: join(serverRoot, '.skills', 'shared-skill') });
     const prompt = buildPipelineSkillPrompt({
-      skillName: 'shared-skill', contentKind: 'federated-skill', ledgerFile: '/ledger.json', pipelineRunId: 'run', pipelineName: 'Pipeline',
-      sourceCardId: 'source', sourceCardTitle: 'Source', stepId: 'step', stepTitle: 'Step',
-      stepInputCardId: 'input', stepInputCardContent: 'Input', outputParentCardId: 'master',
-      outputCardId: 'output', outputSubtaskPosition: 4, outputMarkdownFile: '/output.md', serverSkill: context,
+      skillName: 'shared-skill',
+      contentKind: 'federated-skill',
+      runtimeContext: promptRuntimeContext({
+        skillName: 'shared-skill',
+        serverSkillContext: [
+          '',
+          `Decision OS server skill package: ${context?.packageRoot}`,
+          'Apply the following exact SKILL.md instructions. Read referenced files from that package only when the instructions require them.',
+          '```markdown',
+          context?.markdown ?? '',
+          '```',
+        ].join('\n'),
+      }),
     });
     assert.match(prompt, /Decision OS server skill package:/);
     assert.match(prompt, /# Server workflow/);
@@ -126,10 +172,7 @@ test('one server skill wins in every managed project and supplies exact run inst
       contentRevision: sha256AuthoredBytes(promptSnapshot),
       contentCommit: 'a'.repeat(40),
       promptSnapshot,
-      ledgerFile: '/ledger.json', pipelineRunId: 'run', pipelineName: 'Pipeline',
-      sourceCardId: 'source', sourceCardTitle: 'Source', stepId: 'step', stepTitle: 'Step',
-      stepInputCardId: 'input', stepInputCardContent: 'Input', outputParentCardId: 'source',
-      outputCardId: 'output', outputSubtaskPosition: 1, outputMarkdownFile: '/output.md',
+      runtimeContext: promptRuntimeContext({ skillName: 'pipeline-only' }),
     });
     assert.equal(injected.startsWith('$pipeline-only'), false);
     assert.equal(injected, promptSnapshot);

@@ -227,9 +227,6 @@ export function buildInjectedFileMap(workspaceRoot) {
   return [
     'DOMAINS',
     ...(domains.length === 0 ? [' (none)'] : domains.map(({ name, codes }) => ` ${displaySegment(name)} ${codes}`)),
-    'QUERY',
-    ' tools/map.mjs <c|t|d> [domain]',
-    ' c=code t=test d=doc; domain optional; CODE=top5/dir by LOC',
     'CODE',
     renderInventoryMap(workspaceRoot, inventory, 'code', '', injectedFilesPerDirectory),
   ].join('\n');

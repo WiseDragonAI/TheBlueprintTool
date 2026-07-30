@@ -8,6 +8,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createHttpServer } from '../../src/business/server/application/create-decision-os-server.js';
+import { installPipelinePromptFixture } from '../support/pipeline-prompt-fixture.js';
 
 function git(root: string, ...args: string[]): void {
   execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' });
@@ -47,6 +48,10 @@ test('exposes origin identity and fixed repository status while protecting feder
     mkdirSync(skillRoot, { recursive: true });
     writeFileSync(join(skillRoot, 'SKILL.md'), `---\nname: ${skillName}\ndescription: test\n---\n\nReturn JSON evidence.\n`);
   }
+  installPipelinePromptFixture({
+    workspace: home,
+    decisionOsRoot: join(home, '.decision-os'),
+  });
   const fakeCodex = join(home, 'fake-codex');
   writeFileSync(fakeCodex, [
     '#!/bin/sh',

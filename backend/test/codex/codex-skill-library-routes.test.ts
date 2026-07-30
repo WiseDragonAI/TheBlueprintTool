@@ -140,7 +140,7 @@ test('skill library routes save editable Markdown and defaults without exposing 
       { name: 'guide.md', markdown: '# Guide\n\nUse the guide.\n' },
       { name: 'nested/schema.json', markdown: '```json\n{"type":"object"}\n```\n' },
     ]);
-    assert.deepEqual(detail.availableTags, ['Architecture', 'Implementation', 'Interface', 'Writing', 'Marketing', 'Product', 'Research', 'Automation', 'Artifacts', 'Platform']);
+    assert.deepEqual(detail.availableTags, ['System', 'Architecture', 'Implementation', 'Interface', 'Writing', 'Marketing', 'Product', 'Research', 'Automation', 'Artifacts', 'Platform']);
     assert.equal('skillFile' in detail.skill, false);
     assert.equal(detailText.includes(workspace), false);
 
@@ -529,6 +529,17 @@ test('skill creation separates pipeline-only prompts from natural discovery and 
     assert.deepEqual(revisedPaths, ['codex-pipelines.json', 'pipeline-prompts/pipeline-review.md']);
     assert.deepEqual(execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: workspace, encoding: 'utf8' }).trim().split('\n'), ['README.md']);
     assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim(), parentHeadBeforePrompt);
+    const tagged = await saveCodexSkillLibrary({
+      decisionOsRoot,
+      runtime: { serverRoot: workspace },
+      skillName: 'pipeline-review',
+      payload: { tags: ['System'] },
+    });
+    assert.equal(tagged.ok, true);
+    if (!tagged.ok) return;
+    assert.deepEqual(tagged.skill.tags, ['System']);
+    const taggedStore = JSON.parse(readFileSync(join(decisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
+    assert.deepEqual(taggedStore.skillLibrary.find((entry: Record<string, any>) => entry.skillName === 'pipeline-review')?.tags, ['System']);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

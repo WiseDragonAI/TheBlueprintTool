@@ -1,9 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildThreadCodexPrompt } from '@backend/business/codex/helper/build-thread-codex-prompt.js';
+import { compilePipelinePromptGraph } from '@backend/business/codex/helper/pipeline-prompt-library.js';
+import { testCodexRunPrompt } from '../support/pipeline-prompt-fixture.js';
+
+const developerPromptSnapshot = compilePipelinePromptGraph({
+  roots: ['SYSTEM_PROMPT', 'CODEX_RUN'],
+  resolve: (name) => name === 'SYSTEM_PROMPT'
+    ? 'platform: <PLATFORM>'
+    : name === 'CODEX_RUN'
+      ? testCodexRunPrompt
+      : null,
+}).developerPromptSnapshot;
 
 test('thread Codex prompt uses a direct scoped contract without triggering open-note skills', () => {
   const prompt = buildThreadCodexPrompt({
+    developerPromptSnapshot,
     workspaceRoot: '/workspace',
     projectId: 'project-a',
     ledgerFile: '/workspace/.decision-os/specs.json',
@@ -19,7 +31,7 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
     context: { version: 2, card: { id: 'card-a', markdown: '# Card A\n' }, thread: { id: 'thread-card-a', markdown: '# OPERATOR\n\nImplement this request.\n' }, actions: { executionProfile: { command: 'ledger-cli execution-profile --ledger "$DECISION_OS_LEDGER_FILE" --json' } } },
   });
 
-  assert.match(prompt.developerInstructions, /^Decision OS card run:/);
+  assert.match(prompt.developerInstructions, /^platform: linux\n\nDecision OS card run:/);
   assert.match(prompt.developerInstructions, /Project: `project-a`\./);
   assert.doesNotMatch(prompt.developerInstructions, /session-context/);
   assert.match(prompt.developerInstructions, /master-task-apply/);
@@ -67,6 +79,7 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
 
 test('voice Run prompt explicitly disallows skills', () => {
   const prompt = buildThreadCodexPrompt({
+    developerPromptSnapshot,
     workspaceRoot: '/workspace',
     projectId: 'project-a',
     ledgerFile: '/workspace/.decision-os/specs.json',

@@ -174,6 +174,7 @@ export function createProjectSyncController(input: {
           nodeId,
           initiatorNodeId: run.initiatorNodeId,
           role,
+          pipelineSkill: skill,
           requiredSha,
           snapshot: phaseSnapshot,
           codexRunId: skill.runId,

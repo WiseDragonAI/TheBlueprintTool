@@ -15,6 +15,12 @@ import { taskExecutionState } from '@backend/business/codex/helper/task-executio
 import { admitPipelinePromptSnapshots } from '@backend/business/codex/helper/pipeline-prompt-snapshot.js';
 import { createCodexPipelineRunManifest, type PipelineDefinition } from '@backend/business/codex/helper/create-codex-pipeline-run-manifest.js';
 import { buildPipelineSkillPrompt } from '@backend/business/codex/helper/build-pipeline-skill-prompt.js';
+import {
+  createPipelinePromptRuntimeContext,
+  pipelinePromptRuntimeTokens,
+  pipelinePromptRuntimeVariables,
+  pipelinePromptTemplateVariables,
+} from '@backend/business/codex/helper/pipeline-prompt-library.js';
 import { startPipelineRun } from '@backend/business/codex/controller/start-codex-pipeline-run-controller.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 
@@ -50,6 +56,36 @@ function createSkill(workspace: string, name: string): void {
   writeFileSync(join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name} test skill\n---\n`);
 }
 
+const promptRecordTimestamp = '2026-07-28T00:00:00.000Z';
+const testSkillWrapper = [
+  '$<SKILL_NAME>',
+  'Current skill: <SKILL_NAME>',
+  '<SERVER_SKILL_CONTEXT>',
+  'Direct previous skill result:',
+  '<STEP_INPUT_CARD_CONTENT>',
+  'Write the final result to this Markdown file: <OUTPUT_MARKDOWN_FILE>',
+].join('\n');
+function basePromptAuthoredContent() {
+  return [
+    {
+      id: 'SYSTEM_PROMPT',
+      kind: 'pipeline-prompt' as const,
+      description: 'System prompt',
+      contentFile: 'pipeline-prompts/SYSTEM_PROMPT.md' as const,
+      createdAt: promptRecordTimestamp,
+      updatedAt: promptRecordTimestamp,
+    },
+    {
+      id: 'SKILL',
+      kind: 'pipeline-prompt' as const,
+      description: 'Skill wrapper',
+      contentFile: 'pipeline-prompts/SKILL.md' as const,
+      createdAt: promptRecordTimestamp,
+      updatedAt: promptRecordTimestamp,
+    },
+  ];
+}
+
 function createWorkspace(prefix: string): { workspace: string; decisionOsRoot: string } {
   const workspace = mkdtempSync(join(tmpdir(), prefix));
   const decisionOsRoot = join(workspace, '.decision-os');
@@ -64,6 +100,26 @@ function createWorkspace(prefix: string): { workspace: string; decisionOsRoot: s
     }],
     annotations: [], relationships: [], notes: {},
   }, null, 2));
+  mkdirSync(join(decisionOsRoot, 'pipeline-prompts'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'pipeline-prompts', 'SYSTEM_PROMPT.md'), 'platform: <PLATFORM>');
+  writeFileSync(join(decisionOsRoot, 'pipeline-prompts', 'SKILL.md'), testSkillWrapper);
+  writeCodexPipelineStore({
+    decisionOsRoot,
+    store: {
+      version: 2,
+      pipelines: [],
+      steps: [],
+      runs: [],
+      skillLibrary: [],
+      authoredContent: basePromptAuthoredContent(),
+      activeWorkspaceRun: null,
+    },
+  });
+  git(workspace, ['init', '-q']);
+  git(workspace, ['config', 'user.name', 'Prompt Test']);
+  git(workspace, ['config', 'user.email', 'prompt@example.test']);
+  git(workspace, ['add', '.decision-os']);
+  git(workspace, ['commit', '-q', '-m', 'Seed prompt compiler']);
   return { workspace, decisionOsRoot };
 }
 
@@ -93,6 +149,52 @@ function promptDefinition(): PipelineDefinition {
   };
 }
 
+function runtimeContext(overrides: Partial<Record<string, string>> = {}) {
+  const value = (name: string, fallback = '') => () => overrides[name] ?? fallback;
+  return createPipelinePromptRuntimeContext({
+    PLATFORM: value('PLATFORM', 'linux'),
+    SKILL_NAME: value('SKILL_NAME', 'review-output'),
+    PIPELINE_RUN_ID: value('PIPELINE_RUN_ID', 'pipeline-run'),
+    PIPELINE_NAME: value('PIPELINE_NAME', 'Prompt pipeline'),
+    LEDGER_FILE: value('LEDGER_FILE', '/ledger.json'),
+    SOURCE_CARD_ID: value('SOURCE_CARD_ID', 'source-card'),
+    SOURCE_CARD_TITLE: value('SOURCE_CARD_TITLE', 'Source Card'),
+    STEP_ID: value('STEP_ID', 'prompt-step'),
+    STEP_TITLE: value('STEP_TITLE', 'Prompt step'),
+    STEP_INPUT_CARD_ID: value('STEP_INPUT_CARD_ID', 'source-card'),
+    STEP_INPUT_CARD_CONTENT: value('STEP_INPUT_CARD_CONTENT', 'Input'),
+    OUTPUT_PARENT_CARD_ID: value('OUTPUT_PARENT_CARD_ID', 'source-card'),
+    OUTPUT_CARD_ID: value('OUTPUT_CARD_ID', 'output-card'),
+    OUTPUT_SUBTASK_POSITION: value('OUTPUT_SUBTASK_POSITION', '1'),
+    OUTPUT_MARKDOWN_FILE: value('OUTPUT_MARKDOWN_FILE', '/output.md'),
+    SERVER_SKILL_CONTEXT: value('SERVER_SKILL_CONTEXT'),
+    MASTER_TASK: value('MASTER_TASK', '# Master task'),
+    SUB_CONTEXT: value('SUB_CONTEXT', '{}'),
+    FULL_THREAD: value('FULL_THREAD', '# OPERATOR'),
+    FILE_MAP: value('FILE_MAP', '.'),
+    PREVIOUS_SKILL_RESULT: value('PREVIOUS_SKILL_RESULT', 'Input'),
+    EXECUTION_CONTEXT: value('EXECUTION_CONTEXT', '{}'),
+    PROJECT_ID: value('PROJECT_ID'),
+    CARD_ID: value('CARD_ID'),
+    THREAD_ID: value('THREAD_ID'),
+    RUN_SKILL_POLICY: value('RUN_SKILL_POLICY'),
+    PROTECTED_GIT_PATCH: value('PROTECTED_GIT_PATCH'),
+  });
+}
+
+test('FILE_MAP is recognized beside EXECUTION_CONTEXT in both syntax versions', () => {
+  assert.deepEqual(
+    pipelinePromptTemplateVariables('{{FILE_MAP}}\n{{EXECUTION_CONTEXT}}'),
+    ['FILE_MAP', 'EXECUTION_CONTEXT'],
+  );
+  assert.deepEqual(
+    pipelinePromptRuntimeTokens('<FILE_MAP>\n<EXECUTION_CONTEXT>'),
+    ['FILE_MAP', 'EXECUTION_CONTEXT'],
+  );
+  assert.equal(pipelinePromptRuntimeVariables.has('FILE_MAP'), true);
+  assert.equal(pipelinePromptRuntimeVariables.has('EXECUTION_CONTEXT'), true);
+});
+
 function createPromptRepository(input: {
   prefix: string;
   markdown?: string | Buffer;
@@ -113,29 +215,34 @@ function createPromptRepository(input: {
     'GATE_SKILL',
     '',
     'MASTER_TASK',
-    '{{MASTER_TASK}}',
+    '<MASTER_TASK>',
     '',
     'SUB_CONTEXT',
-    '{{SUB_CONTEXT}}',
+    '<SUB_CONTEXT>',
     '',
     'FULL_THREAD',
-    '{{FULL_THREAD}}',
+    '<FULL_THREAD>',
     '',
     'FILE_MAP',
-    '{{FILE_MAP}}',
+    '<FILE_MAP>',
     '',
     'PREVIOUS_SKILL_RESULT',
-    '{{PREVIOUS_SKILL_RESULT}}',
+    '<PREVIOUS_SKILL_RESULT>',
     '',
     'EXECUTION_CONTEXT',
-    '{{EXECUTION_CONTEXT}}',
+    '<EXECUTION_CONTEXT>',
   ].join('\n'));
-  for (const [name, markdown] of Object.entries(input.templates ?? {})) {
+  const templates = {
+    SYSTEM_PROMPT: 'platform: <PLATFORM>',
+    SKILL: testSkillWrapper,
+    ...(input.templates ?? {}),
+  };
+  for (const [name, markdown] of Object.entries(templates)) {
     writeFileSync(join(decisionOsRoot, 'pipeline-prompts', `${name}.md`), markdown);
   }
   const definition = promptDefinition();
   const recordKind = input.recordKind ?? 'pipeline-prompt';
-  const promptNames = ['review-output', ...Object.keys(input.templates ?? {})];
+  const promptNames = ['review-output', ...Object.keys(templates)];
   writeCodexPipelineStore({
     decisionOsRoot,
     availableSkillNames: promptNames,
@@ -156,23 +263,33 @@ function createPromptRepository(input: {
       })),
       runs: [],
       skillLibrary: [],
-      authoredContent: recordKind === 'pipeline-prompt'
-        ? promptNames.map((name) => ({
+      authoredContent: [
+        ...Object.keys(templates).map((name) => ({
             id: name,
-            kind: 'pipeline-prompt',
+            kind: 'pipeline-prompt' as const,
             description: name,
-            contentFile: `pipeline-prompts/${name}.md`,
+            contentFile: `pipeline-prompts/${name}.md` as const,
             createdAt: '2026-07-28T00:00:00.000Z',
             updatedAt: '2026-07-28T00:00:00.000Z',
-          }))
-        : [{
-            id: 'review-output',
-            kind: 'federated-skill',
-            description: 'Review output',
-            contentFile: '.skills/review-output/SKILL.md',
-            createdAt: '2026-07-28T00:00:00.000Z',
-            updatedAt: '2026-07-28T00:00:00.000Z',
-          }],
+          })),
+        recordKind === 'pipeline-prompt'
+          ? {
+              id: 'review-output',
+              kind: 'pipeline-prompt' as const,
+              description: 'Review output',
+              contentFile: 'pipeline-prompts/review-output.md' as const,
+              createdAt: '2026-07-28T00:00:00.000Z',
+              updatedAt: '2026-07-28T00:00:00.000Z',
+            }
+          : {
+              id: 'review-output',
+              kind: 'federated-skill' as const,
+              description: 'Review output',
+              contentFile: '.skills/review-output/SKILL.md' as const,
+              createdAt: '2026-07-28T00:00:00.000Z',
+              updatedAt: '2026-07-28T00:00:00.000Z',
+            },
+      ],
       activeWorkspaceRun: null,
     },
   });
@@ -190,7 +307,7 @@ function createPromptRepository(input: {
 test('clean local prompt admission persists and injects one immutable snapshot without rereading its file', async () => {
   const fixture = createPromptRepository({
     prefix: 'decision-os-prompt-admission-',
-    markdown: '# Review output\n\n{{AVAILABLE_SKILLS}}\n\n{{MASTER_TASK}}',
+    markdown: '# Review output\n\n{{AVAILABLE_SKILLS}}\n\n<MASTER_TASK>',
     templates: { AVAILABLE_SKILLS: '# Available skills\n\nUse task-list.' },
   });
   try {
@@ -201,9 +318,11 @@ test('clean local prompt admission persists and injects one immutable snapshot w
     });
     const snapshot = admitted.get('review-output');
     assert.ok(snapshot);
-    assert.match(snapshot.promptSnapshot, /# Available skills[\s\S]*Use task-list\./);
-    assert.doesNotMatch(snapshot.promptSnapshot, /\{\{AVAILABLE_SKILLS\}\}/);
-    assert.match(snapshot.promptSnapshot, /\{\{MASTER_TASK\}\}/);
+    assert.equal('syntaxVersion' in snapshot ? snapshot.syntaxVersion : undefined, 2);
+    if (!('developerPromptSnapshot' in snapshot)) assert.fail('Expected version-2 developer prompt evidence.');
+    assert.match(snapshot.developerPromptSnapshot, /platform: <PLATFORM>[\s\S]*# Available skills[\s\S]*Use task-list\./);
+    assert.doesNotMatch(snapshot.developerPromptSnapshot, /\{\{AVAILABLE_SKILLS\}\}/);
+    assert.match(snapshot.developerPromptSnapshot, /<MASTER_TASK>/);
     const store = readCodexPipelineStore({
       decisionOsRoot: fixture.decisionOsRoot,
       availableSkillNames: ['review-output'],
@@ -225,32 +344,25 @@ test('clean local prompt admission persists and injects one immutable snapshot w
     });
     const skill = manifest.steps[0].skills[0];
     assert.equal(skill.contentKind, 'pipeline-prompt');
-    assert.equal(skill.contentKind === 'pipeline-prompt' ? skill.promptSnapshot : '', snapshot.promptSnapshot);
+    assert.equal(skill.syntaxVersion, 2);
+    assert.equal(skill.syntaxVersion === 2 ? skill.developerPromptSnapshot : '', snapshot.developerPromptSnapshot);
     rmSync(fixture.promptFile);
     const processPrompt = buildPipelineSkillPrompt({
       skillName: skill.skillName,
       contentKind: skill.contentKind ?? 'federated-skill',
-      ...(skill.contentKind === 'pipeline-prompt' ? {
-        contentRevision: skill.contentRevision,
-        contentCommit: skill.contentCommit,
-        promptSnapshot: skill.promptSnapshot,
+      ...(skill.syntaxVersion === 2 ? {
+        syntaxVersion: skill.syntaxVersion,
+        developerPromptRevision: skill.developerPromptRevision,
+        developerPromptCommit: skill.developerPromptCommit,
+        developerPromptSnapshot: skill.developerPromptSnapshot,
       } : {}),
-      ledgerFile: join(fixture.decisionOsRoot, 'specs.json'),
-      pipelineRunId: manifest.id,
-      pipelineName: manifest.pipelineName,
-      sourceCardId: manifest.sourceCardId,
-      sourceCardTitle: manifest.sourceCardTitle,
-      stepId: manifest.steps[0].stepId,
-      stepTitle: manifest.steps[0].name,
-      stepInputCardId: manifest.sourceCardId,
-      stepInputCardContent: 'Input',
-      outputParentCardId: manifest.outputParentCardId,
-      outputCardId: manifest.steps[0].outputCardId,
-      outputSubtaskPosition: manifest.steps[0].outputSubtaskPosition,
-      outputMarkdownFile: join(fixture.decisionOsRoot, 'output.md'),
+      runtimeContext: runtimeContext({
+        MASTER_TASK: '# Source card',
+        PLATFORM: 'linux',
+      }),
     });
     assert.match(processPrompt, /# Available skills[\s\S]*Use task-list\./);
-    assert.doesNotMatch(processPrompt, /\{\{MASTER_TASK\}\}/);
+    assert.doesNotMatch(processPrompt, /<MASTER_TASK>/);
     assert.equal(processPrompt.includes('$review-output'), false);
     assert.deepEqual(readCodexPipelineStore({ decisionOsRoot: fixture.decisionOsRoot }).store.runs, []);
   } finally {
@@ -267,10 +379,12 @@ test('direct card processing admits a pipeline prompt as a temporary one-step ru
     '#!/usr/bin/env node',
     'import { writeFileSync } from "node:fs";',
     'let prompt = "";',
+    'const developerArgument = process.argv.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    'const developerPrompt = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
     'process.stdin.on("data", (chunk) => { prompt += chunk; });',
     'process.stdin.on("end", () => {',
-    '  const output = (prompt.match(/"markdownFile": "([^"]+)"/) || [])[1] || "";',
-    '  writeFileSync(output.trim(), prompt.includes("# Review output") ? "pipeline prompt seen\\n" : "pipeline prompt missing\\n");',
+    '  const output = (developerPrompt.match(/"markdownFile": "([^"]+)"/) || [])[1] || "";',
+    '  writeFileSync(output.trim(), developerPrompt.includes("# Review output") && prompt === "Execute this admitted Decision OS pipeline stage." ? "pipeline prompt seen\\n" : "pipeline prompt missing\\n");',
     '  console.log(JSON.stringify({ type: "turn.completed" }));',
     '});',
   ].join('\n'));
@@ -296,7 +410,8 @@ test('direct card processing admits a pipeline prompt as a temporary one-step ru
     assert.equal(response.status, 202, JSON.stringify(body));
     const runSkill = body.pipelineRun.steps[0].skills[0];
     assert.equal(runSkill.contentKind, 'pipeline-prompt');
-    assert.match(runSkill.promptSnapshot, /# Review output/);
+    assert.equal(runSkill.syntaxVersion, 2);
+    assert.match(runSkill.developerPromptSnapshot, /# Review output/);
     await waitFor(() => {
       if (!existsSync(body.run.outputFile)) return null;
       const output = readFileSync(body.run.outputFile, 'utf8');
@@ -313,32 +428,21 @@ test('direct card processing admits a pipeline prompt as a temporary one-step ru
 });
 
 test('local prompt construction rejects corrupted immutable evidence before process launch', () => {
-  const promptSnapshot = '# Admitted local prompt';
+  const developerPromptSnapshot = '# Admitted local prompt';
   const valid: Parameters<typeof buildPipelineSkillPrompt>[0] = {
     skillName: 'review-output',
     contentKind: 'pipeline-prompt',
-    contentRevision: createHash('sha256').update(promptSnapshot).digest('hex'),
-    contentCommit: 'a'.repeat(40),
-    promptSnapshot,
-    ledgerFile: '/ledger.json',
-    pipelineRunId: 'pipeline-run',
-    pipelineName: 'Prompt pipeline',
-    sourceCardId: 'source-card',
-    sourceCardTitle: 'Source Card',
-    stepId: 'prompt-step',
-    stepTitle: 'Prompt step',
-    stepInputCardId: 'source-card',
-    stepInputCardContent: 'Input',
-    outputParentCardId: 'source-card',
-    outputCardId: 'output-card',
-    outputSubtaskPosition: 1,
-    outputMarkdownFile: '/output.md',
+    syntaxVersion: 2,
+    developerPromptRevision: createHash('sha256').update(developerPromptSnapshot).digest('hex'),
+    developerPromptCommit: 'a'.repeat(40),
+    developerPromptSnapshot,
+    runtimeContext: runtimeContext(),
   };
   const cases: Array<[string, Partial<typeof valid>, RegExp]> = [
-    ['snapshot', { promptSnapshot: undefined }, /pipeline_prompt_snapshot_missing/],
-    ['revision', { contentRevision: 'b'.repeat(64) }, /pipeline_prompt_snapshot_revision_mismatch/],
-    ['commit', { contentCommit: 'not-a-commit' }, /pipeline_prompt_snapshot_commit_invalid/],
-    ['kind', { contentKind: 'workspace-skill' }, /pipeline_prompt_snapshot_kind_mismatch/],
+    ['snapshot', { developerPromptSnapshot: undefined }, /pipeline_developer_prompt_snapshot_missing/],
+    ['revision', { developerPromptRevision: 'b'.repeat(64) }, /pipeline_developer_prompt_revision_mismatch/],
+    ['commit', { developerPromptCommit: 'not-a-commit' }, /pipeline_developer_prompt_commit_invalid/],
+    ['version', { syntaxVersion: 1 as 2 }, /pipeline_developer_prompt_version_invalid|pipeline_prompt_snapshot_kind_mismatch/],
   ];
   for (const [label, overrides, expected] of cases) {
     assert.throws(
@@ -349,45 +453,35 @@ test('local prompt construction rejects corrupted immutable evidence before proc
   }
 });
 
-test('pipeline prompt construction injects runtime variables into only the authored gate prompt', () => {
-  const promptSnapshot = [
+test('pipeline prompt construction injects runtime tokens into only the admitted developer prompt', () => {
+  const developerPromptSnapshot = [
     '# Dynamic gate',
-    'MASTER={{MASTER_TASK}}',
-    'SUBTASKS={{SUB_CONTEXT}}',
-    'THREAD={{FULL_THREAD}}',
-    'FILES={{FILE_MAP}}',
-    'PREVIOUS={{PREVIOUS_SKILL_RESULT}}',
-    'CONTEXT={{EXECUTION_CONTEXT}}',
+    'MASTER=<MASTER_TASK>',
+    'SUBTASKS=<SUB_CONTEXT>',
+    'THREAD=<FULL_THREAD>',
+    'FILES=<FILE_MAP>',
+    'PREVIOUS=<PREVIOUS_SKILL_RESULT>',
+    'CONTEXT=<EXECUTION_CONTEXT>',
   ].join('\n');
   const prompt = buildPipelineSkillPrompt({
     skillName: 'dynamic-gate',
     contentKind: 'pipeline-prompt',
-    contentRevision: createHash('sha256').update(promptSnapshot).digest('hex'),
-    contentCommit: 'a'.repeat(40),
-    promptSnapshot,
-    ledgerFile: '/workspace/.decision-os/tasks.json',
-    pipelineRunId: 'dynamic-run',
-    pipelineName: 'Dynamic analysis then gate',
-    sourceCardId: 'source-subtask',
-    sourceCardTitle: 'Source subtask',
-    stepId: 'return-gate',
-    stepTitle: 'Dynamic gate',
-    stepInputCardId: 'worker-output',
-    stepInputCardContent: '# Worker result\n\nVerified analysis.',
-    outputParentCardId: 'master-task',
-    outputCardId: 'gate-output',
-    outputSubtaskPosition: 4,
-    outputMarkdownFile: '/workspace/.decision-os/cards/tasks/gate-output.md',
-    taskThreadId: 'thread-master-task',
-    taskConversationContext: {
-      card: { id: 'master-task', title: 'Master task', markdown: '# Master task\n\nComplete objective.' },
-      thread: { id: 'thread-master-task', markdown: '# OPERATOR\n\nContinue the iteration.' },
-    },
-    subtaskContext: '## Subtask 1: Analyze\n\nAnalysis body.',
-    fileMap: '.\n backend/\n  src/\n   server.ts',
-    projectId: 'project-a',
-    ledgerId: 'tasks',
-    executionId: 'execution-a',
+    syntaxVersion: 2,
+    developerPromptRevision: createHash('sha256').update(developerPromptSnapshot).digest('hex'),
+    developerPromptCommit: 'a'.repeat(40),
+    developerPromptSnapshot,
+    runtimeContext: runtimeContext({
+      MASTER_TASK: '# Master task\n\nComplete objective.',
+      SUB_CONTEXT: '## Subtask 1: Analyze\n\nAnalysis body.',
+      FULL_THREAD: '# OPERATOR\n\nContinue the iteration.',
+      FILE_MAP: '.\n backend/\n  src/\n   server.ts',
+      PREVIOUS_SKILL_RESULT: '# Worker result\n\nVerified analysis.',
+      EXECUTION_CONTEXT: JSON.stringify({
+        projectId: 'project-a',
+        executionId: 'execution-a',
+        output: { markdownFile: '/workspace/.decision-os/cards/tasks/gate-output.md' },
+      }, null, 2),
+    }),
   });
   assert.equal(prompt.startsWith('# Dynamic gate\n'), true);
   assert.match(prompt, /Complete objective\./);
@@ -398,7 +492,7 @@ test('pipeline prompt construction injects runtime variables into only the autho
   assert.match(prompt, /"projectId": "project-a"/);
   assert.match(prompt, /"executionId": "execution-a"/);
   assert.match(prompt, /"markdownFile": "\/workspace\/\.decision-os\/cards\/tasks\/gate-output\.md"/);
-  assert.doesNotMatch(prompt, /\{\{[A-Z_]+\}\}/);
+  assert.doesNotMatch(prompt, /<[A-Z][A-Z0-9_]*>/);
   assert.doesNotMatch(prompt, /Decision OS pipeline-only prompt|Current skill:|Write the final result/);
 });
 
@@ -478,14 +572,17 @@ test('a running pipeline prompt queues one worker then returns with the latest t
     '#!/usr/bin/env node',
     'import { existsSync, writeFileSync } from "node:fs";',
     'let prompt = "";',
+    'const developerArgument = process.argv.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    'const instructions = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
     'process.stdin.on("data", (chunk) => { prompt += chunk; });',
     'process.stdin.on("end", () => {',
-    '  const skill = prompt.includes("GATE_SKILL") ? "review-output" : ((prompt.match(/Current skill: (.+)/) || [])[1] || "missing");',
-    '  const output = (((prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || (prompt.match(/"markdownFile": "([^"]+)"/) || [])[1]) || "").trim();',
-    '  const returningGate = skill === "review-output" && prompt.includes("WORKER_RESULT");',
+    '  const skill = instructions.includes("GATE_SKILL") ? "review-output" : ((instructions.match(/Current skill: (.+)/) || [])[1] || "missing");',
+    '  const output = (((instructions.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || (instructions.match(/"markdownFile": "([^"]+)"/) || [])[1]) || "").trim();',
+    '  const returningGate = skill === "review-output" && instructions.includes("WORKER_RESULT");',
     '  const result = skill === "worker" ? "WORKER_RESULT" : returningGate ? "RETURNED_GATE_RESULT" : "GATE_RESULT";',
     '  writeFileSync(output, "# " + result + "\\n");',
-    '  writeFileSync(output + ".input", prompt);',
+    '  writeFileSync(output + ".input", instructions);',
+    '  writeFileSync(output + ".turn", prompt);',
     '  writeFileSync(output + ".env.json", JSON.stringify({',
     '    executionId: process.env.DECISION_OS_EXECUTION_ID,',
     '    projectId: process.env.DECISION_OS_PROJECT_ID,',
@@ -572,9 +669,9 @@ test('a running pipeline prompt queues one worker then returns with the latest t
         step.skills.map((skill: Record<string, any>) => [skill.skillName, skill.codexModel, skill.codexEffort])),
       [[['worker', 'gpt-5.5', 'high']], [['review-output', 'gpt-5.6-sol', 'max']]],
     );
-    assert.equal(queued.run.steps[1].skills[0].promptSnapshot, started.pipelineRun.steps[0].skills[0].promptSnapshot);
-    assert.equal(queued.run.steps[1].skills[0].contentRevision, started.pipelineRun.steps[0].skills[0].contentRevision);
-    assert.equal(queued.run.steps[1].skills[0].contentCommit, started.pipelineRun.steps[0].skills[0].contentCommit);
+    assert.equal(queued.run.steps[1].skills[0].developerPromptSnapshot, started.pipelineRun.steps[0].skills[0].developerPromptSnapshot);
+    assert.equal(queued.run.steps[1].skills[0].developerPromptRevision, started.pipelineRun.steps[0].skills[0].developerPromptRevision);
+    assert.equal(queued.run.steps[1].skills[0].developerPromptCommit, started.pipelineRun.steps[0].skills[0].developerPromptCommit);
 
     const retryResponse = await queue();
     const retried = await retryResponse.json() as Record<string, any>;
@@ -608,10 +705,16 @@ test('a running pipeline prompt queues one worker then returns with the latest t
       '',
     ].join('\n'));
     writeFileSync(releaseWorker, '');
-    await waitFor(
-      () => taskExecutionState(runtime)?.executions.find(returningExecutionId)?.lifecycle.phase === 'succeeded' ? true : null,
+    const returningExecution = await waitFor(
+      () => {
+        const execution = taskExecutionState(runtime)?.executions.find(returningExecutionId);
+        return execution && ['succeeded', 'failed', 'cancelled'].includes(execution.lifecycle.phase)
+          ? execution
+          : null;
+      },
       'returning gate completion',
     );
+    assert.equal(returningExecution.lifecycle.phase, 'succeeded', JSON.stringify(returningExecution));
 
     const workerOutput = join(fixture.decisionOsRoot, 'cards', 'tasks', `${queued.run.steps[0].outputCardId}.md`);
     const returningOutput = join(fixture.decisionOsRoot, 'cards', 'tasks', `${queued.run.steps[1].outputCardId}.md`);
@@ -625,6 +728,7 @@ test('a running pipeline prompt queues one worker then returns with the latest t
     assert.match(returningInput, /FILE_MAP[\s\S]*src\/[\s\S]*dynamic-gate\.ts/);
     assert.match(returningInput, /PREVIOUS_SKILL_RESULT[\s\S]*WORKER_RESULT/);
     assert.match(returningInput, new RegExp(`"threadId": "${taskThreadId}"`));
+    assert.equal(readFileSync(`${returningOutput}.turn`, 'utf8'), 'Execute this admitted Decision OS pipeline stage.');
     const firstEnvironment = JSON.parse(readFileSync(`${started.run.outputFile}.env.json`, 'utf8')) as Record<string, unknown>;
     const returningEnvironment = JSON.parse(readFileSync(`${returningOutput}.env.json`, 'utf8')) as Record<string, unknown>;
     assert.equal(firstEnvironment.executionId, firstExecutionId);
@@ -711,7 +815,9 @@ test('invalid local prompt states fail before run, card, and process side effect
           admitPipelinePromptSnapshots({
             ownerDecisionOsRoot: fixture.decisionOsRoot,
             steps: promptDefinition().steps,
-            beforeGitValidation: (context) => testCase.race!(context, fixture),
+            beforeGitValidation: (context) => context.name === 'review-output'
+              ? testCase.race!(context, fixture)
+              : undefined,
           }),
           testCase.expected,
           testCase.label,
@@ -754,13 +860,15 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
     '#!/usr/bin/env node',
     'import { appendFileSync, writeFileSync } from "node:fs";',
     'let prompt = "";',
+    'const developerArgument = process.argv.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    'const instructions = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
     'process.stdin.on("data", (chunk) => { prompt += chunk; });',
     'process.stdin.on("end", () => {',
-    '  const skill = (prompt.match(/Current skill: (.+)/) || [])[1] || "missing";',
-    '  const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    '  const skill = (instructions.match(/Current skill: (.+)/) || [])[1] || "missing";',
+    '  const output = (instructions.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
     `  appendFileSync(${JSON.stringify(lifecycleFile)}, "start:" + skill + "\\n");`,
     '  writeFileSync(output.trim(), "# " + skill + " result\\n\\nproduced-by=" + skill + "\\n");',
-    '  writeFileSync(output.trim() + ".input", prompt);',
+    '  writeFileSync(output.trim() + ".input", instructions);',
     '  console.log(JSON.stringify({ type: "thread.started", thread_id: "session-" + skill }));',
     '  setTimeout(() => {',
     '    console.log(JSON.stringify({ type: "turn.completed" }));',
@@ -790,6 +898,7 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
       ],
       runs: [],
       skillLibrary: [{ skillName: 'alpha', favorite: false, tags: [], defaultCodexModel: 'gpt-5.4', defaultCodexEffort: 'high', updatedAt: now }],
+      authoredContent: basePromptAuthoredContent(),
       activeWorkspaceRun: null,
     },
   });
@@ -888,9 +997,11 @@ test('saved pipeline failure cancels every dependent execution without launching
     '#!/usr/bin/env node',
     'import { appendFileSync } from "node:fs";',
     'let prompt = "";',
+    'const developerArgument = process.argv.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    'const instructions = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
     'process.stdin.on("data", (chunk) => { prompt += chunk; });',
     'process.stdin.on("end", () => {',
-    '  const skill = (prompt.match(/Current skill: (.+)/) || [])[1] || "missing";',
+    '  const skill = (instructions.match(/Current skill: (.+)/) || [])[1] || "missing";',
     `  appendFileSync(${JSON.stringify(invocations)}, skill + "\\n");`,
     '  console.log(JSON.stringify({ type: "turn.failed", error: { message: "injected failure" } }));',
     '  process.exitCode = 7;',
@@ -907,7 +1018,7 @@ test('saved pipeline failure cancels every dependent execution without launching
         { id: 'fails-config', skillName: 'fails', codexModel: null, codexEffort: null },
         { id: 'blocked-config', skillName: 'blocked', codexModel: null, codexEffort: null },
       ] }],
-      runs: [], skillLibrary: [], activeWorkspaceRun: null,
+      runs: [], skillLibrary: [], authoredContent: basePromptAuthoredContent(), activeWorkspaceRun: null,
     },
   });
   process.env.CODEX_BIN = fakeCodex;
@@ -961,9 +1072,11 @@ test('saved pipeline restart creates linked immutable run and execution history'
     '#!/usr/bin/env node',
     'import { writeFileSync } from "node:fs";',
     'let prompt = "";',
+    'const developerArgument = process.argv.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    'const instructions = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
     'process.stdin.on("data", (chunk) => { prompt += chunk; });',
     'process.stdin.on("end", () => {',
-    '  const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    '  const output = (instructions.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
     '  writeFileSync(output.trim(), "# immutable result\\n");',
     '  console.log(JSON.stringify({ type: "turn.completed" }));',
     '});',
@@ -978,7 +1091,7 @@ test('saved pipeline restart creates linked immutable run and execution history'
       steps: [{ id: 'step', name: 'Step', purpose: '', createdAt: now, updatedAt: now, skills: [
         { id: 'alpha-config', skillName: 'alpha', codexModel: null, codexEffort: null },
       ] }],
-      runs: [], skillLibrary: [], activeWorkspaceRun: null,
+      runs: [], skillLibrary: [], authoredContent: basePromptAuthoredContent(), activeWorkspaceRun: null,
     },
   });
   process.env.CODEX_BIN = fakeCodex;
@@ -1038,9 +1151,11 @@ test('direct temporary runs inherit skill defaults, preserve snapshots, and hono
     '#!/usr/bin/env node',
     'import { writeFileSync } from "node:fs";',
     'let prompt = "";',
+    'const developerArgument = process.argv.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    'const instructions = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
     'process.stdin.on("data", (chunk) => { prompt += chunk; });',
     'process.stdin.on("end", () => {',
-    '  const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    '  const output = (instructions.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
     '  const args = process.argv.slice(2);',
     '  writeFileSync(output.trim(), "model=" + args[args.indexOf("--model") + 1] + "\\neffort=" + args[args.indexOf("-c") + 1] + "\\n");',
     '  console.log(JSON.stringify({ type: "turn.completed" }));',
@@ -1052,7 +1167,7 @@ test('direct temporary runs inherit skill defaults, preserve snapshots, and hono
     decisionOsRoot,
     availableSkillNames: ['alpha'],
     store: {
-      pipelines: [], steps: [], runs: [], activeWorkspaceRun: null,
+      pipelines: [], steps: [], runs: [], authoredContent: basePromptAuthoredContent(), activeWorkspaceRun: null,
       skillLibrary: [{ skillName: 'alpha', favorite: false, tags: [], defaultCodexModel: 'gpt-5.4', defaultCodexEffort: 'high', updatedAt: now }],
     },
   });
@@ -1129,9 +1244,11 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
     '#!/usr/bin/env node',
     'import { appendFileSync, existsSync, writeFileSync } from "node:fs";',
     'let prompt = "";',
+    'const developerArgument = process.argv.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    'const instructions = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
     'process.stdin.on("data", (chunk) => { prompt += chunk; });',
     'process.stdin.on("end", () => {',
-    '  const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    '  const output = (instructions.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
     `  appendFileSync(${JSON.stringify(lifecycleFile)}, "start" + String.fromCharCode(10));`,
     '  writeFileSync(output.trim(), "# result\\n");',
     '  const release = setInterval(() => {',
@@ -1200,7 +1317,7 @@ test('one catalog-level server skill executes directly and in saved pipelines fr
   mkdirSync(masterDecisionOsRoot, { recursive: true });
   writeFileSync(join(masterDecisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
   const projects = [join(masterRoot, 'repos', 'one'), join(masterRoot, 'repos', 'two')];
-  for (const [projectIndex, workspace] of projects.entries()) {
+  for (const workspace of projects) {
     const decisionOsRoot = join(workspace, '.decision-os');
     mkdirSync(decisionOsRoot, { recursive: true });
     writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }] }));
@@ -1208,28 +1325,39 @@ test('one catalog-level server skill executes directly and in saved pipelines fr
       cards: [{ id: 'source-card', title: 'Source', x: 0, y: 0, w: 300, h: 180, comment: { what: 'Input' } }],
       annotations: [], relationships: [], notes: {},
     }));
-    const now = '2026-07-13T00:00:00.000Z';
-    if (projectIndex === 0) writeCodexPipelineStore({
-      decisionOsRoot, availableSkillNames: ['shared-catalog-skill'],
-      store: {
-        pipelines: [{ id: 'shared-pipeline', name: 'Shared pipeline', purpose: '', stepIds: ['shared-step'], createdAt: now, updatedAt: now }],
-        steps: [{ id: 'shared-step', name: 'Shared step', purpose: '', createdAt: now, updatedAt: now, skills: [{ id: 'shared-config', skillName: 'shared-catalog-skill', codexModel: null, codexEffort: null }] }],
-        runs: [], skillLibrary: [], activeWorkspaceRun: null,
-      },
-    });
   }
+  const now = '2026-07-13T00:00:00.000Z';
+  mkdirSync(join(masterDecisionOsRoot, 'pipeline-prompts'), { recursive: true });
+  writeFileSync(join(masterDecisionOsRoot, 'pipeline-prompts', 'SYSTEM_PROMPT.md'), 'platform: <PLATFORM>');
+  writeFileSync(join(masterDecisionOsRoot, 'pipeline-prompts', 'SKILL.md'), testSkillWrapper);
+  writeCodexPipelineStore({
+    decisionOsRoot: masterDecisionOsRoot,
+    availableSkillNames: ['shared-catalog-skill'],
+    store: {
+      pipelines: [{ id: 'shared-pipeline', name: 'Shared pipeline', purpose: '', stepIds: ['shared-step'], createdAt: now, updatedAt: now }],
+      steps: [{ id: 'shared-step', name: 'Shared step', purpose: '', createdAt: now, updatedAt: now, skills: [{ id: 'shared-config', skillName: 'shared-catalog-skill', contentKind: 'federated-skill', codexModel: null, codexEffort: null }] }],
+      runs: [], skillLibrary: [], authoredContent: basePromptAuthoredContent(), activeWorkspaceRun: null,
+    },
+  });
   const skillDirectory = join(masterRoot, '.skills', 'shared-catalog-skill');
   mkdirSync(skillDirectory, { recursive: true });
   writeFileSync(join(skillDirectory, 'SKILL.md'), '---\nname: shared-catalog-skill\ndescription: Shared catalog workflow\n---\n\n# Server-only instruction\n');
   const fakeCodex = join(masterRoot, 'fake-codex.mjs');
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node', 'import { writeFileSync } from "node:fs";', 'let prompt = "";',
+    'const developerArgument = process.argv.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    'const instructions = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
     'process.stdin.on("data", (chunk) => { prompt += chunk; });', 'process.stdin.on("end", () => {',
-    ' const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
-    ' writeFileSync(output.trim(), "# shared result\\n");', ' writeFileSync(output.trim() + ".input", prompt);',
+    ' const output = (instructions.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    ' writeFileSync(output.trim(), "# shared result\\n");', ' writeFileSync(output.trim() + ".input", instructions);',
     ' console.log(JSON.stringify({ type: "turn.completed" }));', '});',
   ].join('\n'));
   chmodSync(fakeCodex, 0o755);
+  git(masterRoot, ['init', '-q']);
+  git(masterRoot, ['config', 'user.name', 'Prompt Test']);
+  git(masterRoot, ['config', 'user.email', 'prompt@example.test']);
+  git(masterRoot, ['add', '.decision-os']);
+  git(masterRoot, ['commit', '-q', '-m', 'Seed server pipeline']);
   process.env.CODEX_BIN = fakeCodex;
   const runtime: Record<string, unknown> = { decisionOsRoot: masterDecisionOsRoot };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });

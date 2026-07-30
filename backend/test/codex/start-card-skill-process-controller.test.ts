@@ -16,6 +16,7 @@ import { persistCardSkillRunEvents } from '@backend/business/codex/effect/persis
 import { normalizeCardSkillRunEvent } from '@backend/business/codex/helper/normalize-card-skill-run-event.js';
 import { taskExecutionNodeId, taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
+import { installPipelinePromptFixture } from '../support/pipeline-prompt-fixture.js';
 
 // WHAT: Pins the direct-skill fixture to one explicit execution owner.
 // WHY: Assertions must follow the server's strict node-scoped execution identity.
@@ -289,21 +290,28 @@ test('card skill process route creates a linked output card and launches codex',
       }]
     }
   }, null, 2));
+  installPipelinePromptFixture({
+    workspace,
+    decisionOsRoot: join(workspace, '.decision-os'),
+  });
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
     'import { writeFileSync } from "node:fs";',
     'let input = "";',
     'process.stdin.on("data", (chunk) => { input += chunk; });',
     'process.stdin.on("end", () => {',
-    '  const match = input.match(/Write the final result to this Markdown file: (.+)/);',
+    '  const args = process.argv.slice(2);',
+    '  const developerArgument = args.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    '  const developerPrompt = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
+    '  const prompt = developerPrompt.includes("Write the final result") ? developerPrompt : input;',
+    '  const match = prompt.match(/Write the final result to this Markdown file: (.+)/);',
     '  const threadMatch = input.match(/Run summary: (.+)/);',
     '  if (!match && !threadMatch) process.exit(2);',
-    '  const args = process.argv.slice(2);',
     '  const model = args[args.indexOf("--model") + 1] || "";',
     '  const effort = args[args.indexOf("-c") + 1] || "";',
-    '  const ledgerFile = (input.match(/Ledger file: (.+)/) || [])[1] || "";',
+    '  const ledgerFile = (prompt.match(/Ledger file: (.+)/) || [])[1] || "";',
     '  const outputFile = (match?.[1] || threadMatch?.[1] || "").trim();',
-    '  writeFileSync(outputFile, match ? "# Fake Result\\n\\n" + (input.includes("$test-skill") ? "skill seen" : "skill missing") + "\\nmodel=" + model + "\\neffort=" + effort + "\\nledgerFile=" + ledgerFile + "\\n" : "# Fake Thread Result\\n");',
+    '  writeFileSync(outputFile, match ? "# Fake Result\\n\\n" + (prompt.includes("$test-skill") ? "skill seen" : "skill missing") + "\\nmodel=" + model + "\\neffort=" + effort + "\\nledgerFile=" + ledgerFile + "\\n" : "# Fake Thread Result\\n");',
     '  console.log(JSON.stringify({ type: "thread.started", thread_id: "ordinary-card-skill" }));',
     '  console.log(JSON.stringify({ type: "item.started", item: { id: "ordinary-tool", type: "command_execution", command: "rg TODO", status: "in_progress" } }));',
     '  console.log(JSON.stringify({ type: "item.completed", item: { id: "ordinary-tool", type: "command_execution", command: "rg TODO", aggregated_output: "done", exit_code: 0, status: "completed" } }));',
@@ -428,11 +436,11 @@ test('card skill process route creates a linked output card and launches codex',
     };
     assert.equal(completed.runKind, 'card');
     assert.equal(completed.status, 'complete');
-    assert.equal(completed.lineCount, 5);
+    assert.equal(completed.lineCount, 6);
     assert.equal(completed.persistedEventCount, 0);
     assert.equal(completed.toolCallCount, 1);
-    assert.deepEqual(completed.events.map((event) => event.type), ['decision_os.user_prompt', 'thread.started', 'item.started', 'item.completed', 'turn.completed']);
-    assert.deepEqual(completed.events.filter((event) => event.itemId === 'ordinary-tool').map((event) => event.line), [3, 4]);
+    assert.deepEqual(completed.events.map((event) => event.type), ['decision_os.developer_prompt', 'decision_os.user_prompt', 'thread.started', 'item.started', 'item.completed', 'turn.completed']);
+    assert.deepEqual(completed.events.filter((event) => event.itemId === 'ordinary-tool').map((event) => event.line), [4, 5]);
 
     const threadFile = join(workspace, '.decision-os', 'threads', 'specs', `thread-${body.run.outputCardId}.md`);
     const thread = existsSync(threadFile) ? readFileSync(threadFile, 'utf8') : '';
@@ -487,6 +495,10 @@ test('thread codex process route anchors the run widget on the source card and s
   const argsFile = join(workspace, 'thread-args.json');
   const launchesFile = join(workspace, 'thread-launches.txt');
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  installPipelinePromptFixture({
+    workspace,
+    decisionOsRoot: join(workspace, '.decision-os'),
+  });
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
   }, null, 2));
@@ -689,7 +701,7 @@ test('thread codex process route anchors the run widget on the source card and s
       assert.equal(status.thinkingCount, 1);
       assert.equal(status.warningCount, 2);
       assert.equal(status.transportStatus, 'degraded');
-      assert.deepEqual(status.events.map((event) => event.kind), ['diagnostic', 'run_status', 'run_status', 'thinking', 'agent_message', 'tool_call', 'tool_call', 'tool_call', 'warning', 'transport', 'run_status']);
+      assert.deepEqual(status.events.map((event) => event.kind), ['diagnostic', 'diagnostic', 'run_status', 'run_status', 'thinking', 'agent_message', 'tool_call', 'tool_call', 'tool_call', 'warning', 'transport', 'run_status']);
       assert.deepEqual(status.diagnostics.map((event) => event.kind), ['warning', 'transport']);
       assert.equal(status.metadata.codexModel, 'gpt-5.4');
       assert.equal(status.metadata.codexEffort, 'medium');
@@ -789,6 +801,10 @@ test('thread codex process resumes a capacity-interrupted session after five sec
   const fakeCodex = join(workspace, 'fake-codex-capacity.mjs');
   const launchesFile = join(workspace, 'launches.jsonl');
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  installPipelinePromptFixture({
+    workspace,
+    decisionOsRoot: join(workspace, '.decision-os'),
+  });
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
   }, null, 2));
@@ -960,13 +976,20 @@ test('card skill run cancel route terminates the active codex process', async ()
     relationships: [],
     notes: {}
   }, null, 2));
+  installPipelinePromptFixture({
+    workspace,
+    decisionOsRoot: join(workspace, '.decision-os'),
+  });
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
     'import { writeFileSync } from "node:fs";',
     'let input = "";',
     'process.stdin.on("data", (chunk) => { input += chunk; });',
     'process.stdin.on("end", () => {',
-    '  const match = input.match(/Write the final result to this Markdown file: (.+)/);',
+    '  const args = process.argv.slice(2);',
+    '  const developerArgument = args.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    '  const developerPrompt = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
+    '  const match = developerPrompt.match(/Write the final result to this Markdown file: (.+)/);',
     '  if (!match) process.exit(2);',
     '  writeFileSync(match[1].trim(), "# Slow Result\\n\\nstarted\\n");',
     '  console.log(JSON.stringify({ type: "turn.started" }));',
@@ -1051,6 +1074,10 @@ test('card skill run continue route resumes the captured session after its card 
   mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
   mkdirSync(join(workspace, '.decision-os', 'cards', 'tasks'), { recursive: true });
   mkdirSync(join(workspace, '.decision-os', 'threads', 'tasks'), { recursive: true });
+  installPipelinePromptFixture({
+    workspace,
+    decisionOsRoot: join(workspace, '.decision-os'),
+  });
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
     ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }]
   }, null, 2));
@@ -1269,6 +1296,11 @@ test('card skill run continue route resumes the captured session after its card 
     const fallbackArgs = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
     assert.deepEqual(fallbackArgs.slice(0, 4), ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', '-C']);
     assert.equal(fallbackArgs.includes('resume'), false);
+    const fallbackDeveloperArgument = fallbackArgs.find((argument) => argument.startsWith('developer_instructions='));
+    assert.ok(fallbackDeveloperArgument);
+    const fallbackDeveloperPrompt = JSON.parse(fallbackDeveloperArgument.slice('developer_instructions='.length)) as string;
+    assert.match(fallbackDeveloperPrompt, /^platform: linux\nGit commits you create/);
+    assert.match(fallbackDeveloperPrompt, /Decision OS card run:/);
     await waitForText(jsonlFile, 'fresh response');
     await waitForCondition(() => {
       const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
