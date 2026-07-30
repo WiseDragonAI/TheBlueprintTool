@@ -13,9 +13,13 @@ import type { Server } from 'node:http';
 import type { ChildProcess } from 'node:child_process';
 import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
-import { registerTaskExecutionProcess, removeTaskExecutionProcess, taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
+import { registerTaskExecutionProcess, removeTaskExecutionProcess, taskExecutionNodeId, taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
+
+// WHAT: Pins server-backed read fixtures to one explicit execution owner.
+// WHY: Run presentation intentionally excludes durable records owned by another node.
+const EXECUTOR_NODE_ID = 'workstation';
 
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
@@ -70,7 +74,7 @@ async function seedExecution(input: {
   const state = taskExecutionState(input.runtime);
   assert.ok(state);
   const metadata = { ...input.metadata, projectId: state.store.activeDelta().projectId };
-  await state.executions.admit({ metadata, executorNodeId: 'local' });
+  await state.executions.admit({ metadata, executorNodeId: taskExecutionNodeId(input.runtime) });
   await state.executions.transition(input.metadata.executionId, { phase: 'queued', changedAt: input.startedAt });
   await state.executions.transition(input.metadata.executionId, { phase: 'starting', changedAt: input.startedAt });
   await state.executions.transition(input.metadata.executionId, { phase: 'running', changedAt: input.startedAt });
@@ -269,7 +273,9 @@ test('thread-launched run reads return chronological diagnostics without changin
   utimesSync(logPath, completedAt, completedAt);
 
   process.chdir(workspace);
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = {
+    decisionOsSettings: { federationNodeId: EXECUTOR_NODE_ID },
+  };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -412,7 +418,9 @@ test('card skill run route returns command output containing thread markdown as 
   writeFileSync(logPath, '');
 
   process.chdir(workspace);
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = {
+    decisionOsSettings: { federationNodeId: EXECUTOR_NODE_ID },
+  };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -493,7 +501,9 @@ test('card skill run route infers status from the latest continued JSONL segment
   utimesSync(logPath, new Date(startedAt), new Date(startedAt));
 
   process.chdir(workspace);
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = {
+    decisionOsSettings: { federationNodeId: EXECUTOR_NODE_ID },
+  };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -824,6 +834,7 @@ test('card skill run route measures active resumed segment from the latest persi
 
   process.chdir(workspace);
   const runtime: Record<string, unknown> = {
+    decisionOsSettings: { federationNodeId: EXECUTOR_NODE_ID },
     codexSkillRuns: {
       [runId]: {
         id: runId,
@@ -938,9 +949,12 @@ test('server startup interrupts a replicated running execution whose process reg
   writeFileSync(join(runDirectory, `${runId}.md`), '# Thread Codex Run\n\nStatus: processing\n');
   const tasksLedgerFile = join(decisionOsRoot, 'tasks.json');
   writeFileSync(tasksLedgerFile, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  const runtime: Record<string, unknown> = {
+    decisionOsSettings: { federationNodeId: EXECUTOR_NODE_ID },
+  };
   const taskState = createProjectTaskState({
     projectId: 'restart-project',
-    writerId: 'local',
+    writerId: taskExecutionNodeId(runtime),
     decisionOsRoot,
     tasksLedgerFile,
     initialize: true,
@@ -964,7 +978,7 @@ test('server startup interrupts a replicated running execution whose process reg
     predecessorExecutionId: null,
     restartOfExecutionId: null,
   };
-  await taskState.executions.admit({ metadata, executorNodeId: 'local' });
+  await taskState.executions.admit({ metadata, executorNodeId: taskExecutionNodeId(runtime) });
   await taskState.executions.transition(executionId, { phase: 'queued' });
   await taskState.executions.transition(executionId, { phase: 'starting' });
   await taskState.executions.transition(executionId, { phase: 'running' });
@@ -977,7 +991,6 @@ test('server startup interrupts a replicated running execution whose process reg
 
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = {};
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');

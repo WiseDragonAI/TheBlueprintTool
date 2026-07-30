@@ -12,9 +12,13 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
-import { taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
+import { taskExecutionNodeId, taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
+
+// WHAT: Pins the startup-resume fixture to one explicit execution owner.
+// WHY: Resume intentionally schedules only durable successors owned by the current node.
+const EXECUTOR_NODE_ID = 'workstation';
 
 async function closeServer(server: Server): Promise<void> {
   if (!server.listening) return;
@@ -259,9 +263,13 @@ test('server startup schedules the queued replicated successor without mutating 
       skillLibrary: [], activeWorkspaceRun: 'pipeline-resume',
     },
   });
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot,
+    decisionOsSettings: { federationNodeId: EXECUTOR_NODE_ID },
+  };
   const taskState = createProjectTaskState({
     projectId: 'project',
-    writerId: 'local',
+    writerId: taskExecutionNodeId(runtime),
     decisionOsRoot,
     tasksLedgerFile: join(decisionOsRoot, 'tasks.json'),
     initialize: true,
@@ -294,7 +302,7 @@ test('server startup schedules the queued replicated successor without mutating 
   });
   await taskState.executions.admit({
     metadata: executionMetadata(firstExecutionId, 'first-run', 'first-run', null, 'gpt-5.4', 'high'),
-    executorNodeId: 'local',
+    executorNodeId: taskExecutionNodeId(runtime),
   });
   await taskState.executions.transition(firstExecutionId, { phase: 'queued' });
   await taskState.executions.transition(firstExecutionId, { phase: 'starting' });
@@ -311,11 +319,10 @@ test('server startup schedules the queued replicated successor without mutating 
   const firstArtifactHeads = taskState.executions.find(firstExecutionId)?.artifacts;
   await taskState.executions.admit({
     metadata: executionMetadata(secondExecutionId, 'second-run', 'second-run', firstExecutionId, 'gpt-5.5', 'low'),
-    executorNodeId: 'local',
+    executorNodeId: taskExecutionNodeId(runtime),
   });
   await taskState.executions.transition(secondExecutionId, { phase: 'queued' });
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = { decisionOsRoot };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
