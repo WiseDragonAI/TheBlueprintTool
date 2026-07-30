@@ -14,6 +14,7 @@ const safePromptName = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?$/;
 const promptVariable = /\{\{\s*([A-Za-z0-9](?:[A-Za-z0-9_-]{0,62}[A-Za-z0-9])?)\s*\}\}/g;
 export const pipelinePromptRuntimeVariables = new Set([
   'MASTER_TASK',
+  'SUB_CONTEXT',
   'FULL_THREAD',
   'FILE_MAP',
   'PREVIOUS_SKILL_RESULT',

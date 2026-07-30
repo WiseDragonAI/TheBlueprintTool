@@ -20,6 +20,7 @@ import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './cod
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
 import { buildMeaningfulFileMap } from './build-meaningful-file-map.js';
 import { buildCardLaunchContext } from './build-card-launch-context.js';
+import { buildPipelineSubtaskContext } from './build-pipeline-subtask-context.js';
 import { isCodexThreadArtifactNote } from './is-codex-thread-artifact-note.js';
 import { assertPipelineRunSkillPromptEvidence } from './pipeline-prompt-snapshot.js';
 import { resolveCodexCommand } from './resolve-codex-command.js';
@@ -144,7 +145,11 @@ function cardContent(input: { context: PipelineLedgerContext; decisionOsRoot: st
     JSON.parse(JSON.stringify(input.context.ledger)),
     input.decisionOsRoot,
   ) as { cards?: AnyRecord[] };
-  const card = (hydrated.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
+  return hydratedCardContent(hydrated, input.cardId);
+}
+
+function hydratedCardContent(ledger: { cards?: AnyRecord[] }, cardId: string): string {
+  const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
   return String(comment.what ?? comment.body ?? comment.description ?? '');
 }
@@ -154,8 +159,11 @@ function pipelinePromptConversationContext(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
   taskCardId: string;
-}): { threadId: string; context: AnyRecord } {
-  const ledger = JSON.parse(JSON.stringify(input.context.ledger)) as AnyRecord;
+}): { threadId: string; context: AnyRecord; subtaskContext: string } {
+  const ledger = hydrateLedgerCardContent(
+    JSON.parse(JSON.stringify(input.context.ledger)),
+    input.decisionOsRoot,
+  ) as AnyRecord;
   const threadId = `thread-${input.taskCardId}`;
   hydrateLedgerThreadNotesFor(ledger, input.decisionOsRoot, threadId);
   const deletedByThread = ledger.deletedNoteIds && typeof ledger.deletedNoteIds === 'object' && !Array.isArray(ledger.deletedNoteIds)
@@ -166,17 +174,17 @@ function pipelinePromptConversationContext(input: {
     .filter((note) => !deleted.has(String(note.id ?? '')) && !isCodexThreadArtifactNote(note));
   return {
     threadId,
+    subtaskContext: buildPipelineSubtaskContext({
+      ledger,
+      masterTaskId: input.taskCardId,
+    }),
     context: buildCardLaunchContext({
       projectId: String(input.runtime.projectId ?? ''),
       ledgerId: input.context.ledgerId,
       cardId: input.taskCardId,
       threadId,
       ledger,
-      cardMarkdown: cardContent({
-        context: { ...input.context, ledger },
-        decisionOsRoot: input.decisionOsRoot,
-        cardId: input.taskCardId,
-      }),
+      cardMarkdown: hydratedCardContent(ledger as { cards?: AnyRecord[] }, input.taskCardId),
       threadMarkdown: notes.length > 0 ? formatThreadMarkdown(notes) : '',
     }),
   };
@@ -436,6 +444,7 @@ export async function spawnPipelineSkillProcess(input: {
     outputSubtaskPosition: input.step.outputSubtaskPosition,
     outputMarkdownFile: outputFile,
     fileMap,
+    subtaskContext: taskConversation?.subtaskContext ?? '',
     projectId: String(input.runtime.projectId ?? ''),
     ledgerId: input.pipelineRun.ledgerId,
     executionId: input.skill.executionId,

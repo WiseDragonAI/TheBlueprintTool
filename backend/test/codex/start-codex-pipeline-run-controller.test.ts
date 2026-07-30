@@ -115,6 +115,9 @@ function createPromptRepository(input: {
     'MASTER_TASK',
     '{{MASTER_TASK}}',
     '',
+    'SUB_CONTEXT',
+    '{{SUB_CONTEXT}}',
+    '',
     'FULL_THREAD',
     '{{FULL_THREAD}}',
     '',
@@ -350,6 +353,7 @@ test('pipeline prompt construction injects runtime variables into only the autho
   const promptSnapshot = [
     '# Dynamic gate',
     'MASTER={{MASTER_TASK}}',
+    'SUBTASKS={{SUB_CONTEXT}}',
     'THREAD={{FULL_THREAD}}',
     'FILES={{FILE_MAP}}',
     'PREVIOUS={{PREVIOUS_SKILL_RESULT}}',
@@ -379,6 +383,7 @@ test('pipeline prompt construction injects runtime variables into only the autho
       card: { id: 'master-task', title: 'Master task', markdown: '# Master task\n\nComplete objective.' },
       thread: { id: 'thread-master-task', markdown: '# OPERATOR\n\nContinue the iteration.' },
     },
+    subtaskContext: '## Subtask 1: Analyze\n\nAnalysis body.',
     fileMap: '.\n backend/\n  src/\n   server.ts',
     projectId: 'project-a',
     ledgerId: 'tasks',
@@ -386,6 +391,7 @@ test('pipeline prompt construction injects runtime variables into only the autho
   });
   assert.equal(prompt.startsWith('# Dynamic gate\n'), true);
   assert.match(prompt, /Complete objective\./);
+  assert.match(prompt, /SUBTASKS=## Subtask 1: Analyze[\s\S]*Analysis body\./);
   assert.match(prompt, /Continue the iteration\./);
   assert.match(prompt, /FILES=\.\n backend\/\n  src\/\n   server\.ts/);
   assert.match(prompt, /PREVIOUS=# Worker result[\s\S]*Verified analysis\./);
@@ -405,6 +411,8 @@ test('a running pipeline prompt queues one worker then returns with the latest t
   const taskCardId = 'master-task';
   const taskThreadId = `thread-${taskCardId}`;
   const taskCardFile = join(fixture.decisionOsRoot, 'cards', 'tasks', `${taskCardId}.md`);
+  const subtaskCardId = 'existing-subtask';
+  const subtaskCardFile = join(fixture.decisionOsRoot, 'cards', 'tasks', `${subtaskCardId}.md`);
   const taskThreadFile = join(fixture.decisionOsRoot, 'threads', 'tasks', `${taskThreadId}.md`);
   const sourceFile = join(fixture.workspace, 'src', 'dynamic-gate.ts');
   mkdirSync(join(taskCardFile, '..'), { recursive: true });
@@ -415,6 +423,7 @@ test('a running pipeline prompt queues one worker then returns with the latest t
     ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
   }, null, 2));
   writeFileSync(taskCardFile, '# Master objective\n\nImplement the dynamic gate.');
+  writeFileSync(subtaskCardFile, '# Existing subtask\n\nPreserve this complete subtask body.');
   writeFileSync(taskThreadFile, [
     '# OPERATOR',
     '<!-- decision-os:note {"id":"note-initial","timestamp":"2026-07-29T01:00:00.000Z"} -->',
@@ -423,21 +432,42 @@ test('a running pipeline prompt queues one worker then returns with the latest t
     '',
   ].join('\n'));
   writeFileSync(join(fixture.decisionOsRoot, 'tasks.json'), JSON.stringify({
-    cards: [{
-      id: taskCardId,
-      title: 'Dynamic gate task',
-      status: 'todo',
-      labels: ['master-task'],
-      x: 20,
-      y: 40,
-      w: 360,
-      h: 220,
-      comment: { contentFile: `.decision-os/cards/tasks/${taskCardId}.md` },
-      facts: [],
-      fields: [],
-    }],
+    cards: [
+      {
+        id: taskCardId,
+        title: 'Dynamic gate task',
+        status: 'todo',
+        labels: ['master-task'],
+        x: 20,
+        y: 40,
+        w: 360,
+        h: 220,
+        comment: { contentFile: `.decision-os/cards/tasks/${taskCardId}.md` },
+        facts: [],
+        fields: [],
+      },
+      {
+        id: subtaskCardId,
+        title: 'Existing subtask',
+        status: 'in-progress',
+        labels: [],
+        x: 420,
+        y: 40,
+        w: 360,
+        h: 220,
+        comment: { contentFile: `.decision-os/cards/tasks/${subtaskCardId}.md` },
+        facts: [],
+        fields: [],
+      },
+    ],
     annotations: [],
-    relationships: [],
+    relationships: [{
+      id: 'relationship-existing-subtask',
+      from: taskCardId,
+      to: subtaskCardId,
+      label: 'subtask',
+      position: 0,
+    }],
     notes: {},
     threadFiles: { [taskThreadId]: `.decision-os/threads/tasks/${taskThreadId}.md` },
   }, null, 2));
@@ -585,11 +615,13 @@ test('a running pipeline prompt queues one worker then returns with the latest t
 
     const workerOutput = join(fixture.decisionOsRoot, 'cards', 'tasks', `${queued.run.steps[0].outputCardId}.md`);
     const returningOutput = join(fixture.decisionOsRoot, 'cards', 'tasks', `${queued.run.steps[1].outputCardId}.md`);
-    assert.match(readFileSync(`${workerOutput}.input`, 'utf8'), /Direct previous skill result:[\s\S]*GATE_RESULT/);
+    const workerInput = readFileSync(`${workerOutput}.input`, 'utf8');
+    assert.match(workerInput, /Direct previous skill result:[\s\S]*GATE_RESULT/);
     const returningInput = readFileSync(`${returningOutput}.input`, 'utf8');
     assert.match(returningInput, /# Master objective[\s\S]*Implement the dynamic gate\./);
     assert.match(returningInput, /Start from the complete task conversation\./);
     assert.match(returningInput, /This latest operator message must reach the returning gate\./);
+    assert.match(returningInput, /SUB_CONTEXT[\s\S]*Existing subtask[\s\S]*Preserve this complete subtask body\./);
     assert.match(returningInput, /FILE_MAP[\s\S]*src\/[\s\S]*dynamic-gate\.ts/);
     assert.match(returningInput, /PREVIOUS_SKILL_RESULT[\s\S]*WORKER_RESULT/);
     assert.match(returningInput, new RegExp(`"threadId": "${taskThreadId}"`));
