@@ -1,6 +1,6 @@
 # decision-os
 
-Migrating existing workspaces: see [MIGRATE_RUNBOOK.md](MIGRATE_RUNBOOK.md).
+Migrating existing workspaces: see [MIGRATE_RUNBOOK.md](documentation/procedure/deployment/MIGRATE_RUNBOOK.md).
 
 decision-os is a browser canvas, a backend ledger server, and workspace-local `.decision-os` data.
 
@@ -184,7 +184,7 @@ printf '%s\n' 'Inspect the current relay connection and report evidence.' | \
 
 ## Termux Home Master Server
 
-Before upgrading an existing federated node to causal task current-state v2, complete [TASK_STATE_V2_MIGRATION_RUNBOOK.md](TASK_STATE_V2_MIGRATION_RUNBOOK.md).
+Before upgrading an existing federated node to causal task current-state v2, complete [TASK_STATE_V2_MIGRATION_RUNBOOK.md](documentation/procedure/deployment/TASK_STATE_V2_MIGRATION_RUNBOOK.md).
 
 Launch Decision OS from the Termux home to serve the projects registered in its `.decision-os/projects.json` catalog:
 

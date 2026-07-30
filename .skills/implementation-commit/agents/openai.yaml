@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implementation Commit"
+  short_description: "Commit the complete planned iteration"
+  default_prompt: "Use $implementation-commit to reconstruct and commit the complete iteration linked to the supplied Decision OS card IDs."

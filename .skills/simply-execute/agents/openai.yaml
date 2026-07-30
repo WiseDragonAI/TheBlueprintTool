@@ -1,0 +1,4 @@
+interface:
+  display_name: "Simply Execute"
+  short_description: "Execute card plans and report briefly."
+  default_prompt: "Use $simply-execute to execute the plan in the provided card and report the result."

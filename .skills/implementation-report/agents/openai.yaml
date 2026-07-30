@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implementation Report"
+  short_description: "Write concise implementation run reports"
+  default_prompt: "Use $implementation-report to write a concise implementation report from completed run evidence."

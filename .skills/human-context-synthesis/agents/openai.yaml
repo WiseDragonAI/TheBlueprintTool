@@ -1,0 +1,4 @@
+interface:
+  display_name: "Human Context Synthesis"
+  short_description: "Turn extracted facts into readable context"
+  default_prompt: "Use $human-context-synthesis to turn extracted facts into a concise human-readable context report."

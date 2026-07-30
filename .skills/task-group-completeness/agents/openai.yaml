@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Group Completeness (Implementation)"
+  short_description: "Implementation task-group completeness audit"
+  default_prompt: "Use $task-group-completeness to audit implementation task groups for fundamental missing engineering work."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Decision OS Zone Summary"
+  short_description: "Summarize Decision OS zone cards"
+  default_prompt: "Use $decision-os-zone-summary to create a bridge card summary for the cards in this Decision OS zone."

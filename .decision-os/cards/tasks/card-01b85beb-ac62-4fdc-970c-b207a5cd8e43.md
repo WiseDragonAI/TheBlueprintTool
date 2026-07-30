@@ -11,3 +11,12 @@ Define three explicit content kinds. `federated-skill` uses the server skill roo
 3. APIs return the content kind and allowed execution boundary.
 4. Duplicate names, unsafe paths, and invalid kind transitions are rejected deterministically.
 5. Tests prove pipeline prompts are absent from workstation, workspace, cloud-agent, and federation discovery while remaining selectable and injectable in pipelines.
+
+---
+
+## Review Reconciliation — 2026-07-30
+
+1. The three content kinds and their discovery boundaries are implemented in `main`: federated skill, workspace skill, and pipeline-only prompt.
+2. Pipeline-only prompts remain excluded from natural agent discovery and skill federation.
+3. Shared Markdown owner deduplication and metadata-only default model/effort persistence remain product defects tracked by the open implementation cards.
+4. This specification artifact is reconciled and complete.

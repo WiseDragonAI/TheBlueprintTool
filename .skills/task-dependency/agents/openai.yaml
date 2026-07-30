@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Dependency"
+  short_description: "Build dependency graphs from task inventories."
+  default_prompt: "Use $task-dependency to turn a task-list inventory into dependency edges, independent task groups, gates, and collision risks."

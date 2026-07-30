@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ticket Solver"
+  short_description: "Solve a specific GitLab ticket fast"
+  default_prompt: "Use $ticket-solver with: solveticket44 (where 44 is the number used after solveticket): Pull issue 44 using gitlab MCP, then create a worktree, a working document. Copy the verbatim WORKING_PROCEDURE_TEMPLATE.md at the begining of the working document, then analyze the provided ticket and create a full DAG after the verbatim working procedure which contains all the control flow steps regarding the ticket. Then apply the working procedure to solve the ticket."

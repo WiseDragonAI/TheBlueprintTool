@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codebase Analysis"
+  short_description: "Deep code/spec drift and gap analysis"
+  default_prompt: "Use $analysis to run native-subagent code/spec analysis and produce an operator-ready working document."

@@ -193,7 +193,7 @@
 
 ## P. Evidence Index
 
-1. **Architecture and migration:** `NODE_LOCAL_EPOCH3_MIGRATION_PLAN.md`, `TASK_STATE_V2_MIGRATION_RUNBOOK.md`, `TASK_REPLICATION_RECOVERY_GOAL_2026-07-21.md`.
+1. **Architecture and migration:** [node-local Epoch-3 migration plan](../working-documents/NODE_LOCAL_EPOCH3_MIGRATION_PLAN.md), [task current-state Epoch-3 cutover](../procedure/deployment/TASK_STATE_V2_MIGRATION_RUNBOOK.md), and [task replication recovery goal](../working-documents/TASK_REPLICATION_RECOVERY_GOAL_2026-07-21.md).
 2. **Store implementation:** `backend/src/business/task-state/helper/task-current-state-store.ts`, `shared/task-current-state-core/entity.ts`.
 3. **Store regression:** `backend/test/unit/task-state/task-current-state-store.test.ts`.
 4. **Migration implementation:** `backend/src/business/task-state/controller/migrate-node-task-current-state.ts`, `backend/src/business/task-state/helper/task-current-state-migration.ts`.

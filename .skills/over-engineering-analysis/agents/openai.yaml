@@ -1,0 +1,4 @@
+interface:
+  display_name: "Over Engineering Analysis"
+  short_description: "Challenge unnecessary complexity before coding"
+  default_prompt: "Use $over-engineering-analysis to review this proposal for unnecessary persistence or model bloat before implementation."

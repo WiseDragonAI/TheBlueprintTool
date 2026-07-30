@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visual Mockup Generator"
+  short_description: "Render planned screens as mockups."
+  default_prompt: "Use $visual-mockup-generator to turn this screen-content plan into HTML/CSS mockups and rendered screenshots."

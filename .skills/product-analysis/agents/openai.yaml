@@ -1,0 +1,4 @@
+interface:
+  display_name: "Product Analysis"
+  short_description: "Analyze goals against specs and gaps"
+  default_prompt: "Use $product-analysis to map this product goal to codebase-backed linked specs, missing specs, and evidence gaps."
