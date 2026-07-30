@@ -21,7 +21,7 @@ import { hydrateFederationForm } from './federation-form-hydration.js';
 import { createProjectRequest, loadProjectDirectoryRequest } from './project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 import { projectFilterChipPresentation, projectFilterGroups, projectFilterIncludes } from './project-filter-chip.js';
-import { acceptedRunOwnsRoute, captureRouteSnapshot, cardPresentationIdentity, federationEventOwnsCard, sameRouteSnapshot } from './navigation-ownership.js';
+import { acceptedRunOwnsRoute, captureRouteSnapshot, cardPresentationIdentity, contentEventOwnsCard, federationEventOwnsCard, sameRouteSnapshot } from './navigation-ownership.js';
 import { completedTaskLabels, filterCompletedTasks } from './completed-tasks.js';
 import { createOptimisticLedgerTransactionCoordinator } from '/src/runtime/ledger/helper/optimistic-ledger-transaction.js';
 import { applyTaskIntentToProjection, taskIdentity, taskIntentConfirmed } from './optimistic-task-projection.js';
@@ -128,6 +128,7 @@ let queueDragOrigin = null;
 let pendingControlRoomRefresh = false;
 let controlRoomEventSource = null;
 let controlRoomRefreshTimer = 0;
+let activeCardRefreshTimer = 0;
 const controlRoomExecutionRevisions = new Map();
 let controlRoomEtag = '';
 let controlRoomHydrating = false;
@@ -2037,8 +2038,22 @@ function subscribeControlRoomEvents() {
       void refreshControlRoomFromEvent();
     }, 80);
   };
+  const refreshActiveCard = (event) => {
+    let payload = {};
+    try { payload = JSON.parse(event.data || '{}'); } catch {}
+    const route = currentRouteSnapshot();
+    if (!contentEventOwnsCard(payload, route)) return;
+    clearTimeout(activeCardRefreshTimer);
+    activeCardRefreshTimer = window.setTimeout(() => {
+      if (!sameRouteSnapshot(route, currentRouteSnapshot())) return;
+      void loadRoute({ retainView: true });
+    }, 80);
+  };
   controlRoomEventSource.addEventListener('ledger-content-change', refresh);
-  controlRoomEventSource.addEventListener('card-content-change', refresh);
+  controlRoomEventSource.addEventListener('card-content-change', (event) => {
+    refresh();
+    refreshActiveCard(event);
+  });
   controlRoomEventSource.addEventListener('codex-execution-change', (event) => {
     let payload = {};
     try { payload = JSON.parse(event.data || '{}'); } catch {}
@@ -3347,6 +3362,9 @@ window.matchMedia('(min-width: 760px)').addEventListener('change', () => {
 
 initializeMobileThread();
 initializeMobileCodex();
+// WHAT: Connect content events before the first route request settles.
+// WHY: A directly opened card must observe Markdown written after its initial detail response.
+subscribeControlRoomEvents();
 window.setInterval(() => {
   const now = Date.now();
   document.querySelectorAll('.task-stopwatch[data-execution-since]').forEach((stopwatch) => {

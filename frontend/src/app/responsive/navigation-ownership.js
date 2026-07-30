@@ -39,6 +39,19 @@ export function federationEventOwnsCard(payload, snapshot) {
   return true;
 }
 
+export function contentEventOwnsCard(payload, snapshot) {
+  // WHAT: Require the complete event scope to equal the active card route.
+  // WHY: The global stream carries content changes from every registered project.
+  return Boolean(
+    snapshot?.projectId
+    && snapshot?.ledgerId
+    && snapshot?.cardId
+    && String(payload?.projectId ?? '') === snapshot.projectId
+    && String(payload?.ledgerId ?? '') === snapshot.ledgerId
+    && String(payload?.cardId ?? '') === snapshot.cardId
+  );
+}
+
 export function acceptedRunOwnsRoute(detail, snapshot, threadPresentationGeneration) {
   return detail?.actionOwned === true
     && String(detail.projectId || '') === snapshot.projectId
