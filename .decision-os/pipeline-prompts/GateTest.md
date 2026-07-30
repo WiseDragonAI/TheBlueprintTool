@@ -1,3 +1,5 @@
+# Purpose
+
 You have several {{CLI_TOOLS}} at your disposition. 
 Your role is to use them and explain me what the master task is about
 
@@ -7,7 +9,18 @@ Then update the master-task using the exec-summary skill.
 
 {{MASTER_TASK}}
 
+---
+
+## Full Thread
+1. The thread is the **operator supreme truth**. 
+2. It can contradict itself. Always search for complete truth.
+3. Answer in thread file directly, always when finished turn to report.
+
+```
 {{FULL_THREAD}}
+```
+
+---
 
 {{PREVIOUS_SKILL_RESULT}}
 
