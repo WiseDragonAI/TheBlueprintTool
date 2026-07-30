@@ -6,6 +6,7 @@
 
 ## SoftWare Engineering
 ### Product
+1. openticket / improveticket — Creates or improves engineering tickets around expected behavior and minimal impact.
 
 
 ### Code + Quality
@@ -23,11 +24,10 @@
 
    
 ### Changes
+1. executor-implement — Implements the scaffold generated from the master ledger
 
 
 ### Iterating
-1. executor-implement — Implements the scaffold generated from the master ledger
-2. 
 
 
 ### Debug
@@ -35,10 +35,9 @@
 
 
 ### Document
-1. implementation-report — Summarizes implementation, fixes, checks, problems, and lessons.
-2. implementation-commit — Reconstructs completed scope and creates appropriately grouped commits.
-3. openticket / improveticket — Creates or improves engineering tickets around expected behavior and minimal impact.
-4. moh-visual-automated-review — Performs deterministic post-implementation Flutter visual verification.
+1. implementation-commit — Reconstructs completed scope and creates appropriately grouped commits.
+2. implementation-report — Summarizes implementation, fixes, checks, problems, and lessons.
+
 
 ---
 
