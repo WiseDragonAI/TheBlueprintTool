@@ -24,6 +24,7 @@ import { createMasterTask } from '../../ledger/helper/create-master-task.js';
 import { applyScopedMasterTaskPlan } from '../../ledger/effect/apply-scoped-master-task-plan.js';
 import { applyScopedMasterTaskProgress } from '../../ledger/effect/apply-scoped-master-task-progress.js';
 import { queueSkill } from '../../codex/effect/queue-skill.js';
+import { readCardMarkdown } from '../../ledger/helper/read-card-markdown.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -41,6 +42,12 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'projects') {
     const result = await queryProjects();
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'card-read') {
+    const result = await readCardMarkdown({ cardId: command.cardOperation?.cardId });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

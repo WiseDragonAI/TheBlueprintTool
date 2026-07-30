@@ -21,6 +21,7 @@ test('ledger-cli command emits help without reading a ledger', async () => {
   assert.match(messages.join('\n'), /Usage: ledger-cli <command> \[options\]/);
   assert.match(messages.join('\n'), /unanswered --ledger <file> \[--json\]/);
   assert.match(messages.join('\n'), /card-context --ledger <file> --card-id <id> --json/);
+  assert.match(messages.join('\n'), /card-read --card-id <id>/);
   assert.match(messages.join('\n'), /zone-cards --ledger <file> --zone-id <id> --json/);
   assert.match(messages.join('\n'), /answer --ledger <file> --thread-id <id>/);
   assert.match(messages.join('\n'), /--message-file <file>/);
