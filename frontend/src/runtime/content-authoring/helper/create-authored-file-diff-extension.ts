@@ -1,0 +1,160 @@
+/**
+ * WHAT: Stores normalized authored diff hunks in CodeMirror state and renders additions plus accessible deletions.
+ * WHY: The editor transaction must be the only owner of document mapping and touched-hunk withdrawal.
+ */
+import { mapAuthoredFileDiff } from './map-authored-file-diff.js';
+import type { NormalizedAuthoredFileDiff } from './normalize-authored-file-diff.js';
+
+type EffectValue = { identity: string; diff: NormalizedAuthoredFileDiff };
+type EffectType<T> = {
+  of(value: T): unknown;
+};
+type FieldType<T> = unknown;
+
+type CodeMirrorDiffModule = {
+  StateEffect: { define<T>(): EffectType<T> };
+  StateField: {
+    define<T>(spec: {
+      create(): T;
+      update(value: T, transaction: {
+        docChanged: boolean;
+        changes: Parameters<typeof mapAuthoredFileDiff>[1];
+        newDoc: { toString(): string };
+        effects: Array<{ value: unknown; is(type: unknown): boolean }>;
+      }): T;
+      provide(field: FieldType<T>): unknown;
+    }): FieldType<T>;
+  };
+  Decoration: {
+    mark(spec: Record<string, unknown>): { range(from: number, to: number): unknown };
+    widget(spec: Record<string, unknown>): { range(position: number): unknown };
+    set(ranges: unknown[], sort?: boolean): unknown;
+  };
+  EditorView: {
+    decorations: { from<T>(field: FieldType<T>, getter: (value: T) => unknown): unknown };
+  };
+};
+
+export class AuthoredFileDeletionWidget {
+  constructor(
+    readonly hunkId: string,
+    readonly deletedText: string,
+  ) {}
+
+  eq(other: AuthoredFileDeletionWidget): boolean {
+    return other.hunkId === this.hunkId && other.deletedText === this.deletedText;
+  }
+
+  compare(other: unknown): boolean {
+    return other instanceof AuthoredFileDeletionWidget && this.eq(other);
+  }
+
+  updateDOM(): boolean {
+    return false;
+  }
+
+  get estimatedHeight(): number {
+    return -1;
+  }
+
+  get lineBreaks(): number {
+    return 0;
+  }
+
+  get isHidden(): boolean {
+    return false;
+  }
+
+  get editable(): boolean {
+    return false;
+  }
+
+  toDOM(): HTMLElement {
+    const wrapper = document.createElement('span');
+    wrapper.className = 'cm-authored-deletion';
+    wrapper.setAttribute('role', 'note');
+    wrapper.setAttribute('aria-label', `Removed Markdown: ${this.deletedText || 'blank line'}`);
+    const label = document.createElement('span');
+    label.className = 'cm-authored-deletion-label';
+    label.textContent = 'Removed';
+    const content = document.createElement('span');
+    content.className = 'cm-authored-deletion-content';
+    content.textContent = this.deletedText || ' ';
+    wrapper.append(label, content);
+    return wrapper;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+
+  coordsAt(): null {
+    return null;
+  }
+
+  destroy(): void {}
+}
+
+function decorations(cm: CodeMirrorDiffModule, diff: NormalizedAuthoredFileDiff | null): unknown {
+  if (!diff) return cm.Decoration.set([]);
+  const ranges: unknown[] = [];
+  for (const hunk of diff.hunks) {
+    for (const addition of hunk.additions) {
+      if (addition.to > addition.from) {
+        ranges.push(cm.Decoration.mark({
+          class: 'cm-authored-addition',
+          attributes: { 'data-change': 'added', 'aria-label': 'Added Markdown' },
+        }).range(addition.from, addition.to));
+      }
+    }
+    if (hunk.deletedText) {
+      ranges.push(cm.Decoration.widget({
+        widget: new AuthoredFileDeletionWidget(hunk.id, hunk.deletedText),
+        side: -1,
+        block: true,
+      }).range(hunk.deletionAnchor));
+    }
+  }
+  return cm.Decoration.set(ranges, true);
+}
+
+export function createAuthoredFileDiffExtension(cm: CodeMirrorDiffModule): {
+  extension: unknown;
+  installAuthoredFileDiffEffect: EffectType<EffectValue>;
+  clearAuthoredFileDiffEffect: EffectType<string | null>;
+} {
+  const installAuthoredFileDiffEffect = cm.StateEffect.define<EffectValue>();
+  const clearAuthoredFileDiffEffect = cm.StateEffect.define<string | null>();
+  const field = cm.StateField.define<NormalizedAuthoredFileDiff | null>({
+    create: () => null,
+    update: (value, transaction) => {
+      let next = value;
+      if (next && transaction.docChanged) {
+        next = mapAuthoredFileDiff(next, transaction.changes, transaction.newDoc.toString());
+      }
+      for (const effect of transaction.effects) {
+        if (effect.is(installAuthoredFileDiffEffect)) {
+          const candidate = effect.value as EffectValue;
+          next = candidate.diff.document === transaction.newDoc.toString()
+            && candidate.identity === candidate.diff.identity
+            ? candidate.diff
+            : next;
+        }
+        if (effect.is(clearAuthoredFileDiffEffect)) {
+          const identity = effect.value as string | null;
+          if (identity === null || next?.identity === identity) next = null;
+        }
+      }
+      return next;
+    },
+    provide: (ownedField) => cm.EditorView.decorations.from<NormalizedAuthoredFileDiff | null>(
+      ownedField,
+      (value) => decorations(cm, value),
+    ),
+  });
+  return {
+    extension: field,
+    installAuthoredFileDiffEffect,
+    clearAuthoredFileDiffEffect,
+  };
+}
