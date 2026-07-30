@@ -1,7 +1,7 @@
 ## A. Purpose And Canonical Owners
 
 1. This runbook creates, updates, verifies, and recovers the default developer prompts required to operate Decision OS.
-2. `.decision-os/codex-pipelines.json` owns prompt identity and metadata. `.decision-os/pipeline-prompts/<PROMPT_NAME>.md` owns exact UTF-8 Markdown.
+2. The server-owned Decision OS root owns prompt identity and metadata in `codex-pipelines.json` and exact UTF-8 Markdown in `pipeline-prompts/<PROMPT_NAME>.md`. Project-owned `.decision-os` roots are not prompt owners.
 3. Use the existing authored-content API for every create and update. Never edit `.decision-os/codex-pipelines.json` directly.
 4. The required defaults are:
    1. `SYSTEM_PROMPT` — common Decision OS developer instructions.
@@ -94,11 +94,10 @@
 
 ## E. Create The Default Prompts
 
-1. Select the registered Decision OS project and canonical source files:
+1. Select the server-owned authoring endpoint and canonical source files:
 
    ```sh
-   project_id='decision-os'
-   api_root="http://127.0.0.1:50150/p/${project_id}/api/codex/skill-library"
+   api_root='http://127.0.0.1:50150/api/codex/skill-library'
    prompt_root='.decision-os/pipeline-prompts'
    ```
 
@@ -186,16 +185,17 @@
 
 ## H. Verification
 
-1. Confirm the three registered identities:
+1. Confirm the three registered identities in the server-owned store:
 
    ```sh
-   jq -r '.authoredContent[] | select(.id == "SYSTEM_PROMPT" or .id == "SKILL" or .id == "CODEX_RUN") | [.id,.kind,.contentFile] | @tsv' .decision-os/codex-pipelines.json
+   server_decision_os_root='/home/jbb/.decision-os'
+   jq -r '.authoredContent[] | select(.id == "SYSTEM_PROMPT" or .id == "SKILL" or .id == "CODEX_RUN") | [.id,.kind,.contentFile] | @tsv' "${server_decision_os_root}/codex-pipelines.json"
    ```
 
 2. Confirm the authored commit message:
 
    ```sh
-   git -C .decision-os show -s --format=%B HEAD
+   git -C "$server_decision_os_root" show -s --format=%B HEAD
    ```
 
 3. Run focused compiler, direct-run, and authored-transaction tests through the repository lease:
@@ -216,6 +216,6 @@
 
 1. Do not rewrite malformed prompt Markdown, an invalid registration store, staged owner paths, or recovery-pending bytes.
 2. Preserve the exact files and use the stable admission error to identify the rejected boundary.
-3. Retry an accepted authored mutation through `POST /p/:projectId/api/codex/skill-library/:name/revisions/retry` with its returned `recoveryToken` and `contentRevision`.
+3. Retry an accepted authored mutation through `POST /api/codex/skill-library/:name/revisions/retry` with its returned `recoveryToken` and `contentRevision`.
 4. Resume execution only after re-reading and validating the prompt graph and its committed store evidence.
 5. A failed recovery keeps the owning prompt scope unavailable while unrelated routes, projects, and executions remain online.
