@@ -5,6 +5,7 @@
 import type { ServerResponse } from 'node:http';
 import type { TaskExecutionObservation } from '../../../../../shared/schemas/task-execution-types.js';
 import type { DecisionOsProject } from '../helper/project-catalog.js';
+import { ensureDecisionOsGitRepository } from '../helper/ensure-decision-os-git-repository.js';
 import { createProjectCatalogStore } from '../helper/project-catalog-store.js';
 import { createControlRoomProjectionStore } from '../helper/control-room-projection-store.js';
 import { createRuntimeIncidentLedger } from '../helper/runtime-incident-ledger.js';
@@ -57,6 +58,15 @@ export function createServerFoundationRuntime(input: {
     masterRoot: input.masterRoot,
     masterDecisionOsRoot: input.masterDecisionOsRoot,
   });
+  const authoredRoots = new Set([
+    input.masterDecisionOsRoot,
+    ...projectCatalogStore.projects()
+      .filter((project) => project.available)
+      .map((project) => project.decisionOsRoot),
+  ]);
+  for (const decisionOsRoot of [...authoredRoots].sort()) {
+    ensureDecisionOsGitRepository(decisionOsRoot);
+  }
   const contentStore = createFederationContentReplicaStore({
     decisionOsRoot: input.masterDecisionOsRoot,
   });

@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { createLinkedLedger } from '../../ledger/helper/create-linked-ledger.js';
+import { ensureDecisionOsGitRepository } from './ensure-decision-os-git-repository.js';
 import { readProjectRegistry, type ProjectRegistryEntry } from './project-registry.js';
 import { resolveProjectDirectory } from './project-directory-browser.js';
 
@@ -283,6 +284,7 @@ export function createDecisionOsProject(input: {
     }
     ensureTasksLedger(decisionOsRoot);
     const id = stableProjectId(decisionOsRoot, projectRelativePath);
+    ensureDecisionOsGitRepository(decisionOsRoot);
     return {
       id,
       name,

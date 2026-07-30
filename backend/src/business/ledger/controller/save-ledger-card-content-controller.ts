@@ -89,7 +89,6 @@ export async function saveLedgerCardContentController(input: {
   projectId: string;
   ledgerId: string;
   cardId: string;
-  projectRoot: string;
   decisionOsRoot: string;
   ledger: AnyRecord;
   markdown: unknown;
@@ -136,7 +135,7 @@ export async function saveLedgerCardContentController(input: {
   try {
     await assertSkillFileRevisionWritable({
       file: owner.file,
-      repositoryRoot: input.projectRoot,
+      repositoryRoot: input.decisionOsRoot,
       signal: input.signal,
     });
     const mutationId = randomUUID();
@@ -181,7 +180,7 @@ export async function saveLedgerCardContentController(input: {
       throw new Error('The reloaded card owner bytes do not match the accepted task mutation.');
     }
     const gitRevision = await commitAuthoredFileRevision({
-      repositoryRoot: input.projectRoot,
+      repositoryRoot: input.decisionOsRoot,
       ownerId: `ledger-card:${input.projectId}:${input.ledgerId}:${input.cardId}`,
       subject: `Revise card ${input.cardId}`,
       confirmedFiles: [{ file: confirmed.file, contentRevision }],

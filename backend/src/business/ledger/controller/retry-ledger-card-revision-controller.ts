@@ -15,7 +15,6 @@ export async function retryLedgerCardRevisionController(input: {
   projectId: string;
   ledgerId: string;
   cardId: string;
-  projectRoot: string;
   decisionOsRoot: string;
   ledger: AnyRecord;
   recoveryToken: unknown;
@@ -43,7 +42,7 @@ export async function retryLedgerCardRevisionController(input: {
   }
   try {
     const gitRevision = await retryAuthoredFileRevision({
-      repositoryRoot: input.projectRoot,
+      repositoryRoot: input.decisionOsRoot,
       ownerId: `ledger-card:${input.projectId}:${input.ledgerId}:${input.cardId}`,
       recoveryToken: input.recoveryToken,
       signal: input.signal,

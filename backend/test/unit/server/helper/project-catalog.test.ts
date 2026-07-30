@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -117,6 +118,14 @@ test('creates one initialized catalog project and persists its metadata', () => 
   assert.deepEqual(created.ledgers, [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }]);
   assert.equal(JSON.parse(readFileSync(join(root, 'Project Alpha', '.decision-os', 'project.json'), 'utf8')).id, created.id);
   assert.equal(existsSync(join(root, 'Project Alpha', '.git')), true);
+  assert.equal(existsSync(join(root, 'Project Alpha', '.decision-os', '.git')), true);
+  assert.equal(
+    execFileSync('git', ['rev-list', '--count', 'HEAD'], {
+      cwd: join(root, 'Project Alpha', '.decision-os'),
+      encoding: 'utf8',
+    }).trim(),
+    '1',
+  );
 });
 
 test('initializes an existing source directory without replacing its files', () => {
@@ -137,6 +146,7 @@ test('initializes an existing source directory without replacing its files', () 
   assert.equal(created.name, 'Existing Source');
   assert.equal(readFileSync(join(selected, 'README.md'), 'utf8'), '# Existing source\n');
   assert.equal(existsSync(join(selected, '.git')), true);
+  assert.equal(existsSync(join(selected, '.decision-os', '.git')), true);
   assert.equal(existsSync(join(selected, '.decision-os', 'state.json')), true);
   assert.deepEqual(created.ledgers, [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }]);
   assert.equal(existsSync(join(selected, '.decision-os', 'tasks.json')), true);

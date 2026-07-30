@@ -8,6 +8,7 @@ import { readLedgerCardRevisionHistoryController } from '../../src/business/ledg
 import { retryLedgerCardRevisionController } from '../../src/business/ledger/controller/retry-ledger-card-revision-controller.js';
 import { saveLedgerCardContentController } from '../../src/business/ledger/controller/save-ledger-card-content-controller.js';
 import { sha256AuthoredBytes } from '../../src/business/content-authoring/helper/authored-file-git-revisions.js';
+import { ensureDecisionOsGitRepository } from '../../src/business/server/helper/ensure-decision-os-git-repository.js';
 
 function git(root: string, args: string[]): string {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
@@ -18,6 +19,8 @@ function fixture(): {
   decisionOsRoot: string;
   file: string;
   ledger: Record<string, unknown>;
+  parentHead: string;
+  parentIndex: string;
   cleanup(): void;
 } {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-card-content-'));
@@ -32,9 +35,28 @@ function fixture(): {
     }],
   };
   git(root, ['init', '-q']);
-  git(root, ['add', '.']);
+  writeFileSync(join(root, 'README.md'), '# Parent\n');
+  git(root, ['add', 'README.md']);
   git(root, ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', 'commit', '-q', '-m', 'Initial']);
-  return { root, decisionOsRoot, file, ledger, cleanup: () => rmSync(root, { recursive: true, force: true }) };
+  writeFileSync(join(root, 'operator.txt'), 'approved staged bytes\n');
+  git(root, ['add', 'operator.txt']);
+  const parentHead = git(root, ['rev-parse', 'HEAD']);
+  const parentIndex = git(root, ['diff', '--cached', '--binary']);
+  ensureDecisionOsGitRepository(decisionOsRoot);
+  return {
+    root,
+    decisionOsRoot,
+    file,
+    ledger,
+    parentHead,
+    parentIndex,
+    cleanup: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+function assertParentUnchanged(value: ReturnType<typeof fixture>): void {
+  assert.equal(git(value.root, ['rev-parse', 'HEAD']), value.parentHead);
+  assert.equal(git(value.root, ['diff', '--cached', '--binary']), value.parentIndex);
 }
 
 function patchOwner(value: ReturnType<typeof fixture>, counter: { count: number }) {
@@ -83,7 +105,6 @@ test('task card save accepts only the exact card Markdown resource receipt', asy
       projectId: 'project-a',
       ledgerId: 'tasks',
       cardId: 'card-a',
-      projectRoot: accepted.root,
       decisionOsRoot: accepted.decisionOsRoot,
       ledger: accepted.ledger,
       markdown: '# Accepted resource\n',
@@ -94,14 +115,14 @@ test('task card save accepts only the exact card Markdown resource receipt', asy
     assert.equal(saved.ok, true, JSON.stringify(saved));
     assert.equal(acceptedCounter.count, 1);
     assert.equal(readFileSync(accepted.file, 'utf8'), '# Accepted resource\n');
-    assert.equal(git(accepted.root, ['show', '--name-only', '--format=', 'HEAD']), '.decision-os/cards/specs/card-a.md');
+    assert.equal(git(accepted.decisionOsRoot, ['show', '--name-only', '--format=', 'HEAD']), 'cards/specs/card-a.md');
+    assertParentUnchanged(accepted);
 
     const rejectedCounter = { count: 0 };
     const failed = await saveLedgerCardContentController({
       projectId: 'project-a',
       ledgerId: 'tasks',
       cardId: 'card-a',
-      projectRoot: rejected.root,
       decisionOsRoot: rejected.decisionOsRoot,
       ledger: rejected.ledger,
       markdown: '# Wrong resource\n',
@@ -113,7 +134,8 @@ test('task card save accepts only the exact card Markdown resource receipt', asy
     assert.equal(failed.code, 'card_content_save_failed');
     assert.match(String(failed.error), /task mutation receipt/);
     assert.equal(rejectedCounter.count, 1);
-    assert.equal(git(rejected.root, ['rev-list', '--count', 'HEAD']), '1');
+    assert.equal(git(rejected.decisionOsRoot, ['rev-list', '--count', 'HEAD']), '1');
+    assertParentUnchanged(rejected);
   } finally {
     accepted.cleanup();
     rejected.cleanup();
@@ -129,7 +151,6 @@ test('card save mutates once, creates a focused revision, rejects stale/no-op wr
       projectId: 'project-a',
       ledgerId: 'specs',
       cardId: 'card-a',
-      projectRoot: value.root,
       decisionOsRoot: value.decisionOsRoot,
       ledger: value.ledger,
       markdown: '# Revised\n',
@@ -140,14 +161,14 @@ test('card save mutates once, creates a focused revision, rejects stale/no-op wr
     assert.equal(saved.ok, true);
     assert.equal(counter.count, 1);
     assert.equal(readFileSync(value.file, 'utf8'), '# Revised\n');
-    assert.equal(git(value.root, ['log', '-1', '--format=%s']), 'Revise card card-a');
-    assert.equal(git(value.root, ['show', '--name-only', '--format=', 'HEAD']), '.decision-os/cards/specs/card-a.md');
+    assert.equal(git(value.decisionOsRoot, ['log', '-1', '--format=%s']), 'Revise card card-a');
+    assert.equal(git(value.decisionOsRoot, ['show', '--name-only', '--format=', 'HEAD']), 'cards/specs/card-a.md');
+    assertParentUnchanged(value);
 
     const noOp = await saveLedgerCardContentController({
       projectId: 'project-a',
       ledgerId: 'specs',
       cardId: 'card-a',
-      projectRoot: value.root,
       decisionOsRoot: value.decisionOsRoot,
       ledger: value.ledger,
       markdown: '# Revised\n',
@@ -160,7 +181,6 @@ test('card save mutates once, creates a focused revision, rejects stale/no-op wr
       projectId: 'project-a',
       ledgerId: 'specs',
       cardId: 'card-a',
-      projectRoot: value.root,
       decisionOsRoot: value.decisionOsRoot,
       ledger: value.ledger,
       markdown: '# Other\n',
@@ -192,7 +212,6 @@ test('pending card Git revision retries without issuing a second card mutation',
       projectId: 'project-a',
       ledgerId: 'specs',
       cardId: 'card-a',
-      projectRoot: value.root,
       decisionOsRoot: value.decisionOsRoot,
       ledger: value.ledger,
       markdown: '# Preserved\n',
@@ -208,7 +227,6 @@ test('pending card Git revision retries without issuing a second card mutation',
       projectId: 'project-a',
       ledgerId: 'specs',
       cardId: 'card-a',
-      projectRoot: value.root,
       decisionOsRoot: value.decisionOsRoot,
       ledger: value.ledger,
       recoveryToken: saved.recoveryToken,
@@ -217,6 +235,8 @@ test('pending card Git revision retries without issuing a second card mutation',
     assert.equal(retried.ok, true);
     assert.equal(counter.count, 1);
     assert.equal(readFileSync(value.file, 'utf8'), '# Preserved\n');
+    assert.equal(git(value.decisionOsRoot, ['rev-list', '--count', 'HEAD']), '2');
+    assertParentUnchanged(value);
   } finally {
     value.cleanup();
   }

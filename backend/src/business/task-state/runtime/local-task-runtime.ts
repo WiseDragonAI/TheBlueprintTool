@@ -116,7 +116,6 @@ export function createLocalTaskRuntime(input: {
       commitContent: ({ mutation, changedContentFiles }) => commitTaskContentMutation({
         enabled: taskContentAutoCommitEnabled(settings),
         projectId: project.id,
-        projectRoot: project.root,
         decisionOsRoot: project.decisionOsRoot,
         mutation,
         changedContentFiles,

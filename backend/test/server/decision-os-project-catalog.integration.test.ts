@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,6 +8,10 @@ import { basename, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
+
+function git(root: string, args: string[]): string {
+  return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+}
 
 function createProject(root: string, path: string, title: string): void {
   const directory = join(root, path, '.decision-os');
@@ -36,7 +41,7 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
   const runtime: Record<string, unknown> = {};
   const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
-  const server = runtime.server as Server;
+  let server = runtime.server as Server;
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
@@ -45,6 +50,14 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     const catalog = await catalogResponse.json() as { projects: Array<{ id: string; name: string; description: string; color: string; relativePath: string; root: string }> };
     assert.deepEqual(catalog.projects.map((project) => project.relativePath), ['admin', 'dev/project-a', 'dev/project-b']);
     assert.deepEqual(catalog.projects.map((project) => project.name), ['admin', 'project-a', 'project-b']);
+    assert.equal(existsSync(join(home, '.git')), false);
+    for (const decisionOsRoot of [
+      join(home, '.decision-os'),
+      ...catalog.projects.map((project) => join(project.root, '.decision-os')),
+    ]) {
+      assert.equal(existsSync(join(decisionOsRoot, '.git')), true, decisionOsRoot);
+      assert.equal(git(decisionOsRoot, ['rev-list', '--count', 'HEAD']), '1', decisionOsRoot);
+    }
 
     const rootListingResponse = await fetch(`${baseUrl}/decision-os/directories?path=.`);
     assert.equal(rootListingResponse.status, 200);
@@ -63,6 +76,7 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     assert.equal(existingSource.project.relativePath, 'source-existing');
     assert.equal(readFileSync(join(home, 'source-existing', 'README.md'), 'utf8'), '# Existing source\n');
     assert.equal(existsSync(join(home, 'source-existing', '.git')), true);
+    assert.equal(existsSync(join(home, 'source-existing', '.decision-os', '.git')), true);
     assert.equal(existsSync(join(home, 'source-existing', '.decision-os', 'state.json')), true);
 
     const creation = await fetch(`${baseUrl}/decision-os/projects`, {
@@ -81,6 +95,8 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     const createdTasks = JSON.parse(readFileSync(join(home, 'Project Gamma', '.decision-os', 'tasks.json'), 'utf8')) as { modelName: string; cards: unknown[] };
     assert.equal(createdTasks.modelName, 'tasks');
     assert.deepEqual(createdTasks.cards, []);
+    assert.equal(existsSync(join(home, 'Project Gamma', '.decision-os', '.git')), true);
+    assert.equal(git(join(home, 'Project Gamma', '.decision-os'), ['rev-list', '--count', 'HEAD']), '1');
     const refreshedCatalog = await fetch(`${baseUrl}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string }> };
     assert.ok(refreshedCatalog.projects.some((project) => project.id === created.project.id));
 
@@ -202,9 +218,41 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
       afterRejection.projects.find((project) => project.id === projectA.id),
       { ...projectA, name: 'Project Alpha', description: 'Primary workspace', color: '#123456' },
     );
-  } finally {
+
+    const decisionOsRoots = [
+      join(home, '.decision-os'),
+      join(home, 'admin', '.decision-os'),
+      join(home, 'dev', 'project-a', '.decision-os'),
+      join(home, 'dev', 'project-b', '.decision-os'),
+      join(home, 'source-existing', '.decision-os'),
+      join(home, 'Project Gamma', '.decision-os'),
+    ];
+    const headsBeforeRestart = new Map(decisionOsRoots.map((decisionOsRoot) => [
+      decisionOsRoot,
+      git(decisionOsRoot, ['rev-parse', 'HEAD']),
+    ]));
     server.close();
     await once(server, 'close');
+    const restartedRuntime: Record<string, unknown> = {};
+    createHttpServer({
+      action_payload: {
+        port: 0,
+        host: '127.0.0.1',
+        cwd: home,
+        decisionOsFrontendRoot: join(repositoryRoot, 'frontend'),
+      },
+      runtime_state: restartedRuntime,
+    });
+    server = restartedRuntime.server as Server;
+    await once(server, 'listening');
+    for (const [decisionOsRoot, head] of headsBeforeRestart) {
+      assert.equal(git(decisionOsRoot, ['rev-parse', 'HEAD']), head, decisionOsRoot);
+    }
+  } finally {
+    if (server.listening) {
+      server.close();
+      await once(server, 'close');
+    }
     if (previousMaxConcurrentProcesses === undefined) delete process.env.CODEX_MAX_CONCURRENT_PROCESSES;
     else process.env.CODEX_MAX_CONCURRENT_PROCESSES = previousMaxConcurrentProcesses;
     if (previousRepositorySettingsFile === undefined) delete process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;

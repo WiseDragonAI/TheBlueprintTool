@@ -36,6 +36,7 @@ import {
   writeCodexPipelineStore,
 } from '@backend/business/codex/helper/codex-pipeline-store.js';
 import { acquireRepositoryMutationLock } from '@backend/business/content-authoring/helper/repository-mutation-lock.js';
+import { ensureDecisionOsGitRepository } from '@backend/business/server/helper/ensure-decision-os-git-repository.js';
 
 function markdown(name: string, description: string, body = 'Follow the instructions.'): string {
   return ['---', `name: ${name}`, `description: ${description}`, '---', '', '# Instructions', '', body, ''].join('\n');
@@ -376,6 +377,7 @@ test('skill creation separates pipeline-only prompts from natural discovery and 
   initializeGitRepository(workspace);
   execFileSync('git', ['config', 'user.name', 'Test'], { cwd: workspace });
   execFileSync('git', ['config', 'user.email', 'test@localhost'], { cwd: workspace });
+  ensureDecisionOsGitRepository(decisionOsRoot);
   try {
     mkdirSync(join(decisionOsRoot, 'pipeline-prompts'), { recursive: true });
     writeFileSync(join(decisionOsRoot, 'pipeline-prompts', 'orphan.md'), markdown('orphan', 'Not registered'));
@@ -419,6 +421,7 @@ test('skill creation separates pipeline-only prompts from natural discovery and 
     assert.equal(workspaceReload?.projectId, 'project-a');
     writeFileSync(join(workspace, 'README.md'), 'operator staged bytes\n');
     execFileSync('git', ['add', 'README.md'], { cwd: workspace });
+    const parentHeadBeforePrompt = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim();
     const created = await createCodexSkillLibrary({
       decisionOsRoot,
       runtime: { serverRoot: workspace },
@@ -437,11 +440,12 @@ test('skill creation separates pipeline-only prompts from natural discovery and 
     assert.equal(scanCodexSkills({ workspaceRoot: workspace, serverRoot: workspace }).some((skill) => skill.name === 'pipeline-review'), false);
     assert.equal(readCodexSkillCatalog({ decisionOsRoot, runtime: { serverRoot: workspace } }).skills.some((skill) => skill.name === 'pipeline-review'), false);
     assert.equal(readCodexContentCatalog({ decisionOsRoot, runtime: { serverRoot: workspace } }).skills.find((skill) => skill.name === 'pipeline-review')?.executionVisibility, 'pipeline-only');
-    const createdPaths = execFileSync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], { cwd: workspace, encoding: 'utf8' })
+    const createdPaths = execFileSync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' })
       .trim().split('\n').sort();
-    assert.deepEqual(createdPaths, ['.decision-os/codex-pipelines.json', '.decision-os/pipeline-prompts/pipeline-review.md']);
+    assert.deepEqual(createdPaths, ['codex-pipelines.json', 'pipeline-prompts/pipeline-review.md']);
     const stagedPaths = execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: workspace, encoding: 'utf8' }).trim().split('\n');
     assert.deepEqual(stagedPaths, ['README.md']);
+    assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim(), parentHeadBeforePrompt);
     const promptStore = JSON.parse(readFileSync(join(decisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
     assert.deepEqual(promptStore.authoredContent, [{
       id: 'pipeline-review',
@@ -479,26 +483,37 @@ test('skill creation separates pipeline-only prompts from natural discovery and 
     if (!revised.ok) return;
     assert.equal(revised.skill.history.length, 2);
     assert.equal(revised.skill.history[0].subject, 'Revise pipeline-prompt pipeline-review');
-    const revisedPaths = execFileSync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], { cwd: workspace, encoding: 'utf8' })
+    const revisedPaths = execFileSync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' })
       .trim().split('\n').sort();
-    assert.deepEqual(revisedPaths, ['.decision-os/codex-pipelines.json', '.decision-os/pipeline-prompts/pipeline-review.md']);
+    assert.deepEqual(revisedPaths, ['codex-pipelines.json', 'pipeline-prompts/pipeline-review.md']);
     assert.deepEqual(execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: workspace, encoding: 'utf8' }).trim().split('\n'), ['README.md']);
+    assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim(), parentHeadBeforePrompt);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
 });
 
-test('pipeline prompts persist under .decision-os without a Git repository', async () => {
-  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-unversioned-prompt-'));
+test('server startup initializes a child repository for pipeline prompts beneath a non-Git root', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-child-prompt-'));
   const decisionOsRoot = join(workspace, '.decision-os');
   mkdirSync(decisionOsRoot, { recursive: true });
+  const runtime: Record<string, any> = {};
+  createHttpServer({
+    action_payload: { port: 0, host: '127.0.0.1', cwd: workspace },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
   try {
+    assert.equal(existsSync(join(workspace, '.git')), false);
+    assert.equal(existsSync(join(decisionOsRoot, '.git')), true);
+    const baselineHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' }).trim();
     const created = await createCodexSkillLibrary({
       decisionOsRoot,
       runtime: { serverRoot: workspace },
       payload: {
         name: 'local-controller',
-        description: 'Runs without a Git owner.',
+        description: 'Runs from the initialized child owner.',
         markdown: '# Local controller\n',
         contentKind: 'pipeline-prompt',
       },
@@ -507,8 +522,9 @@ test('pipeline prompts persist under .decision-os without a Git repository', asy
     if (!created.ok) return;
     const promptFile = join(decisionOsRoot, 'pipeline-prompts', 'local-controller.md');
     assert.equal(readFileSync(promptFile, 'utf8'), '# Local controller\n');
-    assert.equal(created.skill.gitRevision, null);
-    assert.deepEqual(created.skill.history, []);
+    assert.notEqual(created.skill.gitRevision?.commit, baselineHead);
+    assert.equal(created.skill.gitRevision?.commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' }).trim());
+    assert.equal(created.skill.history.length, 1);
 
     const revised = await saveCodexSkillLibrary({
       decisionOsRoot,
@@ -524,8 +540,8 @@ test('pipeline prompts persist under .decision-os without a Git repository', asy
     assert.equal(revised.ok, true);
     if (!revised.ok) return;
     assert.equal(readFileSync(promptFile, 'utf8'), '# Revised local controller\n');
-    assert.equal(revised.skill.gitRevision, null);
-    assert.deepEqual(revised.skill.history, []);
+    assert.equal(revised.skill.gitRevision?.commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' }).trim());
+    assert.equal(revised.skill.history.length, 2);
 
     const history = await readCodexSkillRevisionHistory({
       decisionOsRoot,
@@ -534,10 +550,11 @@ test('pipeline prompts persist under .decision-os without a Git repository', asy
     });
     assert.equal(history.ok, true);
     if (history.ok) {
-      assert.deepEqual(history.history, []);
+      assert.equal(history.history.length, 2);
       assert.equal(history.nextCursor, null);
     }
   } finally {
+    await closeServer(server);
     rmSync(workspace, { recursive: true, force: true });
   }
 });
@@ -548,6 +565,7 @@ test('pipeline-prompt save rejects a coupled-store race with HTTP 409 and no new
   mkdirSync(decisionOsRoot, { recursive: true });
   writeFileSync(join(workspace, 'README.md'), 'fixture\n');
   initializeGitRepository(workspace);
+  ensureDecisionOsGitRepository(decisionOsRoot);
   try {
     const created = await createCodexSkillLibrary({
       decisionOsRoot,
@@ -562,7 +580,7 @@ test('pipeline-prompt save rejects a coupled-store race with HTTP 409 and no new
     assert.equal(created.ok, true);
     if (!created.ok) return;
     const headBeforeSave = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: workspace,
+      cwd: decisionOsRoot,
       encoding: 'utf8',
     }).trim();
     const promptFile = join(decisionOsRoot, 'pipeline-prompts', 'race-prompt.md');
@@ -593,7 +611,7 @@ test('pipeline-prompt save rejects a coupled-store race with HTTP 409 and no new
     assert.equal(result.statusCode, 409);
     assert.equal(result.code, 'content_revision_conflict');
     assert.equal(
-      execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim(),
+      execFileSync('git', ['rev-parse', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' }).trim(),
       headBeforeSave,
     );
     assert.equal(readFileSync(promptFile, 'utf8'), '# Original prompt\n');
@@ -615,6 +633,7 @@ test('pipeline-prompt revisions reject unresolved exact-name templates before wr
   mkdirSync(decisionOsRoot, { recursive: true });
   writeFileSync(join(workspace, 'README.md'), 'fixture\n');
   initializeGitRepository(workspace);
+  ensureDecisionOsGitRepository(decisionOsRoot);
   try {
     const availableSkills = await createCodexSkillLibrary({
       decisionOsRoot,
@@ -641,7 +660,7 @@ test('pipeline-prompt revisions reject unresolved exact-name templates before wr
     if (!gate.ok) return;
     const promptFile = join(decisionOsRoot, 'pipeline-prompts', 'gate.md');
     const bytesBefore = readFileSync(promptFile);
-    const headBefore = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim();
+    const headBefore = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' }).trim();
     const rejected = await saveCodexSkillLibrary({
       decisionOsRoot,
       runtime: { serverRoot: workspace },
@@ -660,7 +679,7 @@ test('pipeline-prompt revisions reject unresolved exact-name templates before wr
     assert.match(rejected.error, /Pipeline prompt template "available_skills" was not found\./);
     assert.deepEqual(readFileSync(promptFile), bytesBefore);
     assert.equal(
-      execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim(),
+      execFileSync('git', ['rev-parse', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' }).trim(),
       headBefore,
     );
   } finally {
