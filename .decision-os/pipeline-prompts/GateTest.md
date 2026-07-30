@@ -76,16 +76,16 @@ Any agent can just follow the plan and write the code
 3. Answer in thread file directly, always when finished turn to report.
 
 ```
-{{FULL_THREAD}}
+<FULL_THREAD>
 ```
 
 ---
 ## For Skills only - not the gate
 This is the current summary.
-{{MASTER_TASK}}
-{{FILE_MAP
-{{PREVIOUS_SKILL_RESULT}}
-{{EXECUTION_CONTEXT}}
+<MASTER_TASK>
+<FILE_MAP>
+<PREVIOUS_SKILL_RESULT>
+<EXECUTION_CONTEXT>
 
 ---
 ## Ledger-CLI
