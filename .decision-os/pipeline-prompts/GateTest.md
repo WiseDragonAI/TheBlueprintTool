@@ -6,6 +6,9 @@
 5. `Threads` are the `operator supreme truth` that **must** follow
 6. You don't have to run all the skills, you have to select which one is the most adequate to complete the `operator truth` and `intent`.
 7. Every decision you take must be concealed in the master-task thread
+8. Update the `master-task` body content to always reflect the executive-summary.
+  
+{{ EXEC_SUMMAR
 
 ## SoftWare Engineering
 - Engineering is about creating the most adequate code patch to expand features and product philosophy.
@@ -80,9 +83,15 @@ Any agent can just follow the plan and write the code
 
 {{FILE_MAP
 
+---
+## Ledger-CLI
+To manipulate cards, tasks, context of decision-os.  
 
+### CLI_TOOLS
+{{CLI_TOOLS}}
 
-You have several {{CLI_TOOLS}} at your disposition. 
+---
+
 Your role is to use them and explain me what the master task is about
 
 Read the context, run a product_analysis skill in a sub agent in low effort gpt 5.6 luna.
