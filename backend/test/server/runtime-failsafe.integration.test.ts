@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -383,8 +383,48 @@ test('invalid project pipeline store pauses only its Codex runtime while global 
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const invalidStore = join(projectRoots[1].root, '.decision-os', 'codex-pipelines.json');
+  const projectIncidentFile = join(projectRoots[1].root, '.decision-os', 'runtime-incidents.json');
+  const validStoreBytes = JSON.stringify({
+    version: 1,
+    pipelines: [],
+    steps: [],
+    runs: [],
+    skillLibrary: [],
+    authoredContent: [],
+    activeWorkspaceRun: null,
+  });
 
   try {
+    writeFileSync(invalidStore, '{"version":1,"pipelines":[');
+    await waitUntil(() => {
+      const incidents = existsSync(projectIncidentFile)
+        ? JSON.parse(readFileSync(projectIncidentFile, 'utf8')) as {
+          incidents: Array<{ code: string; status: string }>;
+        }
+        : { incidents: [] };
+      return incidents.incidents.some((incident) => (
+        incident.code === 'codex_pipeline_store_corrupt' && incident.status === 'paused'
+      ));
+    });
+    const transientHealth = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
+      pausedBackgroundComponents: string[];
+    };
+    assert.equal(transientHealth.pausedBackgroundComponents.includes('codex-runtime:invalid-project'), false);
+
+    writeFileSync(invalidStore, validStoreBytes);
+    await waitUntil(() => {
+      const incidents = JSON.parse(readFileSync(projectIncidentFile, 'utf8')) as {
+        incidents: Array<{ code: string; status: string }>;
+      };
+      return incidents.incidents.some((incident) => (
+        incident.code === 'codex_pipeline_store_corrupt' && incident.status === 'resolved'
+      ));
+    });
+    const recoveredTransientHealth = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
+      pausedBackgroundComponents: string[];
+    };
+    assert.equal(recoveredTransientHealth.pausedBackgroundComponents.includes('codex-runtime:invalid-project'), false);
+
     writeFileSync(invalidStore, JSON.stringify({
       version: 1,
       pipelines: [],
@@ -399,7 +439,7 @@ test('invalid project pipeline store pauses only its Codex runtime while global 
         pausedBackgroundComponents: string[];
       };
       return health.pausedBackgroundComponents.includes('codex-runtime:invalid-project');
-    });
+    }, 4_000);
 
     const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
       status: string;
@@ -426,15 +466,7 @@ test('invalid project pipeline store pauses only its Codex runtime while global 
       `codex-pipeline-store:${join(projectRoots[1].root, '.decision-os', 'codex-pipelines.json')}`,
     );
 
-    writeFileSync(invalidStore, JSON.stringify({
-      version: 1,
-      pipelines: [],
-      steps: [],
-      runs: [],
-      skillLibrary: [],
-      authoredContent: [],
-      activeWorkspaceRun: null,
-    }));
+    writeFileSync(invalidStore, validStoreBytes);
     const resume = await fetch(`${baseUrl}/api/diagnostics/runtime/resume`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
