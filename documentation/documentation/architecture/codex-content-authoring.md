@@ -27,7 +27,7 @@
    ```
 
 3. `contentKind` is exactly `federated-skill`, `workspace-skill`, or `pipeline-prompt`. `markdown` may replace generated initial Markdown. A workspace skill requires an available project-scoped request.
-4. HTTP `201` returns `{ok, statusCode, skill, publication}`. `skill` includes the path-free identity, `contentKind`, `executionVisibility`, `projectId`, `editable`, `readOnlyReason`, Markdown SHA-256 `revision`, `markdown`, defaults, tags, references, `gitRevision`, and initial `history`.
+4. HTTP `201` returns `{ok, statusCode, skill, publication}`. `skill` includes the path-free identity, `contentKind`, `executionVisibility`, `projectId`, `editable`, `readOnlyReason`, Markdown SHA-256 `revision`, `markdown`, defaults, tags, references, `gitRevision`, initial `history`, and the current authored `snapshot`. Owners without committed history return `snapshot: null`.
 5. Read the selected catalog identity with `GET /p/:projectId/api/codex/skill-library/:name`. Read the canonical server-skill owner explicitly with `GET /p/:projectId/api/codex/server-skills/:name`.
 6. Save Markdown with `PUT /p/:projectId/api/codex/skill-library/:name`; canonical server-skill saves may use `PUT /p/:projectId/api/codex/server-skills/:name`:
 
@@ -43,7 +43,7 @@
 7. A content save requires all four fields. The server revalidates owner containment, editability, immutable skill frontmatter identity, prompt registration, content size, and the loaded revision before mutation.
 8. Favorite and tag requests use the same `PUT` route with only `favorite` and `tags`. They mutate pipeline-store metadata and do not claim a Markdown save or Git content revision.
 9. A successful create returns only after its focused Git revision exists. A skill transaction contains only its `SKILL.md`; a prompt transaction contains its Markdown and `.decision-os/codex-pipelines.json`.
-10. A successful content save returns the reloaded path-free `skill` detail and advances repository `HEAD` exactly once. HTTP `422 content_not_changed` creates no commit.
+10. A successful content save returns the reloaded path-free `skill` detail with its new authored snapshot and advances repository `HEAD` exactly once. HTTP `409 content_revision_conflict` returns the pre-mutation current snapshot while preserving the submitted draft. HTTP `422 content_not_changed` creates no commit.
 
 ---
 
@@ -146,10 +146,10 @@
 4. Read-only mode disables document mutation, Undo, Redo, and Save. Find, wrapping, selection, copy, focus navigation, history navigation, and preview remain available.
 5. Explicit close, Escape, browser Back, route change, and `beforeunload` consult the same dirty state. A dirty session requires discard confirmation; a clean close disposes the views and returns focus to the initiating control.
 6. Desktop geometry is exactly `80vw` by `95vh`. The responsive inset rule keeps the dialog within the mobile viewport and makes the editor body scroll internally.
-7. The editable Task-card surface uses `@pierre/diffs@1.2.12` only through `parseDiffFromFile()` in the dedicated local Worker bundle. Pierre shadow DOM, `FileDiff`, syntax highlighting, and interaction managers never enter the editor.
+7. Editable Skill Library and Task-card surfaces use `@pierre/diffs@1.2.12` only through `parseDiffFromFile()` in the dedicated local Worker bundle. Pierre shadow DOM, `FileDiff`, syntax highlighting, and interaction managers never enter the editor.
 8. The session admits one complete snapshot identity, debounces derivation for `150 ms`, owns one generation, rejects obsolete results, enforces a `2,000 ms` deadline, and terminates the Worker on success, failure, cancellation, replacement, reload, and disposal.
 9. One CodeMirror `StateField` owns diff mapping and presentation. Additions are document decorations; removals are accessible block widgets anchored without adding removed bytes to `EditorState.doc`. Editing a hunk withdraws all presentation for that hunk in the same transaction; edits outside a hunk map it through the transaction.
-10. A successful save installs the returned snapshot. HTTP `409` preserves the local draft and records the server snapshot. An exact active-card refresh reloads a clean editor and exposes a conflict without remounting a dirty editor. Authoritative reload uses `EditorView.setState()` to clear obsolete history while preserving valid selection, scroll, focus, compartments, theme, toolbar, and DOM ownership.
+10. A successful Skill Library or Task-card save installs the returned snapshot. HTTP `409` preserves the local draft and records the server snapshot. An exact active-card refresh reloads a clean editor and exposes a conflict without remounting a dirty editor. Explicit Skill Library and Task-card reloads use `EditorView.setState()` to clear obsolete history while preserving valid selection, scroll, focus, compartments, theme, toolbar, and DOM ownership.
 11. Canonical Markdown semantics are source-positioned decorations over the same document. They do not create rendered-card DOM parity; detached `renderLedgerCardMarkdown()` output remains outside the editor acceptance boundary.
 12. Added and removed changes use blue and red tokens plus explicit `Added Markdown` and `Removed Markdown` labels. Color is not the sole change identity.
 13. `frontend/src/runtime/codex/component/codemirror-file-editor.ts` contains the required future-use comment for a thread-attached file owner.
