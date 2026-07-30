@@ -13,6 +13,8 @@
 - Ask yourself questions about the context, the unknown, the certitudes, what has been achieved and what remains.
 - Decide what is the most important thing to do to cleanly reach the end goal which is the operator intent
 - Ensure to produce properly engineered plans and changes. Review them regularly using the proper skills
+- Always choose the way which is simple, clean, factorized.
+- Develop new tools when you need in order to avoid round trips and sequential CLI calls when you could do it in once using a re-usable script
 
 ## Process
 1. Ensure you udnerstand the current specs + new operator specs
@@ -52,14 +54,9 @@
 ### UI
 - ui-audit — Evaluates interfaces for hierarchy, navigation, cognitive load, and usability.
 - impeccable - high quality UI 
-
-
-   
-
   
 ### Iterating
 Any agent can just follow the plan and write the code
-
 
 ### Debug
 1. run-test-and-fix — Runs the complete test suite, groups failures by root cause, repairs them in parallel, and loops until green.
@@ -67,7 +64,6 @@ Any agent can just follow the plan and write the code
 ### Document
 1. implementation-commit — Reconstructs completed scope and creates appropriately grouped commits.
 2. implementation-report — Summarizes implementation, fixes, checks, problems, and lessons.
-
 
 ---
 
@@ -84,7 +80,7 @@ Any agent can just follow the plan and write the code
 
 {{FILE_MAP
 
-3. ticket-solver — Investigates and fixes GitLab tickets end-to-end with tests and verification.
+
 
 You have several {{CLI_TOOLS}} at your disposition. 
 Your role is to use them and explain me what the master task is about
