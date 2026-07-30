@@ -656,6 +656,8 @@ export function initializeMobileCodex() {
   el('.pipelines-filter-clear').addEventListener('click', () => { state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All'; renderPipelineLibrary(); });
   el('.pipeline-new').addEventListener('click', () => { state.projectId = state.projectFilter === 'All' ? '' : state.projectFilter; openEditor(); }); el('.pipeline-editor-back').addEventListener('click', () => { el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); });
   el('.pipeline-add-step').addEventListener('click', () => { state.editor.steps.push({ id: uid('codex-step'), name: `Step ${state.editor.steps.length + 1}`, purpose: '', skills: [] }); renderEditor(); });
+  el('.pipeline-editor-form').elements['pipeline-name'].addEventListener('input', (event) => { state.editor.name = event.target.value; });
+  el('.pipeline-editor-form').elements['pipeline-purpose'].addEventListener('input', (event) => { state.editor.purpose = event.target.value; });
   el('.pipeline-editor-form').addEventListener('submit', (event) => { event.preventDefault(); void saveEditor(); }); el('.skill-picker-back').addEventListener('click', closePicker);
   el('.skill-picker-cancel').addEventListener('click', closePicker);
   el('.skill-picker-confirm').addEventListener('click', confirmPicker);
