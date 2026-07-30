@@ -487,9 +487,9 @@
     },
     {
       "id": "CLI_TOOLS",
-      "description": "Decision OS commands available to a pipeline gate for task inspection, operator replies, dynamic skill continuation, progress, output handoff, and authorized completion.",
+      "description": "Decision OS commands available to a pipeline gate for automatic Markdown card reads, task inspection, operator replies, dynamic skill continuation, progress, output handoff, and authorized completion.",
       "createdAt": "2026-07-29T02:38:19.859Z",
-      "updatedAt": "2026-07-29T02:38:19.859Z",
+      "updatedAt": "2026-07-30T10:58:33.861Z",
       "kind": "pipeline-prompt",
       "contentFile": "pipeline-prompts/CLI_TOOLS.md"
     },
