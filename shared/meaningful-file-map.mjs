@@ -108,6 +108,7 @@ export function fileMapKind(path) {
     segments.slice(0, -1).some((segment) => /^(?:tests?|fixtures?)(?:[-_].*)?$/.test(segment))
     || /(?:^|[.-])(?:test|spec)\.[^.]+$/.test(name)
   ) return 'test';
+  if (segments.slice(0, -1).some((segment) => /^(?:docs?|documentation)$/.test(segment))) return 'doc';
   if (documentationExtensionNames.has(extname(name).toLowerCase())) return 'doc';
   return 'code';
 }
