@@ -25,7 +25,7 @@
 3. Prepare a strategy in term of architecture and design patterns
 4. Review the strategy, is it over/under engineered? Bloating? Respecting 100% of the operator intent?
 5. Prepare the changes: map files and symbols
-6. Review once again
+6. Review code and engineering decisions quality
 7. Execute the changes
 8. Debug: Run tests and fix. Preserve intent
 9. Commit, merge, document. Use repo conventions
@@ -113,14 +113,7 @@ behavior
 Tasks, group tasks and symbols+files to changes, why to change them, what to
 change
 
-implementation
-test run -> group failures, investigate with subagents in low effort in parallel
-for group investigation
-
 once all reports, fix all at once
 run tests around the failures only - loop on fix. Never fix / ru nsequentially,
 always grouped
-
 run all tests again
-code quality again
-commit and lessons / teachings about avoidable issues
