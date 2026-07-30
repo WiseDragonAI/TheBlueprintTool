@@ -16,6 +16,8 @@ const workspaceSkillName = 'g12-workspace-skill';
 const workspaceSkillFile = join(proofRoot, '.skills', workspaceSkillName, 'SKILL.md');
 const cleanFederatedSkill = 'project-sync-source-publisher';
 const cleanFederatedSkillFile = `.skills/${cleanFederatedSkill}/SKILL.md`;
+const gateTestName = 'GateTest';
+const gateTestProjectId = 'ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z';
 const evidenceRoot = '/tmp/decision-os-g12-proof';
 const canaryOnly = { skip: !canaryUrl };
 
@@ -208,6 +210,62 @@ test('served Skills editor preserves CodeMirror state and navigates Git revision
 
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
+  } finally {
+    await browser?.close();
+  }
+});
+
+test('served GateTest editor renders the unified authored diff on Dev', { ...canaryOnly, timeout: 60_000 }, async () => {
+  assert.equal(canaryUrl, 'http://127.0.0.1:50151', 'DECISION_OS_URL must select the registered canary.');
+  mkdirSync(evidenceRoot, { recursive: true });
+  let browser: Browser | undefined;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: '/snap/bin/chromium',
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    page.setDefaultTimeout(15_000);
+    const pageErrors: string[] = [];
+    const consoleErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    page.on('console', (entry) => {
+      // WHAT: Retain browser console errors as served-surface failure evidence.
+      // WHY: A visible diff is not accepted when the same editor emits runtime errors.
+      if (entry.type() === 'error') consoleErrors.push(entry.text());
+    });
+
+    const response = await page.goto(
+      `${canaryUrl}/skills?editor=skill&name=${gateTestName}&projectId=${gateTestProjectId}`,
+      { waitUntil: 'domcontentloaded' },
+    );
+    assert.equal(response?.status(), 200);
+    const editor = page.locator('.skill-library-editor-modal[open]');
+    await editor.waitFor({ state: 'visible' });
+    await editor.locator('.cm-content').waitFor({ state: 'visible' });
+    const additions = editor.locator('.cm-authored-addition');
+    await additions.first().waitFor({ state: 'visible' });
+    const presentation = await additions.first().evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        count: document.querySelectorAll('.skill-library-editor-modal[open] .cm-authored-addition').length,
+        change: element.getAttribute('data-change'),
+        label: element.getAttribute('aria-label'),
+        borderLeftColor: style.borderLeftColor,
+        backgroundColor: style.backgroundColor,
+      };
+    });
+    assert.ok(presentation.count > 0);
+    assert.deepEqual(
+      { change: presentation.change, label: presentation.label },
+      { change: 'added', label: 'Added Markdown' },
+    );
+    assert.notEqual(presentation.borderLeftColor, 'rgba(0, 0, 0, 0)');
+    assert.notEqual(presentation.backgroundColor, 'rgba(0, 0, 0, 0)');
+    assert.deepEqual(pageErrors, []);
+    assert.deepEqual(consoleErrors, []);
+    await page.screenshot({ path: join(evidenceRoot, 'gatetest-unified-diff-dev.png'), fullPage: false });
   } finally {
     await browser?.close();
   }
