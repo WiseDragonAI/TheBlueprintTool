@@ -816,7 +816,9 @@ test('active ledger reload keeps optimistic thread notes missing from stale serv
         message: 'Voice uploaded; transcription failed.',
         voiceFileRef: '/tmp/voice.webm',
         status: 'transcription failed',
-        optimistic: true
+        revision: 4,
+        optimistic: true,
+        localVoiceUploadId: 'note-local-voice'
       }]
     }
   };
@@ -826,7 +828,7 @@ test('active ledger reload keeps optimistic thread notes missing from stale serv
   };
   (globalThis as unknown as { fetch: unknown }).fetch = async () => ({
     ok: true,
-    json: async () => ({ cards: [], annotations: [], notes: { 'thread-card-a': [{ id: 'note-local-voice', role: 'operator', message: 'Voice note captured. Uploading audio...', status: 'uploading' }] } })
+    json: async () => ({ cards: [], annotations: [], notes: { 'thread-card-a': [{ id: 'note-local-voice', role: 'operator', message: 'Voice note captured. Uploading audio...', status: 'uploading', revision: 99 }] } })
   });
 
   try {
@@ -834,6 +836,9 @@ test('active ledger reload keeps optimistic thread notes missing from stale serv
     assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Voice uploaded; transcription failed.');
     assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'transcription failed');
     assert.equal(state.activeLedger.notes['thread-card-a'][0].voiceFileRef, '/tmp/voice.webm');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].revision, 4);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].optimistic, true);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].localVoiceUploadId, 'note-local-voice');
   } finally {
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
     (globalThis as unknown as { window: unknown }).window = previousWindow;

@@ -455,6 +455,88 @@ test('active thread bootstrap requires response ownership before installing an o
   }]);
 });
 
+test('active thread refresh installs forward same-ID voice state without replacing optimistic text state', async () => {
+  installRuntimeDom();
+  resetRuntimeState();
+  state.activeLedger.notes['thread-card-a'] = [
+    {
+      id: 'note-voice',
+      role: 'operator',
+      message: 'Voice note captured. Uploading audio...',
+      status: 'uploading',
+      revision: 1,
+      optimistic: true,
+      localVoiceUploadId: 'note-voice',
+      imageSizes: {
+        '/.decision-os/thread-images/local.png': { width: 180, height: 90 }
+      }
+    },
+    {
+      id: 'note-text',
+      role: 'operator',
+      message: 'Local optimistic text.',
+      status: 'committing',
+      optimistic: true
+    }
+  ];
+  globalThis.fetch = (async () => revisionResponse({
+    ...structuredClone(state.activeLedger),
+    notes: {
+      'thread-card-a': [
+        {
+          id: 'note-voice',
+          role: 'operator',
+          message: 'Durable transcript.',
+          voiceFileRef: '/tmp/note-voice.webm',
+          status: 'transcribed',
+          revision: 4,
+          acceptedAt: '2026-07-30T13:00:00.000Z',
+          completedAt: '2026-07-30T13:00:04.000Z',
+          imageSizes: {
+            '/.decision-os/thread-images/server.png': { width: 240, height: 120 }
+          }
+        },
+        {
+          id: 'note-text',
+          role: 'operator',
+          message: 'Older server text.',
+          status: 'committed'
+        }
+      ]
+    }
+  }, 2)) as typeof fetch;
+  const { loadActiveThreadSlice } = await import('../../src/runtime/thread/effect/load-active-thread-slice.js');
+  const scope = {
+    projectId: '',
+    replicaNodeId: '',
+    ledgerId: 'specs',
+    threadId: 'thread-card-a',
+    contentFile: '.decision-os/threads/specs/thread-card-a.md',
+  };
+
+  assert.equal(await loadActiveThreadSlice(scope), true);
+  const [voiceNote, textNote] = state.activeLedger.notes['thread-card-a'];
+  assert.deepEqual(voiceNote, {
+    id: 'note-voice',
+    role: 'operator',
+    message: 'Durable transcript.',
+    voiceFileRef: '/tmp/note-voice.webm',
+    status: 'transcribed',
+    revision: 4,
+    acceptedAt: '2026-07-30T13:00:00.000Z',
+    completedAt: '2026-07-30T13:00:04.000Z',
+    imageSizes: {
+      '/.decision-os/thread-images/server.png': { width: 240, height: 120 },
+      '/.decision-os/thread-images/local.png': { width: 180, height: 90 }
+    },
+    localVoiceUploadId: 'note-voice',
+    optimistic: false
+  });
+  assert.equal(textNote.message, 'Local optimistic text.');
+  assert.equal(textNote.status, 'committing');
+  assert.equal(textNote.optimistic, true);
+});
+
 test('event-triggered thread refresh rejects a causally stale task slice and accepts its acknowledgement', async () => {
   installRuntimeDom();
   resetRuntimeState();
