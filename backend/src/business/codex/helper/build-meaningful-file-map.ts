@@ -116,7 +116,8 @@ function compareText(left: string, right: string): number {
 }
 
 function displaySegment(segment: string): string {
-  return JSON.stringify(segment).slice(1, -1);
+  return JSON.stringify(segment).slice(1, -1).replace(/[^\x20-\x7e]/g, (character) =>
+    `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
 }
 
 function isMeaningfulPath(path: string): boolean {
@@ -145,12 +146,11 @@ function insertPath(root: FileMapNode, path: string): void {
   }
 }
 
-function renderChildren(node: FileMapNode, prefix: string): string[] {
+function renderChildren(node: FileMapNode, depth: number): string[] {
   const entries = [...node.children.entries()].sort(([left], [right]) => compareText(left, right));
-  return entries.flatMap(([name, child], index) => {
-    const last = index === entries.length - 1;
-    const line = `${prefix}${last ? '└── ' : '├── '}${displaySegment(name)}${child.file ? '' : '/'}`;
-    return [line, ...renderChildren(child, `${prefix}${last ? '    ' : '│   '}`)];
+  return entries.flatMap(([name, child]) => {
+    const line = `${'  '.repeat(depth)}${displaySegment(name)}${child.file ? '' : '/'}`;
+    return [line, ...renderChildren(child, depth + 1)];
   });
 }
 
@@ -174,14 +174,14 @@ export function meaningfulGitPaths(workspaceRoot: string): string[] {
 export function buildMeaningfulFileMap(workspaceRoot: string): string {
   try {
     const paths = meaningfulGitPaths(workspaceRoot);
-    if (paths.length === 0) return '.\n└── (no meaningful code or documentation files)';
+    if (paths.length === 0) return '.\n  (no meaningful code or documentation files)';
     const retained = paths.slice(0, maximumMeaningfulPaths);
     const root: FileMapNode = { children: new Map(), file: false };
     for (const path of retained) insertPath(root, path);
-    const tree = ['.', ...renderChildren(root, '')];
-    if (paths.length > retained.length) tree.push(`… ${paths.length - retained.length} additional meaningful paths omitted.`);
+    const tree = ['.', ...renderChildren(root, 1)];
+    if (paths.length > retained.length) tree.push(`... ${paths.length - retained.length} additional meaningful paths omitted.`);
     return tree.join('\n');
   } catch {
-    return '.\n└── (file map unavailable: Git could not enumerate this workspace)';
+    return '.\n  (file map unavailable: Git could not enumerate this workspace)';
   }
 }

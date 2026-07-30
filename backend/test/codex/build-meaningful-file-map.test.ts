@@ -21,6 +21,7 @@ test('meaningful file map uses Git ignore rules and renders source plus document
     execFileSync('git', ['init', '-q'], { cwd: workspace });
     write(workspace, '.gitignore', ['ignored/', '*.generated.ts', ''].join('\n'));
     write(workspace, 'README.md');
+    write(workspace, 'docs/café.md');
     write(workspace, 'docs/guide.md');
     write(workspace, 'src/index.ts');
     write(workspace, 'src/nested/view.tsx');
@@ -41,6 +42,7 @@ test('meaningful file map uses Git ignore rules and renders source plus document
     assert.deepEqual(meaningfulGitPaths(workspace), [
       '.gitignore',
       'README.md',
+      'docs/café.md',
       'docs/guide.md',
       'src/index.ts',
       'src/nested/view.tsx',
@@ -48,17 +50,19 @@ test('meaningful file map uses Git ignore rules and renders source plus document
     ]);
     assert.equal(buildMeaningfulFileMap(workspace), [
       '.',
-      '├── .gitignore',
-      '├── README.md',
-      '├── docs/',
-      '│   └── guide.md',
-      '├── src/',
-      '│   ├── index.ts',
-      '│   └── nested/',
-      '│       └── view.tsx',
-      '└── tests/',
-      '    └── index.test.ts',
+      '  .gitignore',
+      '  README.md',
+      '  docs/',
+      '    caf\\u00e9.md',
+      '    guide.md',
+      '  src/',
+      '    index.ts',
+      '    nested/',
+      '      view.tsx',
+      '  tests/',
+      '    index.test.ts',
     ].join('\n'));
+    assert.doesNotMatch(buildMeaningfulFileMap(workspace), /[^\x00-\x7f]/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -69,7 +73,7 @@ test('meaningful file map stays failsafe outside a Git work tree', () => {
   try {
     assert.equal(
       buildMeaningfulFileMap(workspace),
-      '.\n└── (file map unavailable: Git could not enumerate this workspace)',
+      '.\n  (file map unavailable: Git could not enumerate this workspace)',
     );
   } finally {
     rmSync(workspace, { recursive: true, force: true });
