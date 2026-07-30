@@ -264,6 +264,13 @@ GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 - Correcting means fixing the technical debt.
 - Do not propose hiding, disabling, or bypassing the behavior under investigation as an optimization. That is avoiding the bug, not solving it, unless the operator explicitly asks for a degraded-mode tradeoff.
 
+## Branch Comment Contract
+
+- Every control-flow branch and every `if` statement must have adjacent `WHAT:` and `WHY:` code comments.
+- `WHAT:` must identify the exact decision made by the branch.
+- `WHY:` must record the verified invariant, failure mode, or requirement that makes the branch necessary.
+- Agents must add or update these comments whenever they add or modify a branch or `if` statement.
+
 ## Code Smells
 
 - It is a code smell to do expensive operations for many more elements than are needed in the end.
