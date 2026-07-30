@@ -356,6 +356,43 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
   }
 });
 
+test('Responsive pipeline editing preserves unsaved metadata across step addition and removal.', { timeout: 30_000 }, async () => {
+  const fixture = createFixture();
+  let server: ServerHandle | undefined;
+  let browser: Browser | undefined;
+  try {
+    server = await startDecisionOsServer(fixture);
+    browser = await launchBrowser();
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`${server.url}/pipelines`, { waitUntil: 'domcontentloaded' });
+
+    const library = page.locator('.pipelines-modal');
+    await library.waitFor({ state: 'visible' });
+    await library.locator('.pipeline-new').click();
+
+    const editor = page.locator('.pipeline-editor-modal');
+    await editor.waitFor({ state: 'visible' });
+    const name = editor.locator('[name="pipeline-name"]');
+    const purpose = editor.locator('[name="pipeline-purpose"]');
+    await name.fill('Metadata retention pipeline');
+    await purpose.fill('Keep this purpose through step re-renders.');
+
+    await editor.locator('.pipeline-add-step').click();
+    assert.equal(await name.inputValue(), 'Metadata retention pipeline');
+    assert.equal(await purpose.inputValue(), 'Keep this purpose through step re-renders.');
+    assert.equal(await editor.locator('.pipeline-step').count(), 1);
+
+    await editor.getByRole('button', { name: 'Remove step', exact: true }).click();
+    assert.equal(await name.inputValue(), 'Metadata retention pipeline');
+    assert.equal(await purpose.inputValue(), 'Keep this purpose through step re-renders.');
+    assert.equal(await editor.locator('.pipeline-step').count(), 0);
+  } finally {
+    await browser?.close();
+    if (server) await stopDecisionOsServer(server.process);
+    rmSync(fixture.workspace, { recursive: true, force: true });
+  }
+});
+
 test('Reusable step pipelines preserve defaults and publish visible execution progression.', { timeout: 90_000 }, async () => {
   await assertFrontendSpec('Playwright for real browser interaction tests', 'cef65c97', 'canvas');
   const fixture = createFixture();
