@@ -12,6 +12,7 @@ import { createHttpServer } from '@backend/business/server/application/create-de
 import { createFederationNodeConnector } from '@backend/business/federation/helper/federation-node-connector.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
 import { readRepositorySyncStatus } from '@backend/business/project-sync/helper/repository-sync-status.js';
+import { canonicalDecisionOsGitIgnore } from '@backend/business/server/helper/ensure-decision-os-git-repository.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import type { CodexPipelineRun } from '../../../shared/schemas/codex-pipeline-types.js';
 
@@ -551,6 +552,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     '.decision-os/task-state/',
     '',
   ].join('\n'));
+  writeFileSync(join(betaRoot, '.decision-os', '.gitignore'), canonicalDecisionOsGitIgnore);
   execFileSync('git', ['-C', betaRoot, 'add', '.']);
   execFileSync('git', ['-C', betaRoot, 'commit', '-m', 'initialize beta project']);
   execFileSync('git', ['-C', betaRoot, 'remote', 'add', 'origin', betaOrigin]);

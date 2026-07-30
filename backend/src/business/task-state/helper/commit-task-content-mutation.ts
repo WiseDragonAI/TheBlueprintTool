@@ -40,7 +40,6 @@ export function taskContentAutoCommitEnabled(settings: unknown): boolean {
 export async function commitTaskContentMutation(input: {
   enabled: boolean;
   projectId: string;
-  projectRoot: string;
   decisionOsRoot: string;
   mutation: LedgerMutation;
   changedContentFiles: readonly string[];
@@ -53,7 +52,7 @@ export async function commitTaskContentMutation(input: {
   if (files.length === 0) return null;
   for (const file of files) if (!existsSync(file)) throw new Error(`task_content_git_file_missing:${file}`);
   return await commitAuthoredFileRevision({
-    repositoryRoot: input.projectRoot,
+    repositoryRoot: input.decisionOsRoot,
     ownerId: `task-content:${input.projectId}:${mutationIdentity(input.mutation)}`,
     subject: subject(input.mutation),
     confirmedFiles: files.map((file) => ({ file, contentRevision: sha256AuthoredBytes(readFileSync(file)) })),

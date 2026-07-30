@@ -24,6 +24,10 @@ test('canary task creation and thread append each produce a focused authored com
   git(workspace, ['init', '-q']);
   git(workspace, ['add', '.decision-os/state.json', '.decision-os/tasks.json']);
   execFileSync('git', ['-C', workspace, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'Initialize test workspace']);
+  writeFileSync(join(workspace, 'operator.txt'), 'approved staged bytes\n');
+  git(workspace, ['add', 'operator.txt']);
+  const parentHead = git(workspace, ['rev-parse', 'HEAD']);
+  const parentIndex = git(workspace, ['diff', '--cached', '--binary']);
 
   process.chdir(workspace);
   const runtime: Record<string, unknown> = {};
@@ -71,12 +75,14 @@ test('canary task creation and thread append each produce a focused authored com
   const creation = await creationResponse.json() as { gitRevision?: { commit: string; subject: string } };
   assert.match(creation.gitRevision?.commit ?? '', /^[a-f0-9]{40,64}$/);
   assert.equal(creation.gitRevision?.subject, `Create Decision OS task ${cardId}`);
-  assert.equal(git(workspace, ['status', '--short', '--', `.decision-os/cards/tasks/${cardId}.md`, `.decision-os/threads/tasks/${threadId}.md`]), '');
+  assert.equal(git(decisionOsRoot, ['status', '--short', '--', `cards/tasks/${cardId}.md`, `threads/tasks/${threadId}.md`]), '');
   assert.deepEqual(
-    git(workspace, ['show', '--format=', '--name-only', creation.gitRevision!.commit]).split('\n').filter(Boolean).sort(),
-    [`.decision-os/cards/tasks/${cardId}.md`, `.decision-os/threads/tasks/${threadId}.md`],
+    git(decisionOsRoot, ['show', '--format=', '--name-only', creation.gitRevision!.commit]).split('\n').filter(Boolean).sort(),
+    [`cards/tasks/${cardId}.md`, `threads/tasks/${threadId}.md`],
   );
-  assert.equal(git(workspace, ['ls-files', '.decision-os/task-state/**']), '');
+  assert.equal(git(decisionOsRoot, ['ls-files', 'task-state/**']), '');
+  assert.equal(git(workspace, ['rev-parse', 'HEAD']), parentHead);
+  assert.equal(git(workspace, ['diff', '--cached', '--binary']), parentIndex);
 
   const noteResponse = await fetch(`${baseUrl}/p/${projectId}/decision-os/tasks`, {
     method: 'PATCH',
@@ -88,14 +94,16 @@ test('canary task creation and thread append each produce a focused authored com
   assert.match(note.gitRevision?.commit ?? '', /^[a-f0-9]{40,64}$/);
   assert.notEqual(note.gitRevision?.commit, creation.gitRevision?.commit);
   assert.equal(note.gitRevision?.subject, `Record thread message ${threadId}`);
-  assert.equal(git(workspace, ['status', '--short', '--', `.decision-os/cards/tasks/${cardId}.md`, `.decision-os/threads/tasks/${threadId}.md`]), '');
+  assert.equal(git(decisionOsRoot, ['status', '--short', '--', `cards/tasks/${cardId}.md`, `threads/tasks/${threadId}.md`]), '');
   assert.deepEqual(
-    git(workspace, ['show', '--format=', '--name-only', note.gitRevision!.commit]).split('\n').filter(Boolean),
-    [`.decision-os/threads/tasks/${threadId}.md`],
+    git(decisionOsRoot, ['show', '--format=', '--name-only', note.gitRevision!.commit]).split('\n').filter(Boolean),
+    [`threads/tasks/${threadId}.md`],
   );
   assert.match(readFileSync(join(decisionOsRoot, 'threads', 'tasks', `${threadId}.md`), 'utf8'), /Persist this message\./);
   assert.deepEqual(
-    git(workspace, ['log', '-2', '--format=%s']).split('\n'),
+    git(decisionOsRoot, ['log', '-2', '--format=%s']).split('\n'),
     [`Record thread message ${threadId}`, `Create Decision OS task ${cardId}`],
   );
+  assert.equal(git(workspace, ['rev-parse', 'HEAD']), parentHead);
+  assert.equal(git(workspace, ['diff', '--cached', '--binary']), parentIndex);
 });

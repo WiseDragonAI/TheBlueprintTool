@@ -60,7 +60,6 @@ import {
   type SkillGitHistoryPage,
   type SkillGitRevision,
   type SkillGitRevisionDetail,
-  type SkillRevisionPersistence,
 } from './skill-git-revisions.js';
 import { serverPipelineDecisionOsRoot } from './server-pipeline-catalog.js';
 import { readProjectRegistry } from '../../server/helper/project-registry.js';
@@ -575,7 +574,6 @@ export async function readCodexSkillRevisionHistory(input: {
       file: skill.skillFile,
       cursor: input.cursor,
       limit: input.limit,
-      allowUnversioned: skill.source === 'pipeline-prompt',
     });
     return { ok: true, statusCode: 200, history: page.revisions, nextCursor: page.nextCursor };
   } catch (error) {
@@ -715,15 +713,18 @@ export async function createCodexSkillLibrary(input: {
   let createdContentRevision = '';
   let promptMetadataRevision = '';
   try {
-    const ownerRoot = kind === 'federated-skill' ? serverRoot! : workspaceRoot;
+    const ownerRoot = kind === 'federated-skill'
+      ? serverRoot!
+      : kind === 'pipeline-prompt'
+        ? promptDecisionOsRoot
+        : workspaceRoot;
     const futureFile = kind === 'pipeline-prompt'
       ? resolve(promptDecisionOsRoot, 'pipeline-prompts', `${name}.md`)
       : resolve(ownerRoot, '.skills', name, 'SKILL.md');
-    const revisionPersistence = await assertSkillFileRevisionWritable({
+    await assertSkillFileRevisionWritable({
       file: futureFile,
       additionalFiles: kind === 'pipeline-prompt' && promptMetadataExisted ? [promptMetadataFile] : [],
       repositoryRoot: ownerRoot,
-      allowUnversioned: kind === 'pipeline-prompt',
     });
     if (kind === 'pipeline-prompt') {
       const before = readCodexPipelineStore({
@@ -782,16 +783,14 @@ export async function createCodexSkillLibrary(input: {
       atomicCreateTextFile(createdFile, markdown);
       createdContentRevision = skillRevision(markdown);
     }
-    if (revisionPersistence === 'git') {
-      await commitSkillFileRevision({
-        file: createdFile,
-        contentRevision: createdContentRevision,
-        additionalFiles: kind === 'pipeline-prompt'
-          ? [{ file: promptMetadataFile, contentRevision: promptMetadataRevision }]
-          : [],
-        subject: `Create ${kind} ${name}`,
-      });
-    }
+    await commitSkillFileRevision({
+      file: createdFile,
+      contentRevision: createdContentRevision,
+      additionalFiles: kind === 'pipeline-prompt'
+        ? [{ file: promptMetadataFile, contentRevision: promptMetadataRevision }]
+        : [],
+      subject: `Create ${kind} ${name}`,
+    });
   } catch (error) {
     const code = error && typeof error === 'object' ? text((error as AnyRecord).code) : '';
     const currentRevision = createdFile && existsSync(createdFile) ? skillRevision(readFileSync(createdFile, 'utf8')) : skillRevision(markdown);
@@ -877,9 +876,11 @@ export async function saveCodexSkillLibrary(input: {
   const metadataDecisionOsRoot = skill.source === 'server' || skill.source === 'pipeline-prompt'
     ? pipelinePromptDecisionOsRoot(input)
     : input.decisionOsRoot;
-  const ownerRepositoryRoot = skill.source === 'server' || skill.source === 'pipeline-prompt'
+  const ownerRepositoryRoot = skill.source === 'server'
     ? dirname(metadataDecisionOsRoot)
-    : workspaceRoot;
+    : skill.source === 'pipeline-prompt'
+      ? metadataDecisionOsRoot
+      : workspaceRoot;
   const before = readCodexPipelineStore({ decisionOsRoot: metadataDecisionOsRoot, availableSkillNames });
   assertCodexPipelineStoreAvailable(before);
   const priorRecord = before.store.skillLibrary.find((entry) => entry.skillName === skill.name);
@@ -1013,13 +1014,11 @@ export async function saveCodexSkillLibrary(input: {
   let contentWritten = false;
   let confirmedContentRevision = '';
   let confirmedMetadataRevision = '';
-  let revisionPersistence: SkillRevisionPersistence = 'git';
   try {
-    revisionPersistence = await assertSkillFileRevisionWritable({
+    await assertSkillFileRevisionWritable({
       file: skill.skillFile,
       additionalFiles: skill.source === 'pipeline-prompt' ? [metadataFile] : [],
       repositoryRoot: ownerRepositoryRoot,
-      allowUnversioned: skill.source === 'pipeline-prompt',
     });
     if (skill.source === 'pipeline-prompt') {
       confirmedContentRevision = writePipelinePrompt({
@@ -1076,18 +1075,16 @@ export async function saveCodexSkillLibrary(input: {
       atomicReplaceTextFile(skill.skillFile, currentMarkdown);
       throw error;
     }
-    if (revisionPersistence === 'git') {
-      await input.beforeGitRevision?.();
-      await commitSkillFileRevision({
-        file: skill.skillFile,
-        contentRevision: confirmedContentRevision,
-        additionalFiles: skill.source === 'pipeline-prompt'
-          ? [{ file: metadataFile, contentRevision: confirmedMetadataRevision }]
-          : [],
-        subject: `Revise ${contentKind(skill)} ${skill.name}`,
-        failureAt: input.gitFailureAt,
-      });
-    }
+    await input.beforeGitRevision?.();
+    await commitSkillFileRevision({
+      file: skill.skillFile,
+      contentRevision: confirmedContentRevision,
+      additionalFiles: skill.source === 'pipeline-prompt'
+        ? [{ file: metadataFile, contentRevision: confirmedMetadataRevision }]
+        : [],
+      subject: `Revise ${contentKind(skill)} ${skill.name}`,
+      failureAt: input.gitFailureAt,
+    });
   } catch (error) {
     if (error instanceof SkillRevisionConflict) {
       return { ok: false, statusCode: 409, code: 'content_revision_conflict', error: error.message, skillName: input.skillName, currentRevision: error.currentRevision };
