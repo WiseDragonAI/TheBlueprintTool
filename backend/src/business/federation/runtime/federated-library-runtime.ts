@@ -56,7 +56,7 @@ export function createFederatedLibraryRuntime(input: {
   applyOwnedMetadata: <T extends Skill>(skills: T[]) => T[];
   initialize: () => void;
   invalidateIndex: () => void;
-  publishAuthoredSkill: (skillName: string, operation: 'create' | 'save' | 'retry') => Promise<AnyRecord>;
+  publishAuthoredSkill: (skillName: string, operation: 'create' | 'save' | 'retry') => void;
   readSkillIndex: () => Promise<FederatedSkillExportIndex>;
   stop: () => void;
   synchronize: (forceRefresh?: boolean) => Promise<void>;
@@ -224,14 +224,12 @@ export function createFederatedLibraryRuntime(input: {
     });
     return run;
   };
-  const publishAuthoredSkill = async (
+  const publishAuthoredSkill = (
     skillName: string,
     operation: 'create' | 'save' | 'retry',
-  ): Promise<AnyRecord> => {
-    catalog.invalidate();
-    input.federation()?.publishManifest();
-    const failed = (error: unknown): AnyRecord => {
-      const incident = input.recordIncident({
+  ): void => {
+    const failed = (error: unknown): void => {
+      input.recordIncident({
         severity: 'warning',
         scope: `federated-skill-publication:${skillName}`,
         component: 'federated-library-sync',
@@ -240,30 +238,32 @@ export function createFederatedLibraryRuntime(input: {
         error,
         context: { skillName, operation },
       });
-      return {
-        status: 'failed',
-        retryable: true,
-        retryPath: '/api/federation/libraries/synchronize',
-        incidentId: incident.id,
-      };
     };
-    if (input.federation()?.status().phase !== 'connected') {
-      return failed(new Error('The federation relay is not connected.'));
-    }
-    try {
-      await synchronize(true);
-      const status = input.runtime.federatedLibrarySyncStatus as AnyRecord | undefined;
-      if (status?.phase !== 'synchronized') {
-        return failed(new Error('Federated library synchronization did not reach synchronized state.'));
+    const publish = async (): Promise<void> => {
+      try {
+        catalog.invalidate();
+        input.federation()?.publishManifest();
+        if (input.federation()?.status().phase !== 'connected') {
+          failed(new Error('The federation relay is not connected.'));
+          return;
+        }
+        await synchronize(true);
+        const status = input.runtime.federatedLibrarySyncStatus as AnyRecord | undefined;
+        if (status?.phase !== 'synchronized') {
+          failed(new Error('Federated library synchronization did not reach synchronized state.'));
+          return;
+        }
+        input.incidentLedger.resolveScope(
+          `federated-skill-publication:${skillName}`,
+          'Federated skill publication succeeded.',
+        );
+      } catch (error) {
+        failed(error);
       }
-      input.incidentLedger.resolveScope(
-        `federated-skill-publication:${skillName}`,
-        'Federated skill publication succeeded.',
-      );
-      return { status: 'published' };
-    } catch (error) {
-      return failed(error);
-    }
+    };
+    // WHAT: Detach federation convergence from the completed local authoring response.
+    // WHY: A slow or unavailable peer must never retain the operator's save request.
+    void publish().catch(() => undefined);
   };
   return {
     applyOwnedDetail: catalog.applyOwnedDetail,

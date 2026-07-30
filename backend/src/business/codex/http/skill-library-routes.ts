@@ -49,7 +49,7 @@ export async function handleCodexSkillLibraryRoutes(input: {
   publishAuthoredSkill: (
     skillName: string,
     operation: PublicationOperation,
-  ) => Promise<AnyRecord>;
+  ) => void;
   recordRevisionFailure: (skillName: string, result: AnyRecord) => void;
   request: IncomingMessage;
   requestRuntime: AnyRecord;
@@ -64,18 +64,16 @@ export async function handleCodexSkillLibraryRoutes(input: {
     const runtime = shared
       ? { ...input.requestRuntime, decisionOsRoot: input.masterDecisionOsRoot, projectId: '' }
       : input.requestRuntime;
-    let result = input.applyOwnedDetail(await createCodexSkillLibraryController({
+    const result = input.applyOwnedDetail(await createCodexSkillLibraryController({
       action_payload: payload,
       runtime_state: runtime,
     }));
     const skill = result.skill as AnyRecord | undefined;
-    if (result.ok === true && skill?.contentKind === 'federated-skill') {
-      result = {
-        ...result,
-        publication: await input.publishAuthoredSkill(String(skill.name ?? ''), 'create'),
-      };
-    }
+    const publishSkillName = result.ok === true && skill?.contentKind === 'federated-skill'
+      ? String(skill.name ?? '')
+      : '';
     sendResult(input.response, result, 201);
+    if (publishSkillName) input.publishAuthoredSkill(publishSkillName, 'create');
     return HTTP_ROUTE_HANDLED;
   }
 
@@ -88,19 +86,15 @@ export async function handleCodexSkillLibraryRoutes(input: {
     const runtime = serverOwned
       ? { ...input.requestRuntime, decisionOsRoot: input.masterDecisionOsRoot, projectId: '' }
       : input.requestRuntime;
-    let result = input.applyOwnedDetail(await retryCodexSkillRevisionController({
+    const result = input.applyOwnedDetail(await retryCodexSkillRevisionController({
       action_payload: { ...await readJsonObject(input.request), skillName },
       runtime_state: runtime,
     }));
     const skill = result.skill as AnyRecord | undefined;
-    if (result.ok === true && skill?.contentKind === 'federated-skill') {
-      result = {
-        ...result,
-        publication: await input.publishAuthoredSkill(skillName, 'retry'),
-      };
-    }
+    const publish = result.ok === true && skill?.contentKind === 'federated-skill';
     input.response.setHeader('cache-control', 'no-store');
     sendResult(input.response, result, 200);
+    if (publish) input.publishAuthoredSkill(skillName, 'retry');
     return HTTP_ROUTE_HANDLED;
   }
 
@@ -151,7 +145,7 @@ export async function handleCodexSkillLibraryRoutes(input: {
     && input.request.method === 'PUT') {
     const skillName = decodeRouteSegment(input.url.slice('/api/codex/server-skills/'.length));
     const payload = await readJsonObject(input.request);
-    let result = await saveCodexSkillLibraryController({
+    const result = await saveCodexSkillLibraryController({
       action_payload: { ...payload, skillName },
       runtime_state: {
         ...input.requestRuntime,
@@ -159,14 +153,13 @@ export async function handleCodexSkillLibraryRoutes(input: {
         projectId: '',
       },
     });
+    const skill = result.skill as AnyRecord | undefined;
     if (result.ok === false && result.recovery) input.recordRevisionFailure(skillName, result);
-    if (result.ok === true && Object.prototype.hasOwnProperty.call(payload, 'markdown')) {
-      result = {
-        ...result,
-        publication: await input.publishAuthoredSkill(skillName, 'save'),
-      };
-    }
+    const publish = result.ok === true
+      && Object.prototype.hasOwnProperty.call(payload, 'markdown')
+      && skill?.contentKind === 'federated-skill';
     sendResult(input.response, result, 200);
+    if (publish) input.publishAuthoredSkill(skillName, 'save');
     return HTTP_ROUTE_HANDLED;
   }
 
@@ -190,21 +183,17 @@ export async function handleCodexSkillLibraryRoutes(input: {
     const runtime = metadataOnly
       ? { ...input.requestRuntime, decisionOsRoot: input.masterDecisionOsRoot, projectId: '' }
       : input.requestRuntime;
-    let result = input.applyOwnedDetail(await saveCodexSkillLibraryController({
+    const result = input.applyOwnedDetail(await saveCodexSkillLibraryController({
       action_payload: { ...payload, skillName },
       runtime_state: runtime,
     }));
     const skill = result.skill as AnyRecord | undefined;
     if (result.ok === false && result.recovery) input.recordRevisionFailure(skillName, result);
-    if (result.ok === true
+    const publish = result.ok === true
       && Object.prototype.hasOwnProperty.call(payload, 'markdown')
-      && skill?.contentKind === 'federated-skill') {
-      result = {
-        ...result,
-        publication: await input.publishAuthoredSkill(skillName, 'save'),
-      };
-    }
+      && skill?.contentKind === 'federated-skill';
     sendResult(input.response, result, 200);
+    if (publish) input.publishAuthoredSkill(skillName, 'save');
     return HTTP_ROUTE_HANDLED;
   }
 

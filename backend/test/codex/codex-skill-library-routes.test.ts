@@ -54,6 +54,47 @@ async function closeServer(server: Server): Promise<void> {
   await once(server, 'close');
 }
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  reject: (error: unknown) => void;
+  resolve: (value: T | PromiseLike<T>) => void;
+} {
+  let reject!: (error: unknown) => void;
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    reject = rejectPromise;
+    resolve = resolvePromise;
+  });
+  return { promise, reject, resolve };
+}
+
+async function settleWithin<T>(promise: Promise<T>, description: string, timeoutMs = 1_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${description} did not settle within ${timeoutMs}ms.`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function waitForValue<T>(read: () => Promise<T | undefined>, description: string, timeoutMs = 2_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = await read();
+    if (value !== undefined) return value;
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 10);
+      timer.unref?.();
+    });
+  }
+  throw new Error(`${description} was not observed within ${timeoutMs}ms.`);
+}
+
 test('skill library routes save editable Markdown and defaults without exposing paths or partially writing failures', async () => {
   const previousCodexHome = process.env.CODEX_HOME;
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-skill-library-'));
@@ -493,7 +534,7 @@ test('skill creation separates pipeline-only prompts from natural discovery and 
   }
 });
 
-test('server startup initializes a child repository for pipeline prompts beneath a non-Git root', async () => {
+test('server startup initializes a child repository and pipeline-prompt save never enters federation publication', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-child-prompt-'));
   const decisionOsRoot = join(workspace, '.decision-os');
   mkdirSync(decisionOsRoot, { recursive: true });
@@ -543,6 +584,35 @@ test('server startup initializes a child repository for pipeline prompts beneath
     assert.equal(revised.skill.gitRevision?.commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' }).trim());
     assert.equal(revised.skill.history.length, 2);
 
+    const connector = runtime.federationNodeConnector as Record<string, any>;
+    let publicationRequestCount = 0;
+    const unexpectedPublication = deferred<never>();
+    connector.status = () => ({ phase: 'connected' });
+    connector.nodes = () => [{ nodeId: 'held-peer', nodeLabel: 'Held peer', online: true, projects: [] }];
+    connector.request = async () => {
+      publicationRequestCount += 1;
+      return await unexpectedPublication.promise;
+    };
+    const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const httpMarkdown = '# Saved through the pipeline prompt route\n';
+    const response = await settleWithin(fetch(`${baseUrl}/api/codex/server-skills/local-controller`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        revision: revised.skill.revision,
+        markdown: httpMarkdown,
+        defaultCodexModel: null,
+        defaultCodexEffort: null,
+      }),
+    }), 'pipeline prompt save response');
+    assert.equal(response.status, 200);
+    const saved = await response.json() as Record<string, any>;
+    assert.equal(saved.ok, true);
+    assert.equal(saved.skill.contentKind, 'pipeline-prompt');
+    assert.equal(readFileSync(promptFile, 'utf8'), httpMarkdown);
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    assert.equal(publicationRequestCount, 0);
+
     const history = await readCodexSkillRevisionHistory({
       decisionOsRoot,
       runtime: { serverRoot: workspace },
@@ -550,7 +620,7 @@ test('server startup initializes a child repository for pipeline prompts beneath
     });
     assert.equal(history.ok, true);
     if (history.ok) {
-      assert.equal(history.history.length, 2);
+      assert.equal(history.history.length, 3);
       assert.equal(history.nextCursor, null);
     }
   } finally {
@@ -808,7 +878,8 @@ test('a Git add failure preserves authored bytes and returns scoped recovery evi
     const server = runtime.server as Server;
     await once(server, 'listening');
     try {
-      const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/codex/skill-library/recoverable-skill/revisions/retry`, {
+      const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const response = await fetch(`${baseUrl}/api/codex/skill-library/recoverable-skill/revisions/retry`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -821,16 +892,14 @@ test('a Git add failure preserves authored bytes and returns scoped recovery evi
       assert.equal(recovered.ok, true);
       assert.equal(recovered.skill.revision, result.recovery?.contentRevision);
       assert.notEqual(recovered.skill.gitRevision?.commit, head);
-      assert.deepEqual({
-        status: recovered.publication.status,
-        retryable: recovered.publication.retryable,
-        retryPath: recovered.publication.retryPath,
-      }, {
-        status: 'failed',
-        retryable: true,
-        retryPath: '/api/federation/libraries/synchronize',
-      });
-      assert.match(recovered.publication.incidentId, /^incident-/);
+      assert.equal(recovered.publication.status, 'not-applicable');
+      await waitForValue(async () => {
+        const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((incidentResponse) => incidentResponse.json()) as Record<string, any>;
+        return incidents.incidents.find((incident: Record<string, any>) =>
+          incident.scope === 'federated-skill-publication:recoverable-skill'
+          && incident.code === 'federated_skill_publication_failed'
+          && incident.context?.operation === 'retry');
+      }, 'background retry publication incident');
       assert.equal(readFileSync(skillFile, 'utf8'), updated);
       assert.equal(Number(execFileSync('git', ['rev-list', '--count', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim()), commitCount + 1);
       assert.deepEqual(
@@ -927,7 +996,7 @@ test('content saves expose stable no-op, oversized, locked, and staged states wi
   }
 });
 
-test('committed federated create and save routes preserve local success across relay publication failure', async () => {
+test('committed federated create and save routes respond before observed relay publication settles', async () => {
   const serverRoot = mkdtempSync(join(tmpdir(), 'decision-os-publication-failure-'));
   const decisionOsRoot = join(serverRoot, '.decision-os');
   mkdirSync(decisionOsRoot, { recursive: true });
@@ -944,10 +1013,13 @@ test('committed federated create and save routes preserve local success across r
     const connector = runtime.federationNodeConnector as Record<string, any>;
     connector.status = () => ({ phase: 'connected' });
     connector.nodes = () => [{ nodeId: 'unavailable-peer', nodeLabel: 'Unavailable peer', online: true, projects: [] }];
+    const createPublicationStarted = deferred<void>();
+    const createPublication = deferred<never>();
     connector.request = async () => {
-      throw new Error('Injected relay request failure after local commit.');
+      createPublicationStarted.resolve(undefined);
+      return await createPublication.promise;
     };
-    const response = await fetch(`${baseUrl}/api/codex/skill-library`, {
+    const response = await settleWithin(fetch(`${baseUrl}/api/codex/skill-library`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -956,20 +1028,13 @@ test('committed federated create and save routes preserve local success across r
         instructions: 'Preserve the local revision.',
         contentKind: 'federated-skill',
       }),
-    });
+    }), 'federated skill create response');
     assert.equal(response.status, 201);
     const body = await response.json() as Record<string, any>;
     assert.equal(body.ok, true);
-    assert.deepEqual({
-      status: body.publication.status,
-      retryable: body.publication.retryable,
-      retryPath: body.publication.retryPath,
-    }, {
-      status: 'failed',
-      retryable: true,
-      retryPath: '/api/federation/libraries/synchronize',
-    });
-    assert.match(body.publication.incidentId, /^incident-/);
+    assert.equal(body.publication.status, 'not-applicable');
+    await settleWithin(createPublicationStarted.promise, 'background create publication start');
+    createPublication.reject(new Error('Injected relay request failure after local create commit.'));
     assert.equal(readFileSync(join(serverRoot, '.skills', 'published-locally', 'SKILL.md'), 'utf8'), body.skill.markdown);
     assert.equal(body.skill.gitRevision.commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: serverRoot, encoding: 'utf8' }).trim());
     assert.deepEqual(
@@ -978,9 +1043,22 @@ test('committed federated create and save routes preserve local success across r
     );
     const createdManifest = await fetch(`${baseUrl}/api/federation/skills-manifest`).then((manifestResponse) => manifestResponse.json()) as Record<string, any>;
     assert.deepEqual(createdManifest.skills.map((skill: Record<string, any>) => skill.name), ['published-locally']);
+    await waitForValue(async () => {
+      const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((incidentResponse) => incidentResponse.json()) as Record<string, any>;
+      return incidents.incidents.find((incident: Record<string, any>) =>
+        incident.scope === 'federated-skill-publication:published-locally'
+        && incident.code === 'federated_skill_publication_failed'
+        && incident.context?.operation === 'create');
+    }, 'background create publication incident');
 
     const savedMarkdown = markdown('published-locally', 'Saved before relay publication.', 'Keep the second local revision.');
-    const saveResponse = await fetch(`${baseUrl}/api/codex/skill-library/published-locally`, {
+    const savePublicationStarted = deferred<void>();
+    const savePublication = deferred<never>();
+    connector.request = async () => {
+      savePublicationStarted.resolve(undefined);
+      return await savePublication.promise;
+    };
+    const saveResponse = await settleWithin(fetch(`${baseUrl}/api/codex/skill-library/published-locally`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -989,20 +1067,13 @@ test('committed federated create and save routes preserve local success across r
         defaultCodexModel: null,
         defaultCodexEffort: null,
       }),
-    });
+    }), 'federated skill save response');
     assert.equal(saveResponse.status, 200);
     const saved = await saveResponse.json() as Record<string, any>;
     assert.equal(saved.ok, true);
-    assert.deepEqual({
-      status: saved.publication.status,
-      retryable: saved.publication.retryable,
-      retryPath: saved.publication.retryPath,
-    }, {
-      status: 'failed',
-      retryable: true,
-      retryPath: '/api/federation/libraries/synchronize',
-    });
-    assert.match(saved.publication.incidentId, /^incident-/);
+    assert.equal(saved.publication.status, 'not-applicable');
+    await settleWithin(savePublicationStarted.promise, 'background save publication start');
+    savePublication.reject(new Error('Injected relay request failure after local save commit.'));
     assert.equal(readFileSync(join(serverRoot, '.skills', 'published-locally', 'SKILL.md'), 'utf8'), savedMarkdown);
     assert.equal(saved.skill.gitRevision.commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: serverRoot, encoding: 'utf8' }).trim());
     assert.deepEqual(
@@ -1022,11 +1093,13 @@ test('committed federated create and save routes preserve local success across r
     const savedManifest = await fetch(`${baseUrl}/api/federation/skills-manifest`).then((manifestResponse) => manifestResponse.json()) as Record<string, any>;
     assert.notEqual(savedManifest.skills[0].revision, createdManifest.skills[0].revision);
 
-    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((incidentResponse) => incidentResponse.json()) as Record<string, any>;
-    assert.ok(incidents.incidents.some((incident: Record<string, any>) =>
-      incident.id === saved.publication.incidentId
-      && incident.scope === 'federated-skill-publication:published-locally'
-      && incident.code === 'federated_skill_publication_failed'));
+    await waitForValue(async () => {
+      const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((incidentResponse) => incidentResponse.json()) as Record<string, any>;
+      return incidents.incidents.find((incident: Record<string, any>) =>
+        incident.scope === 'federated-skill-publication:published-locally'
+        && incident.code === 'federated_skill_publication_failed'
+        && incident.context?.operation === 'save');
+    }, 'background save publication incident');
   } finally {
     await closeServer(server);
     rmSync(serverRoot, { recursive: true, force: true });
