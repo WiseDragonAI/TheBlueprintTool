@@ -91,6 +91,7 @@
 
 1. **Content:** include only verified information needed for the next operator decision; use task-specific section titles, never a default schema.
 2. Use letter-prefixed H2 sections, --- between sections, numbered list items.
+3. **Card references:** identify every master card and subtask by its exact card title. Do not include card IDs unless the operator explicitly requests them.
 
 ## Platform-Aware Chromium Procedure
 
