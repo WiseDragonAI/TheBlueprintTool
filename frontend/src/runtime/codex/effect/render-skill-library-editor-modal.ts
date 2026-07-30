@@ -601,6 +601,7 @@ function ensureSession(): void {
     filename: filename(),
     markdown: skillLibraryEditorState.markdown,
     loadedRevision: skillLibraryEditorState.detail?.revision ?? '',
+    snapshot: skillLibraryEditorState.detail?.snapshot ?? null,
     readOnly,
     returnFocusTo,
     isOwnerDirty: ownerMetadataDirty,
@@ -704,7 +705,9 @@ function adoptDetail(detail: CodexSkillLibraryDetail, availableTags: string[], a
   skillLibraryEditorState.historyNextCursor = null;
   skillLibraryEditorState.recovery = null;
   skillLibraryEditorState.conflictRevision = '';
-  if (authoritativeReload) session?.reloadAuthoritative(detail.markdown, detail.revision);
+  // WHY: Explicit authority reloads must replace both document bytes and their immutable diff identity.
+  // WHAT: Reload the mounted session with the server-confirmed snapshot.
+  if (authoritativeReload) session?.reloadAuthoritative(detail.markdown, detail.revision, detail.snapshot ?? undefined);
 }
 
 async function loadSkillLibraryDraft(authoritativeReload: boolean): Promise<void> {
@@ -767,7 +770,7 @@ export async function createSkillLibraryDraft(): Promise<boolean> {
   skillLibraryEditorState.mode = 'edit';
   skillLibraryEditorState.skillName = saved.name;
   adoptDetail(saved, skillLibraryEditorState.availableTags, false);
-  session?.markSaved(saved.markdown, saved.revision);
+  session?.markSaved(saved.markdown, saved.revision, saved.snapshot ?? undefined);
   session?.setIdentity(filename(), saved.gitRevision?.commit || saved.revision);
   skillLibraryEditorState.notice = saved.gitRevision !== null
     ? 'Created with its first Git revision.'
@@ -819,13 +822,14 @@ export async function saveSkillLibraryDraft(): Promise<boolean> {
         : result.error || 'Could not save this authored file.';
       skillLibraryEditorState.error = message;
       skillLibraryEditorState.conflictRevision = result.conflict ? result.currentRevision ?? '' : '';
+      session?.setConflictSnapshot(result.snapshot ?? null);
       skillLibraryEditorState.onSaveError?.(message);
     }
     renderSkillLibraryEditorModal();
     return false;
   }
   adoptDetail(result.skill, skillLibraryEditorState.availableTags, false);
-  session?.markSaved(result.skill.markdown, result.skill.revision);
+  session?.markSaved(result.skill.markdown, result.skill.revision, result.skill.snapshot ?? undefined);
   skillLibraryEditorState.notice = result.publication?.status === 'failed'
     ? `Saved locally; publication failed: ${result.publication.error ?? 'retry synchronization.'}`
     : result.skill.gitRevision !== null
@@ -858,7 +862,7 @@ export async function retrySkillLibraryRevision(): Promise<boolean> {
     return false;
   }
   adoptDetail(result.skill, skillLibraryEditorState.availableTags, false);
-  session?.markSaved(result.skill.markdown, result.skill.revision);
+  session?.markSaved(result.skill.markdown, result.skill.revision, result.skill.snapshot ?? undefined);
   session?.setRecovery(null);
   skillLibraryEditorState.notice = 'Created the pending Git revision.';
   await skillLibraryEditorState.onSaved?.(result.skill);
