@@ -14,8 +14,12 @@ import { createHttpServer } from '@backend/business/server/application/create-de
 import { parseThreadMarkdown } from '@backend/business/ledger/helper/thread-content-file.js';
 import { persistCardSkillRunEvents } from '@backend/business/codex/effect/persist-card-skill-run-events.js';
 import { normalizeCardSkillRunEvent } from '@backend/business/codex/helper/normalize-card-skill-run-event.js';
-import { taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
+import { taskExecutionNodeId, taskExecutionState } from '@backend/business/codex/helper/task-execution-runtime.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
+
+// WHAT: Pins the direct-skill fixture to one explicit execution owner.
+// WHY: Assertions must follow the server's strict node-scoped execution identity.
+const EXECUTOR_NODE_ID = 'workstation';
 
 type ContentChangeEvent = {
   contentFile?: string;
@@ -310,7 +314,9 @@ test('card skill process route creates a linked output card and launches codex',
 
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = {
+    decisionOsSettings: { federationNodeId: EXECUTOR_NODE_ID },
+  };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -371,7 +377,7 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(execution?.metadata.pipelineRunId, body.run.pipelineRunId);
     assert.equal(execution?.metadata.pipelineSkillRunId, body.run.id);
     assert.equal(execution?.metadata.sourceCardId, 'source-card');
-    assert.equal(execution?.lifecycle.executorNodeId, 'local');
+    assert.equal(execution?.lifecycle.executorNodeId, taskExecutionNodeId(runtime));
 
     const sourceStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=source-card&since=0`);
     assert.equal(sourceStatusResponse.status, 200);

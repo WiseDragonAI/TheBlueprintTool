@@ -162,7 +162,8 @@ export function watchProjectFiles(input: {
       reportError(error, 'audit-project-files', input.decisionOsRoot);
     }
   }, input.auditIntervalMs ?? 30_000);
-  audit.unref();
+  // WHAT: Keep project event delivery observable until explicit watcher close.
+  // WHY: Native watchers are non-persistent, so this bounded ownership interval is the only pre-close event-loop owner.
 
   const flushProjectChanges = async (timeoutMs: number): Promise<void> => {
     for (const entry of [...pending.values()]) {

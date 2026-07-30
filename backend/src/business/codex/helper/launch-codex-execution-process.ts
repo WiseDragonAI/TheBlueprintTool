@@ -174,7 +174,9 @@ export async function launchCodexExecutionProcess(input: {
     forceStopDeadline = setTimeout(() => {
       if (child.exitCode === null) signalCodexProcessTree({ child, signal: 'SIGKILL' });
     }, 2_000);
-    forceStopDeadline.unref?.();
+    // WHAT: Keep the bounded kill deadline referenced after the execution deadline fires.
+    // WHY: The detached child cannot own delivery of its close settlement.
+    forceStopDeadline.ref?.();
   };
   const invokeCallback = (operation: string, callback: () => unknown): void => {
     try {
@@ -193,7 +195,9 @@ export async function launchCodexExecutionProcess(input: {
   executionDeadline = setTimeout(() => {
     stopForFailure('codex-execution-timeout', new Error(`Codex execution exceeded ${executionTimeoutMs}ms.`));
   }, executionTimeoutMs);
-  executionDeadline.unref?.();
+  // WHAT: Keep one finite lifecycle owner referenced until process settlement.
+  // WHY: Direct-file stdio and the detached child otherwise leave close callbacks unobservable.
+  executionDeadline.ref?.();
   const ingestor = createCardSkillRunEventIngestor({
     decisionOsRoot: input.decisionOsRoot,
     ledgerId: input.ledgerId,

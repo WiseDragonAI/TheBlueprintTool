@@ -12,8 +12,21 @@ import { runtimeIncidentReviewCardId, runtimeIncidentReviewProjectId } from '@ba
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import { createTaskExecutionLaunchRequest, type TaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
 
-test('normal health reports the active release identity', async () => {
+test('normal health reports the active release identity', async (context) => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-release-health-'));
+  const previousDeliveryProtocol = process.env.DECISION_OS_DELIVERY_PROTOCOL;
+  // WHAT: Admit the fixture release through the environment-precedence boundary used by health identity.
+  // WHY: The repository verification process disables delivery globally with protocol `0`.
+  process.env.DECISION_OS_DELIVERY_PROTOCOL = '1';
+  let server: Server | undefined;
+  context.after(async () => {
+    if (server) {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+    if (previousDeliveryProtocol === undefined) delete process.env.DECISION_OS_DELIVERY_PROTOCOL;
+    else process.env.DECISION_OS_DELIVERY_PROTOCOL = previousDeliveryProtocol;
+    rmSync(home, { recursive: true, force: true });
+  });
   const decisionOsRoot = join(home, '.decision-os');
   const releaseSha = 'a'.repeat(40);
   const releaseRoot = join(decisionOsRoot, 'delivery');
@@ -35,7 +48,13 @@ test('normal health reports the active release identity', async () => {
   symlinkSync(`releases/${releaseSha}`, currentPointer);
 
   const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = {
+    decisionOsSettings: {
+      deliveryProtocol: 1,
+      deliveryReleaseRoot: releaseRoot,
+      deliveryCurrentPointer: currentPointer,
+    },
+  };
   createHttpServer({
     action_payload: {
       port: 0,
@@ -45,25 +64,15 @@ test('normal health reports the active release identity', async () => {
     },
     runtime_state: runtime,
   });
-  runtime.decisionOsSettings = {
-    deliveryProtocol: 1,
-    deliveryReleaseRoot: releaseRoot,
-    deliveryCurrentPointer: currentPointer,
-  };
-  const server = runtime.server as Server;
+  server = runtime.server as Server;
   await once(server, 'listening');
-  try {
-    const health = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/health`)
-      .then((response) => response.json()) as Record<string, unknown>;
-    assert.equal(health.status, 'ready');
-    assert.equal(health.releaseSha, releaseSha);
-    assert.equal(health.deliveryProtocol, 1);
-    assert.equal(health.activeReleasePointer, `current:${releaseSha}`);
-    assert.equal(Number.isFinite(Date.parse(String(health.processStartedAt))), true);
-  } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    rmSync(home, { recursive: true, force: true });
-  }
+  const health = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/health`)
+    .then((response) => response.json()) as Record<string, unknown>;
+  assert.equal(health.status, 'ready');
+  assert.equal(health.releaseSha, releaseSha);
+  assert.equal(health.deliveryProtocol, 1);
+  assert.equal(health.activeReleasePointer, `current:${releaseSha}`);
+  assert.equal(Number.isFinite(Date.parse(String(health.processStartedAt))), true);
 });
 
 async function waitUntil(assertion: () => boolean | Promise<boolean>, timeoutMs = 2_000): Promise<void> {

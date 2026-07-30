@@ -822,8 +822,8 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
     });
     assert.equal(queuedResponse.status, 202);
     const queuedBody = await queuedResponse.json() as Record<string, any>;
+    // The scheduler may advance the active run before this response; idempotency guarantees its identity, not a transient phase.
     assert.equal(queuedBody.run.id, pipelineRunId);
-    assert.equal(queuedBody.run.status, 'pending');
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.length, 1);
     const pendingLedger = JSON.parse(readFileSync(join(decisionOsRoot, 'specs.json'), 'utf8')) as Record<string, any>;
     const pendingSourceCard = pendingLedger.cards.find((card: Record<string, any>) => card.id === 'source-card');

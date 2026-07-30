@@ -492,7 +492,9 @@ async function createPipelineAndSkillDefaults(page: Page): Promise<void> {
   assert.ok(saveResponse, 'The server-owned skill save must return a response.');
   const savePayload = await saveResponse.json();
   assert.equal(saveResponse.status(), 200, JSON.stringify(savePayload));
-  await skillEditor.getByText('Saved locally; publication failed: retry synchronization.', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(savePayload.publication?.status, 'not-applicable');
+  assert.match(String(savePayload.skill?.gitRevision?.commit ?? ''), /^[a-f0-9]{40}$/);
+  await skillEditor.getByText('Saved as a new Git revision.', { exact: true }).waitFor({ state: 'visible' });
   await skillEditor.getByRole('button', { name: 'Close', exact: true }).click();
   await skillEditor.waitFor({ state: 'hidden' });
   await skillPicker.waitFor({ state: 'visible' });
@@ -750,6 +752,15 @@ function createFixture(options: { extraSkillCount?: number } = {}): BrowserFixtu
   mkdirSync(threadDirectory, { recursive: true });
   mkdirSync(skillDirectory, { recursive: true });
   mkdirSync(join(codexHome, 'skills'), { recursive: true });
+  // WHAT: Give the temporary browser server an isolated federation identity.
+  // WHY: Canonical verification must not attach a fixture node to operator-facing peers.
+  writeFileSync(join(decisionOsRoot, '.settings.json'), JSON.stringify({
+    federationRelayUrl: '',
+    federationId: '',
+    federationNodeId: 'browser-fixture',
+    federationNodeLabel: 'Browser fixture',
+    federationNodeCredential: '',
+  }, null, 2));
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }],
   }, null, 2));

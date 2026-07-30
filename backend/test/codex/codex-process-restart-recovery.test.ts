@@ -14,6 +14,10 @@ import { createHttpServer } from '@backend/business/server/application/create-de
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
 
+// WHAT: Pins the startup-recovery fixture to one explicit execution owner.
+// WHY: Recovery intentionally schedules only durable records owned by the current node.
+const EXECUTOR_NODE_ID = 'workstation';
+
 async function closeServer(server: Server): Promise<void> {
   if (!server.listening) return;
   server.close();
@@ -56,7 +60,7 @@ async function seedQueuedExecution(input: {
   writeFileSync(tasksLedgerFile, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
   const state = createProjectTaskState({
     projectId: input.projectId,
-    writerId: 'local',
+    writerId: EXECUTOR_NODE_ID,
     decisionOsRoot: input.decisionOsRoot,
     tasksLedgerFile,
     initialize: true,
@@ -80,7 +84,7 @@ async function seedQueuedExecution(input: {
     predecessorExecutionId: null,
     restartOfExecutionId: null,
   };
-  await state.executions.admit({ metadata, executorNodeId: 'local' });
+  await state.executions.admit({ metadata, executorNodeId: EXECUTOR_NODE_ID });
   await state.executions.transition(input.executionId, { phase: 'queued' });
 }
 
@@ -125,7 +129,10 @@ test('server startup schedules a queued replicated execution discovered after an
   ].join('\n'));
   chmodSync(fakeCodex, 0o755);
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = { decisionOsRoot: masterDecisionOsRoot };
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot: masterDecisionOsRoot,
+    decisionOsSettings: { federationNodeId: EXECUTOR_NODE_ID },
+  };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');

@@ -183,7 +183,9 @@ export async function executeNodeMessage(input: {
         forceKillTimer = setTimeout(() => signalCodexProcessTree({ child, signal: 'SIGKILL' }), 2_000);
         forceKillTimer.unref?.();
         forcedSettlementTimer = setTimeout(() => { void settle(error, null); }, 5_000);
-        forcedSettlementTimer.unref?.();
+        // WHAT: Keep the final bounded settlement deadline referenced.
+        // WHY: A detached child that omits close must still release the awaited slot.
+        forcedSettlementTimer.ref?.();
       };
       const onAbort = (): void => stop(new Error('Node message execution was cancelled.'));
       input.signal?.addEventListener('abort', onAbort, { once: true });
@@ -250,7 +252,9 @@ export async function executeNodeMessage(input: {
         }
       };
       const executionDeadline = setTimeout(() => stop(new Error(`Node message execution exceeded ${executionTimeout}ms.`)), executionTimeout);
-      executionDeadline.unref?.();
+      // WHAT: Keep one finite lifecycle owner referenced while execution is awaited.
+      // WHY: Detached children do not keep their completion callbacks observable.
+      executionDeadline.ref?.();
       child.once('error', (error) => { void settle(error, null); });
       child.once('close', (code) => { void settle(null, code); });
     });
