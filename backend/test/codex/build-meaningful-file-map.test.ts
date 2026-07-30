@@ -34,6 +34,7 @@ test('injected file map cuts tests and documentation, ranks five code files per 
     }
     write(workspace, 'backend/test/index.test.ts');
     write(workspace, 'backend/test-responsive/mobile.ts');
+    write(workspace, 'docs/data.json');
     write(workspace, 'docs/guide.md');
     write(workspace, 'tests/root.spec.ts');
     write(workspace, 'backend/src/deleted.ts');
@@ -64,6 +65,7 @@ test('injected file map cuts tests and documentation, ranks five code files per 
       'backend/src/top/two.ts',
       'backend/test-responsive/mobile.ts',
       'backend/test/index.test.ts',
+      'docs/data.json',
       'docs/guide.md',
       'tests/root.spec.ts',
     ]);
@@ -104,6 +106,12 @@ test('injected file map cuts tests and documentation, ranks five code files per 
       '.',
       ' backend/',
       '  README.md',
+    ].join('\n'));
+    assert.equal(runFileMapCli(['d', 'docs'], workspace), [
+      '.',
+      ' docs/',
+      '  data.json',
+      '  guide.md',
     ].join('\n'));
     assert.equal(runFileMapCli(['c', 'backend'], workspace), [
       '.',
