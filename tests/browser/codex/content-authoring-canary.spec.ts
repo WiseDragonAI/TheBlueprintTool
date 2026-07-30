@@ -156,6 +156,23 @@ test('served Skills editor preserves CodeMirror state and navigates Git revision
     const reloaded = page.locator('.skill-library-editor-modal[open]');
     await reloaded.waitFor({ state: 'visible' });
     assert.match(await reloaded.locator('.cm-content').textContent() ?? '', new RegExp(marker));
+    const additions = reloaded.locator('.cm-authored-addition');
+    await additions.first().waitFor({ state: 'visible' });
+    const additionPresentation = await additions.first().evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        change: element.getAttribute('data-change'),
+        label: element.getAttribute('aria-label'),
+        borderLeftColor: style.borderLeftColor,
+        backgroundColor: style.backgroundColor,
+      };
+    });
+    assert.deepEqual(
+      { change: additionPresentation.change, label: additionPresentation.label },
+      { change: 'added', label: 'Added Markdown' },
+    );
+    assert.notEqual(additionPresentation.borderLeftColor, 'rgba(0, 0, 0, 0)');
+    assert.notEqual(additionPresentation.backgroundColor, 'rgba(0, 0, 0, 0)');
     await reloaded.getByRole('button', { name: /^Revisions \(\d+\)$/ }).click();
     await reloaded.getByRole('region', { name: /full historical Markdown/ }).waitFor({ state: 'visible' });
     await reloaded.getByRole('region', { name: /changes introduced by revision/ }).waitFor({ state: 'visible' });
