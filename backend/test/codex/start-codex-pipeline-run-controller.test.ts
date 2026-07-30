@@ -379,7 +379,7 @@ test('pipeline prompt construction injects runtime variables into only the autho
       card: { id: 'master-task', title: 'Master task', markdown: '# Master task\n\nComplete objective.' },
       thread: { id: 'thread-master-task', markdown: '# OPERATOR\n\nContinue the iteration.' },
     },
-    fileMap: '.\n  backend/\n    src/\n      server.ts',
+    fileMap: '.\n backend/\n  src/\n   server.ts',
     projectId: 'project-a',
     ledgerId: 'tasks',
     executionId: 'execution-a',
@@ -387,7 +387,7 @@ test('pipeline prompt construction injects runtime variables into only the autho
   assert.equal(prompt.startsWith('# Dynamic gate\n'), true);
   assert.match(prompt, /Complete objective\./);
   assert.match(prompt, /Continue the iteration\./);
-  assert.match(prompt, /FILES=\.\n  backend\/\n    src\/\n      server\.ts/);
+  assert.match(prompt, /FILES=\.\n backend\/\n  src\/\n   server\.ts/);
   assert.match(prompt, /PREVIOUS=# Worker result[\s\S]*Verified analysis\./);
   assert.match(prompt, /"projectId": "project-a"/);
   assert.match(prompt, /"executionId": "execution-a"/);

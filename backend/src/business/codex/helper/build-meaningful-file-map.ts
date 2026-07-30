@@ -149,7 +149,7 @@ function insertPath(root: FileMapNode, path: string): void {
 function renderChildren(node: FileMapNode, depth: number): string[] {
   const entries = [...node.children.entries()].sort(([left], [right]) => compareText(left, right));
   return entries.flatMap(([name, child]) => {
-    const line = `${'  '.repeat(depth)}${displaySegment(name)}${child.file ? '' : '/'}`;
+    const line = `${' '.repeat(depth)}${displaySegment(name)}${child.file ? '' : '/'}`;
     return [line, ...renderChildren(child, depth + 1)];
   });
 }
@@ -174,7 +174,7 @@ export function meaningfulGitPaths(workspaceRoot: string): string[] {
 export function buildMeaningfulFileMap(workspaceRoot: string): string {
   try {
     const paths = meaningfulGitPaths(workspaceRoot);
-    if (paths.length === 0) return '.\n  (no meaningful code or documentation files)';
+    if (paths.length === 0) return '.\n (no meaningful code or documentation files)';
     const retained = paths.slice(0, maximumMeaningfulPaths);
     const root: FileMapNode = { children: new Map(), file: false };
     for (const path of retained) insertPath(root, path);
@@ -182,6 +182,6 @@ export function buildMeaningfulFileMap(workspaceRoot: string): string {
     if (paths.length > retained.length) tree.push(`... ${paths.length - retained.length} additional meaningful paths omitted.`);
     return tree.join('\n');
   } catch {
-    return '.\n  (file map unavailable: Git could not enumerate this workspace)';
+    return '.\n (file map unavailable: Git could not enumerate this workspace)';
   }
 }

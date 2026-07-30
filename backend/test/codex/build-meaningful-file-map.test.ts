@@ -50,17 +50,17 @@ test('meaningful file map uses Git ignore rules and renders source plus document
     ]);
     assert.equal(buildMeaningfulFileMap(workspace), [
       '.',
-      '  .gitignore',
-      '  README.md',
-      '  docs/',
-      '    caf\\u00e9.md',
-      '    guide.md',
-      '  src/',
-      '    index.ts',
-      '    nested/',
-      '      view.tsx',
-      '  tests/',
-      '    index.test.ts',
+      ' .gitignore',
+      ' README.md',
+      ' docs/',
+      '  caf\\u00e9.md',
+      '  guide.md',
+      ' src/',
+      '  index.ts',
+      '  nested/',
+      '   view.tsx',
+      ' tests/',
+      '  index.test.ts',
     ].join('\n'));
     assert.doesNotMatch(buildMeaningfulFileMap(workspace), /[^\x00-\x7f]/);
   } finally {
@@ -73,7 +73,7 @@ test('meaningful file map stays failsafe outside a Git work tree', () => {
   try {
     assert.equal(
       buildMeaningfulFileMap(workspace),
-      '.\n  (file map unavailable: Git could not enumerate this workspace)',
+      '.\n (file map unavailable: Git could not enumerate this workspace)',
     );
   } finally {
     rmSync(workspace, { recursive: true, force: true });
