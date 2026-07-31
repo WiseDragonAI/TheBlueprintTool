@@ -47,7 +47,7 @@ export async function dispatchLedgerCliCommandController(
   }
 
   if (command.mode === 'card-read') {
-    const result = await readCardMarkdown({ cardId: command.cardOperation?.cardId });
+    const result = await readCardMarkdown({ cardIds: command.cardOperation?.cardIds });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

@@ -15,13 +15,13 @@ The command uses `DECISION_OS_SERVER_URL`, `DECISION_OS_PROJECT_ID`, and `DECISI
 ## Inspect task state
 
 ```sh
-ledger-cli card-read --card-id <card-id>
+ledger-cli card-read --card-id <card-id> [--card-id <card-id>]...
 ledger-cli session-context --ledger "$DECISION_OS_LEDGER_FILE" --card-id <master-task-id> --json
 ledger-cli card-context --ledger "$DECISION_OS_LEDGER_FILE" --card-id <card-id> --json
 ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id <master-task-id> --json
 ```
 
-`card-read` discovers the local project and ledger from the running Decision OS catalog and returns the selected card body plus its full thread as Markdown.
+`card-read` accepts one to 30 repeated `--card-id` flags, discovers their local projects and ledgers with one catalog scan, and returns each selected card body plus its full thread as Markdown in argument order.
 
 ## Inspect repository maps
 
