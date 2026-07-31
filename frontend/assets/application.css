@@ -346,6 +346,8 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .card-detail-actions button { min-width: 0; padding-inline: 8px; }
 .process-card-button { min-height: 44px; padding: 0 14px; color: var(--accent); background: var(--control-bg-primary); }
 .card-body { display: grid; gap: 20px; padding: 22px 0; color: var(--text); }
+.responsive-card-facts { display: grid; gap: 8px; margin: 0; padding: 16px 20px 16px 38px; border: 1px solid color-mix(in srgb, var(--zone-color), rgba(255,255,255,.18) 12%); border-radius: var(--radius); background: var(--panel); }
+.responsive-card-facts li::marker { color: color-mix(in srgb, var(--zone-color), white 52%); }
 .task-state-status { width: max-content; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; }
 .task-state-status.is-replicated { color: var(--accent); }
 .task-state-status.is-synchronizing { color: var(--accent); }
