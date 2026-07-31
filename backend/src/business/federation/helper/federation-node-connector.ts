@@ -257,6 +257,7 @@ export function createFederationNodeConnector(input: {
   onRemoteContentChange?: (nodeId: string) => void;
   onRemoteCatalogChange?: () => void;
   onStateConnected?: () => void;
+  onStateDisconnected?: () => void;
   onStateFrame?: (frame: FederationStateFrame) => void | Promise<void>;
   onExecutionObservation?: (frame: FederationExecutionObservationFrame) => void;
   onError?: (error: unknown, context: { operation: string; frameType?: string }) => void;
@@ -839,6 +840,12 @@ export function createFederationNodeConnector(input: {
       for (const requestId of requesterStreams.keys()) failRequester(requestId, 502, 'federation_outcome_unknown', 'Relay disconnected before the owner response completed.');
       abortOwnerStreams('federation_relay_disconnected');
       for (const stream of remoteNodes.values()) stream.online = false;
+      try { input.onStateDisconnected?.(); }
+      catch (error) {
+        // WHAT: Contain disconnect observer failure inside the connector scope.
+        // WHY: Repair cleanup diagnostics cannot prevent bounded reconnect scheduling.
+        reportError(error, 'state-disconnected-callback');
+      }
       if (!stopped && retryAllowed) {
         const delay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt) * (0.75 + Math.random() * 0.5);
         reconnectAttempt += 1;
@@ -896,6 +903,12 @@ export function createFederationNodeConnector(input: {
       connectionStartedAt = null;
       for (const stream of remoteNodes.values()) stream.online = false;
       deliveryCapabilities.clear();
+      try { input.onStateDisconnected?.(); }
+      catch (error) {
+        // WHAT: Contain disconnect observer failure during explicit connector shutdown.
+        // WHY: Server close must settle even when repair cleanup diagnostics fail.
+        reportError(error, 'state-disconnected-callback');
+      }
       setPhase(settings ? 'disconnected' : 'not_configured');
     },
     reconfigure(value: unknown): void {

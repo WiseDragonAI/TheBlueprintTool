@@ -279,6 +279,9 @@ describe('federation relay', () => {
     const summary = await summaryPromise;
     const received: string[] = [];
     const frameSizes: number[] = [];
+    const repairedSummary = nextFrame(reader, (frame) => frame.type === 'state-bucket-summary'
+      && frame.projectId === 'shared'
+      && frame.payload?.root === summary.payload?.root);
     const complete = new Promise<void>((resolve) => reader.addEventListener('message', (event) => {
       const text = String(event.data);
       const frame = JSON.parse(text) as Frame;
@@ -289,6 +292,7 @@ describe('federation relay', () => {
     }));
     reader.send(JSON.stringify({ version: 1, type: 'state-missing-request', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion, buckets: summary.payload?.buckets?.map((bucket) => bucket.bucket) } }));
     await complete;
+    await expect(repairedSummary).resolves.toMatchObject({ from: 'relay', payload: { root: summary.payload?.root } });
 
     expect(frameSizes.length).toBeGreaterThan(1);
     expect(frameSizes.every((bytes) => bytes <= maximumStateFrameBytes)).toBe(true);

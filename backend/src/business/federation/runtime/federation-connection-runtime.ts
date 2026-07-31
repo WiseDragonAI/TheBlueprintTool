@@ -169,6 +169,9 @@ export function createFederationConnectionRuntime(input: {
         void input.federatedLibrary.synchronize().catch(() => undefined);
       }
     },
+    onStateDisconnected: () => {
+      input.stateRuntime.replicator.disconnectPeer('relay');
+    },
     onError: (error, context) => {
       input.recordStoppedOperation({
         scope: `federation-operation:${context.operation}`,
