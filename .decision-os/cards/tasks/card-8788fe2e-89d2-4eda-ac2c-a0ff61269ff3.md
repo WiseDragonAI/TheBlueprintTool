@@ -1,1 +1,0 @@
-Run the one-time exact-identity repair only after all pre-work passes. Verify every repaired thread mapping, note entity, Markdown body, content head, projection read, and federation publication.

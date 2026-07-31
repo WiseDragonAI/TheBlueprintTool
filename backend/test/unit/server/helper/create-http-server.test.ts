@@ -16,6 +16,8 @@ import { createRuntimeIncidentLedger } from '@backend/business/server/helper/run
 import { scheduleCodexRuntimeTimer } from '@backend/business/codex/helper/codex-runtime-run-store.js';
 import { createTaskExecutionLaunchRequest, type TaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
+import { readCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
+import { mandatoryPipelinePromptNames } from '@backend/business/codex/helper/mandatory-pipeline-prompts.js';
 
 test('create-http-server executes implemented behavior and records telemetry', async () => {
   traces.length = 0;
@@ -27,6 +29,36 @@ test('create-http-server executes implemented behavior and records telemetry', a
   });
   assert.ok(traces.length > 0);
   assert.ok(result === undefined || typeof result === 'object');
+});
+
+test('create-http-server installs mandatory prompts into a fresh server-owned root', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-server-mandatory-prompts-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html><title>Decision OS</title>');
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({
+    action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+
+  try {
+    const store = readCodexPipelineStore({ decisionOsRoot }).store;
+    for (const name of mandatoryPipelinePromptNames) {
+      assert.equal(readFileSync(join(decisionOsRoot, 'pipeline-prompts', `${name}.md`), 'utf8').length > 0, true);
+      assert.equal(store.authoredContent.some((record) => record.id === name), true);
+      assert.deepEqual(store.skillLibrary.find((record) => record.skillName === name)?.tags, ['System']);
+    }
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
 });
 
 test('create-http-server serves shared TypeScript modules through their browser JavaScript URL', async () => {

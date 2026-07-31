@@ -1,0 +1,3 @@
+[submodule ".decision-os"]
+	path = .decision-os
+	url = file:///home/jbb/dev/EditorBP/decision-os-data.git

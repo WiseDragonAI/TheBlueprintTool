@@ -3,11 +3,13 @@
 1. This runbook creates, updates, verifies, and recovers the default developer prompts required to operate Decision OS.
 2. The server-owned Decision OS root owns prompt identity and metadata in `codex-pipelines.json` and exact UTF-8 Markdown in `pipeline-prompts/<PROMPT_NAME>.md`. Project-owned `.decision-os` roots are not prompt owners.
 3. Use the existing authored-content API for every create and update. Never edit `.decision-os/codex-pipelines.json` directly.
-4. The required defaults are:
+4. Decision OS packages the required source files under `backend/defaults/pipeline-prompts/` and installs any missing defaults into the server-owned root during pipeline-catalog initialization.
+5. The required defaults are:
    1. `SYSTEM_PROMPT` — common Decision OS developer instructions.
    2. `SKILL` — the wrapper for a normal pipeline skill.
    3. `CODEX_RUN` — the wrapper for a direct card and thread Codex run.
-5. Assign the `System` tag to all three defaults so the library exposes them as required operating prompts.
+   4. `CLI_TOOLS` — the Decision OS command contract available to pipeline prompts.
+6. Assign the `System` tag to all four defaults so the library exposes them as required operating prompts.
 
 ---
 
@@ -92,51 +94,26 @@
 
 ---
 
-## E. Create The Default Prompts
+## E. Startup Installation
 
-1. Select the server-owned authoring endpoint and canonical source files:
-
-   ```sh
-   api_root='http://127.0.0.1:50150/api/codex/skill-library'
-   prompt_root='.decision-os/pipeline-prompts'
-   ```
-
-2. Create each default in this order: `SYSTEM_PROMPT`, `SKILL`, `CODEX_RUN`.
-3. Submit each source file through the authored-content transaction:
-
-   ```sh
-   prompt_name='SYSTEM_PROMPT'
-   prompt_description='Common Decision OS developer instructions.'
-   jq -n \
-     --arg name "$prompt_name" \
-     --arg description "$prompt_description" \
-     --rawfile markdown "${prompt_root}/${prompt_name}.md" \
-     '{name:$name,description:$description,contentKind:"pipeline-prompt",markdown:$markdown}' |
-     curl -fsS -X POST \
-       -H 'content-type: application/json' \
-       --data-binary @- \
-       "$api_root"
-   ```
-
-4. Assign the required system tag after each successful create:
-
-   ```sh
-   curl -fsS -X PUT \
-     -H 'content-type: application/json' \
-     --data-binary '{"tags":["System"]}' \
-     "${api_root}/${prompt_name}"
-   ```
-
-5. Repeat both commands with the exact descriptions:
-   1. `SKILL` — `Decision OS developer wrapper for pipeline skill execution.`
-   2. `CODEX_RUN` — `Decision OS developer instructions for direct card and thread Codex runs.`
-6. HTTP `201` is complete only when the create response contains the prompt detail and its focused `gitRevision`; the metadata response must return `tags: ["System"]`.
+1. Server startup validates the packaged Markdown for `SYSTEM_PROMPT`, `SKILL`, `CODEX_RUN`, and `CLI_TOOLS` before changing durable state.
+2. Pipeline-catalog initialization validates every existing server-owned file and registration, recursively compiles the mandatory graphs, and creates only missing files, registrations, and metadata.
+3. Existing valid Markdown, registration timestamps, descriptions, favorites, tags, and execution defaults remain unchanged.
+4. Missing defaults are installed and committed in the server-owned Decision OS Git repository with the subject `Install mandatory pipeline prompts` and non-empty `WHAT:` and `WHY:` paragraphs.
+5. Project-owned `.decision-os/pipeline-prompts/` directories must not contain copies of the mandatory defaults.
 
 ---
 
 ## F. Update An Existing Default
 
-1. Read current content and its optimistic revision:
+1. Select the server-owned authoring endpoint and packaged source files:
+
+   ```sh
+   api_root='http://127.0.0.1:50150/api/codex/server-skills'
+   prompt_root='backend/defaults/pipeline-prompts'
+   ```
+
+2. Read current content and its optimistic revision:
 
    ```sh
    prompt_name='CODEX_RUN'
@@ -144,7 +121,7 @@
    jq -r '.skill.revision' "/tmp/${prompt_name}.json"
    ```
 
-2. Submit the complete replacement Markdown with the loaded revision:
+3. Submit the complete replacement Markdown with the loaded revision:
 
    ```sh
    prompt_revision="$(jq -r '.skill.revision' "/tmp/${prompt_name}.json")"
@@ -158,8 +135,8 @@
        "${api_root}/${prompt_name}"
    ```
 
-3. The transaction validates identity, template syntax, contained ownership, exact loaded revision, staged-path protection, and committed Git evidence.
-4. Every authored commit has a concise subject plus non-empty `WHAT:` and `WHY:` paragraphs.
+4. The transaction validates identity, template syntax, contained ownership, exact loaded revision, staged-path protection, and committed Git evidence.
+5. Every authored commit has a concise subject plus non-empty `WHAT:` and `WHY:` paragraphs.
 
 ---
 
@@ -185,11 +162,11 @@
 
 ## H. Verification
 
-1. Confirm the three registered identities in the server-owned store:
+1. Confirm the four registered identities in the server-owned store:
 
    ```sh
    server_decision_os_root='/home/jbb/.decision-os'
-   jq -r '.authoredContent[] | select(.id == "SYSTEM_PROMPT" or .id == "SKILL" or .id == "CODEX_RUN") | [.id,.kind,.contentFile] | @tsv' "${server_decision_os_root}/codex-pipelines.json"
+   jq -r '.authoredContent[] | select(.id == "SYSTEM_PROMPT" or .id == "SKILL" or .id == "CODEX_RUN" or .id == "CLI_TOOLS") | [.id,.kind,.contentFile] | @tsv' "${server_decision_os_root}/codex-pipelines.json"
    ```
 
 2. Confirm the authored commit message:
@@ -198,13 +175,19 @@
    git -C "$server_decision_os_root" show -s --format=%B HEAD
    ```
 
-3. Run focused compiler, direct-run, and authored-transaction tests through the repository lease:
+3. Confirm the four packaged defaults remain outside every project-owned `.decision-os` root:
 
    ```sh
-   node bin/decision-os-verify.mjs -- node --test --import ./backend/node_modules/tsx/dist/esm/index.mjs backend/test/codex/pipeline-prompt-library.test.ts backend/test/codex/build-thread-codex-prompt.test.ts backend/test/codex/start-card-skill-process-controller.test.ts backend/test/content-authoring/authored-file-git-revisions.test.ts
+   ls backend/defaults/pipeline-prompts/{SYSTEM_PROMPT,SKILL,CODEX_RUN,CLI_TOOLS}.md
    ```
 
-4. Run the backend typecheck once after code stabilizes:
+4. Run focused startup, compiler, direct-run, and authored-transaction tests through the repository lease:
+
+   ```sh
+   node bin/decision-os-verify.mjs -- node --test --import ./backend/node_modules/tsx/dist/esm/index.mjs backend/test/codex/mandatory-pipeline-prompts.test.ts backend/test/codex/pipeline-prompt-library.test.ts backend/test/codex/build-thread-codex-prompt.test.ts backend/test/codex/start-card-skill-process-controller.test.ts backend/test/content-authoring/authored-file-git-revisions.test.ts
+   ```
+
+5. Run the backend typecheck once after code stabilizes:
 
    ```sh
    node bin/decision-os-verify.mjs -- npm run typecheck --prefix backend
@@ -214,8 +197,8 @@
 
 ## I. Recovery And Escalation
 
-1. Do not rewrite malformed prompt Markdown, an invalid registration store, staged owner paths, or recovery-pending bytes.
-2. Preserve the exact files and use the stable admission error to identify the rejected boundary.
+1. Do not rewrite malformed prompt Markdown, an invalid registration store, staged owner paths, dirty registration bytes, or recovery-pending bytes.
+2. Startup preserves the exact files, records a `pipeline-catalog` incident, and keeps unrelated server routes online.
 3. Retry an accepted authored mutation through `POST /api/codex/skill-library/:name/revisions/retry` with its returned `recoveryToken` and `contentRevision`.
 4. Resume execution only after re-reading and validating the prompt graph and its committed store evidence.
 5. A failed recovery keeps the owning prompt scope unavailable while unrelated routes, projects, and executions remain online.

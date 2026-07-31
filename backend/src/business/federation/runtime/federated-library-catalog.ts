@@ -10,6 +10,7 @@ import {
 } from '../../codex/helper/codex-skill-metadata-owner.js';
 import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
 import { availablePipelineContent } from '../../codex/helper/available-pipeline-content.js';
+import { ensureMandatoryPipelinePrompts } from '../../codex/helper/mandatory-pipeline-prompts.js';
 
 type AnyRecord = Record<string, unknown>;
 type Skill = { name: string; favorite?: boolean; tags?: string[] };
@@ -52,6 +53,7 @@ export function createFederatedLibraryCatalog(input: {
   };
   const initialize = (): void => {
     invalidate();
+    ensureMandatoryPipelinePrompts({ serverDecisionOsRoot: input.masterDecisionOsRoot });
     const available = availablePipelineContent({
       decisionOsRoot: input.masterDecisionOsRoot,
       runtime: input.runtime,

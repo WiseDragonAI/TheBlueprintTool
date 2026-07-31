@@ -1,1 +1,0 @@
-Dry-run mode prints planned files, imports, graph, and generation output without writing the worktree.
