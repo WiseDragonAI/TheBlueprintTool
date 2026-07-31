@@ -88,6 +88,8 @@ test('opening a mobile thread does not focus the draft and raise the software ke
   const openMobileThread = source.match(/export function openMobileThread\([\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(openMobileThread, /openThreadPanelController\(threadId\);/);
+  assert.match(openMobileThread, /bindThreadCodexRunLog\(\{[\s\S]*cardId: String\(card\.id\),[\s\S]*threadId,[\s\S]*forceRevalidate: true/);
+  assert.match(openMobileThread, /telemetry\('responsive-task-execution-entry'/);
   assert.doesNotMatch(openMobileThread, /selectThread\(/);
   assert.doesNotMatch(openMobileThread, /\.focus\(\)/);
 });

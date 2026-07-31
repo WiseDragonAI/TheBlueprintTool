@@ -4,8 +4,12 @@
  */
 import { renderResponsiveApplicationShell } from '../component/render-responsive-application-shell.js';
 import { loadSurfaceScripts, loadSurfaceStylesheets } from '../../runtime/surface/helper/load-surface-assets.js';
+import { installFrontendTelemetryWebSocket } from '../../runtime/telemetry/effect/frontend-telemetry-websocket.js';
 
 export async function bootApplication(): Promise<void> {
+  // WHAT: Install the opt-in diagnostic sender for the responsive application entrypoint.
+  // WHY: Responsive task routes do not execute the canvas boot controller that previously owned telemetry setup.
+  void installFrontendTelemetryWebSocket();
   await Promise.all([
     loadSurfaceStylesheets([
       { id: 'responsive-shared-styles', href: '/assets/application-shared.css' },
