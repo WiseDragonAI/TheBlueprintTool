@@ -1,3 +1,7 @@
+/**
+ * WHAT: Proves responsive execution admission ordering and exact-request reconciliation from source contracts.
+ * WHY: Pipeline optimism must change timing without weakening direct-skill behavior or request identity fences.
+ */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
