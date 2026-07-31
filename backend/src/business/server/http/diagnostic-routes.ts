@@ -26,7 +26,11 @@ export function handleDiagnosticReadRoutes(input: {
     return HTTP_ROUTE_NEXT;
   }
 
+  const observedAt = new Date().toISOString();
   const incidentSnapshot = input.incidentLedger.snapshot();
+  // WHAT: Expose no document truncation marker for a legacy version-1 snapshot.
+  // WHY: Legacy uncertainty is identified by its version and must not be represented as a fabricated loss timestamp.
+  const historyTruncatedBefore = incidentSnapshot.version === 2 ? incidentSnapshot.historyTruncatedBefore : '';
   const activeIncidents = incidentSnapshot.incidents.filter((incident) => incident.status === 'paused');
   const runtimeInterrupted = activeIncidents.some((incident) => incident.scope === 'server-runtime')
     || input.incidentSupervisor.pausedTaskProjects.size > 0
@@ -39,7 +43,7 @@ export function handleDiagnosticReadRoutes(input: {
   input.response.end(JSON.stringify({
     ok: true,
     status: runtimeInterrupted ? 'degraded' : 'ready',
-    observedAt: new Date().toISOString(),
+    observedAt,
     ...decisionOsReleaseHealthIdentity(input.settings),
     incidentLedger: input.incidentLedger.file,
     activeIncidentCount: activeIncidents.length,
@@ -52,8 +56,14 @@ export function handleDiagnosticReadRoutes(input: {
     ].sort(),
     pausedProjectWatcherIds: [...input.incidentSupervisor.pausedProjectWatchers].sort(),
     pausedProjectRuntimeIds: [...input.incidentSupervisor.pausedProjectRuntimes].sort(),
+    // WHAT: Include durable occurrence history and its completeness markers only on the existing incident endpoint.
+    // WHY: Health retains its compact interruption contract while diagnostics remains the single incident evidence source.
     ...(input.requestPath === '/api/diagnostics/incidents'
-      ? { incidents: incidentSnapshot.incidents }
+      ? {
+        incidentHistoryVersion: incidentSnapshot.version,
+        historyTruncatedBefore,
+        incidents: incidentSnapshot.incidents,
+      }
       : {}),
   }));
   return HTTP_ROUTE_HANDLED;

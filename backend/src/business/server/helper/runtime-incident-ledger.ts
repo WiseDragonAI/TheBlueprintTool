@@ -23,9 +23,19 @@ export type RuntimeIncident = {
   lastObservedAt: string;
   occurrences: number;
   resolvedAt: string;
+  observations?: string[];
+  legacyHistoryBefore?: string;
 };
 
-type IncidentDocument = { version: 1; updatedAt: string; incidents: RuntimeIncident[] };
+type LegacyIncidentDocument = { version: 1; updatedAt: string; incidents: RuntimeIncident[] };
+type CurrentRuntimeIncident = RuntimeIncident & { observations: string[]; legacyHistoryBefore: string };
+type CurrentIncidentDocument = {
+  version: 2;
+  updatedAt: string;
+  historyTruncatedBefore: string;
+  incidents: CurrentRuntimeIncident[];
+};
+export type IncidentDocument = LegacyIncidentDocument | CurrentIncidentDocument;
 type IncidentInput = {
   severity?: RuntimeIncident['severity'];
   scope: string;
@@ -36,20 +46,57 @@ type IncidentInput = {
   context?: Record<string, unknown>;
 };
 
-const emptyDocument = (): IncidentDocument => ({ version: 1, updatedAt: '', incidents: [] });
+const incidentHistoryWindowMs = 24 * 60 * 60 * 1_000;
+const defaultMaximumObservationsPerIncident = 1_000;
+const emptyDocument = (): CurrentIncidentDocument => ({
+  version: 2,
+  updatedAt: '',
+  historyTruncatedBefore: '',
+  incidents: [],
+});
+const validIsoTimestamp = (value: unknown): value is string => {
+  // WHAT: Reject non-string observation values before parsing them as durable timestamps.
+  // WHY: Version 2 must never admit an observation that cannot participate in a deterministic rolling window.
+  if (typeof value !== 'string') return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
+};
+const isLegacyIncident = (incident: unknown): incident is RuntimeIncident => (
+  Boolean(incident) && typeof incident === 'object'
+  && typeof (incident as RuntimeIncident).id === 'string'
+  && typeof (incident as RuntimeIncident).fingerprint === 'string'
+  && ((incident as RuntimeIncident).status === 'paused' || (incident as RuntimeIncident).status === 'resolved')
+  && typeof (incident as RuntimeIncident).scope === 'string'
+  && typeof (incident as RuntimeIncident).code === 'string'
+  && typeof (incident as RuntimeIncident).message === 'string'
+  && Number.isInteger((incident as RuntimeIncident).occurrences)
+);
+const isCurrentIncident = (incident: unknown): incident is CurrentRuntimeIncident => (
+  isLegacyIncident(incident)
+  && Array.isArray(incident.observations)
+  && incident.observations.every(validIsoTimestamp)
+  && typeof incident.legacyHistoryBefore === 'string'
+  && (!incident.legacyHistoryBefore || validIsoTimestamp(incident.legacyHistoryBefore))
+);
 const isIncidentDocument = (value: unknown): value is IncidentDocument => {
+  // WHAT: Reject non-object ledger roots before reading version-specific fields.
+  // WHY: Corrupt durable state must enter the preservation boundary instead of being treated as an empty ledger.
   if (!value || typeof value !== 'object') return false;
   const document = value as Partial<IncidentDocument>;
-  return document.version === 1 && Array.isArray(document.incidents) && document.incidents.every((incident) => (
-    Boolean(incident) && typeof incident === 'object'
-    && typeof incident.id === 'string'
-    && typeof incident.fingerprint === 'string'
-    && (incident.status === 'paused' || incident.status === 'resolved')
-    && typeof incident.scope === 'string'
-    && typeof incident.code === 'string'
-    && typeof incident.message === 'string'
-    && Number.isInteger(incident.occurrences)
-  ));
+  // WHAT: Keep the existing readable version-1 boundary without manufacturing dated occurrences during reads.
+  // WHY: Legacy lifetime counts do not contain enough evidence to reconstruct one timestamp per historical failure.
+  if (document.version === 1) return Array.isArray(document.incidents) && document.incidents.every(isLegacyIncident);
+  // WHAT: Validate every version-2 observation and loss marker before accepting the document.
+  // WHY: Malformed history would otherwise produce exact-looking rolling totals from invalid durable evidence.
+  if (document.version === 2) {
+    return typeof document.updatedAt === 'string'
+      && (!document.updatedAt || validIsoTimestamp(document.updatedAt))
+      && typeof document.historyTruncatedBefore === 'string'
+      && (!document.historyTruncatedBefore || validIsoTimestamp(document.historyTruncatedBefore))
+      && Array.isArray(document.incidents)
+      && document.incidents.every(isCurrentIncident);
+  }
+  return false;
 };
 const boundedText = (value: unknown, limit: number): string => String(value ?? '').slice(0, limit);
 
@@ -79,6 +126,69 @@ function fingerprint(input: { scope: string; component: string; operation: strin
   return createHash('sha256').update(JSON.stringify(input)).digest('hex');
 }
 
+function laterHistoryWatermark(current: string, candidate: string): string {
+  // WHAT: Ignore a loss boundary that cannot represent an actual ISO timestamp.
+  // WHY: An invalid watermark cannot define when a rolling total becomes exact again.
+  if (!validIsoTimestamp(candidate)) return current;
+  // WHAT: Install the first valid loss boundary or advance it to the latest discarded observation.
+  // WHY: Totals remain partial until every potentially lost event has left the inclusive rolling window.
+  if (!current || candidate > current) return candidate;
+  return current;
+}
+
+function writableDocument(document: IncidentDocument, observedAt: string): CurrentIncidentDocument {
+  // WHAT: Reuse a validated current document without rewriting its evidence during reads.
+  // WHY: Version 2 already carries the complete bounded occurrence contract.
+  if (document.version === 2) return document;
+  const incidents = document.incidents.map((incident): CurrentRuntimeIncident => {
+    let observations: string[] = [];
+    // WHAT: Preserve the one dated occurrence that a legacy incident actually recorded.
+    // WHY: Repeating the legacy lifetime count at the last timestamp would invent a false event timeline.
+    if (validIsoTimestamp(incident.lastObservedAt)) observations = [incident.lastObservedAt];
+    let legacyHistoryBefore = '';
+    // WHAT: Mark legacy occurrences that have no individual timestamp through their latest possible boundary.
+    // WHY: Consumers need an owner-specific lower bound until all unrepresented legacy evidence is outside the window.
+    if (incident.occurrences > observations.length) {
+      legacyHistoryBefore = observations.at(-1) ?? observedAt;
+    }
+    return {
+      ...incident,
+      observations,
+      legacyHistoryBefore,
+    };
+  });
+  return {
+    version: 2,
+    updatedAt: document.updatedAt,
+    historyTruncatedBefore: '',
+    incidents,
+  };
+}
+
+function pruneExpiredHistory(document: CurrentIncidentDocument, observedAt: string): void {
+  const cutoff = new Date(Date.parse(observedAt) - incidentHistoryWindowMs).toISOString();
+  // WHAT: Prune each incident independently against the shared write timestamp.
+  // WHY: Every retained incident must expose the same inclusive rolling window after persistence.
+  for (const incident of document.incidents) {
+    // WHAT: Retain observations exactly at the cutoff and remove only strictly older events.
+    // WHY: The rolling 24-hour requirement defines an inclusive lower boundary.
+    incident.observations = incident.observations.filter((entry) => entry >= cutoff);
+    // WHAT: Clear owner-scoped legacy uncertainty only after its latest possible event is strictly outside the window.
+    // WHY: A marker at the inclusive cutoff can still hide a countable occurrence.
+    if (incident.legacyHistoryBefore && incident.legacyHistoryBefore < cutoff) incident.legacyHistoryBefore = '';
+  }
+  // WHAT: Clear document-wide truncation only after every discarded event is strictly outside the window.
+  // WHY: Observation-cap and whole-incident loss must stop making current totals partial once it cannot intersect them.
+  if (document.historyTruncatedBefore && document.historyTruncatedBefore < cutoff) document.historyTruncatedBefore = '';
+}
+
+function latestIncidentHistoryBoundary(incident: CurrentRuntimeIncident): string {
+  return [incident.legacyHistoryBefore, ...incident.observations]
+    .filter(validIsoTimestamp)
+    .sort()
+    .at(-1) ?? '';
+}
+
 export class RuntimeScopePausedError extends Error {
   readonly code = 'runtime_scope_paused';
   readonly statusCode = 503;
@@ -93,14 +203,16 @@ export function createRuntimeIncidentLedger(input: {
   decisionOsRoot: string;
   file?: string;
   maxIncidents?: number;
+  maxObservationsPerIncident?: number;
   now?: () => Date;
   protectedScopes?: () => Iterable<string>;
 }) {
   const file = resolve(input.file ?? resolve(input.decisionOsRoot, 'runtime-incidents.json'));
   const maxIncidents = Math.max(10, input.maxIncidents ?? 500);
+  const maxObservationsPerIncident = Math.max(1, input.maxObservationsPerIncident ?? defaultMaximumObservationsPerIncident);
   const now = input.now ?? (() => new Date());
   let persistenceBlockedReason = '';
-  let pendingRecoveryDocument: IncidentDocument | null = null;
+  let pendingRecoveryDocument: CurrentIncidentDocument | null = null;
   let persistenceFailureReported = false;
 
   const reportPersistenceFailure = (error: unknown, scope: string): void => {
@@ -112,7 +224,7 @@ export function createRuntimeIncidentLedger(input: {
     catch { /* A last-resort diagnostic transport cannot affect server control flow. */ }
   };
 
-  const persist = (document: IncidentDocument): void => {
+  const persist = (document: CurrentIncidentDocument): void => {
     if (persistenceBlockedReason) throw new Error(persistenceBlockedReason);
     mkdirSync(dirname(file), { recursive: true });
     const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
@@ -150,9 +262,10 @@ export function createRuntimeIncidentLedger(input: {
         code: 'runtime_incident_ledger_corrupt',
         message: normalized.message,
       });
-      const document: IncidentDocument = {
-        version: 1,
+      const document: CurrentIncidentDocument = {
+        version: 2,
         updatedAt: observedAt,
+        historyTruncatedBefore: '',
         incidents: [{
           id: `incident-${randomUUID()}`,
           fingerprint: incidentFingerprint,
@@ -169,6 +282,8 @@ export function createRuntimeIncidentLedger(input: {
           lastObservedAt: observedAt,
           occurrences: 1,
           resolvedAt: '',
+          observations: [observedAt],
+          legacyHistoryBefore: '',
         }],
       };
       pendingRecoveryDocument = document;
@@ -196,9 +311,10 @@ export function createRuntimeIncidentLedger(input: {
       code,
       message: error.message,
     });
-    const document = read();
+    const document = writableDocument(read(), observedAt);
+    pruneExpiredHistory(document, observedAt);
     const existing = document.incidents.find((entry) => entry.status === 'paused' && entry.fingerprint === incidentFingerprint);
-    const incident: RuntimeIncident = existing ?? {
+    const incident: CurrentRuntimeIncident = existing ?? {
       id: `incident-${randomUUID()}`,
       fingerprint: incidentFingerprint,
       status: 'paused',
@@ -214,10 +330,24 @@ export function createRuntimeIncidentLedger(input: {
       lastObservedAt: observedAt,
       occurrences: 0,
       resolvedAt: '',
+      observations: [],
+      legacyHistoryBefore: '',
     };
     incident.lastObservedAt = observedAt;
     incident.occurrences += 1;
+    incident.observations.push(observedAt);
+    // WHAT: Discard only the oldest excess observations and advance the global loss watermark to their latest timestamp.
+    // WHY: The per-incident cap must stay bounded without presenting an undercount as exact inside the rolling window.
+    if (incident.observations.length > maxObservationsPerIncident) {
+      const discarded = incident.observations.splice(0, incident.observations.length - maxObservationsPerIncident);
+      document.historyTruncatedBefore = laterHistoryWatermark(
+        document.historyTruncatedBefore,
+        discarded.at(-1) ?? '',
+      );
+    }
     incident.context = boundedContext({ ...incident.context, ...incidentInput.context });
+    // WHAT: Add a newly fingerprinted incident after its first dated observation has been attached.
+    // WHY: Existing incidents are already owned by the current document and must not be duplicated.
     if (!existing) document.incidents.push(incident);
     const protectedScopes = new Set(input.protectedScopes?.() ?? []);
     const ordered = document.incidents.sort((left, right) => left.lastObservedAt.localeCompare(right.lastObservedAt));
@@ -225,6 +355,16 @@ export function createRuntimeIncidentLedger(input: {
     const remainingCapacity = Math.max(0, maxIncidents - protectedIncidents.length);
     const unprotectedHistory = ordered.filter((entry) => !protectedIncidents.includes(entry));
     const retainedHistory = remainingCapacity > 0 ? unprotectedHistory.slice(-remainingCapacity) : [];
+    const retainedIds = new Set([...protectedIncidents, ...retainedHistory].map((entry) => entry.id));
+    const evictedIncidents = ordered.filter((entry) => !retainedIds.has(entry.id));
+    // WHAT: Advance the global watermark across every incident removed by whole-document retention.
+    // WHY: Recent events can be lost even when each retained incident remains below its own observation cap.
+    for (const evicted of evictedIncidents) {
+      document.historyTruncatedBefore = laterHistoryWatermark(
+        document.historyTruncatedBefore,
+        latestIncidentHistoryBoundary(evicted),
+      );
+    }
     // WHAT: Retain every incident that owns live admission before bounded diagnostic history.
     // WHY: Evicting active evidence can make recovery impossible while the in-memory scope remains paused.
     document.incidents = [...protectedIncidents, ...retainedHistory]
@@ -260,16 +400,21 @@ export function createRuntimeIncidentLedger(input: {
       return read().incidents.filter((incident) => incident.status === 'paused' && (!scope || incident.scope === scope));
     },
     resolveScope(scope: string, resolution = ''): RuntimeIncident[] {
-      const document = read();
       const resolvedAt = now().toISOString();
+      const document = writableDocument(read(), resolvedAt);
+      pruneExpiredHistory(document, resolvedAt);
       const resolved: RuntimeIncident[] = [];
       for (const incident of document.incidents) {
+        // WHAT: Resolve only paused incidents owned by the requested scope.
+        // WHY: Recovery of one scope must not mutate unrelated or already settled incident evidence.
         if (incident.status !== 'paused' || incident.scope !== scope) continue;
         incident.status = 'resolved';
         incident.resolvedAt = resolvedAt;
         incident.context = boundedContext({ ...incident.context, resolution: boundedText(resolution, 2_000) });
         resolved.push(structuredClone(incident));
       }
+      // WHAT: Avoid a no-op write when the requested scope has no active incident.
+      // WHY: A read-only recovery attempt must not upgrade or rewrite durable legacy state.
       if (resolved.length === 0) return [];
       document.updatedAt = resolvedAt;
       try { persist(document); }

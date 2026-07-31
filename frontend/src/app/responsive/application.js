@@ -975,6 +975,32 @@ function formatObservedAt(value) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : 'Unknown time';
 }
 
+function formatOccurrenceTotal(occurrences, partial, noun = 'failure') {
+  let qualifier = '';
+  // WHAT: Prefix totals whose retained history is incomplete with an explicit lower-bound label.
+  // WHY: Observation loss and legacy history prohibit presenting the visible count as exact.
+  if (partial) qualifier = 'At least ';
+  let suffix = 's';
+  // WHAT: Remove the plural suffix for a single retained occurrence.
+  // WHY: Summary and group totals must remain readable at every count.
+  if (occurrences === 1) suffix = '';
+  return `${qualifier}${occurrences} ${noun}${suffix} · 24h`;
+}
+
+function formatIncidentContext(context) {
+  const entries = Object.entries(context ?? {});
+  // WHAT: Name the absence of additional structured source context.
+  // WHY: An empty rendered slot would make complete evidence look accidentally omitted.
+  if (entries.length === 0) return 'No additional context';
+  return entries.map(([key, value]) => {
+    let renderedValue = String(value);
+    // WHAT: Serialize nested context values instead of coercing them to an opaque object label.
+    // WHY: Dated event evidence must preserve structured operation and source details.
+    if (value !== null && typeof value === 'object') renderedValue = JSON.stringify(value);
+    return `${key}=${renderedValue}`;
+  }).join(' · ');
+}
+
 function renderRuntimeStatus(diagnostics) {
   const rows = projectRuntimeRows(state.projects, diagnostics);
   const projects = rows.filter((row) => row.kind === 'project');
@@ -990,7 +1016,6 @@ function renderRuntimeStatus(diagnostics) {
     row.dataset.status = project.status;
     row.dataset.projectId = project.id;
     row.style.setProperty('--project-color', project.color);
-    row.open = project.incidents.length > 0;
     const summary = document.createElement('summary');
     summary.className = 'runtime-project-summary';
     const mark = Object.assign(document.createElement('span'), { className: 'runtime-project-mark' });
@@ -1000,10 +1025,35 @@ function renderRuntimeStatus(diagnostics) {
       Object.assign(document.createElement('strong'), { textContent: project.name }),
       Object.assign(document.createElement('small'), { textContent: project.detail }),
     );
+    const summaryState = Object.assign(document.createElement('div'), { className: 'runtime-project-summary-state' });
+    const total = Object.assign(document.createElement('span'), {
+      className: 'runtime-project-occurrences',
+      textContent: formatOccurrenceTotal(project.occurrences, project.occurrencesPartial),
+    });
+    total.dataset.partial = String(project.occurrencesPartial);
     const badge = Object.assign(document.createElement('span'), { className: 'runtime-status-badge runtime-project-availability', textContent: project.label });
-    summary.append(mark, copy, badge);
+    summaryState.append(total, badge);
+    summary.append(mark, copy, summaryState);
     const incidentList = Object.assign(document.createElement('div'), { className: 'runtime-project-incidents' });
-    incidentList.setAttribute('aria-label', `${project.name} active incidents`);
+    incidentList.setAttribute('aria-label', `${project.name} failure history`);
+    // WHAT: Explain why a project-level 24-hour total is a lower bound before listing its retained evidence.
+    // WHY: Legacy and global truncation markers have different evidence-loss scopes that operators must be able to distinguish.
+    if (project.occurrencesPartial) {
+      let partialReason = 'the diagnostics observation time was unavailable';
+      // WHAT: Identify owner-scoped legacy loss as the reason for a partial project total.
+      // WHY: Legacy lifetime counts cannot be expanded into dated rolling-window events.
+      if (project.legacyHistory) partialReason = 'earlier owner history is unavailable';
+      // WHAT: Identify document-wide retention loss as the reason for a partial project total.
+      // WHY: A global truncation watermark means discarded evidence can still intersect this 24-hour window.
+      if (project.truncatedHistory) partialReason = 'retained system history was truncated';
+      // WHAT: Disclose both incomplete-history boundaries when they apply to the same project row.
+      // WHY: Reporting only one marker would hide a verified source of missing occurrences.
+      if (project.legacyHistory && project.truncatedHistory) partialReason = 'earlier owner history is unavailable and retained system history was truncated';
+      incidentList.append(Object.assign(document.createElement('p'), {
+        className: 'runtime-history-lower-bound',
+        textContent: `Lower bound: ${partialReason}.`,
+      }));
+    }
     incidentList.append(...project.incidents.map((incident) => {
       const card = document.createElement('article');
       card.className = 'runtime-incident-card';
@@ -1014,7 +1064,7 @@ function renderRuntimeStatus(diagnostics) {
       incidentCopy.append(
         Object.assign(document.createElement('code'), { textContent: incident.code }),
         Object.assign(document.createElement('small'), {
-          textContent: `${incident.components.join(', ') || 'runtime'} · ${incident.occurrences} occurrence${incident.occurrences === 1 ? '' : 's'} · last ${formatObservedAt(incident.lastObservedAt)}`,
+          textContent: `${incident.components.join(', ') || 'runtime'} · ${formatOccurrenceTotal(incident.occurrences, incident.occurrencesPartial, 'occurrence')} · last ${formatObservedAt(incident.lastObservedAt)}`,
         }),
       );
       const labels = Object.assign(document.createElement('div'), { className: 'runtime-incident-labels' });
@@ -1023,28 +1073,76 @@ function renderRuntimeStatus(diagnostics) {
         textContent: incident.severity,
       });
       severity.dataset.kind = 'severity';
-      const interruption = Object.assign(document.createElement('span'), {
+      let activityLabel = 'Resolved';
+      // WHAT: Label a group with retained active incidents as active even when its rolling count is zero.
+      // WHY: Current incident authority remains independent of whether dated occurrences still intersect the window.
+      if (incident.activeIncidentCount > 0) activityLabel = 'Active';
+      // WHAT: Elevate a group whose active scope matches a pause registry to an interruption.
+      // WHY: The registry match is the authoritative signal that work is currently blocked.
+      if (incident.interrupting) activityLabel = 'Interruption';
+      const activity = Object.assign(document.createElement('span'), {
         className: 'runtime-status-badge',
-        textContent: incident.interrupting ? 'Interruption' : 'Active',
+        textContent: activityLabel,
       });
-      interruption.dataset.kind = 'interruption';
-      labels.append(severity, interruption);
+      activity.dataset.kind = 'interruption';
+      labels.append(severity, activity);
       heading.append(incidentCopy, labels);
-      const scopes = Object.assign(document.createElement('details'), { className: 'runtime-incident-scopes' });
-      const scopesSummary = document.createElement('summary');
-      scopesSummary.textContent = `${incident.scopes.length} affected scope${incident.scopes.length === 1 ? '' : 's'}`;
-      const list = document.createElement('ul');
-      // WHAT: Render each retained affected scope inside its incident card.
-      // WHY: Operators need the complete owner-scoped evidence rather than only the aggregate count.
-      for (const scope of incident.scopes) {
-        const item = document.createElement('li');
-        item.append(Object.assign(document.createElement('code'), { textContent: scope }));
-        list.append(item);
+      const events = Object.assign(document.createElement('div'), { className: 'runtime-incident-events' });
+      events.setAttribute('aria-label', `${incident.code} dated occurrences`);
+      // WHAT: Render each retained occurrence as its own dated evidence record inside the owner-and-code group.
+      // WHY: Equal error codes can retain different messages, sources, statuses, and contexts that must not be collapsed.
+      for (const event of incident.events) {
+        const evidence = Object.assign(document.createElement('article'), { className: 'runtime-incident-event' });
+        const eventHeading = Object.assign(document.createElement('header'), { className: 'runtime-incident-event-heading' });
+        const time = Object.assign(document.createElement('time'), {
+          dateTime: event.observedAt,
+          textContent: formatObservedAt(event.observedAt),
+        });
+        const eventState = Object.assign(document.createElement('span'), {
+          className: 'runtime-incident-event-state',
+          textContent: `${event.status} · ${event.severity}`,
+        });
+        eventHeading.append(time, eventState);
+        const source = Object.assign(document.createElement('dl'), { className: 'runtime-incident-source' });
+        const sourceValues = [
+          ['Component', event.component || 'runtime'],
+          ['Scope', event.scope || 'Unscoped'],
+          ['Context', formatIncidentContext(event.context)],
+        ];
+        // WHAT: Render component, scope, and structured context for the dated occurrence.
+        // WHY: Each message needs its own source trail rather than only group-level aggregate metadata.
+        for (const [label, value] of sourceValues) {
+          source.append(
+            Object.assign(document.createElement('dt'), { textContent: label }),
+            Object.assign(document.createElement('dd'), { textContent: value }),
+          );
+        }
+        evidence.append(
+          eventHeading,
+          Object.assign(document.createElement('p'), { className: 'runtime-incident-message', textContent: event.message }),
+          source,
+        );
+        events.append(evidence);
       }
-      scopes.append(scopesSummary, list);
-      card.append(heading, Object.assign(document.createElement('p'), { className: 'runtime-incident-message', textContent: incident.message }), scopes);
+      // WHAT: State explicitly when an active group has no dated evidence inside the rolling window.
+      // WHY: A blank group could otherwise look like a rendering failure instead of current authority with zero recent occurrences.
+      if (incident.events.length === 0) {
+        events.append(Object.assign(document.createElement('p'), {
+          className: 'runtime-history-empty',
+          textContent: 'No dated occurrences in the last 24 hours.',
+        }));
+      }
+      card.append(heading, events);
       return card;
     }));
+    // WHAT: Give an expanded project with no failure groups an explicit history state.
+    // WHY: Every catalog project remains a disclosure even when its rolling total is exactly zero.
+    if (project.incidents.length === 0) {
+      incidentList.append(Object.assign(document.createElement('p'), {
+        className: 'runtime-history-empty',
+        textContent: 'No failures recorded in the last 24 hours.',
+      }));
+    }
     row.append(summary, incidentList);
     return row;
   }));
