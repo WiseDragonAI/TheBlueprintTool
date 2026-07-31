@@ -7,6 +7,7 @@ import { ledgerCardBody } from '/src/runtime/ledger/helper/ledger-card-body.js';
 import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
 import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
+import { upsertResponsiveRouteCard } from './upsert-responsive-route-card.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
 import { compareControlRoomQueueTasks, executionPresentation, parentMasterTask, projectMasterTask, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
@@ -3252,7 +3253,7 @@ async function loadRoute({ retainView = false } = {}) {
         requireRouteOwnership(owner);
       }
       if (card) {
-        state.ledger.cards = state.ledger.cards.map((entry) => String(entry.id) === requestedCard ? card : entry);
+        state.ledger.cards = upsertResponsiveRouteCard(state.ledger.cards, card);
         const cardZone = zone ?? zones.find((entry) => entry.cards.some((candidate) => String(candidate.id) === requestedCard));
         state.activeZoneId = asText(cardZone?.id ?? 'ungrouped');
         state.activeZoneColor = asText(cardZone?.color ?? '#9ba3ad');
