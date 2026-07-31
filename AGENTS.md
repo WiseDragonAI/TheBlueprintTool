@@ -151,6 +151,18 @@ cd /home/jbb/dev/EditorBP/decision-os
 node bin/decision-os-merge-dev.mjs --json
 ```
 
+Before promotion, run the read-only doctor:
+
+```bash
+node bin/decision-os-merge-dev.mjs doctor
+node bin/decision-os-merge-dev.mjs doctor --json
+```
+
+Doctor reports current branches, parent and main-child dirt, both recorded
+gitlinks, predicted conflicts, blockers, and the expected commit sequence. It
+must not acquire mutation locks, create promotion logs, stage paths, commit,
+update refs, change either worktree, or enter `.worktrees/dev/.decision-os`.
+
 Run it only from the primary parent `main` checkout. The tool may automatically
 commit non-ignored state in main's `.decision-os` child, commit only that
 gitlink in parent `main`, merge the local `dev` ref with `--no-commit --no-ff`,
@@ -166,7 +178,7 @@ parent repositories to the admitted state, and run the tool again.
 
 Every invocation writes one local JSONL receipt under
 `.decision-os-merge-dev-logs/`. This directory is Git-ignored and must remain
-untracked. Review and clean logs according to
+untracked. Doctor is observational and creates no receipt. Review and clean logs according to
 [`documentation/procedure/deployment/merge-dev-into-main.md`](documentation/procedure/deployment/merge-dev-into-main.md); the tool never deletes logs automatically.
 
 ### Server Restart Ownership

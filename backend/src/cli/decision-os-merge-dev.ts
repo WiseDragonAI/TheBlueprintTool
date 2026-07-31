@@ -23,6 +23,33 @@ export type MergeDevReceipt = {
   mainSha: string;
 };
 
+export type MergeDevDoctorReport = {
+  ok: true;
+  ready: boolean;
+  blockers: Array<{ code: string; message: string }>;
+  state: {
+    parentBranch: string;
+    mainSha: string;
+    devSha: string;
+    parentChanges: StatusRecord[];
+    childBranch: string;
+    childSha: string;
+    childChanges: StatusRecord[];
+    mainGitlink: string;
+    devGitlink: string;
+    logDirectoryIgnored: boolean;
+    submoduleBoundaryValid: boolean;
+  };
+  expectedMerge: {
+    conflicts: string[];
+    createDecisionOsCommit: boolean;
+    createGitlinkCommit: boolean;
+    createMergeCommit: boolean;
+    preservedGitlink: string;
+    sourceSha: string;
+  };
+};
+
 export class MergeDevError extends Error {
   logFile?: string;
 
@@ -70,7 +97,7 @@ function gitText(root: string, args: readonly string[]): string {
   return git(root, args).stdout.trim();
 }
 
-type StatusRecord = { path: string; staged: boolean };
+export type StatusRecord = { path: string; staged: boolean };
 
 function statusRecords(root: string, ignoreSubmodules: 'all' | 'none'): StatusRecord[] {
   const output = git(root, [
@@ -152,12 +179,7 @@ function assertNoUnmergedPaths(root: string, scope: string): void {
 }
 
 function assertMergeSimulation(root: string, devSha: string): void {
-  const result = git(root, ['merge-tree', '--write-tree', 'HEAD', devSha], [0, 1]);
-  // WHAT: Ignore only the expected protected gitlink conflict diagnostics.
-  // WHY: Main deliberately retains its Decision OS pointer instead of merging dev child history.
-  const conflicts = `${result.stdout}\n${result.stderr}`
-    .split('\n')
-    .filter((line) => line.startsWith('CONFLICT'));
+  const { conflicts, result } = inspectMergeSimulation(root, devSha);
   const unexpected = conflicts.filter((line) => line !== 'CONFLICT (submodule): Merge conflict in .decision-os');
   // WHAT: Reject every simulated conflict outside the exact gitlink.
   // WHY: An infrastructure command must not select source-code conflict outcomes.
@@ -169,6 +191,130 @@ function assertMergeSimulation(root: string, devSha: string): void {
   if (result.status !== 0 && conflicts.length === 0) {
     throw new MergeDevError('merge_dev_simulation_failed', (result.stderr || result.stdout).trim(), 3);
   }
+}
+
+function inspectMergeSimulation(root: string, devSha: string): { conflicts: string[]; result: GitResult } {
+  const result = git(root, ['merge-tree', '--write-tree', 'HEAD', devSha], [0, 1]);
+  return {
+    conflicts: `${result.stdout}\n${result.stderr}`
+      .split('\n')
+      .filter((line) => line.startsWith('CONFLICT')),
+    result,
+  };
+}
+
+function doctorBlocker(blockers: MergeDevDoctorReport['blockers'], code: string, message: string): void {
+  blockers.push({ code, message });
+}
+
+export function inspectMergeDev(repositoryRoot: string): MergeDevDoctorReport {
+  const root = resolve(repositoryRoot);
+  const childRoot = resolve(root, '.decision-os');
+  const parentBranch = gitText(root, ['branch', '--show-current']);
+  const childBranch = gitText(childRoot, ['branch', '--show-current']);
+  const mainSha = gitText(root, ['rev-parse', 'HEAD']);
+  const devSha = gitText(root, ['rev-parse', '--verify', 'dev^{commit}']);
+  const childSha = gitText(childRoot, ['rev-parse', 'HEAD']);
+  const mainGitlink = gitText(root, ['rev-parse', 'HEAD:.decision-os']);
+  const devGitlink = gitText(root, ['rev-parse', `${devSha}:.decision-os`]);
+  const parentChanges = statusRecords(root, 'none');
+  const childChanges = statusRecords(childRoot, 'all');
+  const stagedParent = parentChanges.filter((record) => record.staged);
+  const unrelatedParent = parentChanges.filter((record) => record.path !== '.decision-os');
+  const parentUnmerged = gitText(root, ['diff', '--name-only', '--diff-filter=U']);
+  const childUnmerged = gitText(childRoot, ['diff', '--name-only', '--diff-filter=U']);
+  const submoduleBoundaryValid = /^160000 [a-f0-9]{40,64} 0\t\.decision-os$/.test(
+    gitText(root, ['ls-files', '--stage', '--', '.decision-os']),
+  );
+  const logDirectoryIgnored = git(
+    root,
+    ['check-ignore', '--quiet', '--no-index', '.decision-os-merge-dev-logs/probe.jsonl'],
+    [0, 1],
+  ).status === 0;
+  const simulation = inspectMergeSimulation(root, devSha);
+  const unexpectedConflicts = simulation.conflicts.filter(
+    (line) => line !== 'CONFLICT (submodule): Merge conflict in .decision-os',
+  );
+  const blockers: MergeDevDoctorReport['blockers'] = [];
+
+  // WHAT: Report an invalid parent branch without changing checkout state.
+  // WHY: Doctor must predict the same admission decision as the mutating command.
+  if (parentBranch !== 'main') doctorBlocker(blockers, 'merge_dev_parent_branch_invalid', `Expected parent branch main, found ${parentBranch || 'detached HEAD'}.`);
+  // WHAT: Report an invalid main child branch without checking out another branch.
+  // WHY: Doctor is observational and cannot repair child ownership.
+  if (childBranch !== 'main') doctorBlocker(blockers, 'merge_dev_child_branch_invalid', `Expected .decision-os branch main, found ${childBranch || 'detached HEAD'}.`);
+  // WHAT: Report a missing or malformed gitlink boundary.
+  // WHY: The merge command may preserve only an exact stage-zero submodule entry.
+  if (!submoduleBoundaryValid) doctorBlocker(blockers, 'merge_dev_submodule_boundary_invalid', '.decision-os is not one initialized stage-zero Git submodule.');
+  // WHAT: Report existing parent conflicts.
+  // WHY: Doctor must distinguish pre-existing Git operations from predicted merge conflicts.
+  if (parentUnmerged) doctorBlocker(blockers, 'merge_dev_parent_unmerged', `Parent repository contains unresolved paths: ${parentUnmerged.split('\n').join(', ')}.`);
+  // WHAT: Report existing child conflicts.
+  // WHY: Automatic child snapshots cannot commit an unresolved index.
+  if (childUnmerged) doctorBlocker(blockers, 'merge_dev_child_unmerged', `Decision OS repository contains unresolved paths: ${childUnmerged.split('\n').join(', ')}.`);
+  // WHAT: Report protected staged parent work.
+  // WHY: The merge command never absorbs operator-approved index state.
+  if (stagedParent.length > 0) doctorBlocker(blockers, 'merge_dev_parent_staged', `Parent index is not clean: ${stagedParent.map((record) => record.path).join(', ')}.`);
+  // WHAT: Report parent dirt outside the exact submodule marker.
+  // WHY: Only main Decision OS state may be snapshotted before promotion.
+  if (unrelatedParent.length > 0) doctorBlocker(blockers, 'merge_dev_parent_dirty', `Parent worktree contains unrelated changes: ${unrelatedParent.map((record) => record.path).join(', ')}.`);
+  // WHAT: Report missing ignore protection for durable doctor and merge logs.
+  // WHY: Operational receipts must not make the parent dirty.
+  if (!logDirectoryIgnored) doctorBlocker(blockers, 'merge_dev_log_directory_not_ignored', '.decision-os-merge-dev-logs/ is not ignored.');
+  // WHAT: Report every predicted source conflict outside the protected gitlink.
+  // WHY: The tool deliberately owns no source-code resolution policy.
+  if (unexpectedConflicts.length > 0) doctorBlocker(blockers, 'merge_dev_source_conflict', unexpectedConflicts.join(' | '));
+  // WHAT: Report an unclassified simulation failure.
+  // WHY: Failed merge prediction without a conflict diagnosis cannot admit mutation.
+  if (simulation.result.status !== 0 && simulation.conflicts.length === 0) doctorBlocker(blockers, 'merge_dev_simulation_failed', (simulation.result.stderr || simulation.result.stdout).trim());
+
+  const createDecisionOsCommit = childChanges.length > 0;
+  return {
+    ok: true,
+    ready: blockers.length === 0,
+    blockers,
+    state: {
+      parentBranch,
+      mainSha,
+      devSha,
+      parentChanges,
+      childBranch,
+      childSha,
+      childChanges,
+      mainGitlink,
+      devGitlink,
+      logDirectoryIgnored,
+      submoduleBoundaryValid,
+    },
+    expectedMerge: {
+      conflicts: simulation.conflicts,
+      createDecisionOsCommit,
+      createGitlinkCommit: createDecisionOsCommit || childSha !== mainGitlink,
+      createMergeCommit: blockers.length === 0,
+      preservedGitlink: createDecisionOsCommit ? 'new main Decision OS snapshot commit' : childSha,
+      sourceSha: devSha,
+    },
+  };
+}
+
+function formatDoctorReport(report: MergeDevDoctorReport): string {
+  const changes = (records: StatusRecord[]): string => records.length === 0
+    ? 'clean'
+    : records.map((record) => `${record.staged ? 'staged' : 'unstaged'}:${record.path}`).join(', ');
+  return [
+    `READY ${report.ready ? 'yes' : 'no'}`,
+    `main ${report.state.mainSha} branch=${report.state.parentBranch} status=${changes(report.state.parentChanges)}`,
+    `main-decision-os ${report.state.childSha} branch=${report.state.childBranch} status=${changes(report.state.childChanges)}`,
+    `dev ${report.state.devSha}`,
+    `gitlink-main ${report.state.mainGitlink}`,
+    `gitlink-dev ${report.state.devGitlink}`,
+    `expected-child-commit ${report.expectedMerge.createDecisionOsCommit ? 'yes' : 'no'}`,
+    `expected-gitlink-commit ${report.expectedMerge.createGitlinkCommit ? 'yes' : 'no'}`,
+    `expected-merge-commit ${report.expectedMerge.createMergeCommit ? 'yes' : 'no'}`,
+    `expected-preserved-gitlink ${report.expectedMerge.preservedGitlink}`,
+    `conflicts ${report.expectedMerge.conflicts.length === 0 ? 'none' : report.expectedMerge.conflicts.join(' | ')}`,
+    `blockers ${report.blockers.length === 0 ? 'none' : report.blockers.map((blocker) => `${blocker.code}: ${blocker.message}`).join(' | ')}`,
+  ].join('\n');
 }
 
 function commitChildState(childRoot: string): { created: boolean; sha: string } {
@@ -319,13 +465,23 @@ export async function mergeDevIntoMain(repositoryRoot: string): Promise<MergeDev
 }
 
 export async function runMergeDevCli(argv = process.argv.slice(2), cwd = process.cwd()): Promise<number> {
-  // WHAT: Accept only the fixed command with optional machine-readable output declaration.
+  const doctor = argv[0] === 'doctor';
+  const doctorArgsValid = doctor && (argv.length === 1 || (argv.length === 2 && argv[1] === '--json'));
+  const mergeArgsValid = !doctor && (argv.length === 0 || (argv.length === 1 && argv[0] === '--json'));
+  // WHAT: Accept only the fixed merge and read-only doctor forms.
   // WHY: Strategy, branch, push, and dirty-state overrides would weaken the safety contract.
-  if (argv.length > 1 || (argv.length === 1 && argv[0] !== '--json')) {
-    process.stderr.write(`${JSON.stringify({ ok: false, code: 'merge_dev_usage', message: 'Usage: decision-os-merge-dev [--json]' })}\n`);
+  if (!doctorArgsValid && !mergeArgsValid) {
+    process.stderr.write(`${JSON.stringify({ ok: false, code: 'merge_dev_usage', message: 'Usage: decision-os-merge-dev [--json] | decision-os-merge-dev doctor [--json]' })}\n`);
     return 2;
   }
   try {
+    // WHAT: Return the predicted merge without locks, logs, staging, commits, or ref updates.
+    // WHY: Doctor is the explicit read-only admission preview requested by operators.
+    if (doctor) {
+      const report = inspectMergeDev(cwd);
+      process.stdout.write(`${argv.includes('--json') ? JSON.stringify(report) : formatDoctorReport(report)}\n`);
+      return report.ready ? 0 : 2;
+    }
     const receipt = await mergeDevIntoMain(cwd);
     process.stdout.write(`${JSON.stringify(receipt)}\n`);
     return 0;

@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
-import { MergeDevError, mergeDevIntoMain } from '../../src/cli/decision-os-merge-dev.js';
+import { MergeDevError, inspectMergeDev, mergeDevIntoMain } from '../../src/cli/decision-os-merge-dev.js';
 
 function git(root: string, args: string[]): string {
   return execFileSync('git', args, {
@@ -67,6 +67,21 @@ test('commits main child state and merges dev without adopting the dev gitlink',
   const devChildStatus = git(join(devRoot, '.decision-os'), ['status', '--porcelain=v2', '--branch']);
   const devChildFile = readFileSync(join(devRoot, '.decision-os', 'dev-card.md'), 'utf8');
   writeFileSync(join(fixture.childRoot, 'main-card.md'), 'main child state\n');
+  const mainBeforeDoctor = git(fixture.parentRoot, ['rev-parse', 'HEAD']);
+  const childBeforeDoctor = git(fixture.childRoot, ['rev-parse', 'HEAD']);
+  const parentStatusBeforeDoctor = git(fixture.parentRoot, ['status', '--porcelain=v2', '--branch']);
+  const childStatusBeforeDoctor = git(fixture.childRoot, ['status', '--porcelain=v2', '--branch']);
+
+  const doctor = inspectMergeDev(fixture.parentRoot);
+
+  assert.equal(doctor.ready, true);
+  assert.equal(doctor.expectedMerge.createDecisionOsCommit, true);
+  assert.equal(doctor.expectedMerge.preservedGitlink, 'new main Decision OS snapshot commit');
+  assert.equal(git(fixture.parentRoot, ['rev-parse', 'HEAD']), mainBeforeDoctor);
+  assert.equal(git(fixture.childRoot, ['rev-parse', 'HEAD']), childBeforeDoctor);
+  assert.equal(git(fixture.parentRoot, ['status', '--porcelain=v2', '--branch']), parentStatusBeforeDoctor);
+  assert.equal(git(fixture.childRoot, ['status', '--porcelain=v2', '--branch']), childStatusBeforeDoctor);
+  assert.equal(readdirSync(fixture.parentRoot).includes('.decision-os-merge-dev-logs'), false);
 
   const receipt = await mergeDevIntoMain(fixture.parentRoot);
 
@@ -118,6 +133,12 @@ test('rejects source conflicts during simulation before committing child state',
   const parentBefore = git(fixture.parentRoot, ['rev-parse', 'HEAD']);
   const childBefore = git(fixture.childRoot, ['rev-parse', 'HEAD']);
   writeFileSync(join(fixture.childRoot, 'main-card.md'), 'must remain uncommitted\n');
+
+  const doctor = inspectMergeDev(fixture.parentRoot);
+
+  assert.equal(doctor.ready, false);
+  assert.ok(doctor.blockers.some((blocker) => blocker.code === 'merge_dev_source_conflict'));
+  assert.ok(doctor.expectedMerge.conflicts.some((conflict) => conflict.includes('shared.txt')));
 
   await assert.rejects(
     () => mergeDevIntoMain(fixture.parentRoot),
