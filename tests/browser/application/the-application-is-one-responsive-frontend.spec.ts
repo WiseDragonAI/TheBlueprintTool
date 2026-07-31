@@ -3,8 +3,9 @@
  * WHY: Control Room and project workflows must not diverge into separate mobile and desktop implementations.
  */
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
@@ -13,6 +14,47 @@ import { chromium, type Browser, type Page } from '@playwright/test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const chromiumExecutablePath = '/snap/bin/chromium';
+let isolatedWorkspaceRoot = '';
+
+test.after(() => {
+  // WHAT: Remove only the browser suite's isolated workspace after every server has stopped.
+  // WHY: Browser verification must not leave copied authored state or runtime artifacts behind.
+  if (isolatedWorkspaceRoot) rmSync(isolatedWorkspaceRoot, { recursive: true, force: true });
+});
+
+function browserWorkspaceRoot(): string {
+  // WHAT: Reuse one isolated authored-state copy across this file's sequential browser servers.
+  // WHY: Every server must remain disconnected from production federation without recopying the large fixture per test.
+  if (isolatedWorkspaceRoot) return isolatedWorkspaceRoot;
+  isolatedWorkspaceRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-responsive-browser-'));
+  materializeCommittedDecisionOsFixture(isolatedWorkspaceRoot);
+  return isolatedWorkspaceRoot;
+}
+
+function materializeCommittedDecisionOsFixture(workspaceRoot: string): void {
+  const fixtureRoot = resolve(workspaceRoot, '.decision-os');
+  // WHAT: Materialize the exact Decision OS child commit recorded by this feature checkout.
+  // WHY: The configured child source owns committed objects even when this linked worktree's submodule is uninitialized or on another commit.
+  const recordedCommit = execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD:.decision-os'], { encoding: 'utf8' }).trim();
+  const childSourceUrl = execFileSync('git', ['-C', repoRoot, 'config', '-f', '.gitmodules', '--get', 'submodule..decision-os.url'], { encoding: 'utf8' }).trim();
+  // WHAT: Bound the in-memory archive above the committed fixture size while retaining synchronous setup ordering.
+  // WHY: Node's 1 MiB default maxBuffer terminates a valid child archive before tar can receive it.
+  const archive = execFileSync('git', [`--git-dir=${fileURLToPath(childSourceUrl)}`, 'archive', '--format=tar', recordedCommit], {
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  mkdirSync(fixtureRoot, { recursive: true });
+  const extraction = spawnSync('tar', ['-x', '-C', fixtureRoot], { input: archive, encoding: 'buffer' });
+  // WHAT: Reject an incomplete authored-state extraction before starting the browser server.
+  // WHY: Continuing with a partial fixture would turn a setup failure into misleading missing-card and missing-project behavior.
+  if (extraction.status !== 0) {
+    throw new Error(`Unable to materialize committed Decision OS browser fixture: ${String(extraction.stderr)}`);
+  }
+  // WHAT: Remove settings and runtime-owned paths even when an older child commit tracked them.
+  // WHY: Browser verification must never inherit credentials, federation identity, caches, runs, or uploads.
+  for (const relativePath of ['.settings.json', 'cache', 'runtime', 'runs', 'voice-uploads']) {
+    rmSync(resolve(fixtureRoot, relativePath), { recursive: true, force: true });
+  }
+}
 
 test('The responsive application preserves the mobile Control Room and expands the same shell on desktop.', { timeout: 60_000 }, async () => {
   const server = await startDecisionOsServer();
@@ -241,7 +283,7 @@ test('An interrupted responsive thread hydration recovers without an operator re
       executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
-    const route = localResponsiveCardRoute();
+    const route = await resolveResponsiveCardRoute(server.url);
     const expectedThreadId = `thread-${decodeURIComponent(route.split('/').at(-1) ?? '')}`;
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     let threadRequestCount = 0;
@@ -294,7 +336,7 @@ test('A hydrated responsive thread remains visible while navigation refresh is p
       executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
-    const route = localResponsiveCardRoute();
+    const route = await resolveResponsiveCardRoute(server.url);
     const expectedThreadId = `thread-${decodeURIComponent(route.split('/').at(-1) ?? '')}`;
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const refreshGate = new Promise<void>((resolveRefresh) => { releaseRefresh = resolveRefresh; });
@@ -443,6 +485,8 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
   let releaseSuccessfulAdmission: (() => void) | undefined;
   let releaseRejectedAdmission: (() => void) | undefined;
   try {
+    // WHAT: Exercise success, rejection, and timeout through one served responsive browser lifecycle.
+    // WHY: The optimistic contract requires pre-settlement UI evidence plus authoritative reconciliation.
     browser = await chromium.launch({
       headless: true,
       // WHAT: Use the platform-authoritative Chromium binary when it is installed.
@@ -480,23 +524,32 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
     successfulProjection = executionProjection(fixture.projection, fixture.task, String(successfulRequest.requestId));
     releaseSuccessfulAdmission();
     await pendingTask.getByText(/^Queued/).waitFor({ state: 'visible' });
+    const successfulTelemetry = await pipelineAdmissionTelemetry(successful, String(successfulRequest.requestId));
+    assert.deepEqual(successfulTelemetry.map((entry) => entry.name), [
+      'optimistic-projection-installed',
+      'handoff-published',
+      'admission-settled',
+      'admission-deadline-cleared',
+      'admission-reconciled',
+    ]);
+    assert.equal(successfulTelemetry.find((entry) => entry.name === 'admission-settled')?.args.outcome, 'accepted');
     await successful.reload({ waitUntil: 'domcontentloaded' });
     await successful.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).waitFor({ state: 'visible' });
 
     const rejected = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    let observeRejectedAdmission!: () => void;
-    const rejectedAdmissionObserved = new Promise<void>((resolveObserved) => { observeRejectedAdmission = resolveObserved; });
+    let observeRejectedAdmission!: (request: Record<string, unknown>) => void;
+    const rejectedAdmissionObserved = new Promise<Record<string, unknown>>((resolveObserved) => { observeRejectedAdmission = resolveObserved; });
     const rejectedAdmissionGate = new Promise<void>((resolveAdmission) => { releaseRejectedAdmission = resolveAdmission; });
     await installFixturePipelineCatalog(rejected);
     await rejected.route('**/api/control-room', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture.projection) }));
     await rejected.route('**/api/codex/pipelines/runs', async (route) => {
-      observeRejectedAdmission();
+      observeRejectedAdmission(route.request().postDataJSON() as Record<string, unknown>);
       await rejectedAdmissionGate;
       await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Pipeline admission rejected.' }) });
     });
     await rejected.goto(`${server.url}${fixture.route}`, { waitUntil: 'domcontentloaded' });
     await startFixturePipeline(rejected);
-    await waitForSignal(rejectedAdmissionObserved, 'Timed out waiting for the deferred rejected admission.');
+    const rejectedRequest = await waitForSignal(rejectedAdmissionObserved, 'Timed out waiting for the deferred rejected admission.');
     await rejected.waitForURL(`${server.url}/?tab=exec`);
     await rejected.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).getByText(/^Preparing/).waitFor({ state: 'visible' });
     releaseRejectedAdmission();
@@ -507,8 +560,18 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
     await rejected.locator(`[data-control-column="${fixture.confirmedTab}"] .control-task`).filter({ hasText: fixture.task.title }).waitFor({ state: 'visible' });
     await rejectedAlert.waitFor({ state: 'visible' });
     assert.equal(await rejected.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).count(), 0);
+    const rejectedTelemetry = await pipelineAdmissionTelemetry(rejected, String(rejectedRequest.requestId));
+    assert.deepEqual(rejectedTelemetry.map((entry) => entry.name), [
+      'optimistic-projection-installed',
+      'handoff-published',
+      'admission-settled',
+      'admission-deadline-cleared',
+      'rejection-reconciled',
+    ]);
+    assert.equal(rejectedTelemetry.find((entry) => entry.name === 'admission-settled')?.args.outcome, 'rejected');
 
     const timedOut = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    let timedOutRequest: Record<string, unknown> | undefined;
     await timedOut.addInitScript(() => {
       const nativeSetTimeout = window.setTimeout.bind(window);
       // WHAT: Accelerate only the fixed production admission deadline inside this timeout fixture.
@@ -520,6 +583,7 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
     await installFixturePipelineCatalog(timedOut);
     await timedOut.route('**/api/control-room', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture.projection) }));
     await timedOut.route('**/api/codex/pipelines/runs', async (route) => {
+      timedOutRequest = route.request().postDataJSON() as Record<string, unknown>;
       await delay(1_000);
       await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ ok: true }) }).catch(() => undefined);
     });
@@ -532,13 +596,43 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
     await timedOut.locator(`[data-control-column="${fixture.confirmedTab}"] .control-task`).filter({ hasText: fixture.task.title }).waitFor({ state: 'visible' });
     await timedOut.locator('#mutation-error:not([hidden])').waitFor({ state: 'visible' });
     assert.equal(await timedOut.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).count(), 0);
+    assert.ok(timedOutRequest?.requestId);
+    const timedOutTelemetry = await pipelineAdmissionTelemetry(timedOut, String(timedOutRequest.requestId));
+    assert.deepEqual(timedOutTelemetry.map((entry) => entry.name), [
+      'optimistic-projection-installed',
+      'handoff-published',
+      'admission-settled',
+      'admission-deadline-cleared',
+      'rejection-reconciled',
+    ]);
+    assert.equal(timedOutTelemetry.find((entry) => entry.name === 'admission-settled')?.args.outcome, 'timed-out');
   } finally {
+    // WHAT: Release deferred admissions and close every browser resource after each outcome.
+    // WHY: A failed assertion must not leave fixture promises or Chromium processes unsettled.
     releaseSuccessfulAdmission?.();
     releaseRejectedAdmission?.();
     await browser?.close();
     await stopDecisionOsServer(server.process);
   }
 });
+
+async function pipelineAdmissionTelemetry(page: Page, requestId: string): Promise<Array<{
+  name: string;
+  args: Record<string, unknown>;
+}>> {
+  const admittedNames = new Set([
+    'optimistic-projection-installed',
+    'handoff-published',
+    'admission-settled',
+    'admission-deadline-cleared',
+    'admission-reconciled',
+    'rejection-reconciled',
+  ]);
+  return await page.evaluate(({ expectedRequestId, names }) => (
+    ((window as typeof window & { __coreTelemetry?: Array<{ name: string; args: Record<string, unknown> }> }).__coreTelemetry ?? [])
+      .filter((entry) => names.includes(entry.name) && String(entry.args.requestId ?? '') === expectedRequestId)
+  ), { expectedRequestId: requestId, names: [...admittedNames] });
+}
 
 test('Master-task completion exposes manual and configured pipeline actions at desktop and mobile widths.', { timeout: 60_000 }, async () => {
   const server = await startDecisionOsServer();
@@ -549,7 +643,9 @@ test('Master-task completion exposes manual and configured pipeline actions at d
       executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
-    const route = await resolveMasterTaskRoute(server.url);
+    const project = await resolveCurrentProject(server.url);
+    const masterTaskFixture = localResponsiveCardFixture(project.id);
+    const route = masterTaskFixture.route;
     const settingsPayload = JSON.stringify({
       ok: true,
       maxConcurrentCodexProcesses: 1,
@@ -560,6 +656,7 @@ test('Master-task completion exposes manual and configured pipeline actions at d
 
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     let pipelineRequest: Record<string, unknown> | undefined;
+    await installMasterTaskCardFixture(desktop, masterTaskFixture.task);
     await desktop.route('**/api/settings/codex-processes', (request) => request.fulfill({ status: 200, contentType: 'application/json', body: settingsPayload }));
     await desktop.route('**/api/codex/pipelines/runs', async (request) => {
       pipelineRequest = request.request().postDataJSON() as Record<string, unknown>;
@@ -579,6 +676,7 @@ test('Master-task completion exposes manual and configured pipeline actions at d
     assert.equal(typeof pipelineRequest?.sourceCardId, 'string');
 
     const unconfigured = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    await installMasterTaskCardFixture(unconfigured, masterTaskFixture.task);
     await unconfigured.route('**/api/settings/codex-processes', (request) => request.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -592,6 +690,7 @@ test('Master-task completion exposes manual and configured pipeline actions at d
 
     const rejected = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     let rejectedLedgerMutation = false;
+    await installMasterTaskCardFixture(rejected, masterTaskFixture.task);
     await rejected.route('**/api/settings/codex-processes', (request) => request.fulfill({ status: 200, contentType: 'application/json', body: settingsPayload }));
     await rejected.route('**/api/codex/pipelines/runs', (request) => request.fulfill({
       status: 400,
@@ -616,6 +715,7 @@ test('Master-task completion exposes manual and configured pipeline actions at d
     let observeManualRequest!: () => void;
     const manualRequestGate = new Promise<void>((resolveGate) => { releaseManualRequest = resolveGate; });
     const manualRequestObserved = new Promise<void>((resolveObserved) => { observeManualRequest = resolveObserved; });
+    await installMasterTaskCardFixture(mobile, masterTaskFixture.task);
     await mobile.route('**/api/settings/codex-processes', (request) => request.fulfill({ status: 200, contentType: 'application/json', body: settingsPayload }));
     await mobile.route('**/decision-os/*', async (request) => {
       if (request.request().method() !== 'PATCH') return request.continue();
@@ -645,7 +745,7 @@ async function resolveResponsiveCardRoute(serverUrl: string): Promise<string> {
   const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
     projects?: Array<{ id: string; root: string; ledgers?: Array<{ id: string }> }>;
   };
-  const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
+  const project = catalog.projects?.find((candidate) => candidate.root === browserWorkspaceRoot());
   assert.ok(project, 'The test workspace must be registered in its project catalog.');
   for (const ledger of project.ledgers ?? []) {
     const canvas = await fetch(`${serverUrl}/p/${encodeURIComponent(project.id)}/api/ledgers/${encodeURIComponent(ledger.id)}/canvas`).then((response) => response.json()) as {
@@ -689,16 +789,56 @@ async function resolvePipelineLaunchFixture(serverUrl: string): Promise<{
   projection: PipelineLaunchProjection;
 }> {
   const project = await resolveCurrentProject(serverUrl);
-  const projection = await fetch(`${serverUrl}/api/control-room`).then((response) => response.json()) as PipelineLaunchProjection;
-  const queuedTask = projection.queue.find((task) => task.projectId === project.id && task.ledgerId && task.cardId);
-  const backlogTask = projection.backlog.find((task) => task.projectId === project.id && task.ledgerId && task.cardId);
-  const task = queuedTask ?? backlogTask;
-  assert.ok(task, 'The browser fixture must expose one confirmed Queue or Backlog task for pipeline launch.');
-  // WHAT: Record the task's authoritative pre-launch placement for rejection reconciliation.
-  // WHY: The served assertion must prove that exact confirmed placement is restored.
-  const confirmedTab = queuedTask ? 'queue' : 'backlog';
-  const route = `/p/${encodeURIComponent(task.projectId)}/ledgers/${encodeURIComponent(task.ledgerId)}/zones/${encodeURIComponent(task.zoneId || 'ungrouped')}/cards/${encodeURIComponent(task.cardId)}`;
-  return { route, task, confirmedTab, projection };
+  const authoritativeProjection = await fetch(`${serverUrl}/api/control-room`).then((response) => response.json()) as PipelineLaunchProjection;
+  const fixture = localResponsiveCardFixture(project.id);
+  const task = {
+    ...fixture.task,
+    projectId: project.id,
+    projectName: project.name,
+    ownerNodeId: 'browser-fixture',
+    assignedNodeId: 'browser-fixture',
+    assignedNodeLabel: 'Browser fixture',
+    assignedNodeOnline: true,
+    assignment: { nodeId: 'browser-fixture', revision: 1 },
+    cardStatus: 'backlog',
+    lifecycle: { status: 'backlog' },
+    status: 'task-backlog',
+    labels: [],
+    diagnostics: [],
+    masterTask: true,
+    subtasks: [],
+    complete: 0,
+    valid: true,
+  };
+  // WHAT: Give the served browser one deterministic server-confirmed Backlog placement.
+  // WHY: A clean worktree intentionally has no mutable tasks ledger for /api/control-room to supply.
+  const projection = {
+    ...authoritativeProjection,
+    queue: [],
+    exec: [],
+    backlog: [task],
+    done: [],
+    allTasks: [task],
+  };
+  return { route: fixture.route, task, confirmedTab: 'backlog', projection };
+}
+
+async function installMasterTaskCardFixture(page: Page, task: PipelineLaunchTask): Promise<void> {
+  await page.route(`**/api/ledgers/${encodeURIComponent(task.ledgerId)}/cards/${encodeURIComponent(task.cardId)}`, async (route) => {
+    const response = await route.fetch();
+    const card = await response.json() as Record<string, unknown>;
+    await route.fulfill({
+      response,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...card,
+        status: 'todo',
+        lifecycle: { status: 'todo', waitingAt: '2026-07-31T00:00:00.000Z' },
+        assignment: { nodeId: 'browser-fixture', revision: 1 },
+        labels: ['master-task'],
+      }),
+    });
+  });
 }
 
 async function installFixturePipelineCatalog(page: Page): Promise<void> {
@@ -757,23 +897,48 @@ function executionProjection(projection: PipelineLaunchProjection, target: Pipel
   return next;
 }
 
-function localResponsiveCardRoute(): string {
-  const project = JSON.parse(readFileSync(resolve(repoRoot, '.decision-os/project.json'), 'utf8')) as { id?: string };
-  const registry = JSON.parse(readFileSync(resolve(repoRoot, '.decision-os/state.json'), 'utf8')) as {
+function localResponsiveCardFixture(projectId?: string): { route: string; task: PipelineLaunchTask } {
+  // WHAT: Resolve every authored fixture file from the same isolated workspace served by the browser server.
+  // WHY: The implementation worktree's .decision-os submodule is not the fixture authority and may lack the copied project data.
+  const workspaceRoot = browserWorkspaceRoot();
+  const project = JSON.parse(readFileSync(resolve(workspaceRoot, '.decision-os/project.json'), 'utf8')) as { id?: string };
+  const registry = JSON.parse(readFileSync(resolve(workspaceRoot, '.decision-os/state.json'), 'utf8')) as {
     ledgers?: Array<{ id?: string; ledgerFile?: string }>;
   };
   assert.ok(project.id, 'The browser fixture must expose a project identity.');
+  // WHAT: Prefer the catalog-resolved project identity while retaining the local helper fallback.
+  // WHY: Served worktree identities can differ from the committed project metadata used by static helpers.
+  const fixtureProjectId = projectId ?? project.id;
   for (const ledgerRef of registry.ledgers ?? []) {
+    // WHAT: Ignore incomplete registry entries that cannot address a card.
+    // WHY: Only a concrete ledger identity and file can produce a deterministic served route.
     if (!ledgerRef.id || !ledgerRef.ledgerFile) continue;
-    const ledger = JSON.parse(readFileSync(resolve(repoRoot, ledgerRef.ledgerFile), 'utf8')) as {
+    const ledgerFile = resolve(workspaceRoot, ledgerRef.ledgerFile);
+    // WHAT: Skip runtime-owned ledgers that are intentionally absent from a clean worktree.
+    // WHY: Browser fixtures must rely only on committed workspace content.
+    if (!existsSync(ledgerFile)) continue;
+    const ledger = JSON.parse(readFileSync(ledgerFile, 'utf8')) as {
       annotations?: Array<{ id?: string; variant?: string; color?: string }>;
-      cards?: Array<{ id?: string }>;
+      cards?: Array<{ id?: string; title?: string }>;
       threadFiles?: Record<string, string>;
     };
     const zone = ledger.annotations?.find((candidate) => candidate.id && candidate.variant !== 'group' && typeof candidate.color === 'string');
     const card = ledger.cards?.find((candidate) => candidate.id && ledger.threadFiles?.[`thread-${candidate.id}`]);
+    // WHAT: Continue until one committed zone, card, and thread form a complete route fixture.
+    // WHY: The card view must hydrate normally before the mocked Control Room projection is exercised.
     if (!zone?.id || !card?.id) continue;
-    return `/p/${encodeURIComponent(project.id)}/ledgers/${encodeURIComponent(ledgerRef.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`;
+    return {
+      route: `/p/${encodeURIComponent(fixtureProjectId)}/ledgers/${encodeURIComponent(ledgerRef.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`,
+      task: {
+        projectId: fixtureProjectId,
+        ledgerId: ledgerRef.id,
+        cardId: card.id,
+        zoneId: zone.id,
+        // WHAT: Use the stable card identity when committed fixture content has no authored title.
+        // WHY: Every rendered Control Room task requires a non-empty deterministic label.
+        title: card.title || card.id,
+      },
+    };
   }
   assert.fail('The browser fixture must expose one local card, zone, and thread.');
 }
@@ -782,27 +947,9 @@ async function resolveCurrentProject(serverUrl: string): Promise<{ id: string; n
   const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
     projects?: Array<{ id: string; name: string; root: string }>;
   };
-  const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
+  const project = catalog.projects?.find((candidate) => candidate.root === browserWorkspaceRoot());
   assert.ok(project, 'The test workspace must be registered in its project catalog.');
   return project;
-}
-
-async function resolveMasterTaskRoute(serverUrl: string): Promise<string> {
-  const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
-    projects?: Array<{ id: string; root: string; ledgers?: Array<{ id: string }> }>;
-  };
-  const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
-  assert.ok(project, 'The test workspace must be registered in its project catalog.');
-  for (const ledger of project.ledgers ?? []) {
-    const canvas = await fetch(`${serverUrl}/p/${encodeURIComponent(project.id)}/api/ledgers/${encodeURIComponent(ledger.id)}/canvas`).then((response) => response.json()) as {
-      annotations?: Array<{ id?: string; variant?: string; color?: string }>;
-      cards?: Array<{ id?: string; status?: string; labels?: string[] }>;
-    };
-    const zone = canvas.annotations?.find((candidate) => candidate.id && candidate.variant !== 'group' && typeof candidate.color === 'string');
-    const card = canvas.cards?.find((candidate) => candidate.id && candidate.status !== 'done' && candidate.labels?.includes('master-task'));
-    if (zone?.id && card?.id) return `/p/${encodeURIComponent(project.id)}/ledgers/${encodeURIComponent(ledger.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`;
-  }
-  assert.fail('The test workspace must expose one open master task and one zone.');
 }
 
 function collectPageErrors(page: Page): string[] {
@@ -822,7 +969,7 @@ async function startDecisionOsServer(): Promise<{ process: ChildProcess; url: st
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, [resolve(repoRoot, 'bin/decision-os-server.mjs')], {
-    cwd: repoRoot,
+    cwd: browserWorkspaceRoot(),
     detached: true,
     env: {
       ...process.env,

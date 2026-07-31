@@ -1,0 +1,10 @@
+{
+  "cards": [
+    {
+      "id": "b4e9c2d7",
+      "title": "Sidebar collapse state persists locally",
+      "cardType": "spec-brief",
+      "domainId": "input"
+    }
+  ]
+}

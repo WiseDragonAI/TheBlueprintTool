@@ -1,3 +1,7 @@
+/**
+ * WHAT: Proves optimistic execution projection, confirmation, rejection, and cold-route materialization.
+ * WHY: Client-owned preparing state must reconcile only against the matching authoritative request.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {

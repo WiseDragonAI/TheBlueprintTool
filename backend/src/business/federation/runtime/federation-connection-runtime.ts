@@ -164,6 +164,18 @@ export function createFederationConnectionRuntime(input: {
       input.stateRuntime.replicator.disconnectPeer('relay');
     },
     onError: (error, context) => {
+      // WHAT: Keep retained-catalog read and persistence failures active until explicit validated recovery.
+      // WHY: These failures disable the durable remote catalog after the reporting callback has returned.
+      if (context.operation === 'read-retained-project-catalog'
+        || context.operation === 'persist-project-catalog') {
+        input.recordBackgroundFailure(
+          'federation-project-catalog',
+          context.operation,
+          error,
+          { catalogFile: input.catalogFile },
+        );
+        return;
+      }
       input.recordStoppedOperation({
         scope: `federation-operation:${context.operation}`,
         component: 'federation-node-connector',

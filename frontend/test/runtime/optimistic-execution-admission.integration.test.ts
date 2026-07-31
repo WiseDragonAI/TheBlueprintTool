@@ -1,3 +1,7 @@
+/**
+ * WHAT: Proves responsive execution admission ordering and exact-request reconciliation from source contracts.
+ * WHY: Pipeline optimism must change timing without weakening direct-skill behavior or request identity fences.
+ */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -54,6 +58,10 @@ test('responsive optimism precedes settlement and success or rejection forces ca
   assert.match(codex, /const PIPELINE_ADMISSION_TIMEOUT_MS = 30_000/);
   assert.match(pipeline, /new AbortController\(\)[\s\S]*setTimeout\(\(\) => admissionController\.abort\(\), PIPELINE_ADMISSION_TIMEOUT_MS\)/);
   assert.match(pipeline, /signal: admissionController\.signal[\s\S]*pipelineAdmissionError\(error, admissionController\.signal\.aborted\)[\s\S]*clearTimeout\(admissionDeadline\)/);
+  assert.ok(pipeline.indexOf("telemetry('admission-settled'") < pipeline.indexOf('finishProcessLaunch('));
+  assert.match(pipeline, /outcome: admissionController\.signal\.aborted \? 'timed-out' : 'rejected'/);
+  assert.ok(pipeline.indexOf('clearTimeout(admissionDeadline)') < pipeline.indexOf("telemetry('admission-deadline-cleared'"));
+  assert.match(codex, /telemetry\('handoff-published', \{ requestId:[\s\S]*actionOwned \}\);[\s\S]*codex-run-handoff/);
   assert.match(application, /pendingOptimisticExecutionDetails\.set\(String\(detail\.requestId\), detail\)/);
   assert.match(application, /materializePendingExecutionIntents\(pendingOptimisticExecutionDetails, optimisticExecutionIntents, nextControlRoom\)[\s\S]*for \(const \[identity, intent\] of optimisticExecutionIntents\)/);
   assert.match(begin, /optimisticExecutionIntents\.set\(identity, intent\);[\s\S]*applyOptimisticExecutionIntent\(state\.controlRoom, intent\)/);
@@ -62,6 +70,9 @@ test('responsive optimism precedes settlement and success or rejection forces ca
   assert.match(acknowledge, /loadControlRoom\(\{ force: true \}\)/);
   assert.match(reject, /removeRejectedExecutionIntent\(optimisticExecutionIntents, detail\)/);
   assert.match(reject, /pendingOptimisticExecutionDetails\.delete\(rejectedRequestId\)/);
+  assert.match(begin, /applyOptimisticExecutionIntent\(state\.controlRoom, intent\);[\s\S]*telemetry\('optimistic-projection-installed'/);
+  assert.match(acknowledge, /loadControlRoom\(\{ force: true \}\)\.then\(\(\) => \{[\s\S]*telemetry\('admission-reconciled'/);
+  assert.match(reject, /loadControlRoom\(\{ force: true \}\)\.then\(\(\) => \{[\s\S]*telemetry\('rejection-reconciled'/);
   assert.ok(reject.indexOf('removeRejectedExecutionIntent(optimisticExecutionIntents, detail)') < reject.indexOf("loadControlRoom({ force: true })"));
   assert.match(reject, /mutation-error-message[\s\S]*mutation-error'\]\.hidden = false/);
   assert.match(application, /codex-run-handoff', \(event\) => \{ void navigateAcceptedProcess\(event\.detail\); \}/);

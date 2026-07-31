@@ -77,6 +77,7 @@ export function createServerProjectRuntime(input: {
       resolve(input.masterDecisionOsRoot, 'cache', 'federation-content-current', 'objects'),
     ],
     contentScheduler: () => federationState.contentScheduler,
+    federation,
     federatedLibrary,
     federatedTaskRuntime: executionRuntime.federatedTaskRuntime,
     incidentLedger,

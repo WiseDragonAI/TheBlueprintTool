@@ -190,6 +190,7 @@ export function createProjectRequestHandler(input: {
       projectSyncStore: input.projectSyncRuntime.store(),
       projects,
       readSkillIndex: input.federatedLibrary.readSkillIndex,
+      receivePublishedSkill: input.federatedLibrary.receivePublishedSkill,
       reconcileProjectRuntimes: input.reconcileProjectRuntimes,
       request,
       requestUrl,
