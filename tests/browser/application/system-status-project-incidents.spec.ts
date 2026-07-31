@@ -28,23 +28,36 @@ type FixtureServer = {
 };
 
 type IncidentDiagnostics = {
+  observedAt?: string;
+  historyTruncatedBefore?: string;
   incidents: Array<{ code?: string }>;
 };
 
-test('System status nests incidents in expandable project rows at desktop and mobile widths', { timeout: 45_000 }, async () => {
-  const workspace = createCatalogFixture();
+type CatalogFixture = {
+  workspace: string;
+  evidence: {
+    alphaPaused: string[];
+    alphaResolved: string;
+    betaRecent: string[];
+    systemResolved: string;
+  };
+};
+
+test('System status renders collapsed rolling failure history at desktop and mobile widths', { timeout: 45_000 }, async () => {
+  const fixture = createCatalogFixture();
   let server: FixtureServer | undefined;
   let browser: Browser | undefined;
   try {
-    server = await startDecisionOsServer(workspace);
+    server = await startDecisionOsServer(fixture.workspace);
     browser = await chromium.launch({
       headless: true,
       executablePath: chromiumExecutablePath,
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
 
-    await exerciseStatusViewport(browser, server.url, { width: 1440, height: 1000 });
-    await exerciseStatusViewport(browser, server.url, { width: 390, height: 844 });
+    await exerciseStatusViewport(browser, server.url, { width: 1440, height: 1000 }, fixture.evidence);
+    await exerciseStatusViewport(browser, server.url, { width: 390, height: 844 }, fixture.evidence);
+    await proveTruncatedTotals(browser, server.url);
     await proveConditionalSystemRow(browser, server.url);
   } finally {
     // WHAT: Close Chromium whenever launch completed, including after an assertion failure.
@@ -53,7 +66,7 @@ test('System status nests incidents in expandable project rows at desktop and mo
     // WHAT: Stop only the detached fixture server process owned by this test.
     // WHY: Existing operator servers are outside the isolated browser-test boundary.
     if (server) await stopDecisionOsServer(server.process);
-    rmSync(workspace, { recursive: true, force: true });
+    rmSync(fixture.workspace, { recursive: true, force: true });
   }
 });
 
@@ -61,6 +74,7 @@ async function exerciseStatusViewport(
   browser: Browser,
   serverUrl: string,
   viewport: { width: number; height: number },
+  evidence: CatalogFixture['evidence'],
 ): Promise<void> {
   const page = await browser.newPage({ viewport });
   const pageErrors = collectPageErrors(page);
@@ -74,54 +88,81 @@ async function exerciseStatusViewport(
     const gamma = page.locator('.runtime-project-row[data-project-id="project-gamma"]');
     const system = page.locator('.runtime-project-row[data-project-id="system"]');
     assert.equal(await page.locator('.runtime-project-row').count(), 4);
-    assert.equal(await alpha.evaluate((row) => (row as HTMLDetailsElement).open), true);
-    assert.equal(await beta.evaluate((row) => (row as HTMLDetailsElement).open), true);
-    assert.equal(await gamma.evaluate((row) => (row as HTMLDetailsElement).open), false);
-    assert.equal(await system.evaluate((row) => (row as HTMLDetailsElement).open), true);
+    assert.equal(await page.locator('.runtime-project-row[open]').count(), 0);
 
-    assert.equal(await alpha.locator('.runtime-incident-card').count(), 1);
+    assert.match(await alpha.locator(':scope > .runtime-project-summary').textContent() ?? '', /At least 4 failures · 24h/);
+    assert.equal(await alpha.locator('.runtime-project-availability').textContent(), 'Paused');
+    assert.match(await beta.locator(':scope > .runtime-project-summary').textContent() ?? '', /2 failures · 24h/);
+    assert.equal(await beta.locator('.runtime-project-occurrences').getAttribute('data-partial'), 'false');
+    assert.match(await gamma.locator(':scope > .runtime-project-summary').textContent() ?? '', /0 failures · 24h/);
+    assert.match(await system.locator(':scope > .runtime-project-summary').textContent() ?? '', /1 failure · 24h/);
+    assert.equal(await system.locator('.runtime-project-availability').textContent(), 'History');
+    assert.equal(await system.getAttribute('data-status'), 'available');
+
+    const alphaSummary = alpha.locator(':scope > .runtime-project-summary');
+    assert.equal(await alphaSummary.count(), 1);
+    await alphaSummary.click();
+    assert.equal(await alpha.evaluate((row) => (row as HTMLDetailsElement).open), true);
+    assert.equal(await alpha.locator('.runtime-history-lower-bound').isVisible(), true);
+    assert.match(await alpha.locator('.runtime-history-lower-bound').textContent() ?? '', /earlier owner history is unavailable/);
+    assert.equal(await alpha.locator('.runtime-incident-card').count(), 2);
+    const alphaShared = alpha.locator('.runtime-incident-card').filter({ hasText: 'shared_outage' });
+    assert.equal(await alphaShared.count(), 1);
+    assert.match(await alphaShared.textContent() ?? '', /3 occurrences · 24h/);
+    assert.deepEqual(await alphaShared.locator('.runtime-incident-message').allTextContents(), [
+      'Resolved alpha runtime message.',
+      'Alpha worker message.',
+      'Alpha worker message.',
+    ]);
+    assert.deepEqual(await alphaShared.locator('time').evaluateAll((times) => times.map((time) => time.getAttribute('datetime'))), [
+      evidence.alphaResolved,
+      ...[...evidence.alphaPaused].reverse(),
+    ]);
+    const alphaSources = await alphaShared.locator('.runtime-incident-source').allTextContents();
+    assert.match(alphaSources.join(' '), /Componentalpha-runtimeScopeproject-runtime:project-alphaContextprojectId=project-alpha · outcome=recovered/);
+    assert.match(alphaSources.join(' '), /alpha-worker/);
+    assert.equal(await alphaShared.locator('[data-kind="severity"]').textContent(), 'fatal');
+    assert.equal(await alphaShared.locator('[data-kind="interruption"]').textContent(), 'Interruption');
+    const alphaLegacy = alpha.locator('.runtime-incident-card').filter({ hasText: 'legacy_failure' });
+    assert.equal(await alphaLegacy.count(), 1);
+    assert.match(await alphaLegacy.textContent() ?? '', /At least 1 occurrence · 24h/);
+    assert.equal(await page.getByText('Expired alpha history.', { exact: true }).count(), 0);
+
     assert.equal(await beta.locator('.runtime-incident-card').count(), 1);
     assert.equal(await gamma.locator('.runtime-incident-card').count(), 0);
     assert.equal(await system.locator('.runtime-incident-card').count(), 1);
     assert.equal(
       await page.locator('.runtime-incident-card').filter({ hasText: 'shared_outage' }).count(),
       2,
-      'identical code-and-message incidents must remain separate across owners',
+      'identical codes must remain separate across owners',
     );
-    assert.match(await alpha.textContent() ?? '', /alpha-runtime, alpha-worker · 5 occurrences · last /);
-    assert.match(await alpha.textContent() ?? '', /Shared worker outage\./);
-    assert.equal(await alpha.locator('[data-kind="severity"]').textContent(), 'fatal');
-    assert.equal(await alpha.locator('[data-kind="interruption"]').textContent(), 'Interruption');
-    assert.equal(await alpha.locator('.runtime-incident-scopes > summary').textContent(), '2 affected scopes');
-    assert.match(await alpha.locator('.runtime-incident-scopes').textContent() ?? '', /http-request:\/p\/project-beta\/ledgers\/tasks/);
-    assert.match(await alpha.locator('.runtime-incident-scopes').textContent() ?? '', /project-runtime:project-alpha/);
-
-    assert.match(await beta.textContent() ?? '', /beta-pipeline · 4 occurrences · last /);
-    assert.equal(await beta.locator('[data-kind="severity"]').textContent(), 'error');
-    assert.equal(await beta.locator('[data-kind="interruption"]').textContent(), 'Active');
-    assert.match(await beta.locator('.runtime-incident-scopes').textContent() ?? '', /pipeline:project-beta:run-1/);
-    assert.doesNotMatch(await beta.textContent() ?? '', /alpha-runtime|alpha-worker/);
-
-    assert.match(await system.textContent() ?? '', /catalog_unowned/);
-    assert.match(await system.textContent() ?? '', /Unowned catalog interruption\./);
-    assert.equal(await system.locator('[data-kind="severity"]').textContent(), 'warning');
-    assert.equal(await system.locator('[data-kind="interruption"]').textContent(), 'Interruption');
-    assert.doesNotMatch(await alpha.textContent() ?? '', /catalog_unowned/);
-    assert.doesNotMatch(await beta.textContent() ?? '', /catalog_unowned/);
-    assert.equal(await page.getByText('resolved_history', { exact: true }).count(), 0);
-
-    const alphaSummary = alpha.locator(':scope > .runtime-project-summary');
-    await alphaSummary.click();
-    assert.equal(await alpha.evaluate((row) => (row as HTMLDetailsElement).open), false);
-    await alphaSummary.click();
-    assert.equal(await alpha.evaluate((row) => (row as HTMLDetailsElement).open), true);
 
     const betaSummary = beta.locator(':scope > .runtime-project-summary');
+    assert.equal(await betaSummary.count(), 1);
     await betaSummary.focus();
     await page.keyboard.press('Space');
-    assert.equal(await beta.evaluate((row) => (row as HTMLDetailsElement).open), false);
-    await page.keyboard.press('Enter');
     assert.equal(await beta.evaluate((row) => (row as HTMLDetailsElement).open), true);
+    assert.match(await beta.textContent() ?? '', /beta-pipeline · 2 occurrences · 24h · last /);
+    assert.equal(await beta.locator('[data-kind="severity"]').textContent(), 'error');
+    assert.equal(await beta.locator('[data-kind="interruption"]').textContent(), 'Active');
+    assert.deepEqual(await beta.locator('time').evaluateAll((times) => times.map((time) => time.getAttribute('datetime'))), [
+      ...[...evidence.betaRecent].reverse(),
+    ]);
+    assert.match(await beta.locator('.runtime-incident-source').allTextContents().then((values) => values.join(' ')), /pipeline:project-beta:run-1/);
+    assert.doesNotMatch(await beta.textContent() ?? '', /Alpha worker message|Resolved alpha runtime message/);
+
+    const systemSummary = system.locator(':scope > .runtime-project-summary');
+    assert.equal(await systemSummary.count(), 1);
+    await systemSummary.focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await system.evaluate((row) => (row as HTMLDetailsElement).open), true);
+    assert.match(await system.textContent() ?? '', /catalog_unowned/);
+    assert.match(await system.textContent() ?? '', /Resolved unowned catalog evidence\./);
+    assert.equal(await system.locator('[data-kind="severity"]').textContent(), 'warning');
+    assert.equal(await system.locator('[data-kind="interruption"]').textContent(), 'Resolved');
+    assert.equal(await system.locator('time').getAttribute('datetime'), evidence.systemResolved);
+    assert.doesNotMatch(await alpha.textContent() ?? '', /catalog_unowned/);
+    assert.doesNotMatch(await beta.textContent() ?? '', /catalog_unowned/);
 
     const layout = await page.evaluate(() => ({
       bodyWidth: document.body.scrollWidth,
@@ -141,10 +182,47 @@ async function exerciseStatusViewport(
       assert.ok(bounds.right <= layout.viewportWidth, JSON.stringify(layout));
     }
     const alphaBounds = await alpha.boundingBox();
-    const alphaIncidentBounds = await alpha.locator('.runtime-incident-card').boundingBox();
+    const alphaIncidentBounds = await alphaShared.boundingBox();
     assert.ok(alphaBounds && alphaIncidentBounds);
     assert.ok(alphaIncidentBounds.x >= alphaBounds.x);
     assert.ok(alphaIncidentBounds.x + alphaIncidentBounds.width <= alphaBounds.x + alphaBounds.width);
+    assert.deepEqual(pageErrors, []);
+    console.log(JSON.stringify({
+      browserEvidence: 'project-failure-history',
+      httpStatus: response?.status() ?? null,
+      viewport,
+      initiallyOpen: 0,
+      pointerExpanded: 'project-alpha',
+      keyboardExpanded: ['project-beta', 'system'],
+      pageErrors,
+      horizontalOverflow: false,
+    }));
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveTruncatedTotals(browser: Browser, serverUrl: string): Promise<void> {
+  const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+  const pageErrors = collectPageErrors(page);
+  try {
+    await page.route('**/api/diagnostics/incidents', async (route) => {
+      const response = await route.fetch();
+      const diagnostics = await response.json() as IncidentDiagnostics;
+      diagnostics.historyTruncatedBefore = diagnostics.observedAt ?? new Date().toISOString();
+      await route.fulfill({ response, json: diagnostics });
+    });
+    const response = await page.goto(`${serverUrl}/status`, { waitUntil: 'domcontentloaded' });
+    assert.equal(response?.status(), 200);
+    await page.locator('#runtime-status-view:not([hidden])').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.runtime-project-occurrences[data-partial="true"]').count(), 4);
+    assert.equal(await page.locator('.runtime-project-occurrences[data-partial="false"]').count(), 0);
+    const alpha = page.locator('.runtime-project-row[data-project-id="project-alpha"]');
+    const alphaSummary = alpha.locator(':scope > .runtime-project-summary');
+    assert.equal(await alphaSummary.count(), 1);
+    await alphaSummary.click();
+    assert.equal(await alpha.locator('.runtime-history-lower-bound').isVisible(), true);
+    assert.match(await alpha.locator('.runtime-history-lower-bound').textContent() ?? '', /retained system history was truncated/);
     assert.deepEqual(pageErrors, []);
   } finally {
     await page.close();
@@ -158,8 +236,8 @@ async function proveConditionalSystemRow(browser: Browser, serverUrl: string): P
     await page.route('**/api/diagnostics/incidents', async (route) => {
       const response = await route.fetch();
       const diagnostics = await response.json() as IncidentDiagnostics;
-      // WHAT: Remove the fixture's only unowned active incident from this isolated response.
-      // WHY: The System disclosure must disappear when every remaining active incident has a catalog owner.
+      // WHAT: Remove the fixture's only unowned recent incident from this isolated response.
+      // WHY: The System disclosure must disappear when every retained failure has a catalog owner.
       diagnostics.incidents = diagnostics.incidents.filter((incident) => incident.code !== 'catalog_unowned');
       await route.fulfill({ response, json: diagnostics });
     });
@@ -180,7 +258,15 @@ function collectPageErrors(page: Page): string[] {
   return errors;
 }
 
-function createCatalogFixture(): string {
+function createCatalogFixture(): CatalogFixture {
+  const fixtureClock = Date.now();
+  const at = (offsetMilliseconds: number): string => new Date(fixtureClock + offsetMilliseconds).toISOString();
+  const evidence: CatalogFixture['evidence'] = {
+    alphaPaused: [at(-4 * 60 * 60 * 1_000), at(-2 * 60 * 60 * 1_000)],
+    alphaResolved: at(-60 * 60 * 1_000),
+    betaRecent: [at(-45 * 60 * 1_000), at(-15 * 60 * 1_000)],
+    systemResolved: at(-20 * 60 * 1_000),
+  };
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-system-status-browser-'));
   const rootDecisionOs = join(workspace, '.decision-os');
   mkdirSync(rootDecisionOs, { recursive: true });
@@ -214,42 +300,66 @@ function createCatalogFixture(): string {
     writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify(emptyLedger));
   }
   writeFileSync(join(rootDecisionOs, 'runtime-incidents.json'), JSON.stringify({
-    version: 1,
-    updatedAt: '2026-07-31T06:00:00.000Z',
+    version: 2,
+    updatedAt: at(-5 * 60 * 1_000),
+    historyTruncatedBefore: at(-25 * 60 * 60 * 1_000),
     incidents: [
       {
-        id: 'incident-alpha-context',
-        fingerprint: 'fixture-alpha-context',
+        id: 'incident-alpha-paused',
+        fingerprint: 'fixture-alpha-paused',
         status: 'paused',
         severity: 'warning',
-        scope: 'http-request:/p/project-beta/ledgers/tasks',
+        scope: 'project-runtime:project-alpha',
         component: 'alpha-worker',
         operation: 'read-alpha-ledger',
         code: 'shared_outage',
-        message: 'Shared worker outage.',
+        message: 'Alpha worker message.',
         stack: '',
-        context: { projectId: 'project-alpha' },
-        firstObservedAt: '2026-07-31T05:00:00.000Z',
-        lastObservedAt: '2026-07-31T05:20:00.000Z',
+        context: { projectId: 'project-alpha', queue: 'runtime' },
+        firstObservedAt: evidence.alphaPaused[0],
+        lastObservedAt: evidence.alphaPaused[1],
         occurrences: 2,
         resolvedAt: '',
+        observations: evidence.alphaPaused,
+        legacyHistoryBefore: '',
       },
       {
-        id: 'incident-alpha-runtime',
-        fingerprint: 'fixture-alpha-runtime',
-        status: 'paused',
+        id: 'incident-alpha-resolved',
+        fingerprint: 'fixture-alpha-resolved',
+        status: 'resolved',
         severity: 'fatal',
         scope: 'project-runtime:project-alpha',
         component: 'alpha-runtime',
         operation: 'run-alpha-runtime',
         code: 'shared_outage',
-        message: 'Shared worker outage.',
+        message: 'Resolved alpha runtime message.',
         stack: '',
-        context: {},
-        firstObservedAt: '2026-07-31T04:50:00.000Z',
-        lastObservedAt: '2026-07-31T05:30:00.000Z',
-        occurrences: 3,
-        resolvedAt: '',
+        context: { projectId: 'project-alpha', outcome: 'recovered' },
+        firstObservedAt: evidence.alphaResolved,
+        lastObservedAt: evidence.alphaResolved,
+        occurrences: 1,
+        resolvedAt: at(-50 * 60 * 1_000),
+        observations: [evidence.alphaResolved],
+        legacyHistoryBefore: '',
+      },
+      {
+        id: 'incident-alpha-legacy',
+        fingerprint: 'fixture-alpha-legacy',
+        status: 'resolved',
+        severity: 'error',
+        scope: 'project-runtime:project-alpha',
+        component: 'alpha-legacy',
+        operation: 'run-alpha-legacy',
+        code: 'legacy_failure',
+        message: 'Legacy alpha evidence.',
+        stack: '',
+        context: { projectId: 'project-alpha', source: 'version-1' },
+        firstObservedAt: at(-90 * 60 * 1_000),
+        lastObservedAt: at(-90 * 60 * 1_000),
+        occurrences: 5,
+        resolvedAt: at(-80 * 60 * 1_000),
+        observations: [at(-90 * 60 * 1_000)],
+        legacyHistoryBefore: at(-90 * 60 * 1_000),
       },
       {
         id: 'incident-beta',
@@ -263,48 +373,54 @@ function createCatalogFixture(): string {
         message: 'Shared worker outage.',
         stack: '',
         context: { projectId: 'project-beta' },
-        firstObservedAt: '2026-07-31T05:05:00.000Z',
-        lastObservedAt: '2026-07-31T05:35:00.000Z',
-        occurrences: 4,
+        firstObservedAt: evidence.betaRecent[0],
+        lastObservedAt: evidence.betaRecent[1],
+        occurrences: 2,
         resolvedAt: '',
+        observations: evidence.betaRecent,
+        legacyHistoryBefore: '',
       },
       {
         id: 'incident-system',
         fingerprint: 'fixture-system',
-        status: 'paused',
+        status: 'resolved',
         severity: 'warning',
         scope: 'background:catalog-scanner',
         component: 'catalog-scanner',
         operation: 'scan-catalog',
         code: 'catalog_unowned',
-        message: 'Unowned catalog interruption.',
+        message: 'Resolved unowned catalog evidence.',
         stack: '',
         context: { projectId: 'unknown-project' },
-        firstObservedAt: '2026-07-31T05:10:00.000Z',
-        lastObservedAt: '2026-07-31T05:40:00.000Z',
+        firstObservedAt: evidence.systemResolved,
+        lastObservedAt: evidence.systemResolved,
         occurrences: 1,
-        resolvedAt: '',
+        resolvedAt: at(-10 * 60 * 1_000),
+        observations: [evidence.systemResolved],
+        legacyHistoryBefore: '',
       },
       {
-        id: 'incident-resolved',
-        fingerprint: 'fixture-resolved',
+        id: 'incident-expired',
+        fingerprint: 'fixture-expired',
         status: 'resolved',
         severity: 'fatal',
         scope: 'project-runtime:project-alpha',
         component: 'alpha-history',
         operation: 'run-alpha-history',
-        code: 'resolved_history',
-        message: 'Resolved history must stay hidden.',
+        code: 'expired_history',
+        message: 'Expired alpha history.',
         stack: '',
         context: { projectId: 'project-alpha' },
-        firstObservedAt: '2026-07-30T05:00:00.000Z',
-        lastObservedAt: '2026-07-30T05:30:00.000Z',
-        occurrences: 99,
-        resolvedAt: '2026-07-30T05:31:00.000Z',
+        firstObservedAt: at(-25 * 60 * 60 * 1_000),
+        lastObservedAt: at(-25 * 60 * 60 * 1_000),
+        occurrences: 1,
+        resolvedAt: at(-24 * 60 * 60 * 1_000),
+        observations: [at(-25 * 60 * 60 * 1_000)],
+        legacyHistoryBefore: '',
       },
     ],
   }));
-  return workspace;
+  return { workspace, evidence };
 }
 
 async function startDecisionOsServer(workspace: string): Promise<FixtureServer> {
@@ -331,7 +447,7 @@ async function startDecisionOsServer(workspace: string): Promise<FixtureServer> 
       assert.equal(child.exitCode, null, `decision-os fixture server exited early:\n${output.join('')}`);
       const response = await fetch(url, { method: 'HEAD' }).catch(() => undefined);
       return Boolean(response?.ok);
-    }, `Timed out waiting for the decision-os fixture server at ${url}`);
+    }, `Timed out waiting for the decision-os fixture server at ${url}:\n${output.join('')}`);
     return { process: child, url };
   } catch (error) {
     // WHAT: Stop a spawned fixture server when readiness fails before returning ownership to the test.

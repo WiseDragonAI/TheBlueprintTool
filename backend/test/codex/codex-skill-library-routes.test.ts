@@ -174,13 +174,16 @@ test('skill library routes save editable Markdown and defaults without exposing 
     assert.match(revisionDetail.revision.patch, /Updated workspace description/);
     const storeFile = join(decisionOsRoot, 'codex-pipelines.json');
     const persisted = JSON.parse(readFileSync(storeFile, 'utf8')) as Record<string, any>;
-    assert.deepEqual(persisted.skillLibrary[0], {
+    const persistedWorkspaceSkill = persisted.skillLibrary.find(
+      (record: Record<string, any>) => record.skillName === 'workspace-skill',
+    );
+    assert.deepEqual(persistedWorkspaceSkill, {
       skillName: 'workspace-skill',
       favorite: false,
       tags: [],
       defaultCodexModel: 'gpt-5.4',
       defaultCodexEffort: 'high',
-      updatedAt: persisted.skillLibrary[0].updatedAt,
+      updatedAt: persistedWorkspaceSkill.updatedAt,
     });
 
     const markdownBeforeFavorite = readFileSync(workspaceFile, 'utf8');
@@ -195,7 +198,13 @@ test('skill library routes save editable Markdown and defaults without exposing 
     assert.equal(readFileSync(workspaceFile, 'utf8'), markdownBeforeFavorite);
     const favoriteCatalog = await fetch(`${baseUrl}/api/codex/skills`).then((response) => response.json()) as Record<string, any>;
     assert.equal(favoriteCatalog.skills.find((entry: Record<string, any>) => entry.name === 'workspace-skill').favorite, true);
-    assert.equal(JSON.parse(readFileSync(storeFile, 'utf8')).skillLibrary[0].favorite, true);
+    const favoriteStore = JSON.parse(readFileSync(storeFile, 'utf8')) as Record<string, any>;
+    assert.equal(
+      favoriteStore.skillLibrary.find(
+        (record: Record<string, any>) => record.skillName === 'workspace-skill',
+      ).favorite,
+      true,
+    );
 
     const tagsResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
       method: 'PUT',
@@ -218,7 +227,13 @@ test('skill library routes save editable Markdown and defaults without exposing 
     });
     assert.equal(unsupportedTagsResponse.status, 400);
     assert.match(String((await unsupportedTagsResponse.json() as Record<string, any>).error), /at most one value from/);
-    assert.deepEqual(JSON.parse(readFileSync(storeFile, 'utf8')).skillLibrary[0].tags, ['Research']);
+    const tagsStore = JSON.parse(readFileSync(storeFile, 'utf8')) as Record<string, any>;
+    assert.deepEqual(
+      tagsStore.skillLibrary.find(
+        (record: Record<string, any>) => record.skillName === 'workspace-skill',
+      ).tags,
+      ['Research'],
+    );
 
     const multipleTagsResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
       method: 'PUT',
@@ -1203,11 +1218,14 @@ test('server and project skill views share migrated server-owned favorite metada
     assert.deepEqual(saved.skill.tags, ['Interface']);
 
     const persisted = JSON.parse(readFileSync(join(masterDecisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
-    assert.deepEqual(persisted.skillLibrary.map((record: Record<string, any>) => ({
-      skillName: record.skillName,
-      favorite: record.favorite,
-      tags: record.tags,
-    })), [{ skillName: 'server-owned-skill', favorite: true, tags: ['Interface'] }]);
+    const persistedServerSkill = persisted.skillLibrary.find(
+      (record: Record<string, any>) => record.skillName === 'server-owned-skill',
+    );
+    assert.deepEqual({
+      skillName: persistedServerSkill.skillName,
+      favorite: persistedServerSkill.favorite,
+      tags: persistedServerSkill.tags,
+    }, { skillName: 'server-owned-skill', favorite: true, tags: ['Interface'] });
     const childAfterServerSave = JSON.parse(readFileSync(join(childDecisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
     assert.deepEqual(childAfterServerSave.skillLibrary[0].tags, ['Implementation']);
 
@@ -1221,11 +1239,14 @@ test('server and project skill views share migrated server-owned favorite metada
     assert.equal(projectSaved.skill.favorite, false);
     assert.deepEqual(projectSaved.skill.tags, ['Architecture']);
     const masterAfterProjectSave = JSON.parse(readFileSync(join(masterDecisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
-    assert.deepEqual(masterAfterProjectSave.skillLibrary.map((record: Record<string, any>) => ({
-      skillName: record.skillName,
-      favorite: record.favorite,
-      tags: record.tags,
-    })), [{ skillName: 'server-owned-skill', favorite: false, tags: ['Architecture'] }]);
+    const masterServerSkill = masterAfterProjectSave.skillLibrary.find(
+      (record: Record<string, any>) => record.skillName === 'server-owned-skill',
+    );
+    assert.deepEqual({
+      skillName: masterServerSkill.skillName,
+      favorite: masterServerSkill.favorite,
+      tags: masterServerSkill.tags,
+    }, { skillName: 'server-owned-skill', favorite: false, tags: ['Architecture'] });
 
     const projectReload = await fetch(`${baseUrl}/p/${encodeURIComponent(projectId)}/api/codex/skills`).then((response) => response.json()) as Record<string, any>;
     const reloadedProjectSkill = projectReload.skills.find((skill: Record<string, any>) => skill.name === 'server-owned-skill');

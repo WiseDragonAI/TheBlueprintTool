@@ -17,6 +17,7 @@ import { routeCanvasMode } from '../../navigation/helper/route-canvas-mode.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { installFrontendTelemetryWebSocket } from '../../telemetry/effect/frontend-telemetry-websocket.js';
 import { installProjectRequestScope, replicaNodeIdFromLocation } from '../../project/helper/project-request-scope.js';
 import { routeScope } from '../../navigation/helper/route-scope.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
@@ -25,6 +26,7 @@ import { hydrateThreadViewportState } from '../../thread/effect/persist-thread-s
 
 export function bootSurface(): void {
   installProjectRequestScope();
+  void installFrontendTelemetryWebSocket();
   const persisted = readPersistedState();
   hydrateThreadViewportState(persisted);
   const scope = routeScope(window.location.pathname);

@@ -23,6 +23,7 @@ import { renderTaskExecutionTodoOverlay } from '../component/render-task-executi
 import { renderTaskExecutionSubagentOverlay } from '../component/render-task-execution-subagent-overlay.js';
 import { threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
 import { threadCodexSessionDeletionState } from '../../codex/controller/delete-thread-codex-session-controller.js';
+import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 type HistoryEntry = { sessionId: string; executionId: string };
 type DisclosureByThread = Record<string, Record<string, boolean>>;
@@ -313,6 +314,19 @@ export function renderThreadCodexLog(): void {
   const threadId = String(state.threadId ?? '');
   const card = selectedThreadCard(threadId);
   root.replaceChildren();
+  telemetry('codex-log-render-decision', {
+    threadId,
+    cardId: String(card?.id ?? ''),
+    cardRunId: String(card?.codexThreadRunId ?? ''),
+    cardRunIds: Array.isArray(card?.codexThreadRunIds) ? card.codexThreadRunIds.map(String) : [],
+    hasTaskSummary: Boolean(recordState('threadTaskExecutionStateByThreadId')[threadId]),
+    summarySessionIds: ((recordState('threadTaskExecutionStateByThreadId')[threadId] as TaskExecutionStateSummary | undefined)?.sessions ?? [])
+      .map((session) => session.sessionId),
+    summaryExecutionIds: ((recordState('threadTaskExecutionStateByThreadId')[threadId] as TaskExecutionStateSummary | undefined)?.sessions ?? [])
+      .flatMap((session) => session.executions.map((execution) => execution.executionId)),
+    selectedExecutionId: String(recordState('threadSelectedExecutionIdByThreadId')[threadId] ?? ''),
+    presentationExecutionId: String((recordState('threadExecutionPresentationByThreadId')[threadId] as TaskExecutionPresentation | undefined)?.execution.executionId ?? ''),
+  });
   if (!card) {
     const empty = document.createElement('p');
     empty.className = 'codex-log-empty';

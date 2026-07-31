@@ -88,6 +88,8 @@ test('opening a mobile thread does not focus the draft and raise the software ke
   const openMobileThread = source.match(/export function openMobileThread\([\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(openMobileThread, /openThreadPanelController\(threadId\);/);
+  assert.match(openMobileThread, /bindThreadCodexRunLog\(\{[\s\S]*cardId: String\(card\.id\),[\s\S]*threadId,[\s\S]*forceRevalidate: true/);
+  assert.match(openMobileThread, /telemetry\('responsive-task-execution-entry'/);
   assert.doesNotMatch(openMobileThread, /selectThread\(/);
   assert.doesNotMatch(openMobileThread, /\.focus\(\)/);
 });
@@ -248,6 +250,21 @@ test('card entry owns the desktop default once while same-card reconciliation pr
   assert.match(openCardDetail, /presentedCardIdentity = nextIdentity/);
   assert.doesNotMatch(openCardDetail, /parsedTask\.masterTask/);
   assert.doesNotMatch(applicationSource, /await navigate\(cardPath\(ledgerRef\.id, zone\.id, cardId\)\);\n  openMobileThread/);
+});
+
+test('new task detail is installed when the navigation snapshot does not list it yet', () => {
+  assert.match(applicationSource, /import \{ upsertResponsiveRouteCard \} from '\.\/upsert-responsive-route-card\.js';/);
+  assert.match(applicationSource, /state\.ledger\.cards = upsertResponsiveRouteCard\(state\.ledger\.cards, card\);/);
+  assert.doesNotMatch(applicationSource, /state\.ledger\.cards = state\.ledger\.cards\.map\(\(entry\) => String\(entry\.id\) === requestedCard/);
+});
+
+test('responsive task ledgers preserve causal ownership across optimistic creation and route hydration', () => {
+  assert.match(applicationSource, /import \{ taskClockFromResponse \} from '\/src\/runtime\/refresh\/helper\/task-causal-clock\.js';/);
+  assert.match(applicationSource, /activeResponsiveTaskClock = taskClockFromResponse\(response\);/);
+  assert.match(applicationSource, /taskClock: activeResponsiveTaskClock/);
+  assert.match(applicationSource, /localProjection: true/);
+  assert.match(source, /if \(input\.localProjection === true\) return \{ \.\.\.\(canvasState\.ledgerReconciliation\?\.lastAppliedTaskClock \?\? \{\}\) \};/);
+  assert.match(source, /taskClock: responsiveReconciliationTaskClock\(input\)/);
 });
 
 test('mobile thread history and async refreshes are owned by the active presentation', () => {

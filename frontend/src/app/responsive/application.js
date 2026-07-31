@@ -7,6 +7,7 @@ import { ledgerCardBody, ledgerCardHasHydratedBody } from '/src/runtime/ledger/h
 import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
 import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
+import { upsertResponsiveRouteCard } from './upsert-responsive-route-card.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
 import { compareControlRoomQueueTasks, executionPresentation, parentMasterTask, projectMasterTask, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
@@ -29,8 +30,10 @@ import {
   applyOptimisticExecutionIntent,
   controlRoomTaskForExecution,
   createOptimisticExecutionIntent,
+  materializePendingExecutionIntents,
   optimisticExecutionConfirmed,
   removeAcknowledgedExecutionIntent,
+  removeRejectedExecutionIntent,
 } from './optimistic-execution-projection.js';
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
 import { requestTaskExecutionState } from '/src/runtime/codex/effect/request-task-execution-state.js';
@@ -44,6 +47,7 @@ import {
   requestSkillLibraryEditorClose,
 } from '/src/runtime/codex/effect/render-skill-library-editor-modal.js';
 import { loadRuntimeDiagnostics, projectRuntimeRows } from './runtime-status.js';
+import { taskClockFromResponse } from '/src/runtime/refresh/helper/task-causal-clock.js';
 
 installProjectRequestScope();
 
@@ -145,8 +149,10 @@ let presentedCardIdentity = '';
 let routeLoadGeneration = 0;
 let routeLoadController = null;
 let masterSubtaskExecutionController = null;
+let activeResponsiveTaskClock = null;
 let codexSettingsRequest = null;
 const optimisticExecutionIntents = new Map();
+const pendingOptimisticExecutionDetails = new Map();
 const optimisticTaskIntents = new Map();
 
 function currentRouteSnapshot() {
@@ -436,8 +442,18 @@ function removeEditorQuery(expectedEditor) {
 }
 
 function beginOptimisticExecution(detail) {
-  if (!state.controlRoom || !detail?.requestId) return '';
+  // WHAT: Ignore execution events that cannot own an optimistic request identity.
+  // WHY: Reconciliation must never use an empty identity that could match unrelated work.
+  if (!detail?.requestId) return '';
+  // WHAT: Retain cold-route execution details until the first Control Room projection arrives.
+  // WHY: A directly opened card has no hydrated task from which to build its preparing intent.
+  if (!state.controlRoom) {
+    pendingOptimisticExecutionDetails.set(String(detail.requestId), detail);
+    return String(detail.requestId);
+  }
   const task = controlRoomTaskForExecution(state.controlRoom, detail);
+  // WHAT: Decline to project an execution that has no matching task in the hydrated Control Room.
+  // WHY: Optimism must not synthesize a task outside the authoritative task inventory.
   if (!task) return '';
   const intent = createOptimisticExecutionIntent(task, detail);
   const identity = taskIdentity(task);
@@ -448,6 +464,8 @@ function beginOptimisticExecution(detail) {
 }
 
 function acknowledgeOptimisticExecution(detail) {
+  const clientRequestId = String(detail?.clientRequestId ?? detail?.requestId ?? '');
+  pendingOptimisticExecutionDetails.delete(clientRequestId);
   removeAcknowledgedExecutionIntent(optimisticExecutionIntents, detail);
   void loadControlRoom({ force: true }).then(() => {
     if (location.pathname === '/') renderControlRoom();
@@ -456,9 +474,8 @@ function acknowledgeOptimisticExecution(detail) {
 
 function rejectOptimisticExecution(detail) {
   const rejectedRequestId = String(detail?.requestId ?? '');
-  for (const [identity, intent] of optimisticExecutionIntents) {
-    if (intent.requestId === rejectedRequestId) optimisticExecutionIntents.delete(identity);
-  }
+  pendingOptimisticExecutionDetails.delete(rejectedRequestId);
+  removeRejectedExecutionIntent(optimisticExecutionIntents, detail);
   elements['mutation-error-message'].textContent = String(detail?.error || 'Execution admission was rejected and confirmed state was restored.');
   elements['mutation-error'].hidden = false;
   void loadControlRoom({ force: true }).then(() => {
@@ -885,7 +902,7 @@ async function createCard(name, description) {
       if (location.pathname === new URL(destination, location.origin).pathname) navigate(previousPath, true);
     },
   });
-  syncMobileThreadContext({ projectId: state.resourceProjectId, replicaNodeId: currentRouteSnapshot().replicaNodeId, ledgerId: state.activeLedgerId, ledger: state.ledger, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
+  syncMobileThreadContext({ projectId: state.resourceProjectId, replicaNodeId: currentRouteSnapshot().replicaNodeId, ledgerId: state.activeLedgerId, ledger: state.ledger, ledgers: state.ledgers, onCodexStarted: activateMasterTask, localProjection: true });
   navigate(destination);
   if (!await committed) throw new Error('Card creation failed and was restored.');
 }
@@ -963,6 +980,32 @@ function formatObservedAt(value) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : 'Unknown time';
 }
 
+function formatOccurrenceTotal(occurrences, partial, noun = 'failure') {
+  let qualifier = '';
+  // WHAT: Prefix totals whose retained history is incomplete with an explicit lower-bound label.
+  // WHY: Observation loss and legacy history prohibit presenting the visible count as exact.
+  if (partial) qualifier = 'At least ';
+  let suffix = 's';
+  // WHAT: Remove the plural suffix for a single retained occurrence.
+  // WHY: Summary and group totals must remain readable at every count.
+  if (occurrences === 1) suffix = '';
+  return `${qualifier}${occurrences} ${noun}${suffix} · 24h`;
+}
+
+function formatIncidentContext(context) {
+  const entries = Object.entries(context ?? {});
+  // WHAT: Name the absence of additional structured source context.
+  // WHY: An empty rendered slot would make complete evidence look accidentally omitted.
+  if (entries.length === 0) return 'No additional context';
+  return entries.map(([key, value]) => {
+    let renderedValue = String(value);
+    // WHAT: Serialize nested context values instead of coercing them to an opaque object label.
+    // WHY: Dated event evidence must preserve structured operation and source details.
+    if (value !== null && typeof value === 'object') renderedValue = JSON.stringify(value);
+    return `${key}=${renderedValue}`;
+  }).join(' · ');
+}
+
 function renderRuntimeStatus(diagnostics) {
   const rows = projectRuntimeRows(state.projects, diagnostics);
   const projects = rows.filter((row) => row.kind === 'project');
@@ -978,7 +1021,6 @@ function renderRuntimeStatus(diagnostics) {
     row.dataset.status = project.status;
     row.dataset.projectId = project.id;
     row.style.setProperty('--project-color', project.color);
-    row.open = project.incidents.length > 0;
     const summary = document.createElement('summary');
     summary.className = 'runtime-project-summary';
     const mark = Object.assign(document.createElement('span'), { className: 'runtime-project-mark' });
@@ -988,10 +1030,35 @@ function renderRuntimeStatus(diagnostics) {
       Object.assign(document.createElement('strong'), { textContent: project.name }),
       Object.assign(document.createElement('small'), { textContent: project.detail }),
     );
+    const summaryState = Object.assign(document.createElement('div'), { className: 'runtime-project-summary-state' });
+    const total = Object.assign(document.createElement('span'), {
+      className: 'runtime-project-occurrences',
+      textContent: formatOccurrenceTotal(project.occurrences, project.occurrencesPartial),
+    });
+    total.dataset.partial = String(project.occurrencesPartial);
     const badge = Object.assign(document.createElement('span'), { className: 'runtime-status-badge runtime-project-availability', textContent: project.label });
-    summary.append(mark, copy, badge);
+    summaryState.append(total, badge);
+    summary.append(mark, copy, summaryState);
     const incidentList = Object.assign(document.createElement('div'), { className: 'runtime-project-incidents' });
-    incidentList.setAttribute('aria-label', `${project.name} active incidents`);
+    incidentList.setAttribute('aria-label', `${project.name} failure history`);
+    // WHAT: Explain why a project-level 24-hour total is a lower bound before listing its retained evidence.
+    // WHY: Legacy and global truncation markers have different evidence-loss scopes that operators must be able to distinguish.
+    if (project.occurrencesPartial) {
+      let partialReason = 'the diagnostics observation time was unavailable';
+      // WHAT: Identify owner-scoped legacy loss as the reason for a partial project total.
+      // WHY: Legacy lifetime counts cannot be expanded into dated rolling-window events.
+      if (project.legacyHistory) partialReason = 'earlier owner history is unavailable';
+      // WHAT: Identify document-wide retention loss as the reason for a partial project total.
+      // WHY: A global truncation watermark means discarded evidence can still intersect this 24-hour window.
+      if (project.truncatedHistory) partialReason = 'retained system history was truncated';
+      // WHAT: Disclose both incomplete-history boundaries when they apply to the same project row.
+      // WHY: Reporting only one marker would hide a verified source of missing occurrences.
+      if (project.legacyHistory && project.truncatedHistory) partialReason = 'earlier owner history is unavailable and retained system history was truncated';
+      incidentList.append(Object.assign(document.createElement('p'), {
+        className: 'runtime-history-lower-bound',
+        textContent: `Lower bound: ${partialReason}.`,
+      }));
+    }
     incidentList.append(...project.incidents.map((incident) => {
       const card = document.createElement('article');
       card.className = 'runtime-incident-card';
@@ -1002,7 +1069,7 @@ function renderRuntimeStatus(diagnostics) {
       incidentCopy.append(
         Object.assign(document.createElement('code'), { textContent: incident.code }),
         Object.assign(document.createElement('small'), {
-          textContent: `${incident.components.join(', ') || 'runtime'} · ${incident.occurrences} occurrence${incident.occurrences === 1 ? '' : 's'} · last ${formatObservedAt(incident.lastObservedAt)}`,
+          textContent: `${incident.components.join(', ') || 'runtime'} · ${formatOccurrenceTotal(incident.occurrences, incident.occurrencesPartial, 'occurrence')} · last ${formatObservedAt(incident.lastObservedAt)}`,
         }),
       );
       const labels = Object.assign(document.createElement('div'), { className: 'runtime-incident-labels' });
@@ -1011,28 +1078,76 @@ function renderRuntimeStatus(diagnostics) {
         textContent: incident.severity,
       });
       severity.dataset.kind = 'severity';
-      const interruption = Object.assign(document.createElement('span'), {
+      let activityLabel = 'Resolved';
+      // WHAT: Label a group with retained active incidents as active even when its rolling count is zero.
+      // WHY: Current incident authority remains independent of whether dated occurrences still intersect the window.
+      if (incident.activeIncidentCount > 0) activityLabel = 'Active';
+      // WHAT: Elevate a group whose active scope matches a pause registry to an interruption.
+      // WHY: The registry match is the authoritative signal that work is currently blocked.
+      if (incident.interrupting) activityLabel = 'Interruption';
+      const activity = Object.assign(document.createElement('span'), {
         className: 'runtime-status-badge',
-        textContent: incident.interrupting ? 'Interruption' : 'Active',
+        textContent: activityLabel,
       });
-      interruption.dataset.kind = 'interruption';
-      labels.append(severity, interruption);
+      activity.dataset.kind = 'interruption';
+      labels.append(severity, activity);
       heading.append(incidentCopy, labels);
-      const scopes = Object.assign(document.createElement('details'), { className: 'runtime-incident-scopes' });
-      const scopesSummary = document.createElement('summary');
-      scopesSummary.textContent = `${incident.scopes.length} affected scope${incident.scopes.length === 1 ? '' : 's'}`;
-      const list = document.createElement('ul');
-      // WHAT: Render each retained affected scope inside its incident card.
-      // WHY: Operators need the complete owner-scoped evidence rather than only the aggregate count.
-      for (const scope of incident.scopes) {
-        const item = document.createElement('li');
-        item.append(Object.assign(document.createElement('code'), { textContent: scope }));
-        list.append(item);
+      const events = Object.assign(document.createElement('div'), { className: 'runtime-incident-events' });
+      events.setAttribute('aria-label', `${incident.code} dated occurrences`);
+      // WHAT: Render each retained occurrence as its own dated evidence record inside the owner-and-code group.
+      // WHY: Equal error codes can retain different messages, sources, statuses, and contexts that must not be collapsed.
+      for (const event of incident.events) {
+        const evidence = Object.assign(document.createElement('article'), { className: 'runtime-incident-event' });
+        const eventHeading = Object.assign(document.createElement('header'), { className: 'runtime-incident-event-heading' });
+        const time = Object.assign(document.createElement('time'), {
+          dateTime: event.observedAt,
+          textContent: formatObservedAt(event.observedAt),
+        });
+        const eventState = Object.assign(document.createElement('span'), {
+          className: 'runtime-incident-event-state',
+          textContent: `${event.status} · ${event.severity}`,
+        });
+        eventHeading.append(time, eventState);
+        const source = Object.assign(document.createElement('dl'), { className: 'runtime-incident-source' });
+        const sourceValues = [
+          ['Component', event.component || 'runtime'],
+          ['Scope', event.scope || 'Unscoped'],
+          ['Context', formatIncidentContext(event.context)],
+        ];
+        // WHAT: Render component, scope, and structured context for the dated occurrence.
+        // WHY: Each message needs its own source trail rather than only group-level aggregate metadata.
+        for (const [label, value] of sourceValues) {
+          source.append(
+            Object.assign(document.createElement('dt'), { textContent: label }),
+            Object.assign(document.createElement('dd'), { textContent: value }),
+          );
+        }
+        evidence.append(
+          eventHeading,
+          Object.assign(document.createElement('p'), { className: 'runtime-incident-message', textContent: event.message }),
+          source,
+        );
+        events.append(evidence);
       }
-      scopes.append(scopesSummary, list);
-      card.append(heading, Object.assign(document.createElement('p'), { className: 'runtime-incident-message', textContent: incident.message }), scopes);
+      // WHAT: State explicitly when an active group has no dated evidence inside the rolling window.
+      // WHY: A blank group could otherwise look like a rendering failure instead of current authority with zero recent occurrences.
+      if (incident.events.length === 0) {
+        events.append(Object.assign(document.createElement('p'), {
+          className: 'runtime-history-empty',
+          textContent: 'No dated occurrences in the last 24 hours.',
+        }));
+      }
+      card.append(heading, events);
       return card;
     }));
+    // WHAT: Give an expanded project with no failure groups an explicit history state.
+    // WHY: Every catalog project remains a disclosure even when its rolling total is exactly zero.
+    if (project.incidents.length === 0) {
+      incidentList.append(Object.assign(document.createElement('p'), {
+        className: 'runtime-history-empty',
+        textContent: 'No failures recorded in the last 24 hours.',
+      }));
+    }
     row.append(summary, incidentList);
     return row;
   }));
@@ -1967,8 +2082,11 @@ async function loadControlRoom({ force = false, deferDuringQueueDrag = false, ow
   if (response.status === 304 && state.controlRoom) return false;
   if (!response.ok) throw new Error(`Could not load the Control Room (${response.status}).`);
   const nextControlRoom = await response.json();
+  materializePendingExecutionIntents(pendingOptimisticExecutionDetails, optimisticExecutionIntents, nextControlRoom);
   for (const [identity, intent] of optimisticExecutionIntents) {
     const serverTask = (nextControlRoom.allTasks ?? []).find((task) => taskIdentity(task) === identity);
+    // WHAT: Retire optimism only after the same request reaches a non-stale authoritative revision.
+    // WHY: An unrelated execution receipt must not erase this request-owned preparing projection.
     if (optimisticExecutionConfirmed(intent, serverTask)) {
       optimisticExecutionIntents.delete(identity);
       continue;
@@ -2208,7 +2326,8 @@ async function createTaskIntake(projectId, assignedNodeId, replicaNodeId = assig
     ledger,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
-    onQuickVoiceSubmitted: navigateVoiceSubmission
+    onQuickVoiceSubmitted: navigateVoiceSubmission,
+    localProjection: true
   });
   navigate(replicaAddress(cardPathForProject(projectId, ledgerRef.id, zone.id, cardId), replicaNodeId));
   void ledgerMutation(ledgerRef.id, { action: 'create-task-intake', assignedNodeId, annotation: zone, card }, projectId, replicaNodeId).then(() => {
@@ -2962,6 +3081,7 @@ async function loadLedger(ledgerId, owner) {
   requireRouteOwnership(owner);
   if (!ledger || !Array.isArray(ledger.cards)) throw new Error('The ledger response does not contain a card list.');
   state.activeLedgerId = ledgerId;
+  activeResponsiveTaskClock = taskClockFromResponse(response);
   const ledgerScope = responsiveLedgerScope({ projectId: owner.route.projectId, replicaNodeId: owner.route.replicaNodeId, ledgerId });
   state.ledger = responsiveLedgerTransactions.reconcile(responsiveLedgerScopeKey(ledgerScope), ledger);
   renderLedgerLinks();
@@ -2972,7 +3092,8 @@ async function loadLedger(ledgerId, owner) {
     ledger: state.ledger,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
-    onQuickVoiceSubmitted: navigateVoiceSubmission
+    onQuickVoiceSubmitted: navigateVoiceSubmission,
+    taskClock: activeResponsiveTaskClock
   });
 }
 
@@ -3139,7 +3260,7 @@ async function loadRoute({ retainView = false } = {}) {
         requireRouteOwnership(owner);
       }
       if (card) {
-        state.ledger.cards = state.ledger.cards.map((entry) => String(entry.id) === requestedCard ? card : entry);
+        state.ledger.cards = upsertResponsiveRouteCard(state.ledger.cards, card);
         const cardZone = zone ?? zones.find((entry) => entry.cards.some((candidate) => String(candidate.id) === requestedCard));
         state.activeZoneId = asText(cardZone?.id ?? 'ungrouped');
         state.activeZoneColor = asText(cardZone?.color ?? '#9ba3ad');
@@ -3150,7 +3271,8 @@ async function loadRoute({ retainView = false } = {}) {
           ledger: state.ledger,
           ledgers: state.ledgers,
           onCodexStarted: activateMasterTask,
-          onQuickVoiceSubmitted: navigateVoiceSubmission
+          onQuickVoiceSubmitted: navigateVoiceSubmission,
+          taskClock: activeResponsiveTaskClock
         });
         renderCard(card);
         const query = new URLSearchParams(owner.route.search);
@@ -3341,6 +3463,7 @@ window.addEventListener('popstate', () => {
   }
 });
 window.addEventListener('decision-os:codex-run-preparing', (event) => { beginOptimisticExecution(event.detail); });
+window.addEventListener('decision-os:codex-run-handoff', (event) => { void navigateAcceptedProcess(event.detail); });
 window.addEventListener('decision-os:codex-run-enqueued', (event) => {
   acknowledgeOptimisticExecution(event.detail);
   void navigateAcceptedProcess(event.detail);

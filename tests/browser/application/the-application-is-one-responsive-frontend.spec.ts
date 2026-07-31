@@ -437,6 +437,109 @@ test('A new desktop task remains in its task view while its optimistic creation 
   }
 });
 
+test('Process Card pipelines reconcile pending admission, replicated success, rejection, and timeout.', { timeout: 60_000 }, async () => {
+  const server = await startDecisionOsServer();
+  let browser: Browser | undefined;
+  let releaseSuccessfulAdmission: (() => void) | undefined;
+  let releaseRejectedAdmission: (() => void) | undefined;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      // WHAT: Use the platform-authoritative Chromium binary when it is installed.
+      // WHY: The Linux runbook requires /snap/bin/chromium for served interaction evidence.
+      executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    const fixture = await resolvePipelineLaunchFixture(server.url);
+
+    const successful = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    let successfulProjection = fixture.projection;
+    let observeSuccessfulAdmission!: (request: Record<string, unknown>) => void;
+    const successfulAdmissionObserved = new Promise<Record<string, unknown>>((resolveObserved) => { observeSuccessfulAdmission = resolveObserved; });
+    const successfulAdmissionGate = new Promise<void>((resolveAdmission) => { releaseSuccessfulAdmission = resolveAdmission; });
+    await installFixturePipelineCatalog(successful);
+    await successful.route('**/api/control-room', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(successfulProjection) }));
+    await successful.route('**/api/codex/pipelines/runs', async (route) => {
+      const request = route.request().postDataJSON() as Record<string, unknown>;
+      observeSuccessfulAdmission(request);
+      await successfulAdmissionGate;
+      await route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, receipts: [{ requestId: `server:${String(request.requestId)}` }], run: { id: 'pipeline-run-success' } }),
+      });
+    });
+    await successful.goto(`${server.url}${fixture.route}`, { waitUntil: 'domcontentloaded' });
+    await startFixturePipeline(successful);
+    const successfulRequest = await waitForSignal(successfulAdmissionObserved, 'Timed out waiting for the deferred successful admission.');
+    await successful.waitForURL(`${server.url}/?tab=exec`);
+    await successful.locator('.process-modal').waitFor({ state: 'hidden' });
+    const pendingTask = successful.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title });
+    await pendingTask.getByText(/^Preparing/).waitFor({ state: 'visible' });
+
+    successfulProjection = executionProjection(fixture.projection, fixture.task, String(successfulRequest.requestId));
+    releaseSuccessfulAdmission();
+    await pendingTask.getByText(/^Queued/).waitFor({ state: 'visible' });
+    await successful.reload({ waitUntil: 'domcontentloaded' });
+    await successful.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).waitFor({ state: 'visible' });
+
+    const rejected = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    let observeRejectedAdmission!: () => void;
+    const rejectedAdmissionObserved = new Promise<void>((resolveObserved) => { observeRejectedAdmission = resolveObserved; });
+    const rejectedAdmissionGate = new Promise<void>((resolveAdmission) => { releaseRejectedAdmission = resolveAdmission; });
+    await installFixturePipelineCatalog(rejected);
+    await rejected.route('**/api/control-room', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture.projection) }));
+    await rejected.route('**/api/codex/pipelines/runs', async (route) => {
+      observeRejectedAdmission();
+      await rejectedAdmissionGate;
+      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Pipeline admission rejected.' }) });
+    });
+    await rejected.goto(`${server.url}${fixture.route}`, { waitUntil: 'domcontentloaded' });
+    await startFixturePipeline(rejected);
+    await waitForSignal(rejectedAdmissionObserved, 'Timed out waiting for the deferred rejected admission.');
+    await rejected.waitForURL(`${server.url}/?tab=exec`);
+    await rejected.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).getByText(/^Preparing/).waitFor({ state: 'visible' });
+    releaseRejectedAdmission();
+    const rejectedAlert = rejected.locator('#mutation-error:not([hidden])');
+    await rejectedAlert.waitFor({ state: 'visible' });
+    assert.equal(await rejected.locator('#mutation-error-message').textContent(), 'Pipeline admission rejected.');
+    await rejected.locator(`[data-control-tab="${fixture.confirmedTab}"]`).click();
+    await rejected.locator(`[data-control-column="${fixture.confirmedTab}"] .control-task`).filter({ hasText: fixture.task.title }).waitFor({ state: 'visible' });
+    await rejectedAlert.waitFor({ state: 'visible' });
+    assert.equal(await rejected.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).count(), 0);
+
+    const timedOut = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await timedOut.addInitScript(() => {
+      const nativeSetTimeout = window.setTimeout.bind(window);
+      // WHAT: Accelerate only the fixed production admission deadline inside this timeout fixture.
+      // WHY: The served test must exercise timeout reconciliation without waiting thirty wall-clock seconds.
+      window.setTimeout = ((handler: TimerHandler, timeout?: number, ...arguments_: unknown[]) => (
+        nativeSetTimeout(handler, timeout === 30_000 ? 50 : timeout, ...arguments_)
+      )) as typeof window.setTimeout;
+    });
+    await installFixturePipelineCatalog(timedOut);
+    await timedOut.route('**/api/control-room', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture.projection) }));
+    await timedOut.route('**/api/codex/pipelines/runs', async (route) => {
+      await delay(1_000);
+      await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ ok: true }) }).catch(() => undefined);
+    });
+    await timedOut.goto(`${server.url}${fixture.route}`, { waitUntil: 'domcontentloaded' });
+    await startFixturePipeline(timedOut);
+    await timedOut.waitForURL(`${server.url}/?tab=exec`);
+    await timedOut.locator('#mutation-error:not([hidden])').waitFor({ state: 'visible' });
+    assert.equal(await timedOut.locator('#mutation-error-message').textContent(), 'Pipeline admission timed out after 30000ms.');
+    await timedOut.locator(`[data-control-tab="${fixture.confirmedTab}"]`).click();
+    await timedOut.locator(`[data-control-column="${fixture.confirmedTab}"] .control-task`).filter({ hasText: fixture.task.title }).waitFor({ state: 'visible' });
+    await timedOut.locator('#mutation-error:not([hidden])').waitFor({ state: 'visible' });
+    assert.equal(await timedOut.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).count(), 0);
+  } finally {
+    releaseSuccessfulAdmission?.();
+    releaseRejectedAdmission?.();
+    await browser?.close();
+    await stopDecisionOsServer(server.process);
+  }
+});
+
 test('Master-task completion exposes manual and configured pipeline actions at desktop and mobile widths.', { timeout: 60_000 }, async () => {
   const server = await startDecisionOsServer();
   let browser: Browser | undefined;
@@ -557,6 +660,101 @@ async function resolveResponsiveCardRoute(serverUrl: string): Promise<string> {
     }
   }
   assert.fail('The test workspace must expose one card and one zone for responsive card routing.');
+}
+
+type PipelineLaunchTask = {
+  projectId: string;
+  ledgerId: string;
+  cardId: string;
+  zoneId?: string;
+  title: string;
+  assignedNodeId?: string;
+  assignedNodeLabel?: string;
+  [key: string]: unknown;
+};
+
+type PipelineLaunchProjection = {
+  queue: PipelineLaunchTask[];
+  exec: PipelineLaunchTask[];
+  backlog: PipelineLaunchTask[];
+  done: PipelineLaunchTask[];
+  allTasks: PipelineLaunchTask[];
+  [key: string]: unknown;
+};
+
+async function resolvePipelineLaunchFixture(serverUrl: string): Promise<{
+  route: string;
+  task: PipelineLaunchTask;
+  confirmedTab: 'queue' | 'backlog';
+  projection: PipelineLaunchProjection;
+}> {
+  const project = await resolveCurrentProject(serverUrl);
+  const projection = await fetch(`${serverUrl}/api/control-room`).then((response) => response.json()) as PipelineLaunchProjection;
+  const queuedTask = projection.queue.find((task) => task.projectId === project.id && task.ledgerId && task.cardId);
+  const backlogTask = projection.backlog.find((task) => task.projectId === project.id && task.ledgerId && task.cardId);
+  const task = queuedTask ?? backlogTask;
+  assert.ok(task, 'The browser fixture must expose one confirmed Queue or Backlog task for pipeline launch.');
+  // WHAT: Record the task's authoritative pre-launch placement for rejection reconciliation.
+  // WHY: The served assertion must prove that exact confirmed placement is restored.
+  const confirmedTab = queuedTask ? 'queue' : 'backlog';
+  const route = `/p/${encodeURIComponent(task.projectId)}/ledgers/${encodeURIComponent(task.ledgerId)}/zones/${encodeURIComponent(task.zoneId || 'ungrouped')}/cards/${encodeURIComponent(task.cardId)}`;
+  return { route, task, confirmedTab, projection };
+}
+
+async function installFixturePipelineCatalog(page: Page): Promise<void> {
+  await page.route('**/api/codex/skills', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: true, skills: [], availableTags: [] }),
+  }));
+  await page.route('**/api/codex/pipelines', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      ok: true,
+      pipelines: [{ id: 'optimistic-browser-pipeline', name: 'Optimistic browser pipeline', purpose: 'Browser admission fixture.', stepIds: [] }],
+      steps: [],
+      availableContent: [],
+      issues: [],
+    }),
+  }));
+}
+
+async function startFixturePipeline(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Process card', exact: true }).click();
+  await page.locator('.process-modal[open]').waitFor({ state: 'visible' });
+  await page.locator('[data-process-tab="pipelines"]').click();
+  await page.locator('.codex-list-item').filter({ hasText: 'Optimistic browser pipeline' }).click();
+  await page.getByRole('button', { name: 'Start pipeline', exact: true }).click();
+}
+
+function executionProjection(projection: PipelineLaunchProjection, target: PipelineLaunchTask, requestId: string): PipelineLaunchProjection {
+  const next = structuredClone(projection);
+  const matchesTarget = (task: PipelineLaunchTask) => (
+    task.projectId === target.projectId && task.ledgerId === target.ledgerId && task.cardId === target.cardId
+  );
+  const executingTask = {
+    ...target,
+    status: 'task-execution',
+    executionStatus: 'queued',
+    executionSince: '2026-07-31T00:00:00.000Z',
+    execution: {
+      executionId: 'execution-browser-success',
+      requestId,
+      phase: 'queued',
+      phaseSince: '2026-07-31T00:00:00.000Z',
+      revision: 1,
+      executorNodeId: target.assignedNodeId || '',
+    },
+  };
+  // WHAT: Replace the fixture task with its authoritative admitted execution in every projection collection.
+  // WHY: Reload survival must read one canonical task identity without stale duplicate placement.
+  for (const collection of ['queue', 'exec', 'backlog', 'done', 'allTasks'] as const) {
+    next[collection] = next[collection].filter((task) => !matchesTarget(task));
+  }
+  next.exec = [executingTask, ...next.exec];
+  next.allTasks = [executingTask, ...next.allTasks];
+  return next;
 }
 
 function localResponsiveCardRoute(): string {

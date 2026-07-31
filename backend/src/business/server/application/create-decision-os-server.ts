@@ -13,6 +13,7 @@ import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtim
 import { NodeReleaseError } from '../../delivery/helper/node-release-store.js';
 import { RuntimeScopePausedError } from '../helper/runtime-incident-ledger.js';
 import { createNodeHttpListener } from '../http/create-node-http-listener.js';
+import { installFrontendTelemetryWebSocket } from '../http/frontend-telemetry-websocket.js';
 import {
   buildDeliveryAdmissionState,
   buildDeliveryStatusEvidence,
@@ -278,6 +279,13 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
     recordStoppedOperation,
     startupTasks: startupProjectTasks,
   });
+  const telemetrySocket = installFrontendTelemetryWebSocket({
+    decisionOsRoot: masterDecisionOsRoot,
+    enabled: (runtime.decisionOsSettings as AnyRecord | undefined)?.frontendTelemetryWebSocketEnabled === true,
+    server,
+    recordFailure: (operation, error) => recordBackgroundFailure('frontend-telemetry', operation, error),
+  });
+  server.on('close', telemetrySocket.close);
   runtime.server = server;
   return { ok: true, port, server };
 }

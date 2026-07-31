@@ -268,6 +268,18 @@ If `transcriptionEnabled` is `false`, decision-os still uploads and persists the
 
 Do not commit real API keys. Keep `.decision-os/.settings.json` workspace-local.
 
+### Frontend telemetry
+
+Browser telemetry remains local and disabled by default. Enable the bounded same-origin diagnostic WebSocket in the server workspace settings:
+
+```json
+{
+  "frontendTelemetryWebSocketEnabled": true
+}
+```
+
+The server writes bounded JSON Lines evidence to `.decision-os/frontend-telemetry.jsonl` and retains one rotated `.1` file. The channel never uses the federation relay and excludes Markdown bodies, Codex output, credentials, and artifact contents from its transport contract.
+
 ## Codex Process Capacity
 
 Codex skill and pipeline runs use a durable per-workspace FIFO queue. Configure the maximum number of concurrently running Codex processes in `.decision-os/.settings.json`:

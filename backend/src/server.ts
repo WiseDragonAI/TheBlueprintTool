@@ -38,16 +38,29 @@ async function main(): Promise<void> {
       const path = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
+      // WHAT: Keep health and incident diagnostics available from the backend emergency listener.
+      // WHY: Startup failure containment must expose the same evaluation-time contract as the normal server.
       if (request.method === 'GET' && (path === '/api/health' || path === '/api/diagnostics/incidents')) {
+        const observedAt = new Date().toISOString();
         const snapshot = incidents.snapshot();
+        // WHAT: Expose no document truncation marker for a readable version-1 emergency snapshot.
+        // WHY: Legacy history has no truthful global loss timestamp until a valid write upgrades it.
+        const historyTruncatedBefore = snapshot.version === 2 ? snapshot.historyTruncatedBefore : '';
         response.end(JSON.stringify({
           ok: true,
           status: 'degraded',
           startupPaused: true,
+          observedAt,
           ...decisionOsReleaseHealthIdentity(runtime_state.decisionOsSettings),
           incidentLedger: incidents.file,
           activeIncidentCount: snapshot.incidents.filter((entry) => entry.status === 'paused').length,
-          ...(path === '/api/diagnostics/incidents' ? { incidents: snapshot.incidents } : {}),
+          // WHAT: Return versioned occurrence evidence only from the established incident diagnostics route.
+          // WHY: Emergency health remains compact while diagnostics exposes the complete normal-mode schema.
+          ...(path === '/api/diagnostics/incidents' ? {
+            incidentHistoryVersion: snapshot.version,
+            historyTruncatedBefore,
+            incidents: snapshot.incidents,
+          } : {}),
         }));
         return;
       }

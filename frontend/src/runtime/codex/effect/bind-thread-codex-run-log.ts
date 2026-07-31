@@ -16,6 +16,7 @@ import { shouldAcceptReplicatedTaskState } from '../../refresh/helper/task-proje
 import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 import { stopThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
 import type { ThreadCodexRunLogIdentity } from './thread-codex-run-log-identity-types.js';
+import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export { syncThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
 export { bindThreadCodexActiveRunLog, unbindThreadCodexActiveRunLog } from './bind-thread-codex-active-run-log.js';
@@ -28,6 +29,7 @@ type TaskLogPoller = {
   timer: ReturnType<typeof setTimeout> | null;
   inFlight: boolean;
   abortController: AbortController | null;
+  expectedSessionUntilMs: number;
 };
 
 const taskLogPollers = new Map<string, TaskLogPoller>();
@@ -83,16 +85,30 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
   const abortController = new AbortController();
   poller.abortController = abortController;
   const { projectId, replicaNodeId, cardId: taskId, threadId } = poller.identity;
+  const startedAt = Date.now();
   let retryDelay: number | null = null;
   const ownsRequest = (): boolean => taskLogPollers.get(threadId) === poller
     && poller.generation === generation
     && poller.abortController === abortController;
   try {
+    telemetry('codex-log-refresh-started', {
+      projectId, replicaNodeId, taskId, threadId, generation,
+    });
     const summaryResult = await requestTaskExecutionState({
       projectId,
       replicaNodeId,
       taskId,
       signal: abortController.signal,
+    });
+    telemetry('codex-log-summary-settled', {
+      projectId,
+      replicaNodeId,
+      taskId,
+      threadId,
+      generation,
+      durationMs: Date.now() - startedAt,
+      outcome: 'error' in summaryResult ? 'error' : 'value',
+      error: 'error' in summaryResult ? summaryResult.error : '',
     });
     if (!ownsRequest()) return;
     if ('error' in summaryResult) {
@@ -102,18 +118,47 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
       return;
     }
     const summary = scopeTaskExecutionState(summaryResult.value, poller.identity.cardId);
+    const expectedSessionExecution = poller.expectedSessionUntilMs > Date.now()
+      ? summary.sessions.find((session) => session.sessionId === poller.identity.runId)?.executions.at(-1) ?? null
+      : null;
+    const awaitingExpectedSession = poller.expectedSessionUntilMs > Date.now()
+      && Boolean(poller.identity.runId)
+      && !expectedSessionExecution;
+    // WHAT: Clear the bounded admission expectation after its session execution becomes locally visible.
+    // WHY: Once durable execution state catches up, normal active and invalidation-driven refresh ownership resumes.
+    if (expectedSessionExecution) poller.expectedSessionUntilMs = 0;
+    telemetry('codex-log-summary-installed', {
+      projectId,
+      replicaNodeId,
+      taskId,
+      threadId,
+      generation,
+      sessions: summary.sessions.length,
+      executions: summary.sessions.reduce((count, session) => count + session.executions.length, 0),
+      activeExecutions: summary.activeExecutionIds.length,
+      defaultExecutionId: summary.defaultExecutionId,
+      requestedRunId: poller.identity.runId,
+      sessionIds: summary.sessions.map((session) => session.sessionId),
+      executionIds: summary.sessions.flatMap((session) => session.executions.map((execution) => execution.executionId)),
+    });
     recordState('threadTaskExecutionStateByThreadId')[threadId] = summary;
     delete recordState('threadExecutionStateErrorByThreadId')[threadId];
     const selectedIds = recordState('threadSelectedExecutionIdByThreadId');
     const requestedExecutionId = String(selectedIds[threadId] ?? '');
-    const selectedExecutionId = findTaskExecution(summary, requestedExecutionId)
-      ? requestedExecutionId
-      : String(summary.defaultExecutionId ?? '');
+    const selectedExecutionId = expectedSessionExecution?.executionId
+      ?? (findTaskExecution(summary, requestedExecutionId)
+        ? requestedExecutionId
+        : String(summary.defaultExecutionId ?? ''));
     selectedIds[threadId] = selectedExecutionId;
-    syncControlsFromSummary(threadId, summary);
+    // WHAT: Preserve optimistic active controls while the accepted session has no execution entity yet.
+    // WHY: An earlier empty summary cannot truthfully reset a run whose admission is still settling.
+    if (!awaitingExpectedSession) syncControlsFromSummary(threadId, summary);
     if (!selectedExecutionId) {
       delete recordState('threadExecutionPresentationByThreadId')[threadId];
       paintThreadLog(threadId);
+      // WHAT: Re-read local task state while the accepted session is inside its bounded materialization window.
+      // WHY: Execution identity is created at turn start and can legitimately follow the admission response.
+      if (awaitingExpectedSession) retryDelay = 300;
       return;
     }
     const presentationResult = await requestTaskExecutionPresentation({
@@ -121,6 +166,17 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
       replicaNodeId,
       executionId: selectedExecutionId,
       signal: abortController.signal,
+    });
+    telemetry('codex-log-presentation-settled', {
+      projectId,
+      replicaNodeId,
+      taskId,
+      threadId,
+      generation,
+      executionId: selectedExecutionId,
+      durationMs: Date.now() - startedAt,
+      outcome: 'error' in presentationResult ? 'error' : 'value',
+      error: 'error' in presentationResult ? presentationResult.error : '',
     });
     if (!ownsRequest()
       || String(recordState('threadSelectedExecutionIdByThreadId')[threadId] ?? '') !== selectedExecutionId) return;
@@ -134,8 +190,41 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
     paintThreadLog(threadId);
     // WHAT: Refresh complete snapshots only while the task has active execution work.
     // WHY: Terminal history is immutable and future admissions arrive through execution-change invalidation.
-    if (retryDelay === null && summary.activeExecutionIds.length > 0) retryDelay = 900;
+    if (retryDelay === null && awaitingExpectedSession) retryDelay = 300;
+    else if (retryDelay === null && summary.activeExecutionIds.length > 0) retryDelay = 900;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack ?? '' : '';
+    telemetry('codex-log-refresh-failed', {
+      projectId,
+      replicaNodeId,
+      taskId,
+      threadId,
+      generation,
+      durationMs: Date.now() - startedAt,
+      aborted: abortController.signal.aborted,
+      error: message,
+      stack,
+    });
+    // WHAT: Install a visible scoped read error and retry after an unexpected projection failure.
+    // WHY: A swallowed exception otherwise leaves the Codex Log in an indistinguishable permanent loading state.
+    if (ownsRequest()) {
+      recordState('threadExecutionStateErrorByThreadId')[threadId] = message;
+      paintThreadLog(threadId);
+      retryDelay = 1_500;
+    }
   } finally {
+    telemetry('codex-log-refresh-settled', {
+      projectId,
+      replicaNodeId,
+      taskId,
+      threadId,
+      generation,
+      durationMs: Date.now() - startedAt,
+      ownsRequest: ownsRequest(),
+      aborted: abortController.signal.aborted,
+      retryDelay,
+    });
     if (poller.abortController === abortController) poller.abortController = null;
     if (taskLogPollers.get(threadId) === poller && poller.generation === generation) {
       poller.inFlight = false;
@@ -201,10 +290,27 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   };
   const key = `${identity.projectId}\0${identity.replicaNodeId}\0${identity.cardId}`;
   const current = taskLogPollers.get(identity.threadId);
+  const expectsAdmission = Boolean(identity.runId)
+    && (input.expectedStatus === 'pending' || input.expectedStatus === 'running');
   const cachedSummary = recordState('threadTaskExecutionStateByThreadId')[identity.threadId] as TaskExecutionStateSummary | undefined;
+  telemetry('codex-log-binding-resolved', {
+    ...identity,
+    expectedExecutionId: input.expectedExecutionId ?? '',
+    expectedStatus: input.expectedStatus ?? '',
+    expectsAdmission,
+    forceRevalidate: input.forceRevalidate === true,
+    existingPollerKey: current?.key ?? '',
+    resolvedPollerKey: key,
+    cachedSessionIds: cachedSummary?.sessions.map((session) => session.sessionId) ?? [],
+    cachedExecutionIds: cachedSummary?.sessions.flatMap((session) => session.executions.map((execution) => execution.executionId)) ?? [],
+    selectedExecutionId: String(recordState('threadSelectedExecutionIdByThreadId')[identity.threadId] ?? ''),
+  });
   if (cachedSummary) syncControlsFromSummary(identity.threadId, cachedSummary);
   if (current?.key === key) {
     current.identity = identity;
+    // WHAT: Renew the bounded session expectation when admission reports pending or running work.
+    // WHY: Intermediate panel renders must not erase the only evidence that execution identity is still materializing.
+    if (expectsAdmission) current.expectedSessionUntilMs = Date.now() + 15_000;
     if (input.forceRevalidate || (input.expectedExecutionId
       && input.expectedExecutionId !== String(recordState('threadSelectedExecutionIdByThreadId')[identity.threadId] ?? ''))) {
       if (input.expectedExecutionId) recordState('threadSelectedExecutionIdByThreadId')[identity.threadId] = input.expectedExecutionId;
@@ -232,6 +338,7 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
     timer: null,
     inFlight: false,
     abortController: null,
+    expectedSessionUntilMs: expectsAdmission ? Date.now() + 15_000 : 0,
   };
   taskLogPollers.set(identity.threadId, poller);
   installExecutionInvalidation();
@@ -240,6 +347,15 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
 
 export function unbindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   const poller = taskLogPollers.get(input.threadId);
+  telemetry('codex-log-unbind-requested', {
+    projectId: input.projectId ?? projectIdFromLocation(),
+    replicaNodeId: input.replicaNodeId ?? replicaNodeIdFromLocation(),
+    ledgerId: input.ledgerId,
+    cardId: input.cardId,
+    threadId: input.threadId,
+    runId: input.runId,
+    installedPollerKey: poller?.key ?? '',
+  });
   if (!poller) return;
   poller.generation += 1;
   if (poller.timer) clearTimeout(poller.timer);

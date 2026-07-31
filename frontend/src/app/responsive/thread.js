@@ -109,6 +109,13 @@ function hydrateThreadRun(runId, startedAt, status, queuePosition) {
   syncThreadCodexRunControls({ threadId, status, queuePosition });
 }
 
+function responsiveReconciliationTaskClock(input) {
+  // WHAT: Reuse the installed causal clock for a ledger produced by the local optimistic coordinator.
+  // WHY: Local projection adds cannot become causally older than the state from which they were derived.
+  if (input.localProjection === true) return { ...(canvasState.ledgerReconciliation?.lastAppliedTaskClock ?? {}) };
+  return input.taskClock ?? null;
+}
+
 export function syncMobileThreadContext(input) {
   const projectReplicaChanged = currentProjectId !== String(input.projectId ?? '')
     || currentReplicaNodeId !== String(input.replicaNodeId ?? '');
@@ -135,6 +142,7 @@ export function syncMobileThreadContext(input) {
     ledger: input.ledger,
     request,
     serverRevision: null,
+    taskClock: responsiveReconciliationTaskClock(input),
     source: 'responsive-thread-context',
     preserveLocalState: !projectReplicaChanged,
   });
@@ -170,6 +178,26 @@ export function openMobileThread(card, zoneColor) {
   }
   subscribeEvents();
   openThreadPanelController(threadId);
+  const runId = String(canvasState.threadSelectedRunIdByThreadId?.[threadId] || cardCodexThreadRunId(card) || '');
+  telemetry('responsive-task-execution-entry', {
+    projectId: currentProjectId,
+    replicaNodeId: currentReplicaNodeId,
+    ledgerId: currentLedgerId,
+    cardId: String(card.id),
+    threadId,
+    runId,
+  });
+  // WHAT: Revalidate the entered card's local execution hierarchy after its thread identity is installed.
+  // WHY: Same-document task navigation must not reuse an empty pre-admission projection until a hard reload.
+  bindThreadCodexRunLog({
+    projectId: currentProjectId,
+    replicaNodeId: currentReplicaNodeId,
+    ledgerId: currentLedgerId,
+    cardId: String(card.id),
+    threadId,
+    runId,
+    forceRevalidate: true,
+  });
   updateLaunchReadiness();
   void recoverActiveThreadHydration('thread-panel-open');
 }

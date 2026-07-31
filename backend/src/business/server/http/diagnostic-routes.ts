@@ -21,12 +21,32 @@ export function handleDiagnosticReadRoutes(input: {
   settings: unknown;
 }): HttpRouteOutcome {
   if ((input.requestPath !== '/api/health'
-      && input.requestPath !== '/api/diagnostics/incidents')
+      && input.requestPath !== '/api/diagnostics/incidents'
+      && input.requestPath !== '/api/diagnostics/frontend-telemetry-config')
     || input.request.method !== 'GET') {
     return HTTP_ROUTE_NEXT;
   }
 
+  const observedAt = new Date().toISOString();
+  const settings = input.settings && typeof input.settings === 'object'
+    ? input.settings as Record<string, unknown>
+    : {};
+  // WHAT: Serve only the browser telemetry enablement contract on its dedicated configuration route.
+  // WHY: The frontend must discover the opt-in without receiving backend credentials or unrelated settings.
+  if (input.requestPath === '/api/diagnostics/frontend-telemetry-config') {
+    input.response.setHeader('cache-control', 'no-store');
+    input.response.setHeader('content-type', 'application/json');
+    input.response.end(JSON.stringify({
+      ok: true,
+      enabled: settings.frontendTelemetryWebSocketEnabled === true,
+      endpoint: '/api/diagnostics/frontend-telemetry',
+    }));
+    return HTTP_ROUTE_HANDLED;
+  }
   const incidentSnapshot = input.incidentLedger.snapshot();
+  // WHAT: Expose no document truncation marker for a legacy version-1 snapshot.
+  // WHY: Legacy uncertainty is identified by its version and must not be represented as a fabricated loss timestamp.
+  const historyTruncatedBefore = incidentSnapshot.version === 2 ? incidentSnapshot.historyTruncatedBefore : '';
   const activeIncidents = incidentSnapshot.incidents.filter((incident) => incident.status === 'paused');
   const runtimeInterrupted = activeIncidents.some((incident) => incident.scope === 'server-runtime')
     || input.incidentSupervisor.pausedTaskProjects.size > 0
@@ -39,8 +59,8 @@ export function handleDiagnosticReadRoutes(input: {
   input.response.end(JSON.stringify({
     ok: true,
     status: runtimeInterrupted ? 'degraded' : 'ready',
-    observedAt: new Date().toISOString(),
-    ...decisionOsReleaseHealthIdentity(input.settings),
+    observedAt,
+    ...decisionOsReleaseHealthIdentity(settings),
     incidentLedger: input.incidentLedger.file,
     activeIncidentCount: activeIncidents.length,
     pausedTaskProjectIds: [...input.incidentSupervisor.pausedTaskProjects.keys()].sort(),
@@ -52,8 +72,14 @@ export function handleDiagnosticReadRoutes(input: {
     ].sort(),
     pausedProjectWatcherIds: [...input.incidentSupervisor.pausedProjectWatchers].sort(),
     pausedProjectRuntimeIds: [...input.incidentSupervisor.pausedProjectRuntimes].sort(),
+    // WHAT: Include durable occurrence history and its completeness markers only on the existing incident endpoint.
+    // WHY: Health retains its compact interruption contract while diagnostics remains the single incident evidence source.
     ...(input.requestPath === '/api/diagnostics/incidents'
-      ? { incidents: incidentSnapshot.incidents }
+      ? {
+        incidentHistoryVersion: incidentSnapshot.version,
+        historyTruncatedBefore,
+        incidents: incidentSnapshot.incidents,
+      }
       : {}),
   }));
   return HTTP_ROUTE_HANDLED;

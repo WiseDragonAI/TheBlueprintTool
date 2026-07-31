@@ -73,6 +73,20 @@
 .runtime-project-copy { display: grid; gap: 4px; min-width: 0; }
 .runtime-project-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .runtime-project-copy small { color: var(--muted); overflow-wrap: anywhere; }
+.runtime-project-summary-state {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 8px;
+  min-width: 0;
+}
+.runtime-project-occurrences {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.runtime-project-occurrences[data-partial="true"] { color: #ffbd57; }
 .runtime-status-badge {
   display: inline-flex;
   min-height: 28px;
@@ -96,6 +110,16 @@
   padding: 12px 14px 14px 52px;
   border-top: 1px solid var(--line);
   background: color-mix(in srgb, var(--panel), transparent 35%);
+}
+.runtime-history-lower-bound {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, #ffbd57, transparent 58%);
+  border-radius: calc(var(--radius) - 2px);
+  background: color-mix(in srgb, #ffbd57, transparent 92%);
+  color: #ffcf80;
+  font-size: 11px;
+  line-height: 1.45;
 }
 .runtime-incident-card {
   display: grid;
@@ -130,15 +154,41 @@
 .runtime-incident-card[data-severity="warning"] [data-kind="severity"] { color: #ffbd57; }
 .runtime-incident-card[data-severity="error"] [data-kind="severity"] { color: #ff8a66; }
 .runtime-incident-message { margin: 0; color: var(--text); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
-.runtime-incident-scopes {
-  border-top: 1px solid var(--line);
-  padding-top: 9px;
+.runtime-incident-events {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.runtime-incident-event {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 2px);
+  background: color-mix(in srgb, var(--panel), transparent 22%);
+}
+.runtime-incident-event-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   color: var(--muted);
   font-size: 11px;
 }
-.runtime-incident-scopes summary { cursor: pointer; font-weight: 750; }
-.runtime-incident-scopes ul { display: grid; gap: 5px; margin: 9px 0 0; padding-left: 18px; }
-.runtime-incident-scopes code { overflow-wrap: anywhere; }
+.runtime-incident-event-heading time { color: var(--text); font-weight: 750; }
+.runtime-incident-event-state { text-transform: capitalize; white-space: nowrap; }
+.runtime-incident-source {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.runtime-incident-source dt { font-weight: 800; }
+.runtime-incident-source dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.runtime-history-empty { margin: 0; color: var(--muted); font-size: 12px; }
 .runtime-status-empty { margin: 0; padding: 18px; color: var(--muted); text-align: center; }
 
 @media (max-width: 540px) {
@@ -148,7 +198,10 @@
   .runtime-status-block-header,
   .runtime-incident-heading { align-items: stretch; flex-direction: column; }
   .runtime-project-summary { grid-template-columns: 14px 8px minmax(0, 1fr); gap: 9px; padding: 12px; }
-  .runtime-project-summary .runtime-status-badge { grid-column: 3; justify-self: start; }
+  .runtime-project-summary-state { grid-column: 3; flex-wrap: wrap; justify-content: start; }
   .runtime-project-incidents { padding: 10px 10px 12px 40px; }
   .runtime-incident-labels { justify-content: start; }
+  .runtime-incident-event-heading { align-items: start; flex-direction: column; gap: 4px; }
+  .runtime-incident-source { grid-template-columns: 1fr; gap: 2px; }
+  .runtime-incident-source dd + dt { margin-top: 5px; }
 }

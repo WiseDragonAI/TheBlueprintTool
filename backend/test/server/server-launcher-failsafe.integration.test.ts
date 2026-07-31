@@ -31,6 +31,27 @@ test('launcher serves durable diagnostics after its server child exits', async (
   mkdirSync(resolve(fixtureRepository, 'bin'), { recursive: true });
   mkdirSync(resolve(fixtureRepository, 'backend/src'), { recursive: true });
   mkdirSync(resolve(workspace, '.decision-os'), { recursive: true });
+  writeFileSync(resolve(workspace, '.decision-os/runtime-incidents.json'), `${JSON.stringify({
+    version: 1,
+    updatedAt: '2026-07-31T00:00:00.000Z',
+    incidents: [{
+      id: 'legacy-resolved',
+      fingerprint: 'legacy-resolved-fingerprint',
+      status: 'resolved',
+      severity: 'error',
+      scope: 'project:legacy',
+      component: 'legacy-component',
+      operation: 'legacy-operation',
+      code: 'legacy_failure',
+      message: 'Legacy resolved evidence.',
+      stack: '',
+      context: { projectId: 'legacy' },
+      firstObservedAt: '2026-07-31T00:00:00.000Z',
+      lastObservedAt: '2026-07-31T00:00:00.000Z',
+      occurrences: 2,
+      resolvedAt: '2026-07-31T00:01:00.000Z',
+    }],
+  }, null, 2)}\n`);
   const releaseRoot = resolve(workspace, '.decision-os', 'delivery');
   const releasePath = resolve(releaseRoot, 'releases', releaseSha);
   const currentPointer = resolve(releaseRoot, 'current');
@@ -75,6 +96,7 @@ test('launcher serves durable diagnostics after its server child exits', async (
   }
   assert.ok(response, `Launcher emergency server did not listen. Output: ${output}`);
   assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
   const diagnostics = await response.json() as Record<string, unknown>;
   assert.equal(diagnostics.status, 'degraded');
   assert.equal(diagnostics.launcherEmergency, true);
@@ -82,15 +104,25 @@ test('launcher serves durable diagnostics after its server child exits', async (
   assert.equal(diagnostics.releaseSha, releaseSha);
   assert.equal(diagnostics.deliveryProtocol, 1);
   assert.equal(diagnostics.activeReleasePointer, `current:${releaseSha}`);
+  assert.equal(Number.isFinite(Date.parse(String(diagnostics.observedAt))), true);
+  assert.equal(diagnostics.incidentHistoryVersion, 2);
+  assert.equal(diagnostics.historyTruncatedBefore, '');
   assert.equal(Number.isFinite(Date.parse(String(diagnostics.processStartedAt))), true);
   const incidents = diagnostics.incidents as Array<Record<string, unknown>>;
-  assert.equal(incidents[0]?.scope, 'server-launcher');
-  assert.equal(incidents[0]?.code, 'server_child_exited');
-  assert.equal((incidents[0]?.context as Record<string, unknown>)?.restartAttempts, 3);
-  assert.deepEqual((incidents[0]?.context as Record<string, unknown>)?.restartDelaysMs, [100, 200, 400]);
+  const launcherIncident = incidents.find((entry) => entry.scope === 'server-launcher');
+  assert.equal(launcherIncident?.code, 'server_child_exited');
+  assert.equal((launcherIncident?.context as Record<string, unknown>)?.restartAttempts, 3);
+  assert.deepEqual((launcherIncident?.context as Record<string, unknown>)?.restartDelaysMs, [100, 200, 400]);
+  assert.equal((launcherIncident?.observations as string[]).length, 1);
+  assert.equal(Number.isFinite(Date.parse(String((launcherIncident?.observations as string[])[0]))), true);
+  const legacyIncident = incidents.find((entry) => entry.id === 'legacy-resolved');
+  assert.equal(legacyIncident?.status, 'resolved');
+  assert.deepEqual(legacyIncident?.observations, ['2026-07-31T00:00:00.000Z']);
+  assert.equal(legacyIncident?.legacyHistoryBefore, '2026-07-31T00:00:00.000Z');
   assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 503);
-  const persisted = JSON.parse(readFileSync(resolve(workspace, '.decision-os/runtime-incidents.json'), 'utf8')) as { incidents: Array<{ id: string }> };
-  assert.equal(persisted.incidents[0]?.id, incidents[0]?.id);
+  const persisted = JSON.parse(readFileSync(resolve(workspace, '.decision-os/runtime-incidents.json'), 'utf8')) as { version: number; incidents: Array<{ id: string }> };
+  assert.equal(persisted.version, 2);
+  assert.equal(persisted.incidents.find((entry) => entry.id === launcherIncident?.id)?.id, launcherIncident?.id);
   assert.equal(child.exitCode, null, 'the launcher must remain alive while diagnostics are serving');
 });
 

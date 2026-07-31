@@ -16,6 +16,7 @@ export const canonicalDecisionOsGitIgnore = [
   '/cache/',
   '/codex-pipeline-recovery/',
   '/codex-process-queue.json',
+  '/frontend-telemetry.jsonl*',
   '/memories.sqlite3',
   '/migrations/',
   '/runs/',
