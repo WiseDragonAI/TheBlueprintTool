@@ -140,6 +140,35 @@ test('tasks.json title-only mutate submits one scoped card patch', async () => {
   }
 });
 
+test('tasks.json facts mutations submit one scoped replacement patch', async () => {
+  const previousServerUrl = process.env.DECISION_OS_SERVER_URL;
+  const previousProjectId = process.env.DECISION_OS_PROJECT_ID;
+  const previousFetch = globalThis.fetch;
+  process.env.DECISION_OS_SERVER_URL = 'http://127.0.0.1:50150';
+  process.env.DECISION_OS_PROJECT_ID = 'project-a';
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requests.push({ url: String(url), init });
+    if (!init) return new Response(JSON.stringify({ ok: true, ledger: { cards: [{ id: 'output-card', title: 'analysis result', facts: ['Existing fact'] }] } }), { status: 200 });
+    return new Response('{"ok":true}', { status: 200 });
+  }) as typeof fetch;
+  try {
+    const result = await dispatchLedgerCliCommandController([
+      'mutate', '--ledger', '/workspace/.decision-os/tasks.json', '--card-id', 'output-card', '--append', 'New fact',
+    ], { emit: () => undefined });
+    assert.equal(result.ok, true);
+    assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), {
+      action: 'patch-card', cardPatch: { id: 'output-card', facts: ['Existing fact', 'New fact'] },
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousServerUrl === undefined) delete process.env.DECISION_OS_SERVER_URL;
+    else process.env.DECISION_OS_SERVER_URL = previousServerUrl;
+    if (previousProjectId === undefined) delete process.env.DECISION_OS_PROJECT_ID;
+    else process.env.DECISION_OS_PROJECT_ID = previousProjectId;
+  }
+});
+
 test('tasks.json title mutate with an additional field remains rejected', async () => {
   const previousServerUrl = process.env.DECISION_OS_SERVER_URL;
   const previousProjectId = process.env.DECISION_OS_PROJECT_ID;

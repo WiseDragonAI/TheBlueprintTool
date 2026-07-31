@@ -33,6 +33,7 @@ export const pipelinePromptRuntimeTokenNames = [
   'SERVER_SKILL_CONTEXT',
   'MASTER_TASK',
   'SUB_CONTEXT',
+  'SUB_TASKS',
   'FULL_THREAD',
   'FILE_MAP',
   'PREVIOUS_SKILL_RESULT',

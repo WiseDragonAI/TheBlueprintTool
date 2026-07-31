@@ -80,10 +80,11 @@
 3. Authored prompt context:
    1. `<MASTER_TASK>`
    2. `<SUB_CONTEXT>`
-   3. `<FULL_THREAD>`
-   4. `<FILE_MAP>`
-   5. `<PREVIOUS_SKILL_RESULT>`
-   6. `<EXECUTION_CONTEXT>`
+   3. `<SUB_TASKS>`
+   4. `<FULL_THREAD>`
+   5. `<FILE_MAP>`
+   6. `<PREVIOUS_SKILL_RESULT>`
+   7. `<EXECUTION_CONTEXT>`
 4. Direct card-run identity:
    1. `<PROJECT_ID>`
    2. `<CARD_ID>`
