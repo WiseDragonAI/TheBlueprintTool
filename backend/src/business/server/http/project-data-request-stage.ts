@@ -70,6 +70,7 @@ export async function handleProjectDataRequestStage(input: {
   projectSyncStore: SyncInput['store'];
   projects: CatalogInput['projects'];
   readSkillIndex: LibraryInput['readSkillIndex'];
+  recordBackgroundFailure: (component: string, operation: string, error: unknown, context?: AnyRecord) => unknown;
   reconcileProjectRuntimes: CatalogInput['reconcileProjectRuntimes'];
   request: IncomingMessage;
   requestUrl: URL;
@@ -114,6 +115,9 @@ export async function handleProjectDataRequestStage(input: {
     contentStore: input.cardRuntime.contentStore,
     decisionOsRoot: input.decisionOsRoot,
     localProject: input.cardRuntime.localProject,
+    recordBackgroundFailure: (operation, error, context) => {
+      input.recordBackgroundFailure('task-content-read', operation, error, context);
+    },
     request: input.request,
     response: input.response,
     revisions: input.ledgerPersistence.revisions,

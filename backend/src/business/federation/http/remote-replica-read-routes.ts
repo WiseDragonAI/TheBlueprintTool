@@ -236,7 +236,9 @@ export async function handleRemoteReplicaReadRoutes(input: {
   });
   input.response.setHeader('cache-control', 'no-store');
   input.response.setHeader('content-type', 'application/json');
-  if (body && taskRootReady && resourceReady) {
+  // WHAT: Return the locally reconstructed task body whenever its causal root is available.
+  // WHY: Missing Markdown bytes are represented by state.content and must not suppress durable structural state.
+  if (body && taskRootReady) {
     input.response.setHeader('x-decision-os-state-status', String(state.status));
     input.response.end(JSON.stringify({ ...body, state }));
     return { handled: true };

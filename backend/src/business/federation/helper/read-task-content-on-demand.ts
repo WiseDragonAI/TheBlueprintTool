@@ -23,6 +23,8 @@ export async function readTaskContentOnDemand(input: {
   key: string;
   contentStore: FederationContentReplicaStore;
   drain: (() => Promise<void>) | null;
+  waitForContent?: boolean;
+  recordBackgroundFailure?: (error: unknown) => void;
 }): Promise<TaskContentReadResult> {
   const heads = input.store.contentHeads(input.key).sort((left, right) => left.sourceReplicaId.localeCompare(right.sourceReplicaId) || left.hash.localeCompare(right.hash));
   const candidates = heads.map((head) => ({ ownerNodeId: head.sourceReplicaId, hash: head.hash, type: head.type }));
@@ -53,7 +55,13 @@ export async function readTaskContentOnDemand(input: {
   }
   const source = heads[0].sourceReplicaId;
   input.contentStore.prioritize(source, input.projectId, input.key);
-  await input.drain?.();
+  // WHAT: Keep mutation preparation blocking while allowing read routes to return structural state immediately.
+  // WHY: Relay delivery is required before a mutation can preserve source content, but it must not gate card or thread availability.
+  if (input.waitForContent !== false) await input.drain?.();
+  else void input.drain?.().catch((error: unknown) => {
+    try { input.recordBackgroundFailure?.(error); }
+    catch { /* Background diagnostics cannot replace the contained content-fetch failure. */ }
+  });
   const content = input.contentStore.resource(source, input.projectId, input.key);
   return {
     body: content.file ? await readFile(content.file, 'utf8') : '',

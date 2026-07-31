@@ -93,6 +93,7 @@ export function applyTaskExecutionPresentationUpdate(
 export function replicatedTaskExecutionPresentation(
   execution: ReplicatedTaskExecutionRecord,
   events: readonly TaskExecutionPresentationEvent[],
+  hydrationStatus: TaskExecutionPresentation['hydrationStatus'] = 'hydrated',
 ): TaskExecutionPresentation {
   const counts = {
     tools: events.filter((event) => event.kind === 'tool_call').length,
@@ -121,5 +122,6 @@ export function replicatedTaskExecutionPresentation(
       counts,
     },
     events,
+    hydrationStatus,
   };
 }

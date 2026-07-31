@@ -19,6 +19,7 @@ export function createTaskExecutionPresentationReader(input: {
   presentationRegistry: ReturnType<typeof createTaskExecutionPresentationRegistry>;
   request: IncomingMessage;
   response: ServerResponse;
+  recordFailure: (input: AnyRecord) => void;
   runtime: AnyRecord;
   runtimeForExecution(executionId: string): AnyRecord | null;
 }) {
@@ -44,6 +45,8 @@ export function createTaskExecutionPresentationReader(input: {
       );
       if (!projection?.hydrated) {
         const hydrated = input.presentationRegistry.locallyHydrated(state, execution);
+        // WHAT: Prefer a complete presentation rebuilt from locally retained terminal artifacts.
+        // WHY: Durable local evidence remains authoritative after the in-memory projection registry is lost on restart.
         if (hydrated) {
           input.presentationRegistry.setHydrated(
             execution.metadata.projectId,
@@ -53,21 +56,25 @@ export function createTaskExecutionPresentationReader(input: {
           );
           return { statusCode: 200, body: JSON.stringify(hydrated) };
         }
-        const remote = await input.presentationRegistry.remotePresentation({
-          projectId: execution.metadata.projectId,
+        input.presentationRegistry.hydrateTerminalArtifacts(
+          execution.metadata.projectId,
+          executorNodeId,
           execution,
-          request: input.request,
-          response: input.response,
-        });
-        return 'presentation' in remote
-          ? {
-            statusCode: 200,
-            body: JSON.stringify(input.presentationRegistry.replicated(execution, {
-              events: remote.presentation.events,
-              hydrated: true,
-            })),
-          }
-          : { statusCode: remote.statusCode, body: remote.body };
+          input.recordFailure,
+        );
+        input.presentationRegistry.hydrateRemotePresentation(
+          execution.metadata.projectId,
+          execution,
+          input.recordFailure,
+        );
+        return {
+          statusCode: 200,
+          body: JSON.stringify(input.presentationRegistry.replicated(
+            execution,
+            projection ?? { events: [], hydrated: false },
+            'hydrating',
+          )),
+        };
       }
       return {
         statusCode: 200,

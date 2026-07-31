@@ -106,6 +106,7 @@ test('rejects oversized presentation batches and projects replicated counts', ()
     },
   } as ReplicatedTaskExecutionRecord;
   const presentation = replicatedTaskExecutionPresentation(record, [message, toolCompleted]);
+  assert.equal(presentation.hydrationStatus, 'hydrated');
   assert.equal(presentation.execution.executorNodeId, 'node-b');
   assert.equal(presentation.execution.phase, 'running');
   assert.deepEqual(presentation.execution.counts, {

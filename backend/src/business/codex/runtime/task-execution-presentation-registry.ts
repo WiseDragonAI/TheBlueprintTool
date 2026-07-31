@@ -26,6 +26,7 @@ type Projection = {
 export function createTaskExecutionPresentationRegistry(input: {
   contentStore: ReturnType<typeof createFederationContentReplicaStore>;
   federation: () => ReturnType<typeof createFederationNodeConnector> | null;
+  serverCloseSignal: AbortSignal;
 }): {
   applyEvents: (change: {
     projectId: string;
@@ -39,6 +40,11 @@ export function createTaskExecutionPresentationRegistry(input: {
     projectId: string,
     executorNodeId: string,
     execution: Execution | null,
+    recordFailure: (input: AnyRecord) => void,
+  ) => void;
+  hydrateRemotePresentation: (
+    projectId: string,
+    execution: Execution,
     recordFailure: (input: AnyRecord) => void,
   ) => void;
   locallyHydrated: (state: Pick<ProjectTaskState, 'executions'>, execution: Execution) => TaskExecutionPresentation | null;
@@ -58,10 +64,11 @@ export function createTaskExecutionPresentationRegistry(input: {
     | { ok: true; presentation: TaskExecutionPresentation }
     | { ok: false; statusCode: number; body: string }
   >;
-  replicated: (execution: Execution, projection: Projection) => TaskExecutionPresentation;
+  replicated: (execution: Execution, projection: Projection, hydrationStatus?: TaskExecutionPresentation['hydrationStatus']) => TaskExecutionPresentation;
   setHydrated: (projectId: string, executionId: string, executorNodeId: string, events: readonly TaskExecutionPresentationEvent[]) => void;
 } {
   const projections = new Map<string, Projection>();
+  const remoteHydrations = new Map<string, Promise<void>>();
   const terminalHydrations = new Map<string, Promise<void>>();
   const key = (projectId: string, executionId: string, executorNodeId: string): string => (
     `${projectId}\0${executionId}\0${executorNodeId}`
@@ -245,19 +252,70 @@ export function createTaskExecutionPresentationRegistry(input: {
     });
     terminalHydrations.set(hydrationKey, hydration);
   };
+  const hydrateRemotePresentation = (
+    projectId: string,
+    execution: Execution,
+    recordFailure: (input: AnyRecord) => void,
+  ): void => {
+    const executionId = execution.metadata.executionId;
+    const executorNodeId = execution.lifecycle.executorNodeId;
+    const hydrationKey = key(projectId, executionId, executorNodeId);
+    // WHAT: Reuse one in-flight remote presentation request for every concurrent browser poll.
+    // WHY: A missing in-memory projection must not multiply relay work while hydration is pending.
+    if (remoteHydrations.has(hydrationKey)) return;
+    const federation = input.federation();
+    // WHAT: Leave the valid local loading projection in place when no relay transport is available.
+    // WHY: Relay availability must not become a prerequisite for reading the durable execution envelope.
+    if (!federation) return;
+    const hydration = federation.request(
+      executorNodeId,
+      `/api/internal/task-executions/${encodeURIComponent(executionId)}/presentation?projectId=${encodeURIComponent(projectId)}`,
+      { timeoutMs: 10_000, signal: input.serverCloseSignal },
+    ).then((remote) => {
+      // WHAT: Admit only a successful executor presentation response.
+      // WHY: Error bodies cannot be installed as trusted projection state.
+      if (remote.status < 200 || remote.status >= 300) throw new Error(`task_execution_remote_hydration_failed:${remote.status || 502}`);
+      const presentation = JSON.parse(remote.body.toString('utf8') || '{}') as TaskExecutionPresentation;
+      // WHAT: Validate execution identity and every event before installing remote bytes.
+      // WHY: The local registry is the browser-facing trust boundary for replicated presentation data.
+      if (presentation.execution?.executionId !== executionId
+        || !Array.isArray(presentation.events)
+        || !presentation.events.every(isTaskExecutionPresentationEvent)) {
+        throw new Error('task_execution_remote_response_invalid');
+      }
+      setHydrated(projectId, executionId, executorNodeId, presentation.events);
+    }).catch((error: unknown) => {
+      // WHAT: Treat server shutdown cancellation as normal lifecycle settlement.
+      // WHY: Closing the owner intentionally aborts downstream relay hydration.
+      if (input.serverCloseSignal.aborted) return;
+      try {
+        recordFailure({
+          scope: `task-execution-presentation:${projectId}:${executionId}`,
+          component: 'task-execution-presentation-registry',
+          operation: 'hydrate-remote-presentation',
+          error,
+          context: { projectId, executionId, executorNodeId },
+        });
+      } catch { /* Presentation hydration diagnostics cannot escape into the background task. */ }
+    }).finally(() => {
+      remoteHydrations.delete(hydrationKey);
+    });
+    remoteHydrations.set(hydrationKey, hydration);
+  };
   return {
     applyEvents,
     events: (projectId, executionId, executorNodeId) => (
       projections.get(key(projectId, executionId, executorNodeId))?.events ?? []
     ),
     hydrateTerminalArtifacts,
+    hydrateRemotePresentation,
     locallyHydrated,
     presentation: (projectId, executionId, executorNodeId) => (
       projections.get(key(projectId, executionId, executorNodeId)) ?? null
     ),
     publishEvents,
     remotePresentation,
-    replicated: (execution, projection) => replicatedTaskExecutionPresentation(execution, projection.events),
+    replicated: (execution, projection, hydrationStatus) => replicatedTaskExecutionPresentation(execution, projection.events, hydrationStatus),
     setHydrated,
   };
 }

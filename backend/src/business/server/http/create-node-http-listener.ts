@@ -106,19 +106,19 @@ export function createNodeHttpListener(input: {
       context: { host: input.host, port: input.port },
     });
   });
-  void Promise.allSettled(input.startupTasks).then(() => {
-    try {
-      server.listen(input.port, input.host);
-    } catch (error) {
-      input.recordIncident({
-        severity: 'fatal',
-        scope: 'server-listener',
-        component: 'http-server',
-        operation: 'listen',
-        error,
-        context: { host: input.host, port: input.port },
-      });
-    }
-  });
+  // WHAT: Open HTTP after synchronous local-state construction without awaiting project recovery tasks.
+  // WHY: Execution recovery is project-scoped background work and must not gate cards, health, or diagnostics.
+  try {
+    server.listen(input.port, input.host);
+  } catch (error) {
+    input.recordIncident({
+      severity: 'fatal',
+      scope: 'server-listener',
+      component: 'http-server',
+      operation: 'listen',
+      error,
+      context: { host: input.host, port: input.port },
+    });
+  }
   return server;
 }

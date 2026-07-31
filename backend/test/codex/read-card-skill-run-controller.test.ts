@@ -997,9 +997,18 @@ test('server startup interrupts a replicated running execution whose process reg
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${cardId}`);
-    assert.equal(response.status, 200);
-    const body = await response.json() as { status: string; phase: string; active: boolean; queuePosition: number | null };
+    let body: { status: string; phase: string; active: boolean; queuePosition: number | null } | null = null;
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${cardId}`);
+      assert.equal(response.status, 200);
+      body = await response.json() as { status: string; phase: string; active: boolean; queuePosition: number | null };
+      // WHAT: Stop polling after background startup recovery settles the orphaned execution.
+      // WHY: HTTP readiness intentionally precedes project-scoped execution recovery.
+      if (body.phase === 'interrupted') break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.ok(body);
     assert.equal(body.status, 'failed');
     assert.equal(body.phase, 'interrupted');
     assert.equal(body.active, false);

@@ -128,6 +128,7 @@ export type TaskExecutionPresentationMetadata = {
 export type TaskExecutionPresentation = {
   readonly execution: TaskExecutionPresentationMetadata;
   readonly events: readonly TaskExecutionPresentationEvent[];
+  readonly hydrationStatus?: 'hydrating' | 'hydrated';
 };
 
 /**

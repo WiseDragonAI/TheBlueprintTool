@@ -71,12 +71,13 @@ export function createServerFoundationRuntime(input: {
     decisionOsRoot: input.masterDecisionOsRoot,
   });
   const executionObservations = new Map<string, TaskExecutionObservation>();
+  const serverCloseAbort = new AbortController();
   const executionPresentations = createTaskExecutionPresentationRegistry({
     contentStore,
     federation: () => connections.federation,
+    serverCloseSignal: serverCloseAbort.signal,
   });
   const pipelinePresentations = new Map<string, AnyRecord>();
-  const serverCloseAbort = new AbortController();
   const executionRuntime = createServerExecutionRuntime({
     baseRuntime: input.runtime,
     contentScheduler: () => connections.contentScheduler,

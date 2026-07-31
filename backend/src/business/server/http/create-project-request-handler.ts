@@ -175,6 +175,7 @@ export function createProjectRequestHandler(input: {
       },
       presentation: {
         presentationRegistry: input.executionPresentations,
+        recordFailure: (incident) => { input.recordIncident(incident as Parameters<typeof input.recordIncident>[0]); },
         runtime: requestRuntime,
         runtimeForExecution: (executionId) => (
           input.federatedSchedulerContexts.get(executionId)?.runtime ?? null
@@ -182,6 +183,7 @@ export function createProjectRequestHandler(input: {
       },
       projectCatalog: () => input.projectCatalogStore.projects(),
       projectCatalogStore: input.projectCatalogStore,
+      recordBackgroundFailure: input.recordBackgroundFailure,
       projectScope,
       projectScoped: Boolean(projectScope),
       projectSyncController: input.projectSyncRuntime.controller,
