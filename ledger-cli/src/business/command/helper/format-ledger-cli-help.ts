@@ -115,6 +115,8 @@ export function formatLedgerCliHelp(): string {
     '  --card-title <title>',
     '  --card-comment <markdown>',
     '  --card-comment-file <file>',
+    '  --append <fact>                 Append one fact; repeat for multiple facts.',
+    '  --replace <fact>                Replace facts; repeat for the complete next list.',
     '  --card-labels <label-a,label-b>',
     '  --card-x <number> --card-y <number> --card-w <number> --card-h <number>',
     '  --add-card-file <file>',

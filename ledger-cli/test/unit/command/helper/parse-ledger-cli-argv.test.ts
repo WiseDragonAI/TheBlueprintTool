@@ -71,6 +71,10 @@ test('parse-ledger-cli-argv parses targeted ledger mutations', () => {
     '320',
     '--card-labels',
     'visual,validated',
+    '--append',
+    'Fact, with comma',
+    '--append',
+    'Second fact',
     '--add-card-file',
     'tmp/card.json',
     '--remove-card',
@@ -95,10 +99,18 @@ test('parse-ledger-cli-argv parses targeted ledger mutations', () => {
   assert.equal(command.mutationOperation.cardW, 640);
   assert.equal(command.mutationOperation.cardH, 320);
   assert.deepEqual(command.mutationOperation.cardLabels, ['visual', 'validated']);
+  assert.deepEqual(command.mutationOperation.cardFactsAppend, ['Fact, with comma', 'Second fact']);
+  assert.equal(command.mutationOperation.cardFactsAppendMissingValue, false);
   assert.equal(command.mutationOperation.addCardFile, 'tmp/card.json');
   assert.deepEqual(command.mutationOperation.removeCardIds, ['card-old']);
   assert.deepEqual(command.mutationOperation.removeRelationshipIds, ['rel-a', 'rel-b']);
   assert.deepEqual(command.mutationOperation.addRelationships, [{ id: 'rel-c', from: 'from-card', to: 'to-card', label: 'label text' }]);
+});
+
+test('parse-ledger-cli-argv records bare fact flags as invalid required arguments', () => {
+  const command = parseLedgerCliArgv(['mutate', '--card-id', 'card-a', '--replace']);
+  assert.deepEqual(command.mutationOperation.cardFactsReplace, []);
+  assert.equal(command.mutationOperation.cardFactsReplaceMissingValue, true);
 });
 
 test('parse-ledger-cli-argv parses ledger overview command', () => {

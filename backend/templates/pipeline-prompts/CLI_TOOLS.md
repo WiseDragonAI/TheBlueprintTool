@@ -45,9 +45,13 @@ ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id <thread-id> --
 ```sh
 ledger-cli master-task-progress --ledger "$DECISION_OS_LEDGER_FILE" --plan-stdin --json
 ledger-cli mutate --ledger "$DECISION_OS_LEDGER_FILE" --card-id <card-id> <card-options>
+ledger-cli mutate --ledger "$DECISION_OS_LEDGER_FILE" --card-id <card-id> --append <fact> [--append <fact>]...
+ledger-cli mutate --ledger "$DECISION_OS_LEDGER_FILE" --card-id <card-id> --replace <fact> [--replace <fact>]...
 ledger-cli todo --ledger "$DECISION_OS_LEDGER_FILE" --card-id <card-id>
 ledger-cli done --ledger "$DECISION_OS_LEDGER_FILE" --card-id <card-id>
 ```
+
+`--append` adds repeated fact strings to the current card facts. `--replace` sets the complete facts array from its repeated fact strings. Each flag requires one non-empty fact; do not combine the two modes.
 
 ## Complete the master task
 

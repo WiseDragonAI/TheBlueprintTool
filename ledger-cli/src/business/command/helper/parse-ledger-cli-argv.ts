@@ -38,6 +38,14 @@ function trailingValues(args: string[], flag: string): string[] {
   });
 }
 
+function missingTrailingValue(args: string[], flag: string): boolean {
+  return args.some((arg, index) => arg === flag && (index === args.length - 1 || args[index + 1]?.startsWith('--') === true));
+}
+
+function factValues(args: string[], flag: string): string[] {
+  return trailingValues(args, flag).filter((value) => !value.startsWith('--'));
+}
+
 function flagNumber(args: string[], flag: string): number | undefined {
   const value = flagValue(args, flag);
   if (value === undefined) return undefined;
@@ -149,6 +157,10 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       cardId: flagValue(argv, '--card-id'),
       cardComment: flagValue(argv, '--card-comment'),
       cardCommentFile: flagValue(argv, '--card-comment-file'),
+      cardFactsAppend: factValues(argv, '--append'),
+      cardFactsAppendMissingValue: missingTrailingValue(argv, '--append'),
+      cardFactsReplace: factValues(argv, '--replace'),
+      cardFactsReplaceMissingValue: missingTrailingValue(argv, '--replace'),
       cardQuestionnairesFile: flagValue(argv, '--card-questionnaires-file'),
       cardH: flagNumber(argv, '--card-h'),
       cardTitle: flagValue(argv, '--card-title'),
