@@ -47,15 +47,19 @@ test('mobile processing guards duplicate submissions and delegates status to the
   assert.doesNotMatch(script, /function poll(?:Skill|Pipeline)/);
 });
 
-test('successful responsive processing closes the card through the shared Control Room navigation lifecycle', () => {
-  assert.match(script, /function finishProcessLaunch\(detail, launch\)/);
+test('responsive pipelines hand off before admission while direct skills retain settled navigation', () => {
+  assert.match(script, /function finishProcessLaunch\(detail, launch, handoffComplete = false\)/);
   assert.match(script, /const actionOwned = processLaunchOwned\(launch\)/);
   assert.match(script, /const requestId = createExecutionRequestId\('(skill|pipeline)'\)/);
   assert.match(script, /decision-os:codex-run-preparing/);
   assert.match(script, /clientRequestId: executionDetail\.requestId, \.\.\.\(body\.receipts\?\.\[0\] \?\? \{\}\)/);
   assert.match(script, /decision-os:codex-run-enqueued/);
+  assert.match(script, /handoffProcessLaunch\(executionDetail, launch\)[\s\S]*await jsonRequest\('\/api\/codex\/pipelines\/runs'/);
+  assert.match(script, /await jsonRequest\('\/api\/codex\/skills\/process'[\s\S]*finishProcessLaunch\(/);
+  assert.match(script, /PIPELINE_ADMISSION_TIMEOUT_MS = 30_000/);
   assert.match(script, /threadPresentationGeneration/);
   assert.match(mobile, /addEventListener\('decision-os:codex-run-preparing', \(event\) => \{ beginOptimisticExecution\(event\.detail\); \}\)/);
+  assert.match(mobile, /addEventListener\('decision-os:codex-run-handoff', \(event\) => \{ void navigateAcceptedProcess\(event\.detail\); \}\)/);
   assert.match(mobile, /addEventListener\('decision-os:codex-run-enqueued', \(event\) => \{[\s\S]*acknowledgeOptimisticExecution\(event\.detail\);[\s\S]*navigateAcceptedProcess\(event\.detail\)/);
   assert.match(mobile, /acceptedRunOwnsRoute\(detail, snapshot, threadGeneration\)/);
 });

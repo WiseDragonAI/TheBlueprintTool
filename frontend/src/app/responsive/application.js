@@ -29,8 +29,10 @@ import {
   applyOptimisticExecutionIntent,
   controlRoomTaskForExecution,
   createOptimisticExecutionIntent,
+  materializePendingExecutionIntents,
   optimisticExecutionConfirmed,
   removeAcknowledgedExecutionIntent,
+  removeRejectedExecutionIntent,
 } from './optimistic-execution-projection.js';
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
 import { requestTaskExecutionState } from '/src/runtime/codex/effect/request-task-execution-state.js';
@@ -147,6 +149,7 @@ let routeLoadController = null;
 let masterSubtaskExecutionController = null;
 let codexSettingsRequest = null;
 const optimisticExecutionIntents = new Map();
+const pendingOptimisticExecutionDetails = new Map();
 const optimisticTaskIntents = new Map();
 
 function currentRouteSnapshot() {
@@ -434,8 +437,18 @@ function removeEditorQuery(expectedEditor) {
 }
 
 function beginOptimisticExecution(detail) {
-  if (!state.controlRoom || !detail?.requestId) return '';
+  // WHAT: Ignore execution events that cannot own an optimistic request identity.
+  // WHY: Reconciliation must never use an empty identity that could match unrelated work.
+  if (!detail?.requestId) return '';
+  // WHAT: Retain cold-route execution details until the first Control Room projection arrives.
+  // WHY: A directly opened card has no hydrated task from which to build its preparing intent.
+  if (!state.controlRoom) {
+    pendingOptimisticExecutionDetails.set(String(detail.requestId), detail);
+    return String(detail.requestId);
+  }
   const task = controlRoomTaskForExecution(state.controlRoom, detail);
+  // WHAT: Decline to project an execution that has no matching task in the hydrated Control Room.
+  // WHY: Optimism must not synthesize a task outside the authoritative task inventory.
   if (!task) return '';
   const intent = createOptimisticExecutionIntent(task, detail);
   const identity = taskIdentity(task);
@@ -446,6 +459,8 @@ function beginOptimisticExecution(detail) {
 }
 
 function acknowledgeOptimisticExecution(detail) {
+  const clientRequestId = String(detail?.clientRequestId ?? detail?.requestId ?? '');
+  pendingOptimisticExecutionDetails.delete(clientRequestId);
   removeAcknowledgedExecutionIntent(optimisticExecutionIntents, detail);
   void loadControlRoom({ force: true }).then(() => {
     if (location.pathname === '/') renderControlRoom();
@@ -454,9 +469,8 @@ function acknowledgeOptimisticExecution(detail) {
 
 function rejectOptimisticExecution(detail) {
   const rejectedRequestId = String(detail?.requestId ?? '');
-  for (const [identity, intent] of optimisticExecutionIntents) {
-    if (intent.requestId === rejectedRequestId) optimisticExecutionIntents.delete(identity);
-  }
+  pendingOptimisticExecutionDetails.delete(rejectedRequestId);
+  removeRejectedExecutionIntent(optimisticExecutionIntents, detail);
   elements['mutation-error-message'].textContent = String(detail?.error || 'Execution admission was rejected and confirmed state was restored.');
   elements['mutation-error'].hidden = false;
   void loadControlRoom({ force: true }).then(() => {
@@ -1965,8 +1979,11 @@ async function loadControlRoom({ force = false, deferDuringQueueDrag = false, ow
   if (response.status === 304 && state.controlRoom) return false;
   if (!response.ok) throw new Error(`Could not load the Control Room (${response.status}).`);
   const nextControlRoom = await response.json();
+  materializePendingExecutionIntents(pendingOptimisticExecutionDetails, optimisticExecutionIntents, nextControlRoom);
   for (const [identity, intent] of optimisticExecutionIntents) {
     const serverTask = (nextControlRoom.allTasks ?? []).find((task) => taskIdentity(task) === identity);
+    // WHAT: Retire optimism only after the same request reaches a non-stale authoritative revision.
+    // WHY: An unrelated execution receipt must not erase this request-owned preparing projection.
     if (optimisticExecutionConfirmed(intent, serverTask)) {
       optimisticExecutionIntents.delete(identity);
       continue;
@@ -3339,6 +3356,7 @@ window.addEventListener('popstate', () => {
   }
 });
 window.addEventListener('decision-os:codex-run-preparing', (event) => { beginOptimisticExecution(event.detail); });
+window.addEventListener('decision-os:codex-run-handoff', (event) => { void navigateAcceptedProcess(event.detail); });
 window.addEventListener('decision-os:codex-run-enqueued', (event) => {
   acknowledgeOptimisticExecution(event.detail);
   void navigateAcceptedProcess(event.detail);
