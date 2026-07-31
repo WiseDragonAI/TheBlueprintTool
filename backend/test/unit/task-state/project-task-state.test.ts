@@ -3,6 +3,7 @@
  * WHY: The application command boundary must remain intact while persistence stays lane-scoped.
  */
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
@@ -16,6 +17,52 @@ import { materializeTaskMutationInputs } from '../../../src/business/federation/
 import { createFederationContentReplicaStore } from '../../../src/business/federation/helper/federation-content-replica-store.js';
 
 type AnyRecord = Record<string, unknown>;
+
+test('serializes mutation preparation against the latest project projection', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-prepared-mutation-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  writeFileSync(ledgerPath, JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Task', status: 'todo' }],
+    annotations: [],
+    relationships: [],
+  }));
+  const state = createProjectTaskState({
+    projectId: 'project-a',
+    writerId: 'workstation',
+    decisionOsRoot: root,
+    tasksLedgerFile: ledgerPath,
+    initialize: true,
+  });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  let releaseFirst: (() => void) | undefined;
+  const firstGate = new Promise<void>((resolveGate) => { releaseFirst = resolveGate; });
+  const preparedTitles: string[] = [];
+  const prepareTitle = (title: string, gate?: Promise<void>) => async (before: AnyRecord) => {
+    const cards = before.cards as AnyRecord[];
+    preparedTitles.push(String(cards[0].title));
+    await gate;
+    const after = structuredClone(before);
+    (after.cards as AnyRecord[])[0].title = title;
+    return { after };
+  };
+
+  const first = state.executePreparedMutation(
+    { action: 'patch-card', cardPatch: { id: 'card-a', title: 'First' } },
+    prepareTitle('First', firstGate),
+  );
+  await new Promise<void>((resolveTick) => setImmediate(resolveTick));
+  const second = state.executePreparedMutation(
+    { action: 'patch-card', cardPatch: { id: 'card-a', title: 'Second' } },
+    prepareTitle('Second'),
+  );
+  await new Promise<void>((resolveTick) => setImmediate(resolveTick));
+
+  assert.deepEqual(preparedTitles, ['Task']);
+  releaseFirst?.();
+  await Promise.all([first, second]);
+  assert.deepEqual(preparedTitles, ['Task', 'First']);
+  assert.equal((state.projection().ledger.cards as AnyRecord[])[0].title, 'Second');
+});
 
 test('configured writer remains read-only until project bootstrap converges', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-write-gate-'));
@@ -754,6 +801,81 @@ test('reasserting preserved local bytes causally resolves concurrent content hea
 
   assert.equal(resolved.entities.some((entity) => entity.entityType === 'resource' && entity.entityId === resource), true);
   assert.deepEqual(state.store.contentHeads(resource), [preserved]);
+});
+
+test('reconciles a concurrent thread candidate only when local Markdown is its lossless note superset', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-thread-superset-'));
+  const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-project-thread-superset-remote-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const resource = '.decision-os/threads/tasks/thread-card-a.md';
+  const contentFile = resolve(root, 'threads', 'tasks', 'thread-card-a.md');
+  const remoteBody = '# OPERATOR\n<!-- decision-os:note {"id":"note-a"} -->\n\nFirst note.\n';
+  const localBody = `${remoteBody}\n# AGENT\n<!-- decision-os:note {"id":"note-b"} -->\n\nSecond note.\n`;
+  const remoteHash = createHash('sha256').update(remoteBody).digest('hex');
+  const ledger = {
+    cards: [{ id: 'card-a', title: 'Task', status: 'todo' }],
+    annotations: [], relationships: [], threadFiles: { 'thread-card-a': resource },
+  };
+  mkdirSync(dirname(contentFile), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify(ledger));
+  writeFileSync(contentFile, localBody);
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'workstation', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  const remote = createTaskCurrentStateStore({ decisionOsRoot: remoteRoot, projectId: 'project-a', initializeLedger: ledger });
+  context.after(async () => {
+    await Promise.all([state.flush(), remote.flush()]);
+    rmSync(root, { recursive: true, force: true });
+    rmSync(remoteRoot, { recursive: true, force: true });
+  });
+  await state.recordContentContribution('card-a', resource);
+  mkdirSync(resolve(state.store.root, 'objects', remoteHash.slice(0, 2)), { recursive: true });
+  writeFileSync(resolve(state.store.root, 'objects', remoteHash.slice(0, 2), remoteHash), remoteBody);
+  const concurrent = await remote.mutate({
+    replicaId: 'phone',
+    changes: [{
+      entityType: 'resource', entityId: resource,
+      changes: [{ path: 'head', operation: 'set', value: { type: 'thread-markdown', key: resource, hash: remoteHash, bytes: Buffer.byteLength(remoteBody), changedAt: '2026-07-31T00:00:00.000Z' } }],
+    }],
+  });
+  await state.store.merge(concurrent.delta);
+
+  assert.equal(await state.reconcileSupersetThreadContentConflict(resource), true);
+  assert.deepEqual(state.store.contentHeads(resource).map((head) => head.hash), [createHash('sha256').update(localBody).digest('hex')]);
+});
+
+test('preserves a same-note thread body divergence as an explicit conflict', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-thread-divergence-'));
+  const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-project-thread-divergence-remote-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const resource = '.decision-os/threads/tasks/thread-card-a.md';
+  const contentFile = resolve(root, 'threads', 'tasks', 'thread-card-a.md');
+  const localBody = '# OPERATOR\n<!-- decision-os:note {"id":"note-a"} -->\n\nLocal body.\n';
+  const remoteBody = '# OPERATOR\n<!-- decision-os:note {"id":"note-a"} -->\n\nRemote body.\n';
+  const remoteHash = createHash('sha256').update(remoteBody).digest('hex');
+  const ledger = { cards: [{ id: 'card-a', title: 'Task', status: 'todo' }], annotations: [], relationships: [], threadFiles: { 'thread-card-a': resource } };
+  mkdirSync(dirname(contentFile), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify(ledger));
+  writeFileSync(contentFile, localBody);
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'workstation', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  const remote = createTaskCurrentStateStore({ decisionOsRoot: remoteRoot, projectId: 'project-a', initializeLedger: ledger });
+  context.after(async () => {
+    await Promise.all([state.flush(), remote.flush()]);
+    rmSync(root, { recursive: true, force: true });
+    rmSync(remoteRoot, { recursive: true, force: true });
+  });
+  await state.recordContentContribution('card-a', resource);
+  mkdirSync(resolve(state.store.root, 'objects', remoteHash.slice(0, 2)), { recursive: true });
+  writeFileSync(resolve(state.store.root, 'objects', remoteHash.slice(0, 2), remoteHash), remoteBody);
+  const concurrent = await remote.mutate({
+    replicaId: 'phone',
+    changes: [{
+      entityType: 'resource', entityId: resource,
+      changes: [{ path: 'head', operation: 'set', value: { type: 'thread-markdown', key: resource, hash: remoteHash, bytes: Buffer.byteLength(remoteBody), changedAt: '2026-07-31T00:00:00.000Z' } }],
+    }],
+  });
+  await state.store.merge(concurrent.delta);
+
+  assert.equal(await state.reconcileSupersetThreadContentConflict(resource), false);
+  assert.equal(state.store.contentHeads(resource).length, 2);
 });
 
 test('watcher observation ignores materialization and publishes only the post-mutation thread head', async (context) => {

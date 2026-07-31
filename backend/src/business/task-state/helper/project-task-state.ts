@@ -4,7 +4,9 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
+import { parseThreadMarkdown } from '../../ledger/helper/thread-content-file.js';
 import { captureTaskExecutionArtifact } from './capture-task-execution-artifact.js';
 import { createTaskCurrentStateStore } from './task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskEntityChange, type TaskStateDelta } from './task-current-state-types.js';
@@ -23,6 +25,11 @@ export type ProjectTaskMutationResult = {
   localChanges: TaskProjectionEntityChange[];
   ledger: AnyRecord;
   contentGitRevision?: AnyRecord;
+};
+
+export type PreparedProjectTaskMutation = {
+  after: AnyRecord;
+  changedContentFiles?: readonly string[];
 };
 
 export type TaskContentHeadRepairResult = {
@@ -48,6 +55,17 @@ function projectionEntityChanges(changes: TaskEntityChange[]): TaskProjectionEnt
     identities.set(`${identity.entityType}\u0000${identity.entityId}`, identity);
   }
   return [...identities.values()];
+}
+
+function containsEveryThreadNote(localBody: string, candidateBody: string): boolean {
+  const localNotes = parseThreadMarkdown(localBody);
+  const candidateNotes = parseThreadMarkdown(candidateBody);
+  const localById = new Map(localNotes.map((note) => [String(note.id ?? ''), note]));
+  const candidateIds = candidateNotes.map((note) => String(note.id ?? ''));
+  return localById.size === localNotes.length
+    && new Set(candidateIds).size === candidateNotes.length
+    && candidateIds.every(Boolean)
+    && candidateNotes.every((note) => isDeepStrictEqual(localById.get(String(note.id)), note));
 }
 
 export function createProjectTaskState(input: {
@@ -212,6 +230,36 @@ export function createProjectTaskState(input: {
     return operation;
   };
 
+  const reconcileSupersetThreadContentConflict = (resourceId: string): Promise<boolean> => {
+    assertWritable();
+    const operation = commandQueue.then(async () => {
+      const heads = store.contentHeads(resourceId);
+      const distinctHashes = new Set(heads.map((head) => head.hash));
+      // WHAT: Limit automatic reconciliation to a genuinely conflicted thread Markdown resource.
+      // WHY: Card documents, assets, and single-hash duplicate candidates require different preservation rules.
+      if (!resourceId.includes('/threads/') || !resourceId.endsWith('.md') || distinctHashes.size < 2) return false;
+      const localHead = await contentObjects.capture(resourceId);
+      // WHAT: Require the mutable sidecar to match one causally retained candidate exactly.
+      // WHY: Untracked local bytes cannot be selected as an automatic conflict winner.
+      if (!localHead || !heads.some((head) => head.hash === localHead.hash && head.bytes === localHead.bytes)) return false;
+      const localBody = readFileSync(contentObjects.objectFile(localHead.hash), 'utf8');
+      for (const head of heads) {
+        const candidateFile = contentObjects.objectFile(head.hash);
+        // WHAT: Keep the conflict explicit when any retained candidate body is unavailable locally.
+        // WHY: Superset proof requires byte-verified access to every causal alternative.
+        if (!existsSync(candidateFile)) return false;
+        // WHAT: Select the local thread only when it losslessly contains every stable note from this candidate.
+        // WHY: Same-note divergence or a note present only remotely must remain operator-visible conflict state.
+        if (!containsEveryThreadNote(localBody, readFileSync(candidateFile, 'utf8'))) return false;
+      }
+      await recordContentContribution('', resourceId);
+      const resolved = store.contentHeads(resourceId);
+      return resolved.length === 1 && resolved[0].hash === localHead.hash;
+    });
+    commandQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+  };
+
   const queueTaskActivation = (taskId: string): Promise<TaskStateDelta> => {
     assertWritable();
     const operation = commandQueue.then(() => activateTask(taskId));
@@ -341,6 +389,20 @@ export function createProjectTaskState(input: {
     return operation;
   };
 
+  const executePreparedMutation = (
+    mutation: LedgerMutation,
+    prepare: (before: AnyRecord) => Promise<PreparedProjectTaskMutation>,
+  ): Promise<ProjectTaskMutationResult> => {
+    assertWritable();
+    const operation = commandQueue.then(async () => {
+      const before = structuredClone(store.projection().ledger);
+      const prepared = await prepare(before);
+      return executeMutationNow(mutation, before, prepared.after, prepared.changedContentFiles);
+    });
+    commandQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+  };
+
   const transitionCardLifecycle = (taskId: string, status: 'todo' | 'backlog' | 'done', waitingAt?: string): Promise<ProjectTaskMutationResult> => {
     assertWritable();
     if (waitingAt !== undefined && (status !== 'todo' || !Number.isFinite(Date.parse(waitingAt)))) {
@@ -425,6 +487,7 @@ export function createProjectTaskState(input: {
     executions,
     executeMutation,
     executeMutationNow,
+    executePreparedMutation,
     transitionCardLifecycle,
     executeProjectionCommand,
     executeProjectionCommandNow,
@@ -432,6 +495,7 @@ export function createProjectTaskState(input: {
     repairMissingContentHeads,
     activateTask: queueTaskActivation,
     recordContentContribution: queueContentContribution,
+    reconcileSupersetThreadContentConflict,
     finalizeExecutionArtifacts,
     flush: store.flush,
     projection: store.projection,
