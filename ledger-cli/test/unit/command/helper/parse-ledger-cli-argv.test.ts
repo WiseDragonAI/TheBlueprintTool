@@ -141,11 +141,17 @@ test('parse-ledger-cli-argv parses card and zone context commands', () => {
 });
 
 test('parse-ledger-cli-argv parses ID-only card reads', () => {
-  const command = parseLedgerCliArgv(['card-read', '--card-id', 'card-a']);
+  const command = parseLedgerCliArgv([
+    'card-read',
+    '--card-id',
+    'card-a',
+    '--card-id',
+    'card-b',
+  ]);
 
   assert.equal(command.mode, 'card-read');
   assert.equal(command.ledgerJsonFile, '');
-  assert.equal(command.cardOperation?.cardId, 'card-a');
+  assert.deepEqual(command.cardOperation?.cardIds, ['card-a', 'card-b']);
   assert.equal(command.json, false);
 });
 

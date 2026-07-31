@@ -44,6 +44,7 @@ export type LedgerCliCommand = {
   };
   cardOperation?: {
     cardId?: string;
+    cardIds?: string[];
   };
   json: boolean;
   exportOperation?: {

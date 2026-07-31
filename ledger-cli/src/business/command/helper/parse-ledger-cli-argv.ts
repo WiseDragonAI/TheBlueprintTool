@@ -76,7 +76,9 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       threadId: flagValue(argv, '--thread-id'),
     },
     cardOperation: normalizedMode === 'card-context' || normalizedMode === 'card-read' || normalizedMode === 'session-context' || normalizedMode === 'master-task-complete' || normalizedMode === 'master-task-gate' || normalizedMode === 'validate-master-tasks'
-      ? { cardId: flagValue(argv, '--card-id') }
+      ? normalizedMode === 'card-read'
+        ? { cardIds: trailingValues(argv, '--card-id') }
+        : { cardId: flagValue(argv, '--card-id') }
       : undefined,
     json: argv.includes('--json'),
     exportOperation: {
