@@ -9,6 +9,7 @@ import {
   type TextFileEditorRecovery,
   type TextFileEditorSession,
 } from '../../content-authoring/controller/text-file-editor-session.js';
+import type { AuthoredFileRevisionSnapshot } from '../../content-authoring/helper/authored-file-revision-snapshot.js';
 import { renderSkillRevisionDiff } from '../component/render-skill-revision-diff.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../helper/codex-run-options.js';
 import { decorateSkillCategoryLabel } from '../helper/skill-library-presentation.js';
@@ -54,6 +55,7 @@ export type SkillLibraryEditorState = {
   historyLoadingMore: boolean;
   recovery: TextFileEditorRecovery;
   conflictRevision: string;
+  conflictSnapshot: AuthoredFileRevisionSnapshot | null;
   error: string;
   notice: string;
   onSaved?: (skill: CodexSkillLibraryDetail) => void | Promise<void>;
@@ -90,6 +92,7 @@ export const skillLibraryEditorState: SkillLibraryEditorState = {
   historyLoadingMore: false,
   recovery: null,
   conflictRevision: '',
+  conflictSnapshot: null,
   error: '',
   notice: '',
 };
@@ -184,6 +187,7 @@ function resetState(input: Partial<SkillLibraryEditorState>): void {
     historyLoadingMore: false,
     recovery: null,
     conflictRevision: '',
+    conflictSnapshot: null,
     error: '',
     notice: '',
     onSaved: undefined,
@@ -404,6 +408,36 @@ function renderMetadata(target: HTMLElement, detail: CodexSkillLibraryDetail): v
   }
 }
 
+function renderConflictEvidence(snapshot: AuthoredFileRevisionSnapshot, localMarkdown: string): HTMLElement {
+  const region = document.createElement('section');
+  region.className = 'authored-file-conflict-evidence';
+  region.setAttribute('role', 'region');
+  region.setAttribute('aria-label', 'Preserved authored Markdown conflict');
+  const summary = document.createElement('p');
+  summary.textContent = `Local draft preserved: ${localMarkdown.length} bytes. Server revision ${snapshot.contentRevision.slice(0, 12)}: ${snapshot.markdown.length} bytes.`;
+  const comparison = document.createElement('details');
+  const toggle = document.createElement('summary');
+  toggle.textContent = 'Compare preserved local and server Markdown';
+  const columns = document.createElement('div');
+  columns.className = 'authored-file-conflict-columns';
+  const local = document.createElement('section');
+  const localTitle = document.createElement('h3');
+  localTitle.textContent = 'Local draft';
+  const localBytes = document.createElement('pre');
+  localBytes.textContent = localMarkdown;
+  local.append(localTitle, localBytes);
+  const server = document.createElement('section');
+  const serverTitle = document.createElement('h3');
+  serverTitle.textContent = `Server revision ${snapshot.contentRevision.slice(0, 12)}`;
+  const serverBytes = document.createElement('pre');
+  serverBytes.textContent = snapshot.markdown;
+  server.append(serverTitle, serverBytes);
+  columns.append(local, server);
+  comparison.append(toggle, columns);
+  region.append(summary, comparison);
+  return region;
+}
+
 function renderTimelineNavigation(target: HTMLElement, detail: CodexSkillLibraryDetail): void {
   const revisions = detail.history ?? [];
   const index = skillLibraryEditorState.selectedRevisionIndex;
@@ -545,6 +579,12 @@ function syncShell(): void {
     const detail = skillLibraryEditorState.detail;
     renderMetadata(shell.metadata, detail);
     renderEditControls(shell.controls, detail);
+    const conflictSnapshot = skillLibraryEditorState.conflictSnapshot;
+    // WHAT: Present both preserved byte sequences when the server rejects a stale authored save.
+    // WHY: A generic conflict message cannot prove which local draft and authoritative revision remain recoverable.
+    if (conflictSnapshot) {
+      shell.controls.append(renderConflictEvidence(conflictSnapshot, skillLibraryEditorState.markdown));
+    }
     const favorite = button(
       skillLibraryEditorState.favoriteSaving ? 'Saving favorite…' : detail.favorite ? 'Remove from favorites' : 'Mark as favorite',
       () => { void toggleSkillLibraryFavorite(); },
@@ -705,6 +745,7 @@ function adoptDetail(detail: CodexSkillLibraryDetail, availableTags: string[], a
   skillLibraryEditorState.historyNextCursor = null;
   skillLibraryEditorState.recovery = null;
   skillLibraryEditorState.conflictRevision = '';
+  skillLibraryEditorState.conflictSnapshot = null;
   // WHY: Explicit authority reloads must replace both document bytes and their immutable diff identity.
   // WHAT: Reload the mounted session with the server-confirmed snapshot.
   if (authoritativeReload) session?.reloadAuthoritative(detail.markdown, detail.revision, detail.snapshot ?? undefined);
@@ -822,6 +863,7 @@ export async function saveSkillLibraryDraft(): Promise<boolean> {
         : result.error || 'Could not save this authored file.';
       skillLibraryEditorState.error = message;
       skillLibraryEditorState.conflictRevision = result.conflict ? result.currentRevision ?? '' : '';
+      skillLibraryEditorState.conflictSnapshot = result.snapshot ?? null;
       session?.setConflictSnapshot(result.snapshot ?? null);
       skillLibraryEditorState.onSaveError?.(message);
     }

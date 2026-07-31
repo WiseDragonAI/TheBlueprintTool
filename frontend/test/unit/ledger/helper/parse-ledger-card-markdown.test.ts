@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLedgerCardMarkdown } from '../../../../src/runtime/ledger/helper/parse-ledger-card-markdown.js';
+import { ledgerMarkdownSemanticRanges } from '../../../../src/runtime/content-authoring/helper/create-ledger-markdown-semantic-extension.js';
 
 test('parse-ledger-card-markdown parses common card description markdown', () => {
   assert.deepEqual(parseLedgerCardMarkdown('## Heading\n**Props**: `mode`\n- first\n* second\n\n---\n\n| Name | Use |\n|---|---|\n| `Health` | **Current** value |\n\n```cpp\nUSTRUCT(BlueprintType)\nstruct FCreatureState\n{\n  GENERATED_BODY()\n};\n```'), [
@@ -182,5 +183,34 @@ test('parse-ledger-card-markdown retains original-byte spans without changing th
       { from: 16, to: 21 },
       { from: 24, to: 34 },
     ],
+  );
+});
+
+test('editable semantic ranges come from canonical blocks including Decision OS directives', () => {
+  const markdown = [
+    '## Heading',
+    '',
+    '- **exact** item',
+    '',
+    '::html[Preview](.decision-os/preview.html)',
+    '::git-diff[Review](git-diff:?repo=.&path=README.md)',
+    '::questions[Decision](questions:?id=gate)',
+  ].join('\n');
+  const ranges = ledgerMarkdownSemanticRanges(markdown);
+  assert.deepEqual(
+    ranges.filter((range) => ['heading', 'list', 'htmlEmbeds', 'gitDiff', 'questions'].includes(range.kind))
+      .map(({ kind, from, to }) => ({ kind, source: markdown.slice(from, to) })),
+    [
+      { kind: 'heading', source: '## Heading' },
+      { kind: 'list', source: '- **exact** item' },
+      { kind: 'htmlEmbeds', source: '::html[Preview](.decision-os/preview.html)' },
+      { kind: 'gitDiff', source: '::git-diff[Review](git-diff:?repo=.&path=README.md)' },
+      { kind: 'questions', source: '::questions[Decision](questions:?id=gate)' },
+    ],
+  );
+  assert.deepEqual(
+    ranges.filter((range) => range.kind === 'strong')
+      .map(({ from, to }) => markdown.slice(from, to)),
+    ['**exact**'],
   );
 });

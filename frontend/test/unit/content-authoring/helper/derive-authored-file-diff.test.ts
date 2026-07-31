@@ -58,7 +58,12 @@ test('deadline terminates once', async () => {
   const worker = new WorkerFixture();
   await assert.rejects(
     deriveAuthoredFileDiff({ ...input, deadlineMs: 5, createWorker: () => worker }),
-    /2,000 ms deadline/,
+    (error: unknown) => (
+      (error as { name?: string }).name === 'TimeoutError'
+      && /5 ms deadline/.test((error as Error).message)
+    ),
   );
   assert.equal(worker.terminated, 1);
+  assert.equal(worker.listeners.get('message')?.size, 0);
+  assert.equal(worker.listeners.get('error')?.size, 0);
 });

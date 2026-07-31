@@ -27,6 +27,7 @@ export async function deriveAuthoredFileDiff(input: {
   signal?: AbortSignal;
   createWorker?: () => WorkerLike;
 }): Promise<AuthoredFileDiffDerivation> {
+  const deadlineMs = input.deadlineMs ?? 2_000;
   const createWorker = input.createWorker ?? (() => new Worker(
     '/assets/vendor/pierre-diff-worker-1.2.12.js',
     { type: 'module', name: 'authored-file-diff' },
@@ -65,8 +66,10 @@ export async function deriveAuthoredFileDiff(input: {
       });
     };
     const deadline = setTimeout(
-      () => finish({ error: new Error('The diff Worker exceeded its 2,000 ms deadline.') }),
-      input.deadlineMs ?? 2_000,
+      () => finish({
+        error: new DOMException(`The diff Worker exceeded its ${deadlineMs.toLocaleString('en-US')} ms deadline.`, 'TimeoutError'),
+      }),
+      deadlineMs,
     );
     worker.addEventListener('message', message);
     worker.addEventListener('error', failure);
