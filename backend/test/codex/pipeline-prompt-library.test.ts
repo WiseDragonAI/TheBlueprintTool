@@ -108,12 +108,12 @@ test('compiler rejects missing references and recursive prompt cycles', () => {
   );
 });
 
-test('registered default roots preserve the pipeline wrapper and direct-run developer bytes', () => {
+test('registered template roots preserve the pipeline wrapper and direct-run developer bytes', () => {
   const repositoryRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..');
-  const defaultPromptRoot = resolve(repositoryRoot, 'backend/defaults/pipeline-prompts');
-  const systemPrompt = readFileSync(resolve(defaultPromptRoot, 'SYSTEM_PROMPT.md'), 'utf8');
-  const skillPrompt = readFileSync(resolve(defaultPromptRoot, 'SKILL.md'), 'utf8');
-  const codexRunPrompt = readFileSync(resolve(defaultPromptRoot, 'CODEX_RUN.md'), 'utf8');
+  const promptTemplateRoot = resolve(repositoryRoot, 'backend/templates/pipeline-prompts');
+  const systemPrompt = readFileSync(resolve(promptTemplateRoot, 'SYSTEM_PROMPT.md'), 'utf8');
+  const skillPrompt = readFileSync(resolve(promptTemplateRoot, 'SKILL.md'), 'utf8');
+  const codexRunPrompt = readFileSync(resolve(promptTemplateRoot, 'CODEX_RUN.md'), 'utf8');
   const context = runtimeContext({
     SKILL_NAME: () => 'analysis',
     PIPELINE_RUN_ID: () => 'run-1',
