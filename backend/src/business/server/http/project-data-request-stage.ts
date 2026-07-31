@@ -71,6 +71,7 @@ export async function handleProjectDataRequestStage(input: {
   projects: CatalogInput['projects'];
   readSkillIndex: LibraryInput['readSkillIndex'];
   recordBackgroundFailure: (component: string, operation: string, error: unknown, context?: AnyRecord) => unknown;
+  receivePublishedSkill: LibraryInput['receivePublishedSkill'];
   reconcileProjectRuntimes: CatalogInput['reconcileProjectRuntimes'];
   request: IncomingMessage;
   requestUrl: URL;
@@ -146,6 +147,7 @@ export async function handleProjectDataRequestStage(input: {
     invalidateSkillIndex: input.invalidateSkillIndex,
     projectScoped: input.projectScoped,
     readSkillIndex: input.readSkillIndex,
+    receivePublishedSkill: input.receivePublishedSkill,
     request: input.request,
     response: input.response,
     status: input.libraryStatus,

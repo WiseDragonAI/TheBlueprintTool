@@ -402,10 +402,10 @@ test('execution remains non-terminal until immutable artifacts are finalized', a
     });
     assert.equal(settling.ok, true);
     assert.equal(settling.phase, 'running');
-    assert.equal(settling.lineCount, 3);
+    assert.equal(settling.lineCount, 2);
     assert.deepEqual(
       (settling.events as Array<Record<string, unknown>>).map((event) => event.type),
-      ['decision_os.developer_prompt', 'decision_os.user_prompt', 'thread.started'],
+      ['decision_os.developer_prompt', 'thread.started'],
     );
 
     releaseFinalization();

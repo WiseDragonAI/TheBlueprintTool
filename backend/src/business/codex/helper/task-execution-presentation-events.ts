@@ -109,14 +109,17 @@ export function taskExecutionPresentationEvents(events: NormalizedRunEvent[]): T
   let userPrompt = '';
   let startPresented = false;
   for (const event of events) {
-    if (event.type === 'decision_os.user_prompt' || event.type === 'decision_os.developer_prompt') {
+    // WHAT: Discard legacy synthetic user-prompt records from execution presentations.
+    // WHY: User prompts are process input, not operator-visible Codex execution events.
+    if (event.type === 'decision_os.user_prompt') continue;
+    if (event.type === 'decision_os.developer_prompt') {
       userPrompt = event.text;
       const prompt = presentationEvent({
         ...event,
         kind: 'run_status',
-        title: event.type === 'decision_os.developer_prompt' ? 'Developer prompt' : 'User prompt',
+        title: 'Developer prompt',
         status: 'running',
-        itemId: event.type === 'decision_os.developer_prompt' ? 'developer-prompt' : 'user-prompt',
+        itemId: 'developer-prompt',
       });
       if (prompt) presented.push(prompt);
       continue;

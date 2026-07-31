@@ -48,6 +48,7 @@ import {
 } from '/src/runtime/codex/effect/render-skill-library-editor-modal.js';
 import { loadRuntimeDiagnostics, projectRuntimeRows } from './runtime-status.js';
 import { taskClockFromResponse } from '/src/runtime/refresh/helper/task-causal-clock.js';
+import { telemetry } from '/src/runtime/telemetry/effect/telemetry.js';
 
 installProjectRequestScope();
 
@@ -449,6 +450,7 @@ function beginOptimisticExecution(detail) {
   // WHY: A directly opened card has no hydrated task from which to build its preparing intent.
   if (!state.controlRoom) {
     pendingOptimisticExecutionDetails.set(String(detail.requestId), detail);
+    telemetry('optimistic-projection-installed', { requestId: String(detail.requestId), kind: String(detail.kind ?? ''), outcome: 'pending-control-room' });
     return String(detail.requestId);
   }
   const task = controlRoomTaskForExecution(state.controlRoom, detail);
@@ -459,6 +461,7 @@ function beginOptimisticExecution(detail) {
   const identity = taskIdentity(task);
   optimisticExecutionIntents.set(identity, intent);
   applyOptimisticExecutionIntent(state.controlRoom, intent);
+  telemetry('optimistic-projection-installed', { requestId: String(detail.requestId), kind: String(detail.kind ?? ''), outcome: 'projected', taskIdentity: identity });
   if (location.pathname === '/') renderControlRoom();
   return identity;
 }
@@ -466,8 +469,9 @@ function beginOptimisticExecution(detail) {
 function acknowledgeOptimisticExecution(detail) {
   const clientRequestId = String(detail?.clientRequestId ?? detail?.requestId ?? '');
   pendingOptimisticExecutionDetails.delete(clientRequestId);
-  removeAcknowledgedExecutionIntent(optimisticExecutionIntents, detail);
+  const removed = removeAcknowledgedExecutionIntent(optimisticExecutionIntents, detail);
   void loadControlRoom({ force: true }).then(() => {
+    telemetry('admission-reconciled', { requestId: clientRequestId, kind: String(detail?.kind ?? ''), outcome: 'accepted', removed });
     if (location.pathname === '/') renderControlRoom();
   }).catch((error) => console.error('Execution admission confirmation failed.', error));
 }
@@ -475,10 +479,11 @@ function acknowledgeOptimisticExecution(detail) {
 function rejectOptimisticExecution(detail) {
   const rejectedRequestId = String(detail?.requestId ?? '');
   pendingOptimisticExecutionDetails.delete(rejectedRequestId);
-  removeRejectedExecutionIntent(optimisticExecutionIntents, detail);
+  const removed = removeRejectedExecutionIntent(optimisticExecutionIntents, detail);
   elements['mutation-error-message'].textContent = String(detail?.error || 'Execution admission was rejected and confirmed state was restored.');
   elements['mutation-error'].hidden = false;
   void loadControlRoom({ force: true }).then(() => {
+    telemetry('rejection-reconciled', { requestId: rejectedRequestId, kind: String(detail?.kind ?? ''), outcome: 'rejected', removed });
     if (location.pathname === '/') renderControlRoom();
   }).catch((error) => console.error('Execution admission reconciliation failed.', error));
 }
@@ -2641,6 +2646,27 @@ function initializeMobileCarousels(root) {
   }
 }
 
+function cardFacts(card) {
+  return Array.isArray(card?.facts)
+    ? card.facts.filter((fact) => typeof fact === 'string').map((fact) => fact.trim()).filter(Boolean)
+    : [];
+}
+
+function renderResponsiveCardFacts(card) {
+  const facts = cardFacts(card);
+  // WHAT: Omit the responsive facts list when the replicated card has no facts.
+  // WHY: The title must remain directly adjacent to the card body until facts exist.
+  if (facts.length === 0) return null;
+  const list = document.createElement('ul');
+  list.className = 'responsive-card-facts';
+  for (const fact of facts) {
+    const item = document.createElement('li');
+    item.textContent = fact;
+    list.appendChild(item);
+  }
+  return list;
+}
+
 function renderCard(card) {
   state.activeCardId = asText(card.id);
   const cardAccent = responsiveCardAccent(card);
@@ -2736,6 +2762,7 @@ function renderCard(card) {
     onQuestionnairesChange: persistCardQuestionnaires,
     onGitReviewNotesChange: persistGitReviewNotes
   });
+  const facts = renderResponsiveCardFacts(card);
   const persistenceFailure = card.persistenceState === 'failed' ? document.createElement('section') : null;
   if (persistenceFailure) {
     persistenceFailure.className = 'task-persistence-error';
@@ -2931,7 +2958,7 @@ function renderCard(card) {
     overview.append(status, heading, subtasks, completion);
     // The relationship-backed task summary is the navigation surface for a master task.
     // Keep it ahead of the narrative so linked cards remain visible on long mobile cards.
-    elements['card-body'].replaceChildren(overview, ...(persistenceFailure ? [persistenceFailure] : []), content);
+    elements['card-body'].replaceChildren(...(facts ? [facts] : []), overview, ...(persistenceFailure ? [persistenceFailure] : []), content);
   } else {
     const subtaskActions = parentMaster ? document.createElement('section') : null;
     if (subtaskActions) {
@@ -2950,6 +2977,7 @@ function renderCard(card) {
       subtaskActions.append(deleteButton);
     }
     elements['card-body'].replaceChildren(
+      ...(facts ? [facts] : []),
       ...(persistenceFailure ? [persistenceFailure] : []),
       content,
       ...(subtaskActions ? [subtaskActions] : []),

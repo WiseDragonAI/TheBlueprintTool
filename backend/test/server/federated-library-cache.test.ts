@@ -8,6 +8,7 @@ import {
   exportFederatedPipelineSnapshot,
   exportFederatedSkillManifest,
   exportFederatedSkillSnapshot,
+  federatedSkillReceipt,
   importFederatedPipelineSnapshot,
   importFederatedSkillSnapshot,
 } from '@backend/business/federation/helper/federated-library-cache.js';
@@ -67,6 +68,13 @@ test('materializes complete skill packages locally before importing pipeline def
     assert.deepEqual(manifest.skills.map((skill) => skill.name), ['remote-analysis']);
     const skillResult = importFederatedSkillSnapshot({ serverRoot: target, snapshot: await exportFederatedSkillSnapshot(source) });
     assert.deepEqual(skillResult.imported, ['remote-analysis']);
+    assert.deepEqual(federatedSkillReceipt(target, 'remote-analysis', manifest.skills[0].revision), {
+      version: 1,
+      name: 'remote-analysis',
+      revision: manifest.skills[0].revision,
+      acknowledged: true,
+    });
+    assert.equal(federatedSkillReceipt(target, 'remote-analysis', '0'.repeat(64)).acknowledged, false);
     assert.equal(readFileSync(join(target, '.skills', 'remote-analysis', 'references', 'guide.md'), 'utf8'), '# Guide\n');
     assert.equal(scanCodexSkills({ workspaceRoot: targetProject, serverRoot: target }).find((skill) => skill.name === 'remote-analysis')?.source, 'server');
 

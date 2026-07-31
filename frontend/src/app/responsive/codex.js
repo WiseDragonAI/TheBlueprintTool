@@ -2,6 +2,8 @@
  * WHAT: Owns responsive skill and pipeline discovery, editing, and execution.
  * WHY: The complete processing workflow must be shared by mobile and desktop routes.
  */
+import { telemetry } from '/src/runtime/telemetry/effect/telemetry.js';
+
 const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 const PIPELINE_ADMISSION_TIMEOUT_MS = 30_000;
@@ -420,13 +422,20 @@ async function startPipeline(pipeline) {
   const admissionDeadline = window.setTimeout(() => admissionController.abort(), PIPELINE_ADMISSION_TIMEOUT_MS);
   try {
     const body = await jsonRequest('/api/codex/pipelines/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ledgerId: launch.ledgerId, sourceCardId: launch.cardId, pipelineId: pipeline.id, requestId }), signal: admissionController.signal }, launch.projectId);
-    finishProcessLaunch({ ...executionDetail, clientRequestId: executionDetail.requestId, ...(body.receipts?.[0] ?? {}), pipelineRunId: body.run?.id || '', queuePosition: body.queuePosition }, launch, true);
+    telemetry('admission-settled', { requestId, kind: 'pipeline', outcome: 'accepted', actionOwned: processLaunchOwned(launch) });
+    finishProcessLaunch({ ...executionDetail, clientRequestId: executionDetail.requestId, ...(body.receipts?.[0] ?? {}), pipelineRunId: body.run?.id || '', queuePosition: body.queuePosition }, launch, { handoffComplete: true });
   } catch (error) {
+    // WHAT: Reconcile the exact optimistic pipeline request through the shared rejection event.
+    // WHY: HTTP rejection and admission timeout must restore the same server-confirmed task placement.
     const launchError = pipelineAdmissionError(error, admissionController.signal.aborted);
+    telemetry('admission-settled', { requestId, kind: 'pipeline', outcome: admissionController.signal.aborted ? 'timed-out' : 'rejected', actionOwned: processLaunchOwned(launch) });
     window.dispatchEvent(new CustomEvent('decision-os:codex-run-rejected', { detail: { ...executionDetail, error: formatProcessLaunchError(launchError) } }));
     message('.process-detail-message', formatProcessLaunchError(launchError), true); setBusy(submit, false);
   } finally {
+    // WHAT: Retire the admission deadline after every settled request path.
+    // WHY: A stale timer must not abort or retain resources after admission has already settled.
     window.clearTimeout(admissionDeadline);
+    telemetry('admission-deadline-cleared', { requestId, kind: 'pipeline' });
   }
 }
 function handoffProcessLaunch(detail, launch, actionOwned = processLaunchOwned(launch)) {
@@ -436,9 +445,10 @@ function handoffProcessLaunch(detail, launch, actionOwned = processLaunchOwned(l
     el('.process-modal').close();
     setMobileCodexView(document, 'library', { global: false, libraryTitle: 'Process card' });
   }
+  telemetry('handoff-published', { requestId: String(detail?.requestId ?? ''), kind: String(detail?.kind ?? ''), actionOwned });
   window.dispatchEvent(new CustomEvent('decision-os:codex-run-handoff', { detail: { ...detail, ...launch, actionOwned } }));
 }
-function finishProcessLaunch(detail, launch, handoffComplete = false) {
+function finishProcessLaunch(detail, launch, { handoffComplete = false } = {}) {
   const actionOwned = processLaunchOwned(launch);
   // WHAT: Preserve settled-admission handoff for direct skills while pipelines hand off before admission settles.
   // WHY: Only Process Card pipelines have an admitted optimistic navigation boundary.

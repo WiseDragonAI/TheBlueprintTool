@@ -426,6 +426,15 @@ test('renders and persists the shared carousel resize handle in a Control Room m
   assert.match(styles, /\.ledger-card-media-resize-handle::before\s*\{[^}]*width: 16px;[^}]*height: 16px;[^}]*content: "";/s);
 });
 
+test('renders replicated card facts as bullet points before the responsive card body', () => {
+  assert.match(mobile, /function cardFacts\(card\) \{[\s\S]*Array\.isArray\(card\?\.facts\)/);
+  assert.match(mobile, /function renderResponsiveCardFacts\(card\) \{[\s\S]*list\.className = 'responsive-card-facts'/);
+  assert.match(mobile, /const facts = renderResponsiveCardFacts\(card\)/);
+  assert.match(mobile, /replaceChildren\(\.\.\.\(facts \? \[facts\] : \[\]\), overview/);
+  assert.match(mobile, /replaceChildren\(\s*\.\.\.\(facts \? \[facts\] : \[\]\),\s*\.\.\.\(persistenceFailure/s);
+  assert.match(styles, /\.responsive-card-facts \{ display: grid; gap: 8px;/);
+});
+
 test('offers manual and configured-pipeline completion from the master-task detail', () => {
   assert.match(mobile, /action: 'complete-master-task', masterTaskId: card\.id/);
   assert.match(mobile, /navigate\(completionReturnPath\(\), true\)/);
@@ -440,7 +449,7 @@ test('offers manual and configured-pipeline completion from the master-task deta
   assert.match(mobile, /pipelineCompleteButton\.disabled = card\.status === 'done' \|\| !configured/);
   assert.match(mobile, /navigate\(controlRoomPath\('exec'\), true\)/);
   assert.match(mobile, /overview\.append\(status, heading, subtasks, completion\)/);
-  assert.match(mobile, /elements\['card-body'\]\.replaceChildren\(overview, \.\.\.\(persistenceFailure \? \[persistenceFailure\] : \[\]\), content\)/);
+  assert.match(mobile, /elements\['card-body'\]\.replaceChildren\(\.\.\.\(facts \? \[facts\] : \[\]\), overview, \.\.\.\(persistenceFailure \? \[persistenceFailure\] : \[\]\), content\)/);
   assert.doesNotMatch(mobile, /complete-master-subtask|masterTaskId=|Mark task as done/);
   assert.match(styles, /\.complete-master-task-button \{ width: 100%; min-height: 52px;/);
   assert.match(styles, /\.master-task-completion-actions \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 12px;/);

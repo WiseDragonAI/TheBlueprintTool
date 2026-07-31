@@ -246,7 +246,7 @@ function unavailablePipelineStore(input: {
     enumerable: true,
     configurable: false,
     get(): never {
-      throw new RuntimeScopePausedError(scope, incident.id);
+      throw new RuntimeScopePausedError(scope, incident.id, input.normalized.issues.map((entry) => entry.code));
     },
   });
   return unavailable;
@@ -256,7 +256,7 @@ export function assertCodexPipelineStoreAvailable(
   result: CodexPipelineStoreReadResult,
 ): asserts result is CodexPipelineStoreAvailable {
   if (result.availability === 'unavailable') {
-    throw new RuntimeScopePausedError(result.scope, result.incidentId);
+    throw new RuntimeScopePausedError(result.scope, result.incidentId, result.issues.map((entry) => entry.code));
   }
 }
 

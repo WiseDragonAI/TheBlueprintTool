@@ -112,7 +112,10 @@ export function createCardSkillRunEventIngestor(input: {
       // WHY: Scalars and arrays have no lifecycle event contract to persist.
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
       let event = normalizeCardSkillRunEvent({ line, event: parsed as AnyRecord });
-      if (event.type === 'decision_os.user_prompt' || event.type === 'decision_os.developer_prompt') userPrompt = event.text;
+      // WHAT: Ignore legacy synthetic user-prompt lines during live ingestion.
+      // WHY: Process input must not be copied into presentation state or subsequent lifecycle events.
+      if (event.type === 'decision_os.user_prompt') return;
+      if (event.type === 'decision_os.developer_prompt') userPrompt = event.text;
       else if (userPrompt && (event.type === 'thread.started' || event.type === 'turn.started')) {
         event = { ...event, text: userPrompt };
       }

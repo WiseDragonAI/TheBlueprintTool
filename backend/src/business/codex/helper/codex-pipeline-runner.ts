@@ -20,7 +20,7 @@ import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './cod
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
 import { buildMeaningfulFileMap } from './build-meaningful-file-map.js';
 import { buildCardLaunchContext } from './build-card-launch-context.js';
-import { buildPipelineSubtaskContext } from './build-pipeline-subtask-context.js';
+import { buildPipelineSubtasks, buildPipelineSubtaskContext } from './build-pipeline-subtask-context.js';
 import { isCodexThreadArtifactNote } from './is-codex-thread-artifact-note.js';
 import {
   createPipelinePromptRuntimeContext,
@@ -310,6 +310,10 @@ export function createPipelineSkillRuntimeContext(input: {
     ),
     MASTER_TASK: () => String(card().markdown ?? ''),
     SUB_CONTEXT: () => resolveConversation()?.subtaskContext ?? '',
+    SUB_TASKS: () => buildPipelineSubtasks({
+      ledger: input.ledgerContext?.ledger ?? {},
+      masterTaskId: input.outputParentCardId,
+    }),
     FULL_THREAD: () => String(thread().markdown ?? ''),
     FILE_MAP: () => buildMeaningfulFileMap(input.workspaceRoot),
     PREVIOUS_SKILL_RESULT: () => previousSkillResult,
@@ -1109,10 +1113,6 @@ export async function executePipelineSkillInWorkspace(input: {
         prompt: developerPrompt,
       })}\n`, 'utf8');
     }
-    appendFileSync(stdoutFile, `${JSON.stringify({
-      type: 'decision_os.user_prompt',
-      prompt: userPrompt,
-    })}\n`, 'utf8');
     const stdoutOffset = existsSync(stdoutFile) ? statSync(stdoutFile).size : 0;
     const stderrOffset = existsSync(stderrFile) ? statSync(stderrFile).size : 0;
     const promptFile = `${stderrFile}.${input.executionId ?? input.skillRunId}.stdin`;

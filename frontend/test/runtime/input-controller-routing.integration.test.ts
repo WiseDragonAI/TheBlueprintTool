@@ -206,7 +206,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   const persistState = source('frontend/src/runtime/persistence/effect/persist-state.ts');
   const scheduledPersistence = source('frontend/src/runtime/persistence/effect/schedule-viewport-persistence.ts');
   const railState = source('frontend/src/runtime/toolbox/effect/apply-rail-collapsed-state.ts');
-  const specsLedger = source('.decision-os/specs.json');
+  const specsLedger = source('frontend/test/fixtures/sidebar-collapse-state-spec.json');
   assert.match(stateSource, /railCollapsed:\s*false/);
   assert.match(bootSurface, /applyRailCollapsedState\(persisted\.railCollapsed === true\)/);
   assert.match(refreshRuntime, /applyRailCollapsedState\(persisted\.railCollapsed === true\)/);

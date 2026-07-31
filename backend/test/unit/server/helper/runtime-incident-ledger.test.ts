@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -242,4 +242,88 @@ test('retains incidents that own live pauses before newer diagnostic history', (
   const snapshot = ledger.snapshot();
   assert.equal(snapshot.incidents.length, 10);
   assert.equal(snapshot.incidents.some((incident) => incident.id === protectedIncident.id), true);
+});
+
+test('retains failed primary writes in the fallback ledger until explicit persistence recovery', (context) => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-runtime-incidents-persistence-'));
+  const primaryRoot = join(root, 'primary');
+  const file = join(primaryRoot, 'runtime-incidents.json');
+  context.after(() => {
+    chmodSync(primaryRoot, 0o700);
+    rmSync(root, { recursive: true, force: true });
+  });
+  mkdirSync(primaryRoot, { recursive: true });
+  writeFileSync(file, `${JSON.stringify({ version: 2, updatedAt: '', historyTruncatedBefore: '', incidents: [] })}\n`);
+  const originalBytes = readFileSync(file, 'utf8');
+  const ledger = createRuntimeIncidentLedger({ decisionOsRoot: root, file, maxObservationsPerIncident: 2 });
+  chmodSync(primaryRoot, 0o500);
+
+  ledger.record({
+    scope: 'background:proof',
+    component: 'proof',
+    operation: 'persist-proof',
+    error: new Error('proof failure'),
+  });
+  ledger.record({ scope: 'background:proof', component: 'proof', operation: 'persist-proof', error: new Error('proof failure') });
+  ledger.record({ scope: 'background:proof', component: 'proof', operation: 'persist-proof', error: new Error('proof failure') });
+
+  assert.equal(readFileSync(file, 'utf8'), originalBytes);
+  assert.deepEqual(
+    ledger.active().map((incident) => incident.scope).sort(),
+    ['background:proof', 'runtime-incident-ledger'],
+  );
+  assert.equal(
+    ledger.active('runtime-incident-ledger')[0]?.observations?.length,
+    2,
+  );
+  const pendingFile = join(root, 'runtime', 'runtime-incidents.pending.json');
+  assert.equal(existsSync(pendingFile), true);
+  const reopened = createRuntimeIncidentLedger({ decisionOsRoot: root, file });
+  assert.deepEqual(
+    reopened.active().map((incident) => incident.scope).sort(),
+    ['background:proof', 'runtime-incident-ledger'],
+  );
+
+  chmodSync(primaryRoot, 0o700);
+  const resolved = reopened.recoverPersistence('Primary incident persistence is writable again.');
+  assert.equal(resolved.length, 1);
+  assert.equal(resolved[0]?.scope, 'runtime-incident-ledger');
+  assert.equal(existsSync(pendingFile), false);
+  assert.deepEqual(reopened.active().map((incident) => incident.scope), ['background:proof']);
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).incidents.length, 2);
+});
+
+test('preserves invalid pending-ledger bytes as an active blocker until explicit valid recovery', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-runtime-incidents-invalid-pending-'));
+  const file = join(root, 'runtime-incidents.json');
+  const pendingFile = join(root, 'runtime', 'runtime-incidents.pending.json');
+  mkdirSync(join(root, 'runtime'), { recursive: true });
+  writeFileSync(file, `${JSON.stringify({ version: 2, updatedAt: '', historyTruncatedBefore: '', incidents: [] })}\n`);
+  const invalid = '{"version":2,"incidents":';
+  writeFileSync(pendingFile, invalid);
+  try {
+    const ledger = createRuntimeIncidentLedger({ decisionOsRoot: root, file });
+    const blocker = ledger.active('runtime-incident-ledger')[0];
+    assert.equal(blocker?.code, 'runtime_incident_ledger_pending_corrupt');
+    assert.equal(blocker?.context.pendingFile, pendingFile);
+    assert.equal(readFileSync(pendingFile, 'utf8'), invalid);
+    ledger.record({
+      scope: 'background:proof-during-pending-corruption',
+      component: 'proof',
+      operation: 'record-while-pending-invalid',
+      error: new Error('Concurrent diagnostic evidence.'),
+    });
+    assert.equal(readFileSync(pendingFile, 'utf8'), invalid);
+    assert.deepEqual(ledger.recoverPersistence('Still invalid.'), []);
+    assert.equal(readFileSync(pendingFile, 'utf8'), invalid);
+
+    writeFileSync(pendingFile, `${JSON.stringify({ version: 2, updatedAt: '', historyTruncatedBefore: '', incidents: [] })}\n`);
+    const resolved = ledger.recoverPersistence('Pending evidence is structurally valid again.');
+    assert.equal(resolved.some((incident) => incident.code === 'runtime_incident_ledger_pending_corrupt'), true);
+    assert.equal(existsSync(pendingFile), false);
+    assert.equal(ledger.active('runtime-incident-ledger').length, 0);
+    assert.equal(ledger.active('background:proof-during-pending-corruption').length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

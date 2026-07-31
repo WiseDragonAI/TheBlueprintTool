@@ -21,6 +21,10 @@ export type LedgerMutationOperation = {
   cardLabels?: string[];
   cardComment?: string;
   cardCommentFile?: string;
+  cardFactsAppend: string[];
+  cardFactsAppendMissingValue: boolean;
+  cardFactsReplace: string[];
+  cardFactsReplaceMissingValue: boolean;
   cardQuestionnairesFile?: string;
   cardH?: number;
   cardId?: string;

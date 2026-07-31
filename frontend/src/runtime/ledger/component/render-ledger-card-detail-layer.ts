@@ -48,6 +48,23 @@ export function createLedgerCardTitleRow(card: Record<string, unknown>, id: stri
   return row;
 }
 
+function cardFacts(card: Record<string, unknown>): string[] {
+  return Array.isArray(card.facts)
+    ? card.facts.filter((fact): fact is string => typeof fact === 'string').map((fact) => fact.trim()).filter(Boolean)
+    : [];
+}
+
+export function renderLedgerCardFacts(facts: readonly string[]): HTMLUListElement {
+  const list = document.createElement('ul');
+  list.className = 'ledger-card-facts';
+  for (const fact of facts) {
+    const item = document.createElement('li');
+    item.textContent = fact;
+    list.appendChild(item);
+  }
+  return list;
+}
+
 export function createCardStatusIndicator(status: string, className = 'card-status-indicator'): HTMLElement {
   const statusIndicator = document.createElement('span');
   statusIndicator.className = className;
@@ -79,6 +96,7 @@ export function renderLedgerCardDetailLayer(card: Record<string, unknown>, exist
   const id = String(card.id ?? '');
   const labels = cardLabels(card);
   const fields = cardFields(card);
+  const facts = cardFacts(card);
   const activeTab = resolveLedgerCardActiveTab(card, id);
   const visibleStatus = resolveCardWorkStatus(card);
   const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' && !Array.isArray(card.imageSizes)
@@ -89,10 +107,11 @@ export function renderLedgerCardDetailLayer(card: Record<string, unknown>, exist
     : renderLedgerCardMarkdown(ledgerCardBody(card), { cardId: id, imageSizes, questionnaires: card.questionnaires, gitReviewNotes: card.gitReviewNotes });
   const detailLayer = existing ?? document.createElement('div');
   const labelNodes = labels.length > 0 ? [renderLedgerCardLabels(labels)] : [];
+  const factNodes = facts.length > 0 ? [renderLedgerCardFacts(facts)] : [];
   const tabs = fields.length > 0 ? [renderLedgerCardTabs(id, activeTab)] : [];
   const codexRunWidget = renderCardSkillRunWidget(card);
   detailLayer.className = 'ledger-card-detail-layer';
   const navigationCard = isLinkedLedgerCard(card) || isProjectCard(card);
-  detailLayer.replaceChildren(...(navigationCard ? [] : [createCardStatusIndicator(visibleStatus)]), ...labelNodes, createLedgerCardTitleRow(card, id), ...(codexRunWidget ? [codexRunWidget] : []), ...tabs, body);
+  detailLayer.replaceChildren(...(navigationCard ? [] : [createCardStatusIndicator(visibleStatus)]), ...labelNodes, createLedgerCardTitleRow(card, id), ...factNodes, ...(codexRunWidget ? [codexRunWidget] : []), ...tabs, body);
   return detailLayer;
 }

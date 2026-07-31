@@ -43,6 +43,7 @@ export type FederatedSkillPackage = {
 export type FederatedSkillManifestEntry = Omit<FederatedSkillPackage, 'files'>;
 export type FederatedSkillManifest = { version: 1; skills: FederatedSkillManifestEntry[] };
 export type FederatedSkillSnapshot = { version: 1; skills: FederatedSkillPackage[] };
+export type FederatedSkillReceipt = { version: 1; name: string; revision: string; acknowledged: boolean };
 export type FederatedPipelineDefinition = { pipeline: CodexPipeline; steps: CodexPipelineStep[] };
 export type FederatedPipelineSnapshot = { version: 1; pipelines: FederatedPipelineDefinition[] };
 export type FederatedSkillExportIndex = {
@@ -177,6 +178,35 @@ function localSkillManifest(serverRoot: string): FederatedSkillManifest {
           updatedAt: packageUpdatedAt(packageRoot).toISOString(),
         };
       }),
+  };
+}
+
+export function federatedSkillReceipt(
+  serverRoot: string,
+  name: string,
+  revision: string,
+): FederatedSkillReceipt {
+  const safeName = safeSegment(name);
+  const normalizedRevision = revision.trim();
+  // WHAT: Admit only the canonical package-revision identity used by federated snapshots.
+  // WHY: Receipt lookup must not accept a malformed or ambiguous durable content identity.
+  if (!/^[a-f0-9]{64}$/.test(normalizedRevision)) throw new Error('Federated skill receipt revision is invalid.');
+  const packageRoot = resolve(serverRoot, '.skills', safeName);
+  const markerFile = resolve(packageRoot, importedFederatedSkillMarker);
+  let markerRevision = '';
+  try {
+    const marker = JSON.parse(readFileSync(markerFile, 'utf8')) as { revision?: unknown };
+    markerRevision = String(marker.revision ?? '');
+  } catch {
+    return { version: snapshotVersion, name: safeName, revision: normalizedRevision, acknowledged: false };
+  }
+  const installedRevision = localSkillManifest(serverRoot).skills
+    .find((skill) => skill.name === safeName)?.revision ?? '';
+  return {
+    version: snapshotVersion,
+    name: safeName,
+    revision: normalizedRevision,
+    acknowledged: markerRevision === normalizedRevision && installedRevision === normalizedRevision,
   };
 }
 

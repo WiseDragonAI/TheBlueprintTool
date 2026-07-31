@@ -21,7 +21,7 @@ export type LedgerMutation = {
   lifecycleStatus?: 'todo' | 'backlog' | 'done';
   masterTaskId?: string;
   imageSrc?: string;
-  cardPatch?: { id?: string; status?: string; title?: string; description?: string; labels?: string[]; imageSizes?: Record<string, { width?: number; height?: number }>; questionnaires?: CardQuestionnaires; gitReviewNotes?: GitReviewNote[]; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
+  cardPatch?: { id?: string; status?: string; title?: string; description?: string; facts?: string[]; labels?: string[]; imageSizes?: Record<string, { width?: number; height?: number }>; questionnaires?: CardQuestionnaires; gitReviewNotes?: GitReviewNote[]; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;
   relationships?: Array<Record<string, unknown>>;
@@ -278,6 +278,7 @@ export function applyLedgerMutation(input: {
     const includesCodexPreference = mutation.cardPatch.codexRunModel !== undefined || mutation.cardPatch.codexRunEffort !== undefined;
     const includesQuestionnaires = mutation.cardPatch.questionnaires !== undefined;
     const includesGitReviewNotes = mutation.cardPatch.gitReviewNotes !== undefined;
+    const includesFacts = mutation.cardPatch.facts !== undefined;
     const includesLabels = mutation.cardPatch.labels !== undefined;
     const validCodexPreference = typeof mutation.cardPatch.codexRunModel === 'string'
       && (codexModelOptions as readonly string[]).includes(mutation.cardPatch.codexRunModel)
@@ -307,6 +308,14 @@ export function applyLedgerMutation(input: {
         body: { ok: false, error: 'Card labels must be non-empty strings.' },
       };
     }
+    // WHAT: Reject a card-facts patch unless every replacement entry is non-empty text.
+    // WHY: Facts are a compact replicated string array, so malformed entries cannot enter its shared lane.
+    if (!mutationError && includesFacts && (!Array.isArray(mutation.cardPatch.facts) || mutation.cardPatch.facts.some((fact) => typeof fact !== 'string' || !fact.trim()))) {
+      mutationError = {
+        statusCode: 400,
+        body: { ok: false, error: 'Card facts must be non-empty strings.' },
+      };
+    }
     if (!mutationError && includesQuestionnaires && revisedQuestionnairesCarryAnswers(card, mutation.cardPatch.questionnaires!)) {
       mutationError = {
         statusCode: 400,
@@ -327,6 +336,9 @@ export function applyLedgerMutation(input: {
         writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
         recordCardContent(card);
       }
+      // WHAT: Replace the card facts with the already validated normalized string array.
+      // WHY: Task-state replication owns one complete causal facts lane per card.
+      if (card && includesFacts) card.facts = mutation.cardPatch.facts!.map((fact) => fact.trim());
       if (card && includesLabels) {
         const requested = [...new Set(mutation.cardPatch.labels!.map((label) => label.trim()))];
         const existing = Array.isArray(card.labels) ? card.labels.map(String) : [];
