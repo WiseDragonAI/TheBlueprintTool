@@ -11,6 +11,7 @@ import { applyLedgerMutation } from '../../ledger/helper/apply-ledger-mutation.j
 import {
   materializeTaskMutationInputs,
   materializeTaskResources,
+  TaskContentMaterializationError,
 } from '../../federation/helper/materialize-task-mutation-inputs.js';
 import { tasksLedgerForProject, type DecisionOsProject } from '../helper/project-catalog.js';
 import { readDecisionOsSettings } from '../helper/read-decision-os-settings.js';
@@ -153,29 +154,50 @@ export function createProjectControllerRuntime(input: {
   runtime.persistTaskLedgerMutation = async (mutation: LedgerMutation): Promise<{ ledger: AnyRecord }> => {
     const project = requiredProject(true);
     const state = input.stateForProject(project);
-    const before = structuredClone(state.projection().ledger);
     const ledgerPath = resolve(
       project.decisionOsRoot,
       tasksLedgerForProject(project).ledgerFile.replace(/^\.decision-os\//, ''),
     );
-    await materializeTaskMutationInputs({
-      projectId: input.projectId,
-      decisionOsRoot: project.decisionOsRoot,
-      ledger: before,
-      mutation,
-      store: state.store,
-      contentStore: input.contentStore,
-      drain: input.contentScheduler()?.drain ?? null,
+    const execute = () => state.executePreparedMutation(mutation, async (before) => {
+      await materializeTaskMutationInputs({
+        projectId: input.projectId,
+        decisionOsRoot: project.decisionOsRoot,
+        ledger: before,
+        mutation,
+        store: state.store,
+        contentStore: input.contentStore,
+        drain: input.contentScheduler()?.drain ?? null,
+      });
+      const after = structuredClone(before);
+      const result = applyLedgerMutation({
+        decisionOsRoot: project.decisionOsRoot,
+        ledgerPath,
+        ledger: after,
+        mutation,
+      });
+      // WHAT: Reject a task command whose Markdown mutation could not produce a complete successor document.
+      // WHY: The serialized transaction must not publish partial structural state after a content mutation failure.
+      if (result.error) throw new Error(String(result.error.body.error ?? 'Task ledger mutation failed.'));
+      return { after, changedContentFiles: result.changedContentFiles };
     });
-    const after = structuredClone(before);
-    const result = applyLedgerMutation({
-      decisionOsRoot: project.decisionOsRoot,
-      ledgerPath,
-      ledger: after,
-      mutation,
-    });
-    if (result.error) throw new Error(String(result.error.body.error ?? 'Task ledger mutation failed.'));
-    const committed = await state.executeMutation(mutation, before, after, result.changedContentFiles);
+    let committed: Awaited<ReturnType<typeof execute>>;
+    try {
+      committed = await execute();
+    } catch (error) {
+      // WHAT: Reconcile a conflicted thread only when the preserved local document proves it is a lossless superset of every retained candidate.
+      // WHY: Common cross-node append races must recover automatically without choosing through same-note divergence.
+      if (error instanceof TaskContentMaterializationError && error.code === 'task_content_conflict') {
+        const reconciled = await state.reconcileSupersetThreadContentConflict(error.key);
+        // WHAT: Retry the complete serialized command once after a causal superset reconciliation.
+        // WHY: The original attempt made no mutation, while the replacement head now observes every prior candidate.
+        if (reconciled) committed = await execute();
+        else throw error;
+      } else {
+        throw error;
+      }
+    }
+    // WHAT: Invalidate project reads only when the serialized causal transaction changed authoritative state.
+    // WHY: No-op task commands must not trigger redundant project reloads.
     if (committed.changed) input.invalidateProject(input.projectId, committed.localChanges);
     return { ledger: committed.ledger };
   };
