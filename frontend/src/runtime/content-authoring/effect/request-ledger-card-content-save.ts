@@ -3,10 +3,6 @@
  * WHY: The browser must never send a filesystem path for card authoring.
  */
 import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
-import {
-  authoredFileRevisionSnapshot,
-  type AuthoredFileRevisionSnapshot,
-} from '../helper/authored-file-revision-snapshot.js';
 
 export type LedgerCardContentDetail = Record<string, unknown> & {
   id: string;
@@ -19,7 +15,6 @@ export type LedgerCardContentSaveResult = {
   card?: LedgerCardContentDetail;
   contentRevision?: string;
   currentRevision?: string;
-  snapshot?: AuthoredFileRevisionSnapshot;
   code?: string;
   recovery?: {
     authoredBytesPreserved: boolean;
@@ -53,7 +48,6 @@ async function responseResult(response: Response | undefined): Promise<LedgerCar
     card: body.card as LedgerCardContentDetail | undefined,
     contentRevision: typeof body.contentRevision === 'string' ? body.contentRevision : undefined,
     currentRevision: typeof body.currentRevision === 'string' ? body.currentRevision : undefined,
-    snapshot: authoredFileRevisionSnapshot(body.snapshot) ?? undefined,
     code: typeof body.code === 'string' ? body.code : undefined,
     recovery,
     error: ok ? undefined : String(body.error ?? `Request failed (${response.status}).`),

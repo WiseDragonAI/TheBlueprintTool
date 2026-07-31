@@ -1315,59 +1315,6 @@
   min-height: max-content;
 }
 
-.authored-file-conflict-evidence {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-  border: 1px solid color-mix(in srgb, #ff5f6d, transparent 44%);
-  border-radius: 3px;
-  background: color-mix(in srgb, #ff5f6d, transparent 94%);
-  color: #ffc1c6;
-  padding: 10px;
-  font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.authored-file-conflict-evidence p,
-.authored-file-conflict-evidence h3 {
-  margin: 0;
-}
-
-.authored-file-conflict-evidence summary {
-  color: var(--text);
-  cursor: pointer;
-}
-
-.authored-file-conflict-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.authored-file-conflict-columns section {
-  min-width: 0;
-}
-
-.authored-file-conflict-columns h3 {
-  color: var(--muted);
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
-.authored-file-conflict-columns pre {
-  max-height: 180px;
-  margin: 5px 0 0;
-  overflow: auto;
-  border: 1px solid var(--line);
-  background: rgba(4, 6, 9, 0.92);
-  color: var(--text);
-  padding: 8px;
-  font: 11px/1.45 var(--mono);
-  white-space: pre-wrap;
-}
-
 .skill-editor-pane,
 .skill-history-pane {
   min-height: 0;
@@ -1414,19 +1361,6 @@
   padding: 7px;
 }
 
-.authored-file-diff-status {
-  color: var(--muted);
-  font-family: var(--mono, "Ubuntu Mono", monospace);
-  font-size: 0.76rem;
-  letter-spacing: 0.01em;
-}
-
-.authored-file-diff-status[data-status="timeout"],
-.authored-file-diff-status[data-status="error"],
-.authored-file-diff-status[data-status="conflict"] {
-  color: var(--danger);
-}
-
 .text-file-editor-identity {
   overflow: hidden;
   color: var(--muted);
@@ -1443,94 +1377,6 @@
 .text-file-editor-surface {
   min-height: 0;
   overflow: hidden;
-}
-
-.cm-authored-addition {
-  border-left: 2px solid #4d9cff;
-  background: color-mix(in srgb, #4d9cff, transparent 84%);
-}
-
-.cm-authored-addition::before {
-  content: '+';
-  color: #4d9cff;
-  font-weight: 800;
-  margin-right: 4px;
-}
-
-.cm-authored-deletion {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  box-sizing: border-box;
-  max-width: 100%;
-  border-left: 2px solid #ff5f6d;
-  background: color-mix(in srgb, #ff5f6d, transparent 86%);
-  color: color-mix(in srgb, #ff5f6d, white 20%);
-  padding: 3px 10px;
-  white-space: pre-wrap;
-}
-
-.cm-authored-deletion-label {
-  flex: 0 0 auto;
-  color: #ff5f6d;
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.cm-authored-deletion-content {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.cm-ledger-block-widget {
-  --thread-accent: rgb(var(--workspace-secondary-rgb));
-  --card-zone-color: var(--thread-accent);
-  --card-code-color: color-mix(in srgb, var(--thread-accent), white 58%);
-  --card-muted-text: #b8c2cc;
-  --thread-heading-color: var(--thread-accent);
-  display: block;
-  content-visibility: auto;
-  contain-intrinsic-size: auto var(--cm-ledger-estimated-height, 29px);
-  width: 100%;
-  max-width: none;
-  padding: 0 10px;
-  font-family: Ubuntu, system-ui, sans-serif;
-  white-space: normal;
-}
-
-.codex-editor-modal .cm-ledger-block-widget .thread-note-message.ledger-card-body {
-  display: block;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.codex-editor-modal .cm-ledger-block-widget .ledger-card-heading {
-  margin: 10px 0 6px;
-  font-size: 1em;
-  line-height: 1.45;
-}
-
-.codex-editor-modal .cm-ledger-block-widget .ledger-card-heading:first-child {
-  margin-top: 0;
-}
-
-.cm-ledger-block-widget .ledger-card-code-line {
-  display: block;
-  min-height: 1.42em;
-  white-space: pre-wrap;
-}
-
-.cm-ledger-block-widget .ledger-card-code-line.cm-authored-deletion {
-  font-family: inherit;
-}
-
-.cm-ledger-projected-deletion {
-  margin: 0 0 5px;
 }
 
 .skill-codemirror-host {
