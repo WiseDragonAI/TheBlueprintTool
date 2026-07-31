@@ -32,3 +32,13 @@ Recurring runtime incident review task created automatically from the central in
 4. **Publication:** the task-content watcher captured those new files as workstation resource heads at counters `5` and `6`. The thread start then failed validation because no timestamped operator note remained. The failed start therefore mutated content before returning its error.
 5. **Recovery source:** restore the six original operator notes from verified object `1617b20e…`. No relay credential change and no state migration are required for content recovery.
 6. **Required code correction:** resolve the current verified resource head before creating a missing mutable file, then validate the thread before any write or watcher-visible side effect.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1785503469120-b8e672bfdae948","timestamp":"2026-07-31T13:11:09.172Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.worktrees/dev/.decision-os/voice-uploads/voice-1785503469169-97adc9fb-89f7-4d84-931b-6895d073a78b.wav","status":"transcribed","transcriptionStartedAt":"2026-07-31T13:11:09.205Z","uploadReceivedAt":"2026-07-31T13:11:09.169Z","audioPersistedAt":"2026-07-31T13:11:09.170Z","acceptedAt":"2026-07-31T13:11:09.170Z","providerStartedAt":"2026-07-31T13:11:09.205Z","providerSettledAt":"2026-07-31T13:11:11.452Z","completedAt":"2026-07-31T13:11:11.472Z","codexQueueRequestId":"voice:note-1785503469120-b8e672bfdae948","codexQueueLaunchMode":"run","codexQueueCardId":"card-runtime-incident-review","revision":4} -->
+
+Crée-moi des subtasks directement ici, dans l'amateur task.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785503658388-427d5721-2f2","timestamp":"2026-07-31T13:14:18.393Z"} -->
+
+1. Created and positioned three subtasks covering canary listener ownership, authored federated skill publication, and stale execution-state reads.
