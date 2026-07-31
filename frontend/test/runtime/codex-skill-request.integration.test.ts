@@ -599,6 +599,7 @@ test('skill-library clients encode identity, exclude paths, and surface revision
     contentRevision: 'a'.repeat(64),
     commit: 'b'.repeat(40),
     olderCommit: null,
+    baselineAvailability: 'no_prior_revision' as const,
     baseMarkdown: '',
     markdown: '---\nname: workspace/skill\ndescription: Editable skill\n---\n',
   };

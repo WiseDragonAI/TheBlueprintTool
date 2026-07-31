@@ -179,11 +179,33 @@ export type CodeMirrorFileEditor = {
   redo(): void;
   search(): void;
   setReadOnly(readOnly: boolean): void;
+  setAuthoredFileDiffStatus(status: AuthoredFileDiffStatus): void;
   installAuthoredFileDiff(diff: NormalizedAuthoredFileDiff): void;
   clearAuthoredFileDiff(identity?: string | null): void;
   replaceDocument(markdown: string, revision?: string): void;
   setIdentity(filename: string, revision?: string): void;
   destroy(): void;
+};
+
+export type AuthoredFileDiffStatus =
+  | 'idle'
+  | 'unavailable'
+  | 'no_prior_revision'
+  | 'deriving'
+  | 'available'
+  | 'timeout'
+  | 'error'
+  | 'conflict';
+
+const authoredFileDiffStatusText: Record<AuthoredFileDiffStatus, string> = {
+  idle: '',
+  unavailable: 'Git changes unavailable',
+  no_prior_revision: 'No prior Git revision',
+  deriving: 'Comparing Git revision…',
+  available: 'Git changes shown',
+  timeout: 'Git changes unavailable: comparison timed out',
+  error: 'Git changes unavailable: comparison failed',
+  conflict: 'Git changes paused: server revision changed',
 };
 
 let modulePromise: Promise<CodeMirrorModule> | null = null;
@@ -224,6 +246,12 @@ export async function mountCodeMirrorFileEditor(input: {
   const identity = document.createElement('span');
   identity.className = 'text-file-editor-identity';
   identity.textContent = input.revision ? `${input.filename} · ${input.revision.slice(0, 12)}` : input.filename;
+  const authoredDiffStatus = document.createElement('span');
+  authoredDiffStatus.className = 'authored-file-diff-status';
+  authoredDiffStatus.setAttribute('role', 'status');
+  authoredDiffStatus.setAttribute('aria-live', 'polite');
+  authoredDiffStatus.hidden = true;
+  authoredDiffStatus.dataset.status = 'idle';
   const actions = document.createElement('span');
   actions.className = 'text-file-editor-actions';
   const editorHost = document.createElement('div');
@@ -293,7 +321,7 @@ export async function mountCodeMirrorFileEditor(input: {
     redo.setAttribute('aria-disabled', String(readOnly));
   };
   updateMutationControls();
-  toolbar.append(identity, actions);
+  toolbar.append(identity, authoredDiffStatus, actions);
   root.append(toolbar, editorHost);
   root.setAttribute('data-dirty', 'false');
   input.parent.replaceChildren(root);
@@ -314,6 +342,12 @@ export async function mountCodeMirrorFileEditor(input: {
       view.dispatch({ effects: readOnlyCompartment.reconfigure(editableFacet(readOnly)) });
       root.dataset.readOnly = String(readOnly);
       updateMutationControls();
+    },
+    setAuthoredFileDiffStatus: (status) => {
+      const text = authoredFileDiffStatusText[status];
+      authoredDiffStatus.dataset.status = status;
+      authoredDiffStatus.textContent = text;
+      authoredDiffStatus.hidden = text.length === 0;
     },
     installAuthoredFileDiff: (authoredDiff) => {
       if (!view || !diff || authoredDiff.document !== view.state.doc.toString()) return;

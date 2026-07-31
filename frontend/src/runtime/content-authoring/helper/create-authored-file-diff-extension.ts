@@ -38,11 +38,14 @@ type CodeMirrorDiffModule = {
 export class AuthoredFileDeletionWidget {
   constructor(
     readonly hunkId: string,
+    readonly deletionOrder: number,
     readonly deletedText: string,
   ) {}
 
   eq(other: AuthoredFileDeletionWidget): boolean {
-    return other.hunkId === this.hunkId && other.deletedText === this.deletedText;
+    return other.hunkId === this.hunkId
+      && other.deletionOrder === this.deletionOrder
+      && other.deletedText === this.deletedText;
   }
 
   compare(other: unknown): boolean {
@@ -72,11 +75,13 @@ export class AuthoredFileDeletionWidget {
   toDOM(): HTMLElement {
     const wrapper = document.createElement('span');
     wrapper.className = 'cm-authored-deletion';
-    wrapper.setAttribute('role', 'note');
-    wrapper.setAttribute('aria-label', `Removed Markdown: ${this.deletedText || 'blank line'}`);
+    wrapper.setAttribute('role', 'group');
+    wrapper.setAttribute('aria-label', `− Removed Markdown: ${this.deletedText || 'blank line'}`);
+    wrapper.setAttribute('contenteditable', 'false');
+    wrapper.tabIndex = -1;
     const label = document.createElement('span');
     label.className = 'cm-authored-deletion-label';
-    label.textContent = 'Removed';
+    label.textContent = '− Removed';
     const content = document.createElement('span');
     content.className = 'cm-authored-deletion-content';
     content.textContent = this.deletedText || ' ';
@@ -107,12 +112,14 @@ function decorations(cm: CodeMirrorDiffModule, diff: NormalizedAuthoredFileDiff 
         }).range(addition.from, addition.to));
       }
     }
-    if (hunk.deletedText) {
+    for (const deletion of hunk.deletions) {
+      // WHAT: Render each canonical deletion segment at its own source-ordered anchor.
+      // WHY: Aggregating a hunk's removals changes their relationship to surviving Markdown.
       ranges.push(cm.Decoration.widget({
-        widget: new AuthoredFileDeletionWidget(hunk.id, hunk.deletedText),
+        widget: new AuthoredFileDeletionWidget(hunk.id, deletion.order, deletion.text),
         side: -1,
         block: true,
-      }).range(hunk.deletionAnchor));
+      }).range(deletion.anchor));
     }
   }
   return cm.Decoration.set(ranges, true);

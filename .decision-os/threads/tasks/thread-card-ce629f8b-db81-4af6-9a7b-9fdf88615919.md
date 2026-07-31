@@ -127,3 +127,88 @@ Là, il y a une erreur fondamentale. Il faut que tu fasses une analyse complète
 6. Green suites proved the reduced implementation contract, not the requested product outcome. The performance gate is not the next gate.
 7. The full report is committed on `origin/dev` at `4f0bbfe9`.
 8. **Study a Unified Markdown Diff Editor Model** remains `todo`; the current Dev implementation must not enter `main`.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785485249977-ac35ad77-c9f","timestamp":"2026-07-31T08:07:29.995Z"} -->
+
+---
+
+**Postmortem delivery** `is verified` on current `origin/dev` at `10ae9985`, and execution `stops` because the operator can now QA the failure analysis before authorizing remediation.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1785485399165-e83747ec2424","timestamp":"2026-07-31T08:09:59.308Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.decision-os/voice-uploads/voice-1785485399282-85e75040-aa9c-461b-9196-1e04849775c9.wav","status":"transcribed","transcriptionStartedAt":"2026-07-31T08:09:59.341Z","uploadReceivedAt":"2026-07-31T08:09:59.282Z","audioPersistedAt":"2026-07-31T08:09:59.282Z","acceptedAt":"2026-07-31T08:09:59.282Z","providerStartedAt":"2026-07-31T08:09:59.341Z","providerSettledAt":"2026-07-31T08:10:02.170Z","completedAt":"2026-07-31T08:10:02.216Z","codexQueueRequestId":"voice:note-1785485399165-e83747ec2424","codexQueueLaunchMode":"run","codexQueueCardId":"card-ce629f8b-db81-4af6-9a7b-9fdf88615919","revision":4} -->
+
+Mais le dernier message que j'ai vu, c'était que c'était pas terminé. Maintenant, est-ce que c'est fait ou est-ce que c'est pas fait ? J'arrive pas à comprendre.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1785485420728-6f857193cb21f8","timestamp":"2026-07-31T08:10:20.883Z"} -->
+
+![Pasted image](/.decision-os/thread-images/thread-card-ce629f8b-db81-4af6-9a7b-9fdf88615919/paste-1785485420832-84c3678695ccb.png)
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1785485426684-2230f2c44dae2","timestamp":"2026-07-31T08:10:26.736Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.decision-os/voice-uploads/voice-1785485426707-7c34925d-0a99-454a-905b-9a382393af4f.wav","status":"transcribed","transcriptionStartedAt":"2026-07-31T08:10:26.759Z","uploadReceivedAt":"2026-07-31T08:10:26.707Z","audioPersistedAt":"2026-07-31T08:10:26.707Z","acceptedAt":"2026-07-31T08:10:26.707Z","providerStartedAt":"2026-07-31T08:10:26.759Z","providerSettledAt":"2026-07-31T08:10:30.052Z","completedAt":"2026-07-31T08:10:30.124Z","revision":4} -->
+
+Putain, mais ça marche toujours pas, c'est toujours pas fait, il faut que tu fasses le travail, bordel de merde !
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785485517826-1c80a0da-bb4","timestamp":"2026-07-31T08:11:58.067Z"} -->
+
+---
+
+**Remediation implementation** `is now authorized`, and execution `continues` with a high-effort `executor-precheck` to admit the corrected semantic, historical, exact-route, persistence, and isolated-worktree contracts before production edits resume.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785486708720-50ccef18-a73","timestamp":"2026-07-31T08:31:48.739Z"} -->
+
+---
+
+**Canonical semantic ranges, explicit `no_prior_revision`, source-ordered deletion anchors, and visible change signs** `are implemented and focused checks pass`; execution `continues` because `GateTest` history migration, conflict evidence, exact-route persistence proof, performance, and `dev` integration remain open.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785487467214-7f14a8af-955","timestamp":"2026-07-31T08:44:27.234Z"} -->
+
+---
+
+**Exact GateTest history, inspectable conflict evidence, and a non-permissive route oracle** `are implemented and focused checks pass`; execution `continues` because persistence, stale-result, teardown, performance, full-suite, and `dev` integration gates remain open.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785487548039-3c5fa84c-a81","timestamp":"2026-07-31T08:45:48.057Z"} -->
+
+---
+
+**Continuation enqueue** `is not issued` because task execution `codex-execution-1785486713352-6bac57a1` already owns the master task while this stage is injected as `codex-execution-1785486713351-ee0721ec`; this turn `ends` to avoid a competing execution, with the next work contract preserved in the master body.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785488073758-79a1c15a-560","timestamp":"2026-07-31T08:54:33.776Z"} -->
+
+---
+
+**Stale-result rejection, finite Worker deadline, conflict withdrawal, visible diff lifecycle state, and exact-once teardown** `are implemented` with frontend typecheck green; execution `continues` because the final focused rerun, exact-route persistence and teardown proof, performance, full suites, and `dev` integration remain open.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785489622309-ecc505d2-995","timestamp":"2026-07-31T09:20:22.330Z"} -->
+
+---
+
+**Exact GateTest semantics, persistence, conflict recovery, stale-result rejection, finite timeout, and teardown** `are proved` on the registered canary, and execution `continues` because the `1,000,000`-byte performance gate, full verification, commit, `dev` integration, and operator QA remain open.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785489651491-e13a7668-c8a","timestamp":"2026-07-31T09:20:51.508Z"} -->
+
+---
+
+**Exact GateTest functional and lifecycle acceptance** `is proved`, and this gate turn `ends without a continuation enqueue` because active execution `codex-execution-1785488085681-7e059939` already owns the master task and must continue from the `1,000,000`-byte performance gate.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785490711379-b339ab8d-c27","timestamp":"2026-07-31T09:38:31.462Z"} -->
+
+---
+
+**The `1,000,000`-byte diff gate** `passed` with a `43.7 ms` Worker lifecycle, zero attributable `50 ms` renderer-main tasks, preserved focus, and restored `50151`, so **execution** `continues` through `GateAgent` at `high` effort for full verification and integration readiness.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785491102212-17a62bb2-817","timestamp":"2026-07-31T09:45:02.230Z"} -->
+
+---
+
+**Full verification and diff review** `are green`, so **execution** `continues` with scoped commits and authorized `dev` integration while `main` remains prohibited.
