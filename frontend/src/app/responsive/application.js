@@ -2646,6 +2646,27 @@ function initializeMobileCarousels(root) {
   }
 }
 
+function cardFacts(card) {
+  return Array.isArray(card?.facts)
+    ? card.facts.filter((fact) => typeof fact === 'string').map((fact) => fact.trim()).filter(Boolean)
+    : [];
+}
+
+function renderResponsiveCardFacts(card) {
+  const facts = cardFacts(card);
+  // WHAT: Omit the responsive facts list when the replicated card has no facts.
+  // WHY: The title must remain directly adjacent to the card body until facts exist.
+  if (facts.length === 0) return null;
+  const list = document.createElement('ul');
+  list.className = 'responsive-card-facts';
+  for (const fact of facts) {
+    const item = document.createElement('li');
+    item.textContent = fact;
+    list.appendChild(item);
+  }
+  return list;
+}
+
 function renderCard(card) {
   state.activeCardId = asText(card.id);
   const cardAccent = responsiveCardAccent(card);
@@ -2741,6 +2762,7 @@ function renderCard(card) {
     onQuestionnairesChange: persistCardQuestionnaires,
     onGitReviewNotesChange: persistGitReviewNotes
   });
+  const facts = renderResponsiveCardFacts(card);
   const persistenceFailure = card.persistenceState === 'failed' ? document.createElement('section') : null;
   if (persistenceFailure) {
     persistenceFailure.className = 'task-persistence-error';
@@ -2936,7 +2958,7 @@ function renderCard(card) {
     overview.append(status, heading, subtasks, completion);
     // The relationship-backed task summary is the navigation surface for a master task.
     // Keep it ahead of the narrative so linked cards remain visible on long mobile cards.
-    elements['card-body'].replaceChildren(overview, ...(persistenceFailure ? [persistenceFailure] : []), content);
+    elements['card-body'].replaceChildren(...(facts ? [facts] : []), overview, ...(persistenceFailure ? [persistenceFailure] : []), content);
   } else {
     const subtaskActions = parentMaster ? document.createElement('section') : null;
     if (subtaskActions) {
@@ -2955,6 +2977,7 @@ function renderCard(card) {
       subtaskActions.append(deleteButton);
     }
     elements['card-body'].replaceChildren(
+      ...(facts ? [facts] : []),
       ...(persistenceFailure ? [persistenceFailure] : []),
       content,
       ...(subtaskActions ? [subtaskActions] : []),
