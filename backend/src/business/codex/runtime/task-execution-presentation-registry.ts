@@ -22,6 +22,7 @@ type Projection = {
   events: readonly TaskExecutionPresentationEvent[];
   hydrated: boolean;
 };
+type HydrationBackoff = { failures: number; nextAttemptAt: number };
 
 export function createTaskExecutionPresentationRegistry(input: {
   contentStore: ReturnType<typeof createFederationContentReplicaStore>;
@@ -47,7 +48,7 @@ export function createTaskExecutionPresentationRegistry(input: {
     execution: Execution,
     recordFailure: (input: AnyRecord) => void,
   ) => void;
-  locallyHydrated: (state: Pick<ProjectTaskState, 'executions'>, execution: Execution) => TaskExecutionPresentation | null;
+  locallyHydrated: (state: Pick<ProjectTaskState, 'executions' | 'executionArtifactFile'>, execution: Execution) => TaskExecutionPresentation | null;
   presentation: (projectId: string, executionId: string, executorNodeId: string) => Projection | null;
   publishEvents: (change: {
     projectId: string;
@@ -69,6 +70,7 @@ export function createTaskExecutionPresentationRegistry(input: {
 } {
   const projections = new Map<string, Projection>();
   const remoteHydrations = new Map<string, Promise<void>>();
+  const remoteHydrationBackoff = new Map<string, HydrationBackoff>();
   const terminalHydrations = new Map<string, Promise<void>>();
   const key = (projectId: string, executionId: string, executorNodeId: string): string => (
     `${projectId}\0${executionId}\0${executorNodeId}`
@@ -98,16 +100,25 @@ export function createTaskExecutionPresentationRegistry(input: {
     projections.set(key(projectId, executionId, executorNodeId), { events, hydrated: true });
   };
   const locallyHydrated = (
-    state: Pick<ProjectTaskState, 'executions'>,
+    state: Pick<ProjectTaskState, 'executions' | 'executionArtifactFile'>,
     execution: Execution,
   ): TaskExecutionPresentation | null => {
+    // WHAT: Restrict immutable artifact reconstruction to settled executions.
+    // WHY: A live execution can still be writing its JSONL and stderr streams.
     if (!['succeeded', 'failed', 'cancelled', 'interrupted'].includes(execution.lifecycle.phase)) return null;
     const heads = [execution.artifacts.jsonl, execution.artifacts.stderr].filter((head) => head !== null);
-    if (heads.some((head) => !existsSync(input.contentStore.objectFile(head.hash)))) return null;
+    const artifactFiles = new Map(heads.map((head) => {
+      const canonical = state.executionArtifactFile(head.hash);
+      const cached = input.contentStore.objectFile(head.hash);
+      return [head.hash, canonical && existsSync(canonical) ? canonical : cached] as const;
+    }));
+    // WHAT: Stop local reconstruction when any declared artifact is absent from both durable namespaces.
+    // WHY: A partial presentation would misrepresent the retained execution log as complete.
+    if (heads.some((head) => !existsSync(artifactFiles.get(head.hash) ?? ''))) return null;
     const runtime: AnyRecord = {
       taskExecutionNodeId: input.federation()?.localOwner().ownerNodeId ?? 'local',
       taskExecutionArtifactFile: (hash: string) => /^[a-f0-9]{64}$/i.test(hash)
-        ? input.contentStore.objectFile(hash)
+        ? artifactFiles.get(hash) ?? ''
         : '',
     };
     const result = buildTaskExecutionPresentation({
@@ -263,6 +274,10 @@ export function createTaskExecutionPresentationRegistry(input: {
     // WHAT: Reuse one in-flight remote presentation request for every concurrent browser poll.
     // WHY: A missing in-memory projection must not multiply relay work while hydration is pending.
     if (remoteHydrations.has(hydrationKey)) return;
+    const backoff = remoteHydrationBackoff.get(hydrationKey);
+    // WHAT: Suppress sequential relay retries until the bounded cooldown expires.
+    // WHY: Several browser refreshes must not turn one unavailable executor into Cloudflare request flooding.
+    if (backoff && Date.now() < backoff.nextAttemptAt) return;
     const federation = input.federation();
     // WHAT: Leave the valid local loading projection in place when no relay transport is available.
     // WHY: Relay availability must not become a prerequisite for reading the durable execution envelope.
@@ -284,10 +299,16 @@ export function createTaskExecutionPresentationRegistry(input: {
         throw new Error('task_execution_remote_response_invalid');
       }
       setHydrated(projectId, executionId, executorNodeId, presentation.events);
+      remoteHydrationBackoff.delete(hydrationKey);
     }).catch((error: unknown) => {
       // WHAT: Treat server shutdown cancellation as normal lifecycle settlement.
       // WHY: Closing the owner intentionally aborts downstream relay hydration.
       if (input.serverCloseSignal.aborted) return;
+      const failures = (remoteHydrationBackoff.get(hydrationKey)?.failures ?? 0) + 1;
+      remoteHydrationBackoff.set(hydrationKey, {
+        failures,
+        nextAttemptAt: Date.now() + Math.min(30_000, 1_000 * (2 ** (failures - 1))),
+      });
       try {
         recordFailure({
           scope: `task-execution-presentation:${projectId}:${executionId}`,

@@ -79,6 +79,7 @@ export async function handleRemoteProjectGateway(input: {
     ),
     presentationRegistry: input.presentationRegistry,
     presentationRuntime: input.presentationRuntime,
+    recordBackgroundFailure: input.recordBackgroundFailure,
     projectId: input.projectId,
     projection,
     queuePosition: (record: Execution) => {

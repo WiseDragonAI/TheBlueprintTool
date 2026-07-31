@@ -37,6 +37,18 @@ export function createTaskExecutionPresentationReader(input: {
     }
     const executorNodeId = execution.lifecycle.executorNodeId;
     const localExecutorNodeId = taskExecutionNodeId(input.runtime);
+    const retained = input.presentationRegistry.locallyHydrated(state, execution);
+    // WHAT: Rebuild a settled presentation from canonical project artifacts before executor routing.
+    // WHY: Durable local evidence survives both the live runtime and in-memory registry across restart.
+    if (retained) {
+      input.presentationRegistry.setHydrated(
+        execution.metadata.projectId,
+        executionId,
+        executorNodeId,
+        retained.events,
+      );
+      return { statusCode: 200, body: JSON.stringify(retained) };
+    }
     if (executorNodeId !== localExecutorNodeId) {
       const projection = input.presentationRegistry.presentation(
         execution.metadata.projectId,
@@ -44,18 +56,6 @@ export function createTaskExecutionPresentationReader(input: {
         executorNodeId,
       );
       if (!projection?.hydrated) {
-        const hydrated = input.presentationRegistry.locallyHydrated(state, execution);
-        // WHAT: Prefer a complete presentation rebuilt from locally retained terminal artifacts.
-        // WHY: Durable local evidence remains authoritative after the in-memory projection registry is lost on restart.
-        if (hydrated) {
-          input.presentationRegistry.setHydrated(
-            execution.metadata.projectId,
-            executionId,
-            executorNodeId,
-            hydrated.events,
-          );
-          return { statusCode: 200, body: JSON.stringify(hydrated) };
-        }
         input.presentationRegistry.hydrateTerminalArtifacts(
           execution.metadata.projectId,
           executorNodeId,

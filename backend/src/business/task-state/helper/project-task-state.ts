@@ -485,6 +485,9 @@ export function createProjectTaskState(input: {
   return {
     store,
     executions,
+    executionArtifactFile: (hash: string): string => (
+      /^[a-f0-9]{64}$/i.test(hash) ? contentObjects.objectFile(hash) : ''
+    ),
     executeMutation,
     executeMutationNow,
     executePreparedMutation,

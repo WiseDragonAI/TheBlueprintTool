@@ -322,6 +322,17 @@ export function renderThreadCodexLog(): void {
   }
   const taskSummary = (recordState('threadTaskExecutionStateByThreadId')[threadId] as TaskExecutionStateSummary | undefined) ?? null;
   const entries = historyEntries(taskSummary);
+  // WHAT: Represent an uninstalled execution summary as local loading instead of confirmed absence.
+  // WHY: The first asynchronous read has not yet established whether durable executions exist.
+  if (!taskSummary) {
+    const loading = document.createElement('p');
+    loading.className = 'codex-log-waiting';
+    loading.textContent = 'Loading local Codex execution state.';
+    root.append(loading);
+    return;
+  }
+  // WHAT: Show the empty state only after a confirmed task summary contains no execution.
+  // WHY: Durable absence and pending local hydration are distinct operator states.
   if (taskSummary && entries.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'codex-log-empty';

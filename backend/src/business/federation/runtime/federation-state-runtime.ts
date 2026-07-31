@@ -177,12 +177,6 @@ export function createFederationStateRuntime(input: {
           record,
           remote: true,
         });
-        input.presentations.hydrateTerminalArtifacts(
-          projectId,
-          record?.lifecycle.executorNodeId ?? from,
-          record,
-          input.recordStoppedOperation,
-        );
       }
       for (const client of input.globalClients) {
         client.write(`event: ledger-content-change\ndata: ${JSON.stringify({

@@ -55,21 +55,12 @@ export function createFederationConnectionRuntime(input: {
 }) {
   let connector: ReturnType<typeof createFederationNodeConnector> | null = null;
   const publishLocalExecutionPresentationSnapshots = (): void => {
-    const localNodeId = connector?.localOwner().ownerNodeId ?? 'local';
     const pipelineRuns = new Map<string, { projectId: string; executionId: string }>();
     for (const [projectId, state] of [
       ...input.projectStates,
       ...input.federatedExecutionStates,
     ]) {
       for (const record of state.executions.all()) {
-        if (record.lifecycle.executorNodeId !== localNodeId) {
-          input.executionPresentations.hydrateTerminalArtifacts(
-            projectId,
-            record.lifecycle.executorNodeId,
-            record,
-            input.recordStoppedOperation,
-          );
-        }
         if (record.metadata.pipelineRunId) {
           pipelineRuns.set(record.metadata.pipelineRunId, {
             projectId,
