@@ -241,6 +241,7 @@ Ctrl+D  Resize selected cards to their content and selected zones to contained c
   5. Unrelated changes and protected staged hunks are excluded.
 - **Failed gate:** If any integration gate fails, keep the feature branch and worktree intact, report the exact blocker, and do not merge.
 - **Mandatory successful-merge cleanup:** Immediately after a successful feature merge, remove the iteration worktree, delete the merged feature branch, and delete all iteration-temporary documentation and artifacts. Commit intended permanent documentation before the merge. Verify that no completed iteration worktree or feature branch remains before reporting completion.
+- **Dev Decision OS visibility:** In the `dev` linked worktree, set `submodule.".decision-os".ignore = all` through worktree-local Git configuration. Do not commit this setting to `.gitmodules`; it suppresses mutable child-state noise only in `dev` and preserves submodule-drift visibility in `main`.
 - **Explicit operator exceptions:** The operator may explicitly direct the current iteration to run directly on `dev`, directly on `main`, or in a dedicated worktree based on `main`. The exception applies only to that stated iteration and must never be inferred from the current checkout, a clean primary checkout, urgency, or a prior exception.
 - **Main protection:** Without an explicit operator exception, an agent must not implement on `main`, create an iteration worktree from `main`, merge an iteration into `main`, or use the primary checkout as an uncommitted handoff location.
 
