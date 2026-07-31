@@ -39,9 +39,9 @@ type MandatoryPromptDefinition = {
 
 const maximumGitOutputBytes = 1024 * 1024;
 const gitDeadlineMs = 20_000;
-const packagedPromptRoot = resolve(
+const packagedPromptTemplateRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../../../../defaults/pipeline-prompts',
+  '../../../../templates/pipeline-prompts',
 );
 
 export const mandatoryPipelinePromptDefinitions: readonly MandatoryPromptDefinition[] = [
@@ -80,19 +80,19 @@ function git(input: {
   return String(result.stdout).trim();
 }
 
-function packagedPromptMarkdown(definition: MandatoryPromptDefinition): string {
-  const file = resolve(packagedPromptRoot, `${definition.name}.md`);
-  // WHAT: fail bootstrap when a packaged mandatory default is absent or not a regular file.
+function packagedPromptTemplateMarkdown(definition: MandatoryPromptDefinition): string {
+  const file = resolve(packagedPromptTemplateRoot, `${definition.name}.md`);
+  // WHAT: fail bootstrap when a packaged mandatory template is absent or not a regular file.
   // WHY: startup cannot invent the exact operating instructions for a missing server prompt.
   if (!existsSync(file) || !statSync(file).isFile()) {
-    throw new Error(`Packaged mandatory pipeline prompt is unavailable: ${file}`);
+    throw new Error(`Packaged mandatory pipeline prompt template is unavailable: ${file}`);
   }
   const markdown = readFileSync(file, 'utf8');
   const validation = validatePipelinePromptMarkdown(markdown);
-  // WHAT: reject an invalid packaged default before touching server-owned state.
+  // WHAT: reject an invalid packaged template before touching server-owned state.
   // WHY: a bad release asset must not become durable authored content.
   if (validation.ok === false) {
-    throw new Error(`Packaged mandatory pipeline prompt ${definition.name} is invalid: ${validation.error}`);
+    throw new Error(`Packaged mandatory pipeline prompt template ${definition.name} is invalid: ${validation.error}`);
   }
   return markdown;
 }
@@ -221,7 +221,7 @@ export function ensureMandatoryPipelinePrompts(input: {
     if (registration) assertRegistration(registration, definition);
     const file = pipelinePromptFile(decisionOsRoot, definition.name);
     const current = existingPromptMarkdown(file, definition.name);
-    const markdown = current || packagedPromptMarkdown(definition);
+    const markdown = current || packagedPromptTemplateMarkdown(definition);
     promptMarkdown.set(definition.name, markdown);
     // WHAT: mark only genuinely absent files for creation.
     // WHY: valid authored prompt Markdown must remain byte-identical across restart.
