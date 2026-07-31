@@ -29,6 +29,7 @@ type TaskLogPoller = {
   timer: ReturnType<typeof setTimeout> | null;
   inFlight: boolean;
   abortController: AbortController | null;
+  expectedSessionUntilMs: number;
 };
 
 const taskLogPollers = new Map<string, TaskLogPoller>();
@@ -117,6 +118,15 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
       return;
     }
     const summary = scopeTaskExecutionState(summaryResult.value, poller.identity.cardId);
+    const expectedSessionExecution = poller.expectedSessionUntilMs > Date.now()
+      ? summary.sessions.find((session) => session.sessionId === poller.identity.runId)?.executions.at(-1) ?? null
+      : null;
+    const awaitingExpectedSession = poller.expectedSessionUntilMs > Date.now()
+      && Boolean(poller.identity.runId)
+      && !expectedSessionExecution;
+    // WHAT: Clear the bounded admission expectation after its session execution becomes locally visible.
+    // WHY: Once durable execution state catches up, normal active and invalidation-driven refresh ownership resumes.
+    if (expectedSessionExecution) poller.expectedSessionUntilMs = 0;
     telemetry('codex-log-summary-installed', {
       projectId,
       replicaNodeId,
@@ -132,14 +142,20 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
     delete recordState('threadExecutionStateErrorByThreadId')[threadId];
     const selectedIds = recordState('threadSelectedExecutionIdByThreadId');
     const requestedExecutionId = String(selectedIds[threadId] ?? '');
-    const selectedExecutionId = findTaskExecution(summary, requestedExecutionId)
-      ? requestedExecutionId
-      : String(summary.defaultExecutionId ?? '');
+    const selectedExecutionId = expectedSessionExecution?.executionId
+      ?? (findTaskExecution(summary, requestedExecutionId)
+        ? requestedExecutionId
+        : String(summary.defaultExecutionId ?? ''));
     selectedIds[threadId] = selectedExecutionId;
-    syncControlsFromSummary(threadId, summary);
+    // WHAT: Preserve optimistic active controls while the accepted session has no execution entity yet.
+    // WHY: An earlier empty summary cannot truthfully reset a run whose admission is still settling.
+    if (!awaitingExpectedSession) syncControlsFromSummary(threadId, summary);
     if (!selectedExecutionId) {
       delete recordState('threadExecutionPresentationByThreadId')[threadId];
       paintThreadLog(threadId);
+      // WHAT: Re-read local task state while the accepted session is inside its bounded materialization window.
+      // WHY: Execution identity is created at turn start and can legitimately follow the admission response.
+      if (awaitingExpectedSession) retryDelay = 300;
       return;
     }
     const presentationResult = await requestTaskExecutionPresentation({
@@ -171,7 +187,8 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
     paintThreadLog(threadId);
     // WHAT: Refresh complete snapshots only while the task has active execution work.
     // WHY: Terminal history is immutable and future admissions arrive through execution-change invalidation.
-    if (retryDelay === null && summary.activeExecutionIds.length > 0) retryDelay = 900;
+    if (retryDelay === null && awaitingExpectedSession) retryDelay = 300;
+    else if (retryDelay === null && summary.activeExecutionIds.length > 0) retryDelay = 900;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const stack = error instanceof Error ? error.stack ?? '' : '';
@@ -270,10 +287,15 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   };
   const key = `${identity.projectId}\0${identity.replicaNodeId}\0${identity.cardId}`;
   const current = taskLogPollers.get(identity.threadId);
+  const expectsAdmission = Boolean(identity.runId)
+    && (input.expectedStatus === 'pending' || input.expectedStatus === 'running');
   const cachedSummary = recordState('threadTaskExecutionStateByThreadId')[identity.threadId] as TaskExecutionStateSummary | undefined;
   if (cachedSummary) syncControlsFromSummary(identity.threadId, cachedSummary);
   if (current?.key === key) {
     current.identity = identity;
+    // WHAT: Renew the bounded session expectation when admission reports pending or running work.
+    // WHY: Intermediate panel renders must not erase the only evidence that execution identity is still materializing.
+    if (expectsAdmission) current.expectedSessionUntilMs = Date.now() + 15_000;
     if (input.forceRevalidate || (input.expectedExecutionId
       && input.expectedExecutionId !== String(recordState('threadSelectedExecutionIdByThreadId')[identity.threadId] ?? ''))) {
       if (input.expectedExecutionId) recordState('threadSelectedExecutionIdByThreadId')[identity.threadId] = input.expectedExecutionId;
@@ -294,6 +316,7 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
     timer: null,
     inFlight: false,
     abortController: null,
+    expectedSessionUntilMs: expectsAdmission ? Date.now() + 15_000 : 0,
   };
   taskLogPollers.set(identity.threadId, poller);
   installExecutionInvalidation();

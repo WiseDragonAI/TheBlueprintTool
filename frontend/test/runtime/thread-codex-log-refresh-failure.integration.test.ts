@@ -50,3 +50,67 @@ test('unexpected summary projection failure becomes visible and retryable', asyn
     globalThis.fetch = previousFetch;
   }
 });
+
+test('accepted session keeps reading until its delayed execution identity appears', async () => {
+  const previousFetch = globalThis.fetch;
+  const threadId = 'thread-delayed-execution';
+  let summaryReads = 0;
+  const identity = {
+    projectId: 'project-a',
+    replicaNodeId: '',
+    ledgerId: 'tasks',
+    cardId: 'card-a',
+    threadId,
+    runId: 'session-delayed',
+    expectedStatus: 'running',
+  } as const;
+  try {
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      // WHAT: Return an empty first summary before exposing the execution created at turn start.
+      // WHY: Production admission can settle before Codex emits the execution-owning turn-start event.
+      if (String(input).includes('/execution-state')) {
+        summaryReads += 1;
+        const executions = summaryReads === 1 ? [] : [{
+          executionId: 'execution-delayed',
+          sessionId: 'session-delayed',
+          sourceCardId: 'card-a',
+          taskId: 'card-a',
+          kind: 'thread',
+          phase: 'running',
+          requestedAt: '2026-07-31T16:49:21.000Z',
+          startedAt: '2026-07-31T16:49:23.654Z',
+          finishedAt: null,
+          model: 'gpt-5.6-sol',
+          effort: 'medium',
+          executorNodeId: 'workstation-dev',
+          revision: 1,
+          error: null,
+          queuePosition: null,
+        }];
+        return new Response(JSON.stringify({
+          taskId: 'card-a',
+          activeExecutionIds: executions.map((execution) => execution.executionId),
+          defaultExecutionId: executions.at(-1)?.executionId ?? null,
+          sessions: executions.length > 0 ? [{ sessionId: 'session-delayed', executions }] : [],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        execution: { executionId: 'execution-delayed', counts: { tools: 0, warnings: 0, errors: 0 } },
+        events: [],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof globalThis.fetch;
+    state.threadExecutionStateErrorByThreadId = {};
+    state.threadTaskExecutionStateByThreadId = {};
+    state.threadExecutionPresentationByThreadId = {};
+    state.threadSelectedExecutionIdByThreadId = {};
+    bindThreadCodexRunLog(identity);
+    await waitFor(() => state.threadSelectedExecutionIdByThreadId[threadId] === 'execution-delayed'
+      && state.threadExecutionPresentationByThreadId[threadId]?.execution?.executionId === 'execution-delayed');
+    assert.equal(summaryReads, 2);
+    assert.equal(state.threadTaskExecutionStateByThreadId[threadId].activeExecutionIds[0], 'execution-delayed');
+    assert.equal(state.threadExecutionPresentationByThreadId[threadId].execution.executionId, 'execution-delayed');
+  } finally {
+    unbindThreadCodexRunLog(identity);
+    globalThis.fetch = previousFetch;
+  }
+});
