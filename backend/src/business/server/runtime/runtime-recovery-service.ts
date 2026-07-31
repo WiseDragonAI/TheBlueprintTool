@@ -247,6 +247,9 @@ export function createRuntimeRecoveryService(input: {
       );
     } else if (scope.startsWith('background:')) {
       resolvedIncidentIds = await resumeBackgroundRuntime({
+        activeIncidentIds: (activeScope) => input.incidentLedger
+          .active(activeScope)
+          .map((incident) => incident.id),
         codexCoordinator: input.codexCoordinator,
         component: scope.slice('background:'.length),
         contentScheduler: input.contentScheduler,

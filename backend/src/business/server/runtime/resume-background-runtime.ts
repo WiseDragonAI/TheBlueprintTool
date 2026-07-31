@@ -11,6 +11,7 @@ import type { createIncidentSupervisor } from './incident-supervisor.js';
 import type { createProjectRuntimeRegistry } from './project-runtime-registry.js';
 
 export async function resumeBackgroundRuntime(input: {
+  activeIncidentIds: (scope: string) => string[];
   codexCoordinator: ReturnType<typeof createCodexProcessCoordinator>;
   component: string;
   contentScheduler: () => ReturnType<typeof createFederationContentScheduler> | null;
@@ -25,6 +26,7 @@ export async function resumeBackgroundRuntime(input: {
   scope: string;
 }): Promise<string[]> {
   if (!input.incidentSupervisor.pausedBackgroundComponents.has(input.component)) return [];
+  const activeIncidentIds = input.activeIncidentIds(input.scope);
   try {
     if (input.component === 'pipeline-migration') input.migrateProjectPipelines();
     else if (input.component === 'pipeline-catalog') input.initializePipelineCatalog();
@@ -54,6 +56,11 @@ export async function resumeBackgroundRuntime(input: {
       if (prefix === 'codex-runtime:') await input.codexCoordinator.schedule();
     } else {
       throw new Error(`runtime_background_scope_not_resumable:${input.component}`);
+    }
+    // WHAT: Accept a component-owned successful recovery when it already cleared its pause and incident.
+    // WHY: Federated library synchronization resolves its incident atomically with installing synchronized state.
+    if (!input.incidentSupervisor.pausedBackgroundComponents.has(input.component)) {
+      return activeIncidentIds;
     }
     const ids = input.resolveScope(input.scope, input.resolution);
     input.incidentSupervisor.pausedBackgroundComponents.delete(input.component);
