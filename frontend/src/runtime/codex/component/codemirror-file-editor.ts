@@ -7,7 +7,7 @@
  * submit an arbitrary filesystem path.
  */
 import { createAuthoredFileDiffExtension } from '../../content-authoring/helper/create-authored-file-diff-extension.js';
-import { createLedgerMarkdownSemanticExtension } from '../../content-authoring/helper/create-ledger-markdown-semantic-extension.js';
+import { createLedgerMarkdownPresentationExtension } from '../../content-authoring/helper/create-ledger-markdown-presentation-extension.js';
 import type { NormalizedAuthoredFileDiff } from '../../content-authoring/helper/normalize-authored-file-diff.js';
 
 type CodeMirrorModule = {
@@ -22,8 +22,10 @@ type CodeMirrorModule = {
   };
   StateEffect: { define<T>(): { of(value: T): unknown; is(effect: unknown): boolean } };
   StateField: { define<T>(spec: Record<string, unknown>): unknown };
+  ViewPlugin: { fromClass(plugin: new (...args: never[]) => unknown): unknown };
   Decoration: {
     mark(spec: Record<string, unknown>): { range(from: number, to: number): unknown };
+    replace(spec: Record<string, unknown>): { range(from: number, to: number): unknown };
     widget(spec: Record<string, unknown>): { range(position: number): unknown };
     set(ranges: unknown[], sort?: boolean): unknown;
   };
@@ -47,6 +49,9 @@ type CodeMirrorModule = {
     decorations: {
       from<T>(field: unknown, getter?: (value: T) => unknown): unknown;
       of(value: unknown): unknown;
+    };
+    atomicRanges: {
+      from<T>(field: unknown, getter?: (value: T) => unknown): unknown;
     };
     lineWrapping: unknown;
     theme(spec: Record<string, Record<string, string>>, options?: { dark?: boolean }): unknown;
@@ -290,7 +295,10 @@ export async function mountCodeMirrorFileEditor(input: {
       cm.basicSetup,
       cm.markdown(),
       ...decisionOsCodeMirrorTheme(cm),
-      ...(diff ? [diff.extension, createLedgerMarkdownSemanticExtension(cm)] : []),
+      ...(diff ? [
+        diff.extension,
+        createLedgerMarkdownPresentationExtension(cm, diff.readAuthoredFileDiff),
+      ] : []),
       cm.keymap.of([...cm.defaultKeymap, ...cm.historyKeymap, ...cm.searchKeymap]),
       updateListener,
       readOnlyCompartment.of(editableFacet(readOnly)),

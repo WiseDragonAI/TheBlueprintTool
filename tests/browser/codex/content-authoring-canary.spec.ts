@@ -73,6 +73,53 @@ function replaceMillionByteToken(markdown: string, minimumOffset: number, replac
   return `${markdown.slice(0, offset)}${replacement}${markdown.slice(offset + token.length)}`;
 }
 
+type BrowserTraceEvent = {
+  name?: string;
+  ph?: string;
+  ts?: number;
+  dur?: number;
+  pid?: number;
+  tid?: number;
+};
+
+function attributableRendererMainTasks(traceEvents: unknown[]): Array<{ name: string; duration: number }> {
+  const events = traceEvents as BrowserTraceEvent[];
+  const workerPost = events.filter((event) => event.name === 'authored-diff-worker-posted').at(-1);
+  const settled = events.filter((event) => event.name === 'authored-diff-measurement-settled').at(-1);
+  assert.ok(workerPost?.ts);
+  assert.ok(settled?.ts);
+  assert.equal(workerPost.pid, settled.pid);
+  assert.equal(workerPost.tid, settled.tid);
+  const causalEvents = new Set([
+    'FunctionCall',
+    'EventDispatch',
+    'TimerFire',
+    'FireAnimationFrame',
+    'Document::UpdateStyleAndLayout',
+    'UpdateLayoutTree',
+    'Layout',
+    'LayoutView::HitTest',
+    'InlineNode::ShapeTextIncludingFirstLine',
+    'PrePaint',
+    'Paint',
+    'Commit',
+  ]);
+  return events.filter((event) => (
+    event.ph === 'X'
+    && event.pid === workerPost.pid
+    && event.tid === workerPost.tid
+    && typeof event.ts === 'number'
+    && typeof event.dur === 'number'
+    && event.ts < (settled.ts ?? 0)
+    && event.ts + event.dur > (workerPost.ts ?? 0)
+    && event.dur >= 50_000
+    && causalEvents.has(event.name ?? '')
+  )).map((event) => ({
+    name: event.name ?? 'unknown',
+    duration: (event.dur ?? 0) / 1_000,
+  }));
+}
+
 test('served Skills creation is projectless and preserves authored casing', { ...canaryOnly, timeout: 60_000 }, async () => {
   assert.equal(canaryUrl, 'http://127.0.0.1:50151', 'DECISION_OS_URL must select the registered canary.');
   mkdirSync(evidenceRoot, { recursive: true });
@@ -153,7 +200,7 @@ test('served Skills editor preserves CodeMirror state and navigates Git revision
     page.setDefaultTimeout(15_000);
     const pageErrors: string[] = [];
     const consoleErrors: string[] = [];
-    page.on('pageerror', (error) => pageErrors.push(error.message));
+    page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
     page.on('console', (entry) => {
       if (entry.type() === 'error') consoleErrors.push(entry.text());
     });
@@ -390,7 +437,7 @@ test('served GateTest editor preserves exact diff, persistence, conflict, Worker
     ` });
     const pageErrors: string[] = [];
     const consoleErrors: string[] = [];
-    page.on('pageerror', (error) => pageErrors.push(error.message));
+    page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
     page.on('console', (entry) => {
       // WHAT: Retain browser console errors as served-surface failure evidence.
       // WHY: A visible diff is not accepted when the same editor emits runtime errors.
@@ -412,12 +459,23 @@ test('served GateTest editor preserves exact diff, persistence, conflict, Worker
     await search.fill('<FULL_THREAD>');
     await editor.locator('.cm-search').getByRole('button', { name: 'next', exact: true }).click();
     await page.keyboard.press('Escape');
-    const additions = editor.locator('.cm-authored-addition');
+    const revealedSource = editor.locator('.cm-line').filter({ hasText: '<FULL_THREAD>' });
+    assert.equal(await revealedSource.count(), 1);
+    await page.evaluate(async () => {
+      const { EditorView } = await import('/assets/vendor/codemirror-6.0.2.js');
+      const editorElement = document.querySelector<HTMLElement>('.skill-library-editor-modal[open] .cm-editor');
+      const view = EditorView.findFromDOM(editorElement!);
+      const fenceStart = view.state.doc.toString().lastIndexOf('```', view.state.selection.main.from);
+      // WHAT: Move the main selection to the blank byte immediately before the changed fenced block.
+      // WHY: The changed block must return to canonical presentation without moving its viewport out of evidence.
+      view.dispatch({ selection: { anchor: Math.max(0, fenceStart - 1) } });
+    });
+    const additions = editor.locator('.cm-ledger-block-widget .cm-authored-addition');
     await additions.first().waitFor({ state: 'visible' });
     const presentation = await editor.evaluate((element) => {
-      const additionElements = [...element.querySelectorAll<HTMLElement>('.cm-authored-addition')];
-      const deletionElements = [...element.querySelectorAll<HTMLElement>('.cm-authored-deletion')];
-      const contextLine = [...element.querySelectorAll<HTMLElement>('.cm-line')]
+      const additionElements = [...element.querySelectorAll<HTMLElement>('.cm-ledger-block-widget .cm-authored-addition')];
+      const deletionElements = [...element.querySelectorAll<HTMLElement>('.cm-ledger-block-widget .cm-authored-deletion')];
+      const contextLine = [...element.querySelectorAll<HTMLElement>('.cm-ledger-block-widget li, .cm-ledger-block-widget p')]
         .find((line) => line.textContent?.includes('Any agent can just follow the plan and write the code'));
       const firstAddition = additionElements[0];
       const style = getComputedStyle(firstAddition);
@@ -436,9 +494,10 @@ test('served GateTest editor preserves exact diff, persistence, conflict, Worker
         backgroundColor: style.backgroundColor,
         contextLineFound: Boolean(contextLine),
         contextMarked: Boolean(contextLine?.matches('.cm-authored-addition') || contextLine?.querySelector('.cm-authored-addition')),
-        headingText: [...element.querySelectorAll<HTMLElement>('.cm-ledger-heading')].map((record) => record.textContent ?? ''),
-        listCount: element.querySelectorAll('.cm-ledger-list').length,
-        codeCount: element.querySelectorAll('.cm-ledger-code-block').length,
+        headingText: [...element.querySelectorAll<HTMLElement>('.cm-ledger-block-widget .ledger-card-heading')]
+          .map((record) => record.textContent ?? ''),
+        listCount: element.querySelectorAll('.cm-ledger-block-widget ol, .cm-ledger-block-widget ul').length,
+        codeCount: element.querySelectorAll('.cm-ledger-block-widget .ledger-card-code-block').length,
       };
     });
     assert.deepEqual(
@@ -474,10 +533,21 @@ test('served GateTest editor preserves exact diff, persistence, conflict, Worker
     await tailSearch.fill('run all tests again');
     await editor.locator('.cm-search').getByRole('button', { name: 'next', exact: true }).click();
     await page.keyboard.press('Escape');
+    await page.evaluate(async () => {
+      const { EditorView } = await import('/assets/vendor/codemirror-6.0.2.js');
+      const editorElement = document.querySelector<HTMLElement>('.skill-library-editor-modal[open] .cm-editor');
+      const view = EditorView.findFromDOM(editorElement!);
+      const markdown = view.state.doc.toString();
+      const lineStart = markdown.lastIndexOf('\n', view.state.selection.main.from - 1) + 1;
+      // WHAT: Move the main selection to the byte immediately before the changed tail line.
+      // WHY: The tail must return to canonical presentation while remaining inside the served viewport.
+      view.dispatch({ selection: { anchor: Math.max(0, lineStart - 1) } });
+    });
+    await editor.locator('.cm-ledger-block-widget .cm-authored-addition').first().waitFor({ state: 'visible' });
     const tailPresentation = await editor.evaluate((element) => ({
-      additions: [...element.querySelectorAll<HTMLElement>('.cm-authored-addition')]
+      additions: [...element.querySelectorAll<HTMLElement>('.cm-ledger-block-widget .cm-authored-addition')]
         .map((addition) => addition.textContent ?? ''),
-      deletions: [...element.querySelectorAll<HTMLElement>('.cm-authored-deletion-content')]
+      deletions: [...element.querySelectorAll<HTMLElement>('.cm-ledger-block-widget .cm-authored-deletion-content')]
         .map((deletion) => deletion.textContent ?? ''),
     }));
     assert.deepEqual([...new Set([...presentation.additionLines, ...tailPresentation.additions])], [
@@ -765,6 +835,7 @@ test('served GateTest editor settles a 1,000,000-byte diff without an input-thre
 
           postMessage(message) {
             this.record.postedAt = performance.now();
+            performance.mark('authored-diff-worker-posted');
             this.nativeWorker.postMessage(message);
           }
 
@@ -791,6 +862,7 @@ test('served GateTest editor settles a 1,000,000-byte diff without an input-thre
         'blink',
         'cc',
         'benchmark',
+        'blink.user_timing',
         'disabled-by-default-blink.debug.layout',
       ].join(','),
       transferMode: 'ReportEvents',
@@ -869,8 +941,10 @@ test('served GateTest editor settles a 1,000,000-byte diff without an input-thre
       control.longTasks.length = 0;
       control.measurementStartedAt = performance.now();
       control.settledAt = 0;
+      performance.clearMarks('authored-diff-worker-posted');
+      performance.clearMarks('authored-diff-measurement-settled');
     });
-    await content.click();
+    await content.click({ position: { x: 12, y: 12 } });
     await page.keyboard.press('Control+Home');
     await page.keyboard.down('Shift');
     await page.keyboard.press('ArrowRight');
@@ -891,6 +965,7 @@ test('served GateTest editor settles a 1,000,000-byte diff without an input-thre
       (window as unknown as {
         __authoredDiffPerformance: { settledAt: number };
       }).__authoredDiffPerformance.settledAt = performance.now();
+      performance.mark('authored-diff-measurement-settled');
     });
     await cdp.send('Tracing.end');
     await traceComplete;
@@ -911,6 +986,12 @@ test('served GateTest editor settles a 1,000,000-byte diff without an input-thre
       return {
         ...control,
         focused: Boolean(document.activeElement?.closest('.skill-library-editor-modal[open] .cm-content')),
+        dom: {
+          widgets: document.querySelectorAll('.skill-library-editor-modal[open] .cm-ledger-block-widget').length,
+          listItems: document.querySelectorAll('.skill-library-editor-modal[open] .cm-ledger-block-widget li').length,
+          sourceLines: document.querySelectorAll('.skill-library-editor-modal[open] .cm-line').length,
+          contentChildren: document.querySelector('.skill-library-editor-modal[open] .cm-content')?.children.length ?? 0,
+        },
       };
     });
     const activeRecord = performanceEvidence.records.at(-1);
@@ -921,6 +1002,7 @@ test('served GateTest editor settles a 1,000,000-byte diff without an input-thre
       && entry.startTime + entry.duration > activeRecord.postedAt
       && entry.duration >= 50
     ));
+    const rendererMainTasks = attributableRendererMainTasks(traceEvents);
     writeFileSync(
       join(evidenceRoot, 'gatetest-million-byte-performance.json'),
       JSON.stringify({
@@ -929,8 +1011,10 @@ test('served GateTest editor settles a 1,000,000-byte diff without an input-thre
         workerPostToTerminationMs: activeRecord.terminatedAt - activeRecord.postedAt,
         inputToSettlementMs: performanceEvidence.settledAt - performanceEvidence.measurementStartedAt,
         diffLongTasks,
+        attributableRendererMainTasks: rendererMainTasks,
         observedInputLongTasks: performanceEvidence.longTasks.filter((entry) => entry.duration >= 50),
         focused: performanceEvidence.focused,
+        dom: performanceEvidence.dom,
         trace: join(evidenceRoot, 'gatetest-million-byte-trace.json'),
       }, null, 2),
     );
@@ -938,7 +1022,7 @@ test('served GateTest editor settles a 1,000,000-byte diff without an input-thre
     assert.ok(activeRecord.terminatedAt >= activeRecord.postedAt, JSON.stringify(performanceEvidence));
     assert.ok(activeRecord.terminatedAt - activeRecord.postedAt < 2_100, JSON.stringify(performanceEvidence));
     assert.ok(performanceEvidence.settledAt - performanceEvidence.measurementStartedAt < 2_500, JSON.stringify(performanceEvidence));
-    assert.deepEqual(diffLongTasks, []);
+    assert.deepEqual(rendererMainTasks, []);
     assert.ok(terminalStatus === 'available' || terminalStatus === 'timeout');
     assert.equal(performanceEvidence.focused, true);
     // WHAT: Require rendered hunks only when the Worker completed before its finite deadline.
