@@ -73,3 +73,33 @@ export function removeAcknowledgedExecutionIntent(intents, detail) {
   }
   return false;
 }
+
+export function removeRejectedExecutionIntent(intents, detail) {
+  const rejectedRequestId = String(detail?.requestId ?? '');
+  // WHAT: Search every live intent for the exact rejected client request.
+  // WHY: Intent storage is keyed by task identity while rejection is keyed by request identity.
+  for (const [identity, intent] of intents) {
+    // WHAT: Remove only the optimistic execution owned by the rejected client request.
+    // WHY: Concurrent launches must retain their independently admitted preparing state.
+    if (intent.requestId !== rejectedRequestId) continue;
+    intents.delete(identity);
+    return true;
+  }
+  return false;
+}
+
+export function materializePendingExecutionIntents(pendingDetails, intents, projection) {
+  let materialized = 0;
+  // WHAT: Resolve every retained cold-route request against the newly authoritative task projection.
+  // WHY: A single Control Room hydration can materialize multiple independently launched requests.
+  for (const [requestId, detail] of pendingDetails) {
+    const task = controlRoomTaskForExecution(projection, detail);
+    // WHAT: Retain unmatched cold-route requests for a later authoritative projection.
+    // WHY: Replication may not expose the requested task in the first Control Room response.
+    if (!task) continue;
+    intents.set(taskIdentity(task), createOptimisticExecutionIntent(task, detail));
+    pendingDetails.delete(requestId);
+    materialized += 1;
+  }
+  return materialized;
+}
