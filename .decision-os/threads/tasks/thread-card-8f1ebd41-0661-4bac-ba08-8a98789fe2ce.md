@@ -90,3 +90,8 @@ The task-group completeness audit repaired severity aggregation, deterministic f
 <!-- decision-os:note {"id":"note-agent-1785502700000-voice-conflict","timestamp":"2026-07-31T12:58:20.000Z"} -->
 
 The voice acceptance conflict is repaired at the shared task transaction boundary. Lossless superset heads reconcile causally; same-note divergence remains explicit. Backend typecheck and all 673 backend tests pass.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785504300000-library-resume","timestamp":"2026-07-31T13:25:00.000Z"} -->
+
+Federated library recovery is now idempotent when synchronization resolves its own incident before the generic resume layer settles.
