@@ -233,7 +233,7 @@ function renderPresentationEvent(
   subagentExecution: TaskExecutionStateItem | null = null,
 ): HTMLElement {
   const startDisclosure = event.kind === 'run_status'
-    && (event.title === 'User prompt' || event.title === 'Thread started' || event.title === 'Turn started');
+    && (event.title === 'Thread started' || event.title === 'Turn started');
   const article = document.createElement(startDisclosure ? 'details' : 'article');
   article.className = `codex-log-event is-${event.kind} is-${event.severity}`;
   if (startDisclosure) article.classList.add('is-start-disclosure');
