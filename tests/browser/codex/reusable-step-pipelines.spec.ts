@@ -13,6 +13,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type Locator, type Page, type Route } from '@playwright/test';
 import { assertFrontendSpec } from '../../../frontend/src/test/spec-assertions.js';
+import { installPipelinePromptFixture } from '../../../backend/test/support/pipeline-prompt-fixture.js';
 
 type BrowserFixture = {
   workspace: string;
@@ -514,6 +515,7 @@ async function createPipelineAndSkillDefaults(page: Page): Promise<void> {
   await openStep.getByLabel('Step purpose', { exact: true }).fill('Override the library defaults.');
   await openStep.getByRole('button', { name: 'Add skill', exact: true }).click();
   await skillPicker.waitFor({ state: 'visible' });
+  await skillPicker.locator(`[data-codex-focus-key="picker-skill:${skillName}"]`).click();
   await skillPicker.getByRole('button', { name: 'Add skill', exact: true }).click();
   await skillPicker.waitFor({ state: 'hidden' });
   openStep = editor.locator('.pipeline-step-card.is-open');
@@ -817,6 +819,7 @@ function createFixture(options: { extraSkillCount?: number } = {}): BrowserFixtu
   }
   writeFileSync(fakeCodexFile, fakeCodexSource({ launchFile, counterFile }), 'utf8');
   chmodSync(fakeCodexFile, 0o755);
+  installPipelinePromptFixture({ workspace, decisionOsRoot, commit: false });
   execFileSync('git', ['init', '-q'], { cwd: workspace });
   execFileSync('git', ['config', 'user.name', 'Decision OS Test'], { cwd: workspace });
   execFileSync('git', ['config', 'user.email', 'test@decision-os.invalid'], { cwd: workspace });
@@ -833,7 +836,8 @@ function fakeCodexSource(input: { launchFile: string; counterFile: string }): st
     'let prompt = "";',
     'process.stdin.on("data", (chunk) => { prompt += String(chunk); });',
     'process.stdin.on("end", async () => {',
-    '  const step = prompt.match(/^Active step title: (.+)$/m)?.[1]?.trim() || "unknown";',
+    '  const promptSurface = [prompt, ...args].join("\\n").replaceAll("\\\\n", "\\n");',
+    '  const step = promptSurface.match(/^Active step title: (.+)$/m)?.[1]?.trim() || "unknown";',
     '  const outputFile = prompt.match(/^Write the final result to this Markdown file: (.+)$/m)?.[1]?.trim() || "";',
     `  const counts = existsSync(${JSON.stringify(input.counterFile)}) ? JSON.parse(readFileSync(${JSON.stringify(input.counterFile)}, "utf8")) : {};`,
     '  counts[step] = Number(counts[step] || 0) + 1;',

@@ -14,6 +14,7 @@ export const testSystemPrompt = [
 export const testPipelineSkillPrompt = [
   '$<SKILL_NAME>',
   'Ledger file: <LEDGER_FILE>',
+  'Active step title: <STEP_TITLE>',
   'Current skill: <SKILL_NAME>',
   '<SERVER_SKILL_CONTEXT>',
   'Write the final result to this Markdown file: <OUTPUT_MARKDOWN_FILE>',
