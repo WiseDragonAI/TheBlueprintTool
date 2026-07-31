@@ -130,11 +130,11 @@ test('returns one exact snapshot with typed todos and no raw tool result bytes',
     assert.ok(serialized.length < 10_000);
     assert.deepEqual(result.presentation.events, [
       {
-        id: 'run_status:user-prompt',
+        id: 'run_status:event-8e7dbb6d1688139f',
         kind: 'run_status',
-        title: 'User prompt',
+        title: 'Thread started',
         status: 'running',
-        text: userPrompt,
+        text: 'Codex thread started.',
         severity: 'info',
       },
       {
