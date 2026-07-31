@@ -443,6 +443,8 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
   let releaseSuccessfulAdmission: (() => void) | undefined;
   let releaseRejectedAdmission: (() => void) | undefined;
   try {
+    // WHAT: Exercise success, rejection, and timeout through one served responsive browser lifecycle.
+    // WHY: The optimistic contract requires pre-settlement UI evidence plus authoritative reconciliation.
     browser = await chromium.launch({
       headless: true,
       // WHAT: Use the platform-authoritative Chromium binary when it is installed.
@@ -533,6 +535,8 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
     await timedOut.locator('#mutation-error:not([hidden])').waitFor({ state: 'visible' });
     assert.equal(await timedOut.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).count(), 0);
   } finally {
+    // WHAT: Release deferred admissions and close every browser resource after each outcome.
+    // WHY: A failed assertion must not leave fixture promises or Chromium processes unsettled.
     releaseSuccessfulAdmission?.();
     releaseRejectedAdmission?.();
     await browser?.close();
@@ -549,7 +553,9 @@ test('Master-task completion exposes manual and configured pipeline actions at d
       executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
-    const route = await resolveMasterTaskRoute(server.url);
+    const project = await resolveCurrentProject(server.url);
+    const masterTaskFixture = localResponsiveCardFixture(project.id);
+    const route = masterTaskFixture.route;
     const settingsPayload = JSON.stringify({
       ok: true,
       maxConcurrentCodexProcesses: 1,
@@ -560,6 +566,7 @@ test('Master-task completion exposes manual and configured pipeline actions at d
 
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     let pipelineRequest: Record<string, unknown> | undefined;
+    await installMasterTaskCardFixture(desktop, masterTaskFixture.task);
     await desktop.route('**/api/settings/codex-processes', (request) => request.fulfill({ status: 200, contentType: 'application/json', body: settingsPayload }));
     await desktop.route('**/api/codex/pipelines/runs', async (request) => {
       pipelineRequest = request.request().postDataJSON() as Record<string, unknown>;
@@ -579,6 +586,7 @@ test('Master-task completion exposes manual and configured pipeline actions at d
     assert.equal(typeof pipelineRequest?.sourceCardId, 'string');
 
     const unconfigured = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    await installMasterTaskCardFixture(unconfigured, masterTaskFixture.task);
     await unconfigured.route('**/api/settings/codex-processes', (request) => request.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -592,6 +600,7 @@ test('Master-task completion exposes manual and configured pipeline actions at d
 
     const rejected = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     let rejectedLedgerMutation = false;
+    await installMasterTaskCardFixture(rejected, masterTaskFixture.task);
     await rejected.route('**/api/settings/codex-processes', (request) => request.fulfill({ status: 200, contentType: 'application/json', body: settingsPayload }));
     await rejected.route('**/api/codex/pipelines/runs', (request) => request.fulfill({
       status: 400,
@@ -616,6 +625,7 @@ test('Master-task completion exposes manual and configured pipeline actions at d
     let observeManualRequest!: () => void;
     const manualRequestGate = new Promise<void>((resolveGate) => { releaseManualRequest = resolveGate; });
     const manualRequestObserved = new Promise<void>((resolveObserved) => { observeManualRequest = resolveObserved; });
+    await installMasterTaskCardFixture(mobile, masterTaskFixture.task);
     await mobile.route('**/api/settings/codex-processes', (request) => request.fulfill({ status: 200, contentType: 'application/json', body: settingsPayload }));
     await mobile.route('**/decision-os/*', async (request) => {
       if (request.request().method() !== 'PATCH') return request.continue();
@@ -689,16 +699,56 @@ async function resolvePipelineLaunchFixture(serverUrl: string): Promise<{
   projection: PipelineLaunchProjection;
 }> {
   const project = await resolveCurrentProject(serverUrl);
-  const projection = await fetch(`${serverUrl}/api/control-room`).then((response) => response.json()) as PipelineLaunchProjection;
-  const queuedTask = projection.queue.find((task) => task.projectId === project.id && task.ledgerId && task.cardId);
-  const backlogTask = projection.backlog.find((task) => task.projectId === project.id && task.ledgerId && task.cardId);
-  const task = queuedTask ?? backlogTask;
-  assert.ok(task, 'The browser fixture must expose one confirmed Queue or Backlog task for pipeline launch.');
-  // WHAT: Record the task's authoritative pre-launch placement for rejection reconciliation.
-  // WHY: The served assertion must prove that exact confirmed placement is restored.
-  const confirmedTab = queuedTask ? 'queue' : 'backlog';
-  const route = `/p/${encodeURIComponent(task.projectId)}/ledgers/${encodeURIComponent(task.ledgerId)}/zones/${encodeURIComponent(task.zoneId || 'ungrouped')}/cards/${encodeURIComponent(task.cardId)}`;
-  return { route, task, confirmedTab, projection };
+  const authoritativeProjection = await fetch(`${serverUrl}/api/control-room`).then((response) => response.json()) as PipelineLaunchProjection;
+  const fixture = localResponsiveCardFixture(project.id);
+  const task = {
+    ...fixture.task,
+    projectId: project.id,
+    projectName: project.name,
+    ownerNodeId: 'browser-fixture',
+    assignedNodeId: 'browser-fixture',
+    assignedNodeLabel: 'Browser fixture',
+    assignedNodeOnline: true,
+    assignment: { nodeId: 'browser-fixture', revision: 1 },
+    cardStatus: 'backlog',
+    lifecycle: { status: 'backlog' },
+    status: 'task-backlog',
+    labels: [],
+    diagnostics: [],
+    masterTask: true,
+    subtasks: [],
+    complete: 0,
+    valid: true,
+  };
+  // WHAT: Give the served browser one deterministic server-confirmed Backlog placement.
+  // WHY: A clean worktree intentionally has no mutable tasks ledger for /api/control-room to supply.
+  const projection = {
+    ...authoritativeProjection,
+    queue: [],
+    exec: [],
+    backlog: [task],
+    done: [],
+    allTasks: [task],
+  };
+  return { route: fixture.route, task, confirmedTab: 'backlog', projection };
+}
+
+async function installMasterTaskCardFixture(page: Page, task: PipelineLaunchTask): Promise<void> {
+  await page.route(`**/api/ledgers/${encodeURIComponent(task.ledgerId)}/cards/${encodeURIComponent(task.cardId)}`, async (route) => {
+    const response = await route.fetch();
+    const card = await response.json() as Record<string, unknown>;
+    await route.fulfill({
+      response,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...card,
+        status: 'todo',
+        lifecycle: { status: 'todo', waitingAt: '2026-07-31T00:00:00.000Z' },
+        assignment: { nodeId: 'browser-fixture', revision: 1 },
+        labels: ['master-task'],
+      }),
+    });
+  });
 }
 
 async function installFixturePipelineCatalog(page: Page): Promise<void> {
@@ -757,25 +807,51 @@ function executionProjection(projection: PipelineLaunchProjection, target: Pipel
   return next;
 }
 
-function localResponsiveCardRoute(): string {
+function localResponsiveCardFixture(projectId?: string): { route: string; task: PipelineLaunchTask } {
   const project = JSON.parse(readFileSync(resolve(repoRoot, '.decision-os/project.json'), 'utf8')) as { id?: string };
   const registry = JSON.parse(readFileSync(resolve(repoRoot, '.decision-os/state.json'), 'utf8')) as {
     ledgers?: Array<{ id?: string; ledgerFile?: string }>;
   };
   assert.ok(project.id, 'The browser fixture must expose a project identity.');
+  // WHAT: Prefer the catalog-resolved project identity while retaining the local helper fallback.
+  // WHY: Served worktree identities can differ from the committed project metadata used by static helpers.
+  const fixtureProjectId = projectId ?? project.id;
   for (const ledgerRef of registry.ledgers ?? []) {
+    // WHAT: Ignore incomplete registry entries that cannot address a card.
+    // WHY: Only a concrete ledger identity and file can produce a deterministic served route.
     if (!ledgerRef.id || !ledgerRef.ledgerFile) continue;
-    const ledger = JSON.parse(readFileSync(resolve(repoRoot, ledgerRef.ledgerFile), 'utf8')) as {
+    const ledgerFile = resolve(repoRoot, ledgerRef.ledgerFile);
+    // WHAT: Skip runtime-owned ledgers that are intentionally absent from a clean worktree.
+    // WHY: Browser fixtures must rely only on committed workspace content.
+    if (!existsSync(ledgerFile)) continue;
+    const ledger = JSON.parse(readFileSync(ledgerFile, 'utf8')) as {
       annotations?: Array<{ id?: string; variant?: string; color?: string }>;
-      cards?: Array<{ id?: string }>;
+      cards?: Array<{ id?: string; title?: string }>;
       threadFiles?: Record<string, string>;
     };
     const zone = ledger.annotations?.find((candidate) => candidate.id && candidate.variant !== 'group' && typeof candidate.color === 'string');
     const card = ledger.cards?.find((candidate) => candidate.id && ledger.threadFiles?.[`thread-${candidate.id}`]);
+    // WHAT: Continue until one committed zone, card, and thread form a complete route fixture.
+    // WHY: The card view must hydrate normally before the mocked Control Room projection is exercised.
     if (!zone?.id || !card?.id) continue;
-    return `/p/${encodeURIComponent(project.id)}/ledgers/${encodeURIComponent(ledgerRef.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`;
+    return {
+      route: `/p/${encodeURIComponent(fixtureProjectId)}/ledgers/${encodeURIComponent(ledgerRef.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`,
+      task: {
+        projectId: fixtureProjectId,
+        ledgerId: ledgerRef.id,
+        cardId: card.id,
+        zoneId: zone.id,
+        // WHAT: Use the stable card identity when committed fixture content has no authored title.
+        // WHY: Every rendered Control Room task requires a non-empty deterministic label.
+        title: card.title || card.id,
+      },
+    };
   }
   assert.fail('The browser fixture must expose one local card, zone, and thread.');
+}
+
+function localResponsiveCardRoute(): string {
+  return localResponsiveCardFixture().route;
 }
 
 async function resolveCurrentProject(serverUrl: string): Promise<{ id: string; name: string }> {
@@ -785,24 +861,6 @@ async function resolveCurrentProject(serverUrl: string): Promise<{ id: string; n
   const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
   assert.ok(project, 'The test workspace must be registered in its project catalog.');
   return project;
-}
-
-async function resolveMasterTaskRoute(serverUrl: string): Promise<string> {
-  const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
-    projects?: Array<{ id: string; root: string; ledgers?: Array<{ id: string }> }>;
-  };
-  const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
-  assert.ok(project, 'The test workspace must be registered in its project catalog.');
-  for (const ledger of project.ledgers ?? []) {
-    const canvas = await fetch(`${serverUrl}/p/${encodeURIComponent(project.id)}/api/ledgers/${encodeURIComponent(ledger.id)}/canvas`).then((response) => response.json()) as {
-      annotations?: Array<{ id?: string; variant?: string; color?: string }>;
-      cards?: Array<{ id?: string; status?: string; labels?: string[] }>;
-    };
-    const zone = canvas.annotations?.find((candidate) => candidate.id && candidate.variant !== 'group' && typeof candidate.color === 'string');
-    const card = canvas.cards?.find((candidate) => candidate.id && candidate.status !== 'done' && candidate.labels?.includes('master-task'));
-    if (zone?.id && card?.id) return `/p/${encodeURIComponent(project.id)}/ledgers/${encodeURIComponent(ledger.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`;
-  }
-  assert.fail('The test workspace must expose one open master task and one zone.');
 }
 
 function collectPageErrors(page: Page): string[] {

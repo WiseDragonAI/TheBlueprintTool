@@ -48,7 +48,7 @@ test('mobile processing guards duplicate submissions and delegates status to the
 });
 
 test('responsive pipelines hand off before admission while direct skills retain settled navigation', () => {
-  assert.match(script, /function finishProcessLaunch\(detail, launch, handoffComplete = false\)/);
+  assert.match(script, /function finishProcessLaunch\(detail, launch, \{ handoffComplete = false \} = \{\}\)/);
   assert.match(script, /const actionOwned = processLaunchOwned\(launch\)/);
   assert.match(script, /const requestId = createExecutionRequestId\('(skill|pipeline)'\)/);
   assert.match(script, /decision-os:codex-run-preparing/);

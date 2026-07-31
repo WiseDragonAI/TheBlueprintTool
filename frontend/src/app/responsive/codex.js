@@ -420,12 +420,16 @@ async function startPipeline(pipeline) {
   const admissionDeadline = window.setTimeout(() => admissionController.abort(), PIPELINE_ADMISSION_TIMEOUT_MS);
   try {
     const body = await jsonRequest('/api/codex/pipelines/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ledgerId: launch.ledgerId, sourceCardId: launch.cardId, pipelineId: pipeline.id, requestId }), signal: admissionController.signal }, launch.projectId);
-    finishProcessLaunch({ ...executionDetail, clientRequestId: executionDetail.requestId, ...(body.receipts?.[0] ?? {}), pipelineRunId: body.run?.id || '', queuePosition: body.queuePosition }, launch, true);
+    finishProcessLaunch({ ...executionDetail, clientRequestId: executionDetail.requestId, ...(body.receipts?.[0] ?? {}), pipelineRunId: body.run?.id || '', queuePosition: body.queuePosition }, launch, { handoffComplete: true });
   } catch (error) {
+    // WHAT: Reconcile the exact optimistic pipeline request through the shared rejection event.
+    // WHY: HTTP rejection and admission timeout must restore the same server-confirmed task placement.
     const launchError = pipelineAdmissionError(error, admissionController.signal.aborted);
     window.dispatchEvent(new CustomEvent('decision-os:codex-run-rejected', { detail: { ...executionDetail, error: formatProcessLaunchError(launchError) } }));
     message('.process-detail-message', formatProcessLaunchError(launchError), true); setBusy(submit, false);
   } finally {
+    // WHAT: Retire the admission deadline after every settled request path.
+    // WHY: A stale timer must not abort or retain resources after admission has already settled.
     window.clearTimeout(admissionDeadline);
   }
 }
@@ -438,7 +442,7 @@ function handoffProcessLaunch(detail, launch, actionOwned = processLaunchOwned(l
   }
   window.dispatchEvent(new CustomEvent('decision-os:codex-run-handoff', { detail: { ...detail, ...launch, actionOwned } }));
 }
-function finishProcessLaunch(detail, launch, handoffComplete = false) {
+function finishProcessLaunch(detail, launch, { handoffComplete = false } = {}) {
   const actionOwned = processLaunchOwned(launch);
   // WHAT: Preserve settled-admission handoff for direct skills while pipelines hand off before admission settles.
   // WHY: Only Process Card pipelines have an admitted optimistic navigation boundary.
