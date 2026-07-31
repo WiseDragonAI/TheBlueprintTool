@@ -25,6 +25,7 @@ test('discovers opt-in telemetry and batches global traces over one same-origin 
     value: async () => ({ ok: true, json: async () => ({ enabled: true, endpoint: '/api/diagnostics/frontend-telemetry' }) }),
   });
   const transport = await import('../../../src/runtime/telemetry/effect/frontend-telemetry-websocket.js');
+  transport.enqueueFrontendTelemetry({ name: 'task-entry-before-config', at: '2026-07-31T14:59:59.000Z', args: { threadId: 'thread-a' } });
   await transport.installFrontendTelemetryWebSocket();
   transport.enqueueFrontendTelemetry({ name: 'codex-log-refresh-started', at: '2026-07-31T15:00:00.000Z', args: { generation: 4 } });
   transport.enqueueFrontendTelemetry({
@@ -37,10 +38,11 @@ test('discovers opt-in telemetry and batches global traces over one same-origin 
   assert.equal(String(sockets[0]?.url), 'ws://127.0.0.1:50150/api/diagnostics/frontend-telemetry');
   assert.equal(sent.length, 1);
   const batch = JSON.parse(sent[0] ?? '[]') as Array<Record<string, unknown>>;
-  assert.equal(batch.length, 2);
+  assert.equal(batch.length, 3);
   assert.equal(batch[0]?.route, '/p/project/ledgers/tasks?thread=open');
-  assert.equal(batch[1]?.name, 'codex-log-refresh-failed');
-  assert.deepEqual(batch[1]?.args, { error: 'projection failed', token: '[redacted]', markdown: '[redacted]' });
-  assert.equal(batch[0]?.browserSessionId, batch[1]?.browserSessionId);
+  assert.equal(batch[0]?.name, 'task-entry-before-config');
+  assert.equal(batch[2]?.name, 'codex-log-refresh-failed');
+  assert.deepEqual(batch[2]?.args, { error: 'projection failed', token: '[redacted]', markdown: '[redacted]' });
+  assert.equal(batch[0]?.browserSessionId, batch[2]?.browserSessionId);
   transport.closeFrontendTelemetryWebSocket();
 });

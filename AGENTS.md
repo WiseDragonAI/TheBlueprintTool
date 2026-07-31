@@ -312,6 +312,22 @@ node bin/decision-os-verify.mjs -- <command> [args...]
 - Passing check: do not repeat after docs-only edits.
 - On mobile, test and typecheck commands must use no more than `3`-way parallelism.
 
+### Frontend Commands From An Iteration Worktree
+
+Run these commands from the iteration worktree root, where `bin/decision-os-verify.mjs` and `frontend/package.json` are both present:
+
+```bash
+node bin/decision-os-verify.mjs -- npm --prefix frontend test -- --test-concurrency=1
+node bin/decision-os-verify.mjs -- npm --prefix frontend run typecheck
+node bin/decision-os-verify.mjs -- env --chdir=frontend TSX_TSCONFIG_PATH=tsconfig.json node --test --test-concurrency=1 --import tsx test/<focused-test-file>.test.ts
+```
+
+- Use the package-owned test command so `TSX_TSCONFIG_PATH=tsconfig.json` resolves relative to `frontend/` and frontend path aliases remain valid.
+- Keep the complete frontend suite at `--test-concurrency=1`; its integration files mutate shared browser globals and higher concurrency creates cross-file interference while increasing workstation load.
+- Do not invoke the complete frontend suite as direct `node --test` from the worktree root. That changes the expected package cwd and can leave failed test children holding the verification lease.
+- Do not set `--test-concurrency` through `NODE_OPTIONS`; Node rejects that option there.
+- If an interrupted verification appears stuck, inspect it read-only with `node bin/decision-os-workload-status.mjs`. Terminate only the exact agent-owned failed process group before starting another verification.
+
 ## Card Image Assets
 
 Markdown image assets can be referenced from the active workspace `.decision-os` directory:
