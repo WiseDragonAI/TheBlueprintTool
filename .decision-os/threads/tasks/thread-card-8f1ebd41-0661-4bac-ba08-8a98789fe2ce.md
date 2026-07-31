@@ -85,3 +85,8 @@ The task-group completeness audit repaired severity aggregation, deterministic f
 ---
 
 **The complete repository gate and exact diff review** were `passed`, and the **controller decision** is to `queue` `implementation-commit` at `medium` effort for the scoped direct-`dev` commit set while preserving unrelated state.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1785502700000-voice-conflict","timestamp":"2026-07-31T12:58:20.000Z"} -->
+
+The voice acceptance conflict is repaired at the shared task transaction boundary. Lossless superset heads reconcile causally; same-note divergence remains explicit. Backend typecheck and all 673 backend tests pass.
