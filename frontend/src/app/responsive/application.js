@@ -47,6 +47,7 @@ import {
   requestSkillLibraryEditorClose,
 } from '/src/runtime/codex/effect/render-skill-library-editor-modal.js';
 import { loadRuntimeDiagnostics, projectRuntimeRows } from './runtime-status.js';
+import { taskClockFromResponse } from '/src/runtime/refresh/helper/task-causal-clock.js';
 
 installProjectRequestScope();
 
@@ -148,6 +149,7 @@ let presentedCardIdentity = '';
 let routeLoadGeneration = 0;
 let routeLoadController = null;
 let masterSubtaskExecutionController = null;
+let activeResponsiveTaskClock = null;
 let codexSettingsRequest = null;
 const optimisticExecutionIntents = new Map();
 const pendingOptimisticExecutionDetails = new Map();
@@ -898,7 +900,7 @@ async function createCard(name, description) {
       if (location.pathname === new URL(destination, location.origin).pathname) navigate(previousPath, true);
     },
   });
-  syncMobileThreadContext({ projectId: state.resourceProjectId, replicaNodeId: currentRouteSnapshot().replicaNodeId, ledgerId: state.activeLedgerId, ledger: state.ledger, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
+  syncMobileThreadContext({ projectId: state.resourceProjectId, replicaNodeId: currentRouteSnapshot().replicaNodeId, ledgerId: state.activeLedgerId, ledger: state.ledger, ledgers: state.ledgers, onCodexStarted: activateMasterTask, localProjection: true });
   navigate(destination);
   if (!await committed) throw new Error('Card creation failed and was restored.');
 }
@@ -2322,7 +2324,8 @@ async function createTaskIntake(projectId, assignedNodeId, replicaNodeId = assig
     ledger,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
-    onQuickVoiceSubmitted: navigateVoiceSubmission
+    onQuickVoiceSubmitted: navigateVoiceSubmission,
+    localProjection: true
   });
   navigate(replicaAddress(cardPathForProject(projectId, ledgerRef.id, zone.id, cardId), replicaNodeId));
   void ledgerMutation(ledgerRef.id, { action: 'create-task-intake', assignedNodeId, annotation: zone, card }, projectId, replicaNodeId).then(() => {
@@ -3076,6 +3079,7 @@ async function loadLedger(ledgerId, owner) {
   requireRouteOwnership(owner);
   if (!ledger || !Array.isArray(ledger.cards)) throw new Error('The ledger response does not contain a card list.');
   state.activeLedgerId = ledgerId;
+  activeResponsiveTaskClock = taskClockFromResponse(response);
   const ledgerScope = responsiveLedgerScope({ projectId: owner.route.projectId, replicaNodeId: owner.route.replicaNodeId, ledgerId });
   state.ledger = responsiveLedgerTransactions.reconcile(responsiveLedgerScopeKey(ledgerScope), ledger);
   renderLedgerLinks();
@@ -3086,7 +3090,8 @@ async function loadLedger(ledgerId, owner) {
     ledger: state.ledger,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
-    onQuickVoiceSubmitted: navigateVoiceSubmission
+    onQuickVoiceSubmitted: navigateVoiceSubmission,
+    taskClock: activeResponsiveTaskClock
   });
 }
 
@@ -3264,7 +3269,8 @@ async function loadRoute({ retainView = false } = {}) {
           ledger: state.ledger,
           ledgers: state.ledgers,
           onCodexStarted: activateMasterTask,
-          onQuickVoiceSubmitted: navigateVoiceSubmission
+          onQuickVoiceSubmitted: navigateVoiceSubmission,
+          taskClock: activeResponsiveTaskClock
         });
         renderCard(card);
         const query = new URLSearchParams(owner.route.search);
