@@ -25,19 +25,43 @@
 .runtime-status-block-header p { margin: 0; }
 .runtime-status-block-header h2 { font-size: 17px; }
 .runtime-status-block-header p { color: var(--muted); font-size: 12px; }
-.runtime-project-list,
-.runtime-incident-list { display: grid; gap: 8px; }
+.runtime-project-list { display: grid; gap: 8px; min-width: 0; }
 .runtime-project-row {
   --project-color: var(--accent);
+  overflow: hidden;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-deep);
+}
+.runtime-project-summary {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-columns: 16px 10px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   min-height: 66px;
   padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel-deep);
+  cursor: pointer;
+  list-style: none;
+}
+.runtime-project-summary::-webkit-details-marker { display: none; }
+.runtime-project-summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-block: 5px solid transparent;
+  border-inline-start: 7px solid var(--muted);
+  transform-origin: 35% 50%;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+.runtime-project-row[open] > .runtime-project-summary::before {
+  border-inline-start-color: var(--text);
+  transform: rotate(90deg);
+}
+.runtime-project-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: calc(var(--radius) - 1px);
 }
 .runtime-project-mark {
   width: 8px;
@@ -62,13 +86,21 @@
   letter-spacing: .06em;
   text-transform: uppercase;
 }
-.runtime-project-row[data-status="available"] .runtime-status-badge { color: #53e08a; }
-.runtime-project-row[data-status="paused"] .runtime-status-badge,
-.runtime-incident-card[data-interrupting="true"] .runtime-status-badge { color: var(--danger); }
-.runtime-project-row[data-status="unavailable"] .runtime-status-badge { color: #ffbd57; }
+.runtime-project-row[data-status="available"] .runtime-project-availability { color: #53e08a; }
+.runtime-project-row[data-status="paused"] .runtime-project-availability { color: var(--danger); }
+.runtime-project-row[data-status="unavailable"] .runtime-project-availability { color: #ffbd57; }
+.runtime-project-incidents {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px 14px 52px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel), transparent 35%);
+}
 .runtime-incident-card {
   display: grid;
   gap: 11px;
+  min-width: 0;
   padding: 14px;
   border: 1px solid var(--line);
   border-inline-start: 3px solid #ffbd57;
@@ -76,15 +108,27 @@
   background: var(--panel-deep);
 }
 .runtime-incident-card[data-interrupting="true"] { border-inline-start-color: var(--danger); }
+.runtime-incident-card[data-severity="fatal"] { border-inline-start-color: var(--danger); }
 .runtime-incident-heading {
   display: flex;
   align-items: start;
   justify-content: space-between;
   gap: 14px;
 }
-.runtime-incident-heading div { display: grid; gap: 5px; min-width: 0; }
+.runtime-incident-heading > div:first-child { display: grid; gap: 5px; min-width: 0; }
 .runtime-incident-heading code { color: var(--text); font-weight: 800; overflow-wrap: anywhere; }
 .runtime-incident-heading small { color: var(--muted); }
+.runtime-incident-labels {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 6px;
+}
+.runtime-incident-card[data-severity="fatal"] [data-kind="severity"],
+.runtime-incident-card[data-interrupting="true"] [data-kind="interruption"] { color: var(--danger); }
+.runtime-incident-card[data-severity="warning"] [data-kind="severity"] { color: #ffbd57; }
+.runtime-incident-card[data-severity="error"] [data-kind="severity"] { color: #ff8a66; }
 .runtime-incident-message { margin: 0; color: var(--text); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
 .runtime-incident-scopes {
   border-top: 1px solid var(--line);
@@ -103,6 +147,8 @@
   .runtime-status-block { padding: 14px; }
   .runtime-status-block-header,
   .runtime-incident-heading { align-items: stretch; flex-direction: column; }
-  .runtime-project-row { grid-template-columns: 8px minmax(0, 1fr); }
-  .runtime-project-row .runtime-status-badge { grid-column: 2; justify-self: start; }
+  .runtime-project-summary { grid-template-columns: 14px 8px minmax(0, 1fr); gap: 9px; padding: 12px; }
+  .runtime-project-summary .runtime-status-badge { grid-column: 3; justify-self: start; }
+  .runtime-project-incidents { padding: 10px 10px 12px 40px; }
+  .runtime-incident-labels { justify-content: start; }
 }

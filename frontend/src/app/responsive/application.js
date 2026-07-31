@@ -43,7 +43,7 @@ import {
   openSkillLibraryEditor,
   requestSkillLibraryEditorClose,
 } from '/src/runtime/codex/effect/render-skill-library-editor-modal.js';
-import { groupedActiveIncidents, loadRuntimeDiagnostics, projectRuntimeRows } from './runtime-status.js';
+import { loadRuntimeDiagnostics, projectRuntimeRows } from './runtime-status.js';
 
 installProjectRequestScope();
 
@@ -75,7 +75,6 @@ const elements = Object.fromEntries([
   'project-name', 'ledger-links', 'loading-view', 'error-view', 'error-message', 'empty-view',
   'projects-view', 'projects-summary', 'project-list', 'project-detail-view', 'project-detail-name', 'project-detail-description', 'settings-view',
   'runtime-status-view', 'runtime-status-summary', 'runtime-project-status-summary', 'runtime-project-list',
-  'runtime-incident-status-summary', 'runtime-incident-list',
   'project-detail-color', 'project-detail-status', 'project-detail-path',
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
@@ -963,19 +962,23 @@ function formatObservedAt(value) {
 }
 
 function renderRuntimeStatus(diagnostics) {
-  const projects = projectRuntimeRows(state.projects, diagnostics);
-  const incidents = groupedActiveIncidents(diagnostics);
+  const rows = projectRuntimeRows(state.projects, diagnostics);
+  const projects = rows.filter((row) => row.kind === 'project');
   const pausedProjects = projects.filter((project) => project.status === 'paused').length;
   const unavailableProjects = projects.filter((project) => project.status === 'unavailable').length;
   elements['runtime-status-summary'].textContent = `${diagnostics?.status === 'ready' ? 'Ready' : 'Degraded'} · observed ${formatObservedAt(diagnostics?.observedAt)}`;
   elements['runtime-project-status-summary'].textContent = pausedProjects > 0 || unavailableProjects > 0
     ? `${pausedProjects} paused · ${unavailableProjects} unavailable`
     : `${projects.length} available`;
-  elements['runtime-project-list'].replaceChildren(...projects.map((project) => {
-    const row = document.createElement('article');
+  elements['runtime-project-list'].replaceChildren(...rows.map((project) => {
+    const row = document.createElement('details');
     row.className = 'runtime-project-row';
     row.dataset.status = project.status;
+    row.dataset.projectId = project.id;
     row.style.setProperty('--project-color', project.color);
+    row.open = project.incidents.length > 0;
+    const summary = document.createElement('summary');
+    summary.className = 'runtime-project-summary';
     const mark = Object.assign(document.createElement('span'), { className: 'runtime-project-mark' });
     mark.setAttribute('aria-hidden', 'true');
     const copy = Object.assign(document.createElement('div'), { className: 'runtime-project-copy' });
@@ -983,48 +986,58 @@ function renderRuntimeStatus(diagnostics) {
       Object.assign(document.createElement('strong'), { textContent: project.name }),
       Object.assign(document.createElement('small'), { textContent: project.detail }),
     );
-    const badge = Object.assign(document.createElement('span'), { className: 'runtime-status-badge', textContent: project.label });
-    row.append(mark, copy, badge);
+    const badge = Object.assign(document.createElement('span'), { className: 'runtime-status-badge runtime-project-availability', textContent: project.label });
+    summary.append(mark, copy, badge);
+    const incidentList = Object.assign(document.createElement('div'), { className: 'runtime-project-incidents' });
+    incidentList.setAttribute('aria-label', `${project.name} active incidents`);
+    incidentList.append(...project.incidents.map((incident) => {
+      const card = document.createElement('article');
+      card.className = 'runtime-incident-card';
+      card.dataset.interrupting = String(incident.interrupting);
+      card.dataset.severity = incident.severity;
+      const heading = Object.assign(document.createElement('header'), { className: 'runtime-incident-heading' });
+      const incidentCopy = document.createElement('div');
+      incidentCopy.append(
+        Object.assign(document.createElement('code'), { textContent: incident.code }),
+        Object.assign(document.createElement('small'), {
+          textContent: `${incident.components.join(', ') || 'runtime'} · ${incident.occurrences} occurrence${incident.occurrences === 1 ? '' : 's'} · last ${formatObservedAt(incident.lastObservedAt)}`,
+        }),
+      );
+      const labels = Object.assign(document.createElement('div'), { className: 'runtime-incident-labels' });
+      const severity = Object.assign(document.createElement('span'), {
+        className: 'runtime-status-badge',
+        textContent: incident.severity,
+      });
+      severity.dataset.kind = 'severity';
+      const interruption = Object.assign(document.createElement('span'), {
+        className: 'runtime-status-badge',
+        textContent: incident.interrupting ? 'Interruption' : 'Active',
+      });
+      interruption.dataset.kind = 'interruption';
+      labels.append(severity, interruption);
+      heading.append(incidentCopy, labels);
+      const scopes = Object.assign(document.createElement('details'), { className: 'runtime-incident-scopes' });
+      const scopesSummary = document.createElement('summary');
+      scopesSummary.textContent = `${incident.scopes.length} affected scope${incident.scopes.length === 1 ? '' : 's'}`;
+      const list = document.createElement('ul');
+      // WHAT: Render each retained affected scope inside its incident card.
+      // WHY: Operators need the complete owner-scoped evidence rather than only the aggregate count.
+      for (const scope of incident.scopes) {
+        const item = document.createElement('li');
+        item.append(Object.assign(document.createElement('code'), { textContent: scope }));
+        list.append(item);
+      }
+      scopes.append(scopesSummary, list);
+      card.append(heading, Object.assign(document.createElement('p'), { className: 'runtime-incident-message', textContent: incident.message }), scopes);
+      return card;
+    }));
+    row.append(summary, incidentList);
     return row;
   }));
-  if (projects.length === 0) {
+  // WHAT: Render an explicit empty state only when neither catalog projects nor unowned active incidents produced a row.
+  // WHY: The conditional System row is meaningful status content even when the catalog is empty.
+  if (rows.length === 0) {
     elements['runtime-project-list'].append(Object.assign(document.createElement('p'), { className: 'runtime-status-empty', textContent: 'No projects discovered.' }));
-  }
-  const totalOccurrences = incidents.reduce((total, incident) => total + incident.occurrences, 0);
-  elements['runtime-incident-status-summary'].textContent = incidents.length === 0
-    ? 'No active incidents'
-    : `${incidents.length} grouped errors · ${totalOccurrences} occurrences`;
-  elements['runtime-incident-list'].replaceChildren(...incidents.map((incident) => {
-    const card = document.createElement('article');
-    card.className = 'runtime-incident-card';
-    card.dataset.interrupting = String(incident.interrupting);
-    const heading = Object.assign(document.createElement('header'), { className: 'runtime-incident-heading' });
-    const copy = document.createElement('div');
-    copy.append(
-      Object.assign(document.createElement('code'), { textContent: incident.code }),
-      Object.assign(document.createElement('small'), {
-        textContent: `${incident.components.join(', ') || 'runtime'} · ${incident.occurrences} occurrence${incident.occurrences === 1 ? '' : 's'} · last ${formatObservedAt(incident.lastObservedAt)}`,
-      }),
-    );
-    heading.append(copy, Object.assign(document.createElement('span'), {
-      className: 'runtime-status-badge',
-      textContent: incident.interrupting ? 'Interruption' : 'Error',
-    }));
-    const scopes = Object.assign(document.createElement('details'), { className: 'runtime-incident-scopes' });
-    const summary = document.createElement('summary');
-    summary.textContent = `${incident.scopes.length} affected scope${incident.scopes.length === 1 ? '' : 's'}`;
-    const list = document.createElement('ul');
-    for (const scope of incident.scopes) {
-      const item = document.createElement('li');
-      item.append(Object.assign(document.createElement('code'), { textContent: scope }));
-      list.append(item);
-    }
-    scopes.append(summary, list);
-    card.append(heading, Object.assign(document.createElement('p'), { className: 'runtime-incident-message', textContent: incident.message }), scopes);
-    return card;
-  }));
-  if (incidents.length === 0) {
-    elements['runtime-incident-list'].append(Object.assign(document.createElement('p'), { className: 'runtime-status-empty', textContent: 'No current interruptions or errors.' }));
   }
 }
 
