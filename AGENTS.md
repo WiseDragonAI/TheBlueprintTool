@@ -142,6 +142,33 @@ This checkout uses the local-only submodule source
 must use a local bare source repository that is available to the checkout;
 portable projects require a shared remote source instead.
 
+### Dev To Main Merge Tool
+
+Use the fixed merge tool for a local `dev` to `main` promotion:
+
+```bash
+cd /home/jbb/dev/EditorBP/decision-os
+node bin/decision-os-merge-dev.mjs --json
+```
+
+Run it only from the primary parent `main` checkout. The tool may automatically
+commit non-ignored state in main's `.decision-os` child, commit only that
+gitlink in parent `main`, merge the local `dev` ref with `--no-commit --no-ff`,
+restore main's `.decision-os` gitlink, and create the merge commit. It must never
+enter, update, commit, or reset `.worktrees/dev/.decision-os`, push a ref,
+resolve a conflict outside the exact `.decision-os` gitlink, or accept arbitrary
+Git strategy and dirty-state overrides.
+
+The parent index must be empty and parent dirt must be limited to the exact
+`.decision-os` marker before invocation. A non-submodule merge conflict is a
+rejection: resolve it through its owning implementation workflow, return both
+parent repositories to the admitted state, and run the tool again.
+
+Every invocation writes one local JSONL receipt under
+`.decision-os-merge-dev-logs/`. This directory is Git-ignored and must remain
+untracked. Review and clean logs according to
+[`documentation/procedure/deployment/merge-dev-into-main.md`](documentation/procedure/deployment/merge-dev-into-main.md); the tool never deletes logs automatically.
+
 ### Server Restart Ownership
 
 - **Do not restart or stop the server unless the operator explicitly asks.**

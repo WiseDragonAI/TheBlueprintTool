@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "bin": {
+    "decision-os-merge-dev": "./bin/decision-os-merge-dev.mjs",
     "decision-os-verify": "./bin/decision-os-verify.mjs",
     "decision-os-workload-status": "./bin/decision-os-workload-status.mjs",
     "decision-os-delivery": "./bin/decision-os-delivery.mjs",

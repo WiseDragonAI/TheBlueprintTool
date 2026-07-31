@@ -2,6 +2,8 @@
 
 Migrating existing workspaces: see [MIGRATE_RUNBOOK.md](documentation/procedure/deployment/MIGRATE_RUNBOOK.md).
 
+Merging local `dev` into `main` while preserving main-owned `.decision-os` state: see [merge-dev-into-main.md](documentation/procedure/deployment/merge-dev-into-main.md).
+
 decision-os is a browser canvas, a backend ledger server, and workspace-local `.decision-os` data.
 
 ## Run From Any Workspace CWD

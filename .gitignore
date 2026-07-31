@@ -35,3 +35,4 @@ backend/node_modules/
 frontend/dist/
 backend/dist/
 /.decision-os-release.json
+/.decision-os-merge-dev-logs/
