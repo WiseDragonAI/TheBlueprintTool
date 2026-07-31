@@ -252,6 +252,12 @@ test('card entry owns the desktop default once while same-card reconciliation pr
   assert.doesNotMatch(applicationSource, /await navigate\(cardPath\(ledgerRef\.id, zone\.id, cardId\)\);\n  openMobileThread/);
 });
 
+test('new task detail is installed when the navigation snapshot does not list it yet', () => {
+  assert.match(applicationSource, /import \{ upsertResponsiveRouteCard \} from '\.\/upsert-responsive-route-card\.js';/);
+  assert.match(applicationSource, /state\.ledger\.cards = upsertResponsiveRouteCard\(state\.ledger\.cards, card\);/);
+  assert.doesNotMatch(applicationSource, /state\.ledger\.cards = state\.ledger\.cards\.map\(\(entry\) => String\(entry\.id\) === requestedCard/);
+});
+
 test('mobile thread history and async refreshes are owned by the active presentation', () => {
   const refresh = source.match(/async function refreshThreadLedger\(optimisticRunId = ''\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   assert.match(source, /history\.pushState\(\{[\s\S]*responsiveThreadLayer: \{/);
