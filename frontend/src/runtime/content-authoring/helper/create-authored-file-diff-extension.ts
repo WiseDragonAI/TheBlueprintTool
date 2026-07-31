@@ -4,6 +4,10 @@
  */
 import { mapAuthoredFileDiff } from './map-authored-file-diff.js';
 import type { NormalizedAuthoredFileDiff } from './normalize-authored-file-diff.js';
+import {
+  ledgerMarkdownSourceRanges,
+  type LedgerMarkdownSelectionRange,
+} from './create-ledger-markdown-presentation-extension.js';
 
 type EffectValue = { identity: string; diff: NormalizedAuthoredFileDiff };
 type EffectType<T> = {
@@ -21,6 +25,7 @@ type CodeMirrorDiffModule = {
         changes: Parameters<typeof mapAuthoredFileDiff>[1];
         newDoc: { toString(): string };
         effects: Array<{ value: unknown; is(type: unknown): boolean }>;
+        state: { selection: { main: LedgerMarkdownSelectionRange } };
       }): T;
       provide(field: FieldType<T>): unknown;
     }): FieldType<T>;
@@ -100,19 +105,39 @@ export class AuthoredFileDeletionWidget {
   destroy(): void {}
 }
 
-function decorations(cm: CodeMirrorDiffModule, diff: NormalizedAuthoredFileDiff | null): unknown {
-  if (!diff) return cm.Decoration.set([]);
+type DiffPresentationState = {
+  diff: NormalizedAuthoredFileDiff | null;
+  selection: LedgerMarkdownSelectionRange;
+};
+
+function decorations(cm: CodeMirrorDiffModule, state: DiffPresentationState): unknown {
+  // WHAT: Render no raw Git decorations before an identity-bound snapshot is admitted.
+  // WHY: Canonical widgets must never infer change ownership.
+  if (!state.diff) return cm.Decoration.set([]);
+  const visibleRanges = ledgerMarkdownSourceRanges(state.diff.document, state.selection);
   const ranges: unknown[] = [];
-  for (const hunk of diff.hunks) {
+  for (const hunk of state.diff.hunks) {
     for (const addition of hunk.additions) {
-      if (addition.to > addition.from) {
-        ranges.push(cm.Decoration.mark({
-          class: 'cm-authored-addition',
-          attributes: { 'data-change': 'added', 'aria-label': 'Added Markdown' },
-        }).range(addition.from, addition.to));
+      for (const visible of visibleRanges) {
+        const from = Math.max(addition.from, visible.from);
+        const to = Math.min(addition.to, visible.to);
+        // WHAT: Project only the addition segment currently revealed as literal source.
+        // WHY: Inactive ranges are owned exclusively by canonical replacement widgets.
+        if (to > from) {
+          ranges.push(cm.Decoration.mark({
+            class: 'cm-authored-addition',
+            attributes: { 'data-change': 'added', 'aria-label': 'Added Markdown' },
+          }).range(from, to));
+        }
       }
     }
     for (const deletion of hunk.deletions) {
+      const sourceOwnsAnchor = visibleRanges.some((visible) => (
+        deletion.anchor >= visible.from && deletion.anchor <= visible.to
+      ));
+      // WHAT: Suppress raw deletion widgets outside the revealed source block.
+      // WHY: Canonical widgets already present those anchors and duplicate removals are false evidence.
+      if (!sourceOwnsAnchor) continue;
       // WHAT: Render each canonical deletion segment at its own source-ordered anchor.
       // WHY: Aggregating a hunk's removals changes their relationship to surviving Markdown.
       ranges.push(cm.Decoration.widget({
@@ -129,13 +154,19 @@ export function createAuthoredFileDiffExtension(cm: CodeMirrorDiffModule): {
   extension: unknown;
   installAuthoredFileDiffEffect: EffectType<EffectValue>;
   clearAuthoredFileDiffEffect: EffectType<string | null>;
+  readAuthoredFileDiff(state: {
+    field<T>(field: FieldType<T>, require?: boolean): T | undefined;
+  }): NormalizedAuthoredFileDiff | null;
 } {
   const installAuthoredFileDiffEffect = cm.StateEffect.define<EffectValue>();
   const clearAuthoredFileDiffEffect = cm.StateEffect.define<string | null>();
-  const field = cm.StateField.define<NormalizedAuthoredFileDiff | null>({
-    create: () => null,
+  const field = cm.StateField.define<DiffPresentationState>({
+    create: () => ({
+      diff: null,
+      selection: { from: 0, to: 0, head: 0, empty: true },
+    }),
     update: (value, transaction) => {
-      let next = value;
+      let next = value.diff;
       if (next && transaction.docChanged) {
         next = mapAuthoredFileDiff(next, transaction.changes, transaction.newDoc.toString());
       }
@@ -152,9 +183,9 @@ export function createAuthoredFileDiffExtension(cm: CodeMirrorDiffModule): {
           if (identity === null || next?.identity === identity) next = null;
         }
       }
-      return next;
+      return { diff: next, selection: transaction.state.selection.main };
     },
-    provide: (ownedField) => cm.EditorView.decorations.from<NormalizedAuthoredFileDiff | null>(
+    provide: (ownedField) => cm.EditorView.decorations.from<DiffPresentationState>(
       ownedField,
       (value) => decorations(cm, value),
     ),
@@ -163,5 +194,6 @@ export function createAuthoredFileDiffExtension(cm: CodeMirrorDiffModule): {
     extension: field,
     installAuthoredFileDiffEffect,
     clearAuthoredFileDiffEffect,
+    readAuthoredFileDiff: (state) => state.field<DiffPresentationState>(field, false)?.diff ?? null,
   };
 }

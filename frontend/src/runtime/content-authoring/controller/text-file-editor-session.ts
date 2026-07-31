@@ -8,7 +8,6 @@ import {
   type CodeMirrorFileEditor,
 } from '../../codex/component/codemirror-file-editor.js';
 import { deriveAuthoredFileDiff } from '../helper/derive-authored-file-diff.js';
-import { normalizeAuthoredFileDiff } from '../helper/normalize-authored-file-diff.js';
 import type { AuthoredFileRevisionSnapshot } from '../helper/authored-file-revision-snapshot.js';
 
 export type TextFileEditorRecovery = {
@@ -160,11 +159,11 @@ export async function createTextFileEditorSession(input: {
           || result.identity !== identity
           || editable.value() !== markdown
         ) return;
-        editable.installAuthoredFileDiff(normalizeAuthoredFileDiff({
+        editable.installAuthoredFileDiff({
           identity,
           document: markdown,
-          metadata: result.metadata,
-        }));
+          hunks: result.hunks,
+        });
         setDiffStatus('available');
       } catch (error) {
         // WHAT: Contain only the active non-cancellation failure as visible diff-unavailable state.

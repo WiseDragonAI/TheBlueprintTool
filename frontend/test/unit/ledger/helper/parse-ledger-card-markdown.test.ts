@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLedgerCardMarkdown } from '../../../../src/runtime/ledger/helper/parse-ledger-card-markdown.js';
-import { ledgerMarkdownSemanticRanges } from '../../../../src/runtime/content-authoring/helper/create-ledger-markdown-semantic-extension.js';
+import { ledgerMarkdownPresentationRecords } from '../../../../src/runtime/content-authoring/helper/create-ledger-markdown-presentation-extension.js';
 
 test('parse-ledger-card-markdown parses common card description markdown', () => {
   assert.deepEqual(parseLedgerCardMarkdown('## Heading\n**Props**: `mode`\n- first\n* second\n\n---\n\n| Name | Use |\n|---|---|\n| `Health` | **Current** value |\n\n```cpp\nUSTRUCT(BlueprintType)\nstruct FCreatureState\n{\n  GENERATED_BODY()\n};\n```'), [
@@ -186,7 +186,7 @@ test('parse-ledger-card-markdown retains original-byte spans without changing th
   );
 });
 
-test('editable semantic ranges come from canonical blocks including Decision OS directives', () => {
+test('inactive editor presentation records come from canonical blocks including Decision OS directives', () => {
   const markdown = [
     '## Heading',
     '',
@@ -195,11 +195,19 @@ test('editable semantic ranges come from canonical blocks including Decision OS 
     '::html[Preview](.decision-os/preview.html)',
     '::git-diff[Review](git-diff:?repo=.&path=README.md)',
     '::questions[Decision](questions:?id=gate)',
+    '',
+    'cursor',
   ].join('\n');
-  const ranges = ledgerMarkdownSemanticRanges(markdown);
+  const cursor = markdown.lastIndexOf('cursor') + 1;
+  const ranges = ledgerMarkdownPresentationRecords(markdown, {
+    from: cursor,
+    to: cursor,
+    head: cursor,
+    empty: true,
+  });
   assert.deepEqual(
-    ranges.filter((range) => ['heading', 'list', 'htmlEmbeds', 'gitDiff', 'questions'].includes(range.kind))
-      .map(({ kind, from, to }) => ({ kind, source: markdown.slice(from, to) })),
+    ranges.filter((range) => ['heading', 'list', 'htmlEmbeds', 'gitDiff', 'questions'].includes(range.block.kind))
+      .map(({ block, source }) => ({ kind: block.kind, source })),
     [
       { kind: 'heading', source: '## Heading' },
       { kind: 'list', source: '- **exact** item' },
@@ -208,9 +216,62 @@ test('editable semantic ranges come from canonical blocks including Decision OS 
       { kind: 'questions', source: '::questions[Decision](questions:?id=gate)' },
     ],
   );
+  assert.equal(ranges.some((range) => range.source.includes('**exact**')), true);
+});
+
+test('editor presentation reveals every canonical block intersecting the main selection', () => {
+  const markdown = ['## Heading', '', '- first', '- second', '', '---', '', 'Paragraph'].join('\n');
+  const listStart = markdown.indexOf('- first');
+  const listEnd = markdown.indexOf('\n\n---');
+  const records = ledgerMarkdownPresentationRecords(markdown, {
+    from: listStart + 2,
+    to: listEnd - 1,
+    head: listEnd - 1,
+    empty: false,
+  });
   assert.deepEqual(
-    ranges.filter((range) => range.kind === 'strong')
-      .map(({ from, to }) => markdown.slice(from, to)),
-    ['**exact**'],
+    records.map((record) => ({ kind: record.block.kind, source: record.source })),
+    [
+      { kind: 'heading', source: '## Heading' },
+      { kind: 'hr', source: '---' },
+      { kind: 'paragraph', source: 'Paragraph' },
+    ],
   );
+});
+
+test('editor presentation retains the preceding source block for a cursor in trailing parser whitespace', () => {
+  const markdown = '## Heading\n\nParagraph\n';
+  const records = ledgerMarkdownPresentationRecords(markdown, {
+    from: markdown.length,
+    to: markdown.length,
+    head: markdown.length,
+    empty: true,
+  });
+  assert.deepEqual(
+    records.map((record) => ({ kind: record.block.kind, source: record.source })),
+    [{ kind: 'heading', source: '## Heading' }],
+  );
+});
+
+test('editor presentation chunks oversized canonical lists into exact virtualizable ranges', () => {
+  const listMarkdown = Array.from({ length: 66 }, (_, index) => `- item ${index}`).join('\n');
+  const markdown = `${listMarkdown}\n\nTrailing paragraph`;
+  const records = ledgerMarkdownPresentationRecords(markdown, {
+    from: markdown.indexOf('Trailing') + 1,
+    to: markdown.indexOf('Trailing') + 1,
+    head: markdown.indexOf('Trailing') + 1,
+    empty: true,
+  });
+
+  assert.deepEqual(records.map((record) => record.block.kind), ['list', 'list', 'list']);
+  assert.deepEqual(
+    records.map((record) => record.block.kind === 'list' ? record.block.items.length : 0),
+    [32, 32, 2],
+  );
+  assert.equal(records.map((record) => record.source).join(''), listMarkdown);
+  assert.deepEqual(records.map(({ from, to }) => ({ from, to })), [
+    { from: 0, to: markdown.indexOf('- item 32') },
+    { from: markdown.indexOf('- item 32'), to: markdown.indexOf('- item 64') },
+    { from: markdown.indexOf('- item 64'), to: listMarkdown.length },
+  ]);
 });

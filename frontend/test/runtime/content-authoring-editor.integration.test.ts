@@ -472,7 +472,7 @@ test('text-file session mounts one editable view, retains draft state across sta
 
 test('text-file session rejects stale diff settlement, exposes timeout and conflict states, and disposes pending work once', async () => {
   type DeferredDiff = {
-    resolve(value: { generation: number; identity: string; metadata: unknown }): void;
+    resolve(value: { generation: number; identity: string; hunks: [] }): void;
     reject(error: Error): void;
   };
   const pending: DeferredDiff[] = [];
@@ -540,7 +540,7 @@ test('text-file session rejects stale diff settlement, exposes timeout and confl
   pending[1].resolve({
     generation: 2,
     identity: `${snapshot.commit}:${snapshot.olderCommit}:${snapshot.contentRevision}`,
-    metadata: { isPartial: false, additionLines: [], deletionLines: [], hunks: [] },
+    hunks: [],
   });
   await flush();
   assert.equal(installed.length, 1);
@@ -548,7 +548,7 @@ test('text-file session rejects stale diff settlement, exposes timeout and confl
   pending[0].resolve({
     generation: 1,
     identity: `${snapshot.commit}:${snapshot.olderCommit}:${snapshot.contentRevision}`,
-    metadata: { isPartial: false, additionLines: [], deletionLines: [], hunks: [] },
+    hunks: [],
   });
   await flush();
   assert.equal(installed.length, 1);
