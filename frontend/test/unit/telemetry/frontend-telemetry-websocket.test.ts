@@ -27,7 +27,11 @@ test('discovers opt-in telemetry and batches global traces over one same-origin 
   const transport = await import('../../../src/runtime/telemetry/effect/frontend-telemetry-websocket.js');
   await transport.installFrontendTelemetryWebSocket();
   transport.enqueueFrontendTelemetry({ name: 'codex-log-refresh-started', at: '2026-07-31T15:00:00.000Z', args: { generation: 4 } });
-  transport.enqueueFrontendTelemetry({ name: 'codex-log-refresh-failed', at: '2026-07-31T15:00:01.000Z', args: { error: 'projection failed' } });
+  transport.enqueueFrontendTelemetry({
+    name: 'codex-log-refresh-failed',
+    at: '2026-07-31T15:00:01.000Z',
+    args: { error: 'projection failed', token: 'secret-token', markdown: '# private card' },
+  });
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.equal(sockets.length, 1);
   assert.equal(String(sockets[0]?.url), 'ws://127.0.0.1:50150/api/diagnostics/frontend-telemetry');
@@ -36,6 +40,7 @@ test('discovers opt-in telemetry and batches global traces over one same-origin 
   assert.equal(batch.length, 2);
   assert.equal(batch[0]?.route, '/p/project/ledgers/tasks?thread=open');
   assert.equal(batch[1]?.name, 'codex-log-refresh-failed');
+  assert.deepEqual(batch[1]?.args, { error: 'projection failed', token: '[redacted]', markdown: '[redacted]' });
   assert.equal(batch[0]?.browserSessionId, batch[1]?.browserSessionId);
   transport.closeFrontendTelemetryWebSocket();
 });
