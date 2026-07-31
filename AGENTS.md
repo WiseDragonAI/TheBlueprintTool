@@ -163,7 +163,13 @@ cd /home/jbb/dev/EditorBP/decision-os
 node bin/decision-os-merge-dev.mjs --json
 ```
 
-Before promotion, run the read-only doctor:
+When the operator has already authorized the merge, run the normal promotion
+command directly. Do not run doctor first: the normal command performs the
+same critical admission checks before mutation, so a separate preview adds no
+decision value.
+
+Use the read-only doctor only when merge authorization has not been given and
+the operator needs an observational admission preview:
 
 ```bash
 node bin/decision-os-merge-dev.mjs doctor
