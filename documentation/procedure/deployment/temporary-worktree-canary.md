@@ -4,8 +4,10 @@
 
 1. Use this procedure to verify code served directly from one temporary Decision OS feature worktree before integration into `dev`.
 2. The feature worktree owns only application source. A temporary scratch workspace owns the served `.decision-os` state so startup discovery, migrations, prompt installation, incidents, and test writes cannot modify source fixtures in the feature worktree.
-3. The canary is a bounded test process. Do not register it in MultiTerm, enable automatic restart, attach it to a federation relay, reuse ports `50150` through `50152`, or leave it running after verification.
-4. Federation behavior is outside this canary boundary. Verify federation with the isolated integration fixture, then use the persistent integrated-dev canary for final served evidence after merge into `dev`.
+3. Never use the existing `dev` worktree as the temporary canary source. That worktree already owns the persistent MultiTerm server on port `50151`, so serving it again does not prove feature-worktree isolation.
+4. The dedicated feature worktree must contain the change under verification. For a topology smoke test, add one unmistakable rendered text marker to a persistent application surface, commit it on the feature branch, and verify that exact marker through the temporary canary before removing it.
+5. The canary is a bounded test process. Do not register it in MultiTerm, enable automatic restart, attach it to a federation relay, reuse ports `50150` through `50152`, or leave it running after verification.
+6. Federation behavior is outside this canary boundary. Verify federation with the isolated integration fixture, then use the persistent integrated-dev canary for final served evidence after merge into `dev`.
 
 ---
 
@@ -171,7 +173,7 @@
    test "$(pwd -P)" = "$CANARY_SOURCE"
    ```
 
-5. Run the focused HTTP or browser behavior required by the feature against `CANARY_URL`. Browser proof must follow `BROWSER_RUNBOOK.md` and must not control the operator's browser.
+5. Run the focused HTTP or browser behavior required by the feature against `CANARY_URL`. Verify the change on a rendered application surface; an HTTP response containing markup that the application replaces during startup is not visual proof. Browser proof must follow `BROWSER_RUNBOOK.md` and must not control the operator's browser.
 
 ---
 
@@ -215,7 +217,7 @@
 
 1. Record the feature source worktree, exact `HEAD`, and recorded `.decision-os` gitlink.
 2. Record the scratch workspace, dynamically allocated port, and log path.
-3. Record successful `/api/health` and `/` responses plus the feature-specific served observation.
+3. Record successful `/api/health` and `/` responses plus the feature-specific rendered observation. For a topology smoke test, record the exact visible marker confirmed by the operator.
 4. Record that the launcher and backend process paths belong to the feature worktree while process cwd belongs to the scratch workspace.
 5. Record that no MultiTerm registration or federation configuration was created.
 6. Record that ports `50150`, `50151`, and `50152` were not stopped or restarted.
