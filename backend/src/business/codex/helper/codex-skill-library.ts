@@ -305,8 +305,11 @@ function stableGitFailure(input: {
 async function gitHistory(skill: CodexSkillSummary): Promise<SkillGitRevision[]> {
   try {
     return await readSkillGitHistory(skill.skillFile);
-  } catch {
-    return [];
+  } catch (error) {
+    // WHAT: Represent only a verified missing Git owner as unavailable history.
+    // WHY: Standalone canonical server skills can persist metadata before server startup creates their authored repository.
+    if (error instanceof Error && /not a git repository/i.test(error.message)) return [];
+    throw error;
   }
 }
 
@@ -317,11 +320,7 @@ async function currentGitSnapshot(
   // WHY: Owners without committed history have no immutable base identity to admit into the diff editor.
   // WHAT: Return no snapshot when the known history is empty.
   if (history?.length === 0) return null;
-  try {
-    return await readCurrentSkillGitRevision(skill.skillFile);
-  } catch {
-    return null;
-  }
+  return await readCurrentSkillGitRevision(skill.skillFile);
 }
 
 function catalogEntry(input: {
@@ -561,7 +560,9 @@ export async function readCodexSkillLibraryDetail(input: {
   const catalog = catalogFromSkills({ ...input, workspaceRoot, skills });
   const entry = catalog.skills.find((candidate) => candidate.name === input.skillName);
   if (!entry) return null;
-  const history = skillSourceClass(skill) === 'imported' ? [] : await gitHistory(skill);
+  // WHAT: Keep immutable history outside read-only and imported library projections.
+  // WHY: Those files have no writable authored owner and therefore no admissible editor baseline.
+  const history = !entry.editable || skillSourceClass(skill) === 'imported' ? [] : await gitHistory(skill);
   const snapshot = await currentGitSnapshot(skill, history);
   return {
     ...entry,

@@ -15,7 +15,7 @@ export type AuthoredFileChangeMap = {
 function touched(changes: AuthoredFileChangeMap, hunk: NormalizedAuthoredFileDiffHunk): boolean {
   return Boolean(
     changes.touchesRange(hunk.from, hunk.to)
-    || changes.touchesRange(hunk.deletionAnchor),
+    || hunk.deletions.some((deletion) => changes.touchesRange(deletion.anchor)),
   );
 }
 
@@ -33,7 +33,10 @@ export function mapAuthoredFileDiff(
         ...hunk,
         from: changes.mapPos(hunk.from, 1),
         to: changes.mapPos(hunk.to, -1),
-        deletionAnchor: changes.mapPos(hunk.deletionAnchor, 1),
+        deletions: hunk.deletions.map((deletion) => ({
+          ...deletion,
+          anchor: changes.mapPos(deletion.anchor, 1),
+        })),
         additions: hunk.additions.map((range) => ({
           from: changes.mapPos(range.from, 1),
           to: changes.mapPos(range.to, -1),

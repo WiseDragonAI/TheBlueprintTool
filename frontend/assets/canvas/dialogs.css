@@ -1315,6 +1315,59 @@
   min-height: max-content;
 }
 
+.authored-file-conflict-evidence {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid color-mix(in srgb, #ff5f6d, transparent 44%);
+  border-radius: 3px;
+  background: color-mix(in srgb, #ff5f6d, transparent 94%);
+  color: #ffc1c6;
+  padding: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.authored-file-conflict-evidence p,
+.authored-file-conflict-evidence h3 {
+  margin: 0;
+}
+
+.authored-file-conflict-evidence summary {
+  color: var(--text);
+  cursor: pointer;
+}
+
+.authored-file-conflict-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.authored-file-conflict-columns section {
+  min-width: 0;
+}
+
+.authored-file-conflict-columns h3 {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.authored-file-conflict-columns pre {
+  max-height: 180px;
+  margin: 5px 0 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: rgba(4, 6, 9, 0.92);
+  color: var(--text);
+  padding: 8px;
+  font: 11px/1.45 var(--mono);
+  white-space: pre-wrap;
+}
+
 .skill-editor-pane,
 .skill-history-pane {
   min-height: 0;
@@ -1361,6 +1414,19 @@
   padding: 7px;
 }
 
+.authored-file-diff-status {
+  color: var(--muted);
+  font-family: var(--mono, "Ubuntu Mono", monospace);
+  font-size: 0.76rem;
+  letter-spacing: 0.01em;
+}
+
+.authored-file-diff-status[data-status="timeout"],
+.authored-file-diff-status[data-status="error"],
+.authored-file-diff-status[data-status="conflict"] {
+  color: var(--danger);
+}
+
 .text-file-editor-identity {
   overflow: hidden;
   color: var(--muted);
@@ -1382,6 +1448,13 @@
 .cm-authored-addition {
   border-left: 2px solid #4d9cff;
   background: color-mix(in srgb, #4d9cff, transparent 84%);
+}
+
+.cm-authored-addition::before {
+  content: '+';
+  color: #4d9cff;
+  font-weight: 800;
+  margin-right: 4px;
 }
 
 .cm-authored-deletion {

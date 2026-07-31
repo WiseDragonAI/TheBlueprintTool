@@ -44,6 +44,7 @@ export type AuthoredFileRevision = {
 export type AuthoredFileRevisionContent = AuthoredFileRevision & {
   contentRevision: string;
   markdown: string;
+  baselineAvailability: 'available' | 'no_prior_revision';
   baseMarkdown: string;
   patch: string;
   olderCommit: string | null;
@@ -54,6 +55,7 @@ export type AuthoredFileRevisionSnapshot = {
   contentRevision: string;
   commit: string;
   olderCommit: string | null;
+  baselineAvailability: 'available' | 'no_prior_revision';
   baseMarkdown: string;
   markdown: string;
 };
@@ -806,6 +808,7 @@ export async function readAuthoredFileRevisionContent(input: {
     ...revision,
     contentRevision: sha256AuthoredBytes(markdown),
     markdown,
+    baselineAvailability: older ? 'available' : 'no_prior_revision',
     baseMarkdown,
     patch: patchResult.stdout,
     olderCommit: older?.commit ?? null,
@@ -826,6 +829,7 @@ export async function readCurrentAuthoredFileRevisionContent(input: {
     contentRevision: sha256AuthoredBytes(markdown),
     commit: selected.commit,
     olderCommit: older?.commit ?? null,
+    baselineAvailability: older ? 'available' : 'no_prior_revision',
     baseMarkdown: older ? await immutableContent(context, older, input.signal) : '',
     markdown,
   };

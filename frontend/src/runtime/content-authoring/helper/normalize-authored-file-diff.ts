@@ -3,14 +3,18 @@
  * WHY: CodeMirror state must receive validated positions without depending on Pierre renderer ownership.
  */
 export type AuthoredFileDiffRange = { from: number; to: number };
+export type AuthoredFileDiffDeletion = {
+  anchor: number;
+  text: string;
+  order: number;
+};
 
 export type NormalizedAuthoredFileDiffHunk = {
   id: string;
   from: number;
   to: number;
-  deletionAnchor: number;
   additions: AuthoredFileDiffRange[];
-  deletedText: string;
+  deletions: AuthoredFileDiffDeletion[];
 };
 
 export type NormalizedAuthoredFileDiff = {
@@ -91,8 +95,7 @@ export function normalizeAuthoredFileDiff(input: {
     let newLine = hunk.additionStart;
     let oldLine = hunk.deletionStart;
     const additions: AuthoredFileDiffRange[] = [];
-    const deleted: string[] = [];
-    let deletionAnchor = lineOffset(starts, input.document, newLine);
+    const deletions: AuthoredFileDiffDeletion[] = [];
     for (const content of hunk.hunkContent) {
       if (content.type === 'context') {
         newLine += content.lines;
@@ -101,7 +104,6 @@ export function normalizeAuthoredFileDiff(input: {
       }
       if (content.type !== 'change') throw new Error('Pierre returned an unknown hunk segment.');
       const anchor = lineOffset(starts, input.document, newLine);
-      if (content.deletions > 0 && deleted.length === 0) deletionAnchor = anchor;
       if (content.additions > 0) {
         additions.push({
           from: anchor,
@@ -109,23 +111,29 @@ export function normalizeAuthoredFileDiff(input: {
         });
       }
       if (content.deletions > 0) {
-        deleted.push(...parsed.deletionLines.slice(
+        deletions.push({
+          anchor,
+          order: deletions.length,
+          text: joinPierreLines(parsed.deletionLines.slice(
           content.deletionLineIndex,
           content.deletionLineIndex + content.deletions,
-        ));
+          )),
+        });
       }
       newLine += content.additions;
       oldLine += content.deletions;
     }
     const positions = additions.flatMap((range) => [range.from, range.to]);
-    positions.push(deletionAnchor);
+    positions.push(...deletions.map((deletion) => deletion.anchor));
+    // WHAT: Retain the hunk's new-file start when Pierre reports no visible range.
+    // WHY: Empty or malformed position arrays must not produce infinite editor coordinates.
+    if (positions.length === 0) positions.push(lineOffset(starts, input.document, hunk.additionStart));
     hunks.push({
       id: `${input.identity}:${hunkIndex}`,
       from: Math.min(...positions),
       to: Math.max(...positions),
-      deletionAnchor,
       additions,
-      deletedText: joinPierreLines(deleted),
+      deletions,
     });
   });
   return { identity: input.identity, document: input.document, hunks };

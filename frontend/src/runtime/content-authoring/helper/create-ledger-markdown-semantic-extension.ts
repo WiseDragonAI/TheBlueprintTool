@@ -1,7 +1,13 @@
 /**
- * WHAT: Decorates canonical Markdown syntax ranges inside the active CodeMirror document.
- * WHY: Semantic presentation must remain source-positioned and must never replace authored bytes.
+ * WHAT: Decorates canonical Decision OS Markdown records inside the active CodeMirror document.
+ * WHY: The editable surface must use the same parser authority as card rendering, including application directives.
  */
+import {
+  parseLedgerCardMarkdown,
+  type LedgerMarkdownBlock,
+  type LedgerMarkdownInline,
+} from '../../ledger/helper/parse-ledger-card-markdown.js';
+
 type SemanticCodeMirrorModule = {
   Decoration: {
     mark(spec: Record<string, unknown>): { range(from: number, to: number): unknown };
@@ -12,52 +18,112 @@ type SemanticCodeMirrorModule = {
   };
   StateField: {
     define<T>(spec: {
-      create(state: unknown): T;
-      update(value: T, transaction: { docChanged: boolean; state: unknown }): T;
+      create(state: { doc: { toString(): string } }): T;
+      update(value: T, transaction: {
+        docChanged: boolean;
+        state: { doc: { toString(): string } };
+      }): T;
       provide(field: unknown): unknown;
     }): unknown;
   };
-  syntaxTree(state: unknown): {
-    iterate(spec: { enter(node: { name: string; from: number; to: number }): void }): void;
-  };
 };
 
-const semanticClassByNode: Record<string, string> = {
-  ATXHeading1: 'cm-ledger-heading',
-  ATXHeading2: 'cm-ledger-heading',
-  ATXHeading3: 'cm-ledger-heading',
-  ATXHeading4: 'cm-ledger-heading',
-  ATXHeading5: 'cm-ledger-heading',
-  ATXHeading6: 'cm-ledger-heading',
-  StrongEmphasis: 'cm-ledger-strong',
-  Emphasis: 'cm-ledger-emphasis',
-  InlineCode: 'cm-ledger-code',
-  Link: 'cm-ledger-link',
-  Image: 'cm-ledger-image',
-  Blockquote: 'cm-ledger-quote',
-  FencedCode: 'cm-ledger-code-block',
+const blockClass: Record<LedgerMarkdownBlock['kind'], string> = {
+  heading: 'cm-ledger-heading',
+  paragraph: 'cm-ledger-paragraph',
+  images: 'cm-ledger-images',
+  htmlEmbeds: 'cm-ledger-directive cm-ledger-html',
+  gitDiff: 'cm-ledger-directive cm-ledger-git-diff',
+  questions: 'cm-ledger-directive cm-ledger-questions',
+  list: 'cm-ledger-list',
+  table: 'cm-ledger-table',
+  hr: 'cm-ledger-rule',
+  code: 'cm-ledger-code-block',
 };
+
+const inlineClass: Partial<Record<LedgerMarkdownInline['kind'], string>> = {
+  strong: 'cm-ledger-strong',
+  code: 'cm-ledger-code',
+  link: 'cm-ledger-link',
+  image: 'cm-ledger-image',
+};
+
+function inlineRecords(block: LedgerMarkdownBlock): LedgerMarkdownInline[] {
+  // WHAT: Return the canonical inline records owned directly by text-bearing blocks.
+  // WHY: Container-only directives and rules already expose their exact block source span.
+  if (block.kind === 'heading' || block.kind === 'paragraph') return block.children;
+  // WHAT: Flatten canonical list item records in authored source order.
+  // WHY: Each item retains its own exact parser-owned source positions.
+  if (block.kind === 'list') return block.items.flat();
+  // WHAT: Return image records that already retain absolute source positions.
+  // WHY: Grouped image blocks need both container and individual image semantics.
+  if (block.kind === 'images') return block.images;
+  return [];
+}
+
+function sourceRange(value: { readonly from?: number; readonly to?: number }, length: number): {
+  from: number;
+  to: number;
+} | null {
+  // WHAT: Admit only finite non-empty ranges contained by the exact current document.
+  // WHY: Canonical semantic decorations must never clamp or guess source identity.
+  if (
+    !Number.isInteger(value.from)
+    || !Number.isInteger(value.to)
+    || (value.from ?? -1) < 0
+    || (value.to ?? 0) <= (value.from ?? 0)
+    || (value.to ?? length + 1) > length
+  ) return null;
+  return { from: value.from as number, to: value.to as number };
+}
+
+export function ledgerMarkdownSemanticRanges(markdown: string): Array<{
+  kind: string;
+  className: string;
+  from: number;
+  to: number;
+}> {
+  const ranges: Array<{ kind: string; className: string; from: number; to: number }> = [];
+  for (const block of parseLedgerCardMarkdown(markdown)) {
+    const blockRange = sourceRange(block, markdown.length);
+    // WHAT: Publish the canonical block range exactly as parsed.
+    // WHY: Every supported Decision OS block kind must be represented in the editable surface.
+    if (blockRange) ranges.push({
+      kind: block.kind,
+      className: blockClass[block.kind],
+      ...blockRange,
+    });
+    for (const inline of inlineRecords(block)) {
+      const className = inlineClass[inline.kind];
+      const inlineRange = sourceRange(inline, markdown.length);
+      // WHAT: Publish canonical inline emphasis only when it has a styled semantic class.
+      // WHY: Plain text remains literal editable context without redundant decorations.
+      if (className && inlineRange) ranges.push({
+        kind: inline.kind,
+        className,
+        ...inlineRange,
+      });
+    }
+  }
+  return ranges;
+}
 
 export function createLedgerMarkdownSemanticExtension(cm: SemanticCodeMirrorModule): unknown {
-  const semanticDecorations = (state: unknown): unknown => {
-    const ranges: unknown[] = [];
-    cm.syntaxTree(state).iterate({
-      enter: (node) => {
-        const className = semanticClassByNode[node.name];
-        if (!className || node.to <= node.from) return;
-        ranges.push(cm.Decoration.mark({
-          class: className,
-          attributes: { 'data-ledger-semantic': node.name },
-        }).range(node.from, node.to));
-      },
-    });
-    return cm.Decoration.set(ranges, true);
-  };
+  const semanticDecorations = (markdown: string): unknown => cm.Decoration.set(
+    ledgerMarkdownSemanticRanges(markdown).map((range) => cm.Decoration.mark({
+      class: range.className,
+      attributes: { 'data-ledger-semantic': range.kind },
+    }).range(range.from, range.to)),
+    true,
+  );
   return cm.StateField.define<unknown>({
-    create: semanticDecorations,
-    update: (value, transaction) => transaction.docChanged
-      ? semanticDecorations(transaction.state)
-      : value,
+    create: (state) => semanticDecorations(state.doc.toString()),
+    update: (value, transaction) => {
+      // WHAT: Reparse canonical semantics only after document bytes change.
+      // WHY: Selection and presentation transactions retain the same exact source identity.
+      if (transaction.docChanged) return semanticDecorations(transaction.state.doc.toString());
+      return value;
+    },
     provide: (field) => cm.EditorView.decorations.from(field),
   });
 }
