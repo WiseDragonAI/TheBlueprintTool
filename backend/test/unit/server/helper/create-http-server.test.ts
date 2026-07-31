@@ -714,8 +714,22 @@ test('Codex background failure pauses only project Codex work and remains diagno
     const startBody = await start.json() as { error: string; scope: string };
     assert.equal(startBody.error, 'runtime-scope-paused');
     assert.match(startBody.scope, /^background:codex-runtime:/);
-    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as { incidents: Array<{ operation: string; message: string }> };
+    const incidentResponse = await fetch(`${baseUrl}/api/diagnostics/incidents`);
+    assert.equal(incidentResponse.headers.get('cache-control'), 'no-store');
+    const incidents = await incidentResponse.json() as {
+      observedAt: string;
+      incidentHistoryVersion: number;
+      historyTruncatedBefore: string;
+      incidents: Array<{ operation: string; message: string; observations: string[]; legacyHistoryBefore: string }>;
+    };
+    assert.equal(Number.isFinite(Date.parse(incidents.observedAt)), true);
+    assert.equal(incidents.incidentHistoryVersion, 2);
+    assert.equal(incidents.historyTruncatedBefore, '');
     assert.ok(incidents.incidents.some((incident) => incident.operation === 'injected-codex-background-work' && incident.message === 'injected Codex background failure'));
+    const injectedIncident = incidents.incidents.find((incident) => incident.operation === 'injected-codex-background-work');
+    assert.equal(injectedIncident?.observations.length, 1);
+    assert.equal(Number.isFinite(Date.parse(String(injectedIncident?.observations[0]))), true);
+    assert.equal(injectedIncident?.legacyHistoryBefore, '');
     const component = healthBody.pausedBackgroundComponents.find((entry) => entry.startsWith('codex-runtime:'));
     assert.ok(component);
     const resume = await fetch(`${baseUrl}/api/diagnostics/runtime/resume`, {
