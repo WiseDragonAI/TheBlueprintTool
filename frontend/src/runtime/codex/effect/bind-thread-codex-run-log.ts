@@ -319,6 +319,13 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
       current.inFlight = false;
       schedule(current, 0);
     }
+    const orphaned = !cachedSummary && !current.inFlight && current.timer === null;
+    // WHAT: Restart an idle same-task reader only when no summary, request, or timer exists.
+    // WHY: Browser state can outlive the server without multiplying local reads or relay-backed replica reads.
+    if (orphaned) {
+      current.generation += 1;
+      schedule(current, 0);
+    }
     return;
   }
   if (current?.timer) clearTimeout(current.timer);

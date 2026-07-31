@@ -628,6 +628,39 @@ test('generated skill-result threads bind and render their retained provider ses
   }
 });
 
+test('an uninstalled execution summary renders local loading instead of confirmed absence', async () => {
+  const previousFetch = globalThis.fetch;
+  const { codexLog } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
+  const threadId = 'thread-card-local-restart';
+  globalThis.fetch = (() => new Promise<Response>(() => undefined)) as typeof fetch;
+  try {
+    state.projectId = 'project-a';
+    state.activeTab = 'tasks';
+    state.activeLedger = { cards: [{ id: 'card-local-restart', title: 'Restart task' }], annotations: [], relationships: [], notes: { [threadId]: [] } };
+    state.threadId = threadId;
+    state.renderedThreadId = '';
+    state.threadPanelOpen = true;
+    state.activeTool = 'select';
+    state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
+    state.threadTaskExecutionStateByThreadId = {};
+    state.threadExecutionPresentationByThreadId = {};
+    state.threadScrollTopByThreadId = {};
+    state.telemetry = [];
+    state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+
+    renderThreadPanel();
+
+    assert.equal(codexLog.querySelector('.codex-log-waiting')?.textContent, 'Loading local Codex execution state.');
+    assert.equal(codexLog.textContent.includes('No Codex execution for this task.'), false);
+  } finally {
+    state.threadPanelOpen = false;
+    renderThreadPanel();
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test('closing the desktop thread panel releases selected and active run polling', async () => {
   const previousFetch = globalThis.fetch;
   const previousSetTimeout = globalThis.setTimeout;

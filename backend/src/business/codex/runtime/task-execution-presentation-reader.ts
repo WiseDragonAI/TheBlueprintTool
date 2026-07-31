@@ -19,6 +19,7 @@ export function createTaskExecutionPresentationReader(input: {
   presentationRegistry: ReturnType<typeof createTaskExecutionPresentationRegistry>;
   request: IncomingMessage;
   response: ServerResponse;
+  recordFailure: (input: AnyRecord) => void;
   runtime: AnyRecord;
   runtimeForExecution(executionId: string): AnyRecord | null;
 }) {
@@ -36,6 +37,18 @@ export function createTaskExecutionPresentationReader(input: {
     }
     const executorNodeId = execution.lifecycle.executorNodeId;
     const localExecutorNodeId = taskExecutionNodeId(input.runtime);
+    const retained = input.presentationRegistry.locallyHydrated(state, execution);
+    // WHAT: Rebuild a settled presentation from canonical project artifacts before executor routing.
+    // WHY: Durable local evidence survives both the live runtime and in-memory registry across restart.
+    if (retained) {
+      input.presentationRegistry.setHydrated(
+        execution.metadata.projectId,
+        executionId,
+        executorNodeId,
+        retained.events,
+      );
+      return { statusCode: 200, body: JSON.stringify(retained) };
+    }
     if (executorNodeId !== localExecutorNodeId) {
       const projection = input.presentationRegistry.presentation(
         execution.metadata.projectId,
@@ -43,31 +56,25 @@ export function createTaskExecutionPresentationReader(input: {
         executorNodeId,
       );
       if (!projection?.hydrated) {
-        const hydrated = input.presentationRegistry.locallyHydrated(state, execution);
-        if (hydrated) {
-          input.presentationRegistry.setHydrated(
-            execution.metadata.projectId,
-            executionId,
-            executorNodeId,
-            hydrated.events,
-          );
-          return { statusCode: 200, body: JSON.stringify(hydrated) };
-        }
-        const remote = await input.presentationRegistry.remotePresentation({
-          projectId: execution.metadata.projectId,
+        input.presentationRegistry.hydrateTerminalArtifacts(
+          execution.metadata.projectId,
+          executorNodeId,
           execution,
-          request: input.request,
-          response: input.response,
-        });
-        return 'presentation' in remote
-          ? {
-            statusCode: 200,
-            body: JSON.stringify(input.presentationRegistry.replicated(execution, {
-              events: remote.presentation.events,
-              hydrated: true,
-            })),
-          }
-          : { statusCode: remote.statusCode, body: remote.body };
+          input.recordFailure,
+        );
+        input.presentationRegistry.hydrateRemotePresentation(
+          execution.metadata.projectId,
+          execution,
+          input.recordFailure,
+        );
+        return {
+          statusCode: 200,
+          body: JSON.stringify(input.presentationRegistry.replicated(
+            execution,
+            projection ?? { events: [], hydrated: false },
+            'hydrating',
+          )),
+        };
       }
       return {
         statusCode: 200,

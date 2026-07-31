@@ -3,7 +3,7 @@
  * WHY: The former mobile feature set is the single application contract for every viewport.
  */
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
-import { ledgerCardBody } from '/src/runtime/ledger/helper/ledger-card-body.js';
+import { ledgerCardBody, ledgerCardHasHydratedBody } from '/src/runtime/ledger/helper/ledger-card-body.js';
 import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
 import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
@@ -399,7 +399,9 @@ function commitRouteView() {
     const task = taskForCurrentRoute();
     const { ledgerId, cardId } = currentRouteSnapshot();
     const cached = state.activeLedgerId === ledgerId && state.ledger?.cards?.find((card) => String(card.id) === cardId);
-    if (cached) renderCard(cached);
+    // WHAT: Render a cached card only when its Markdown body has been hydrated.
+    // WHY: Navigation projections omit comment.what and must not become the visible `Ledger card` fallback.
+    if (cached && ledgerCardHasHydratedBody(cached)) renderCard(cached);
     else renderTaskReplicaShell(task);
     return true;
   }

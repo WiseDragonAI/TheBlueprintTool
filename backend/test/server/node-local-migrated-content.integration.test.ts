@@ -89,7 +89,20 @@ test('hosted project card read demands an empty phone-owned migrated object by e
 
   const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/p/${projectId}/api/ledgers/tasks/cards/phone-only`);
   assert.equal(response.status, 200);
-  const card = await response.json() as { comment: { what: string }; state: { content: { status: string; candidates: Array<{ ownerNodeId: string; hash: string }> } } };
+  const initialCard = await response.json() as { comment: { what: string }; state: { content: { status: string; candidates: Array<{ ownerNodeId: string; hash: string }> } } };
+  assert.equal(initialCard.state.content.status, 'synchronizing');
+  assert.ok(initialCard.state.content.candidates.some((candidate) => candidate.ownerNodeId === 'phone' && candidate.hash === phoneHash));
+  let card = initialCard;
+  const contentDeadline = Date.now() + 2_000;
+  while (Date.now() < contentDeadline) {
+    const retry = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/p/${projectId}/api/ledgers/tasks/cards/phone-only`);
+    assert.equal(retry.status, 200);
+    card = await retry.json() as typeof card;
+    // WHAT: Stop after a later local read observes the background-fetched immutable object.
+    // WHY: The first structural response must not wait for relay content delivery.
+    if (card.state.content.status === 'available') break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
   assert.equal(card.comment.what, phoneBody.toString());
   assert.equal(card.state.content.status, 'available');
   assert.ok(card.state.content.candidates.some((candidate) => candidate.ownerNodeId === 'phone' && candidate.hash === phoneHash));

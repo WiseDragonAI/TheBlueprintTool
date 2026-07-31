@@ -13,6 +13,7 @@ import {
   TaskContentMaterializationError,
 } from '../../../src/business/federation/helper/materialize-task-mutation-inputs.js';
 import { createFederationContentReplicaStore } from '../../../src/business/federation/helper/federation-content-replica-store.js';
+import { readTaskContentOnDemand } from '../../../src/business/federation/helper/read-task-content-on-demand.js';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 
 const projectId = 'project-a';
@@ -146,6 +147,27 @@ test('demands and installs verified relay bytes when the local object is absent'
 
   assert.equal(drainCount, 1);
   assert.equal(readFileSync(state.file, 'utf8'), body);
+});
+
+test('returns missing content immediately while demand hydration continues in background', async (context) => {
+  const state = fixture();
+  context.after(async () => { await state.store.flush(); rmSync(state.workspace, { recursive: true, force: true }); });
+  await publishHead(state, 'remote only');
+  let releaseDrain!: () => void;
+  const drain = new Promise<void>((resolveDrain) => { releaseDrain = resolveDrain; });
+
+  const content = await readTaskContentOnDemand({
+    projectId,
+    store: state.store,
+    key,
+    contentStore: state.contentStore,
+    drain: () => drain,
+    waitForContent: false,
+  });
+
+  assert.equal(content.available, false);
+  releaseDrain();
+  await drain;
 });
 
 test('validation failure occurs before a verified sidecar becomes watcher-visible', async (context) => {

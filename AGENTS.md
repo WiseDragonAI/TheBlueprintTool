@@ -120,6 +120,69 @@
 
 ## decision-os Server Procedure
 
+## Decision OS Submodule Boundary
+
+Every workspace `.decision-os` directory is a Git submodule. Do not add
+workspace Decision OS cards, threads, ledgers, prompts, or other authored
+documents directly to the owning project repository. Initialize the child
+repository first, add it to the owning repository with `git submodule add`,
+and commit the parent gitlink plus `.gitmodules` entry before authored content
+is edited. Runtime, cache, settings, upload, and other ignored state remains
+inside the submodule and is not added to either repository.
+
+The parent repository must record only the `.decision-os` gitlink. A parent
+status showing individual `.decision-os/...` files means the submodule boundary
+is missing or has been removed and must be repaired before reporting the parent
+clean. A parent status showing `m .decision-os` means the submodule has
+uncommitted content; commit authored content in the child repository before
+updating the parent gitlink.
+
+This checkout uses the local-only submodule source
+`file:///home/jbb/dev/EditorBP/decision-os-data.git`. New local-only projects
+must use a local bare source repository that is available to the checkout;
+portable projects require a shared remote source instead.
+
+### Dev To Main Merge Tool
+
+Use the fixed merge tool for a local `dev` to `main` promotion:
+
+```bash
+cd /home/jbb/dev/EditorBP/decision-os
+node bin/decision-os-merge-dev.mjs --json
+```
+
+Before promotion, run the read-only doctor:
+
+```bash
+node bin/decision-os-merge-dev.mjs doctor
+node bin/decision-os-merge-dev.mjs doctor --json
+```
+
+Doctor reports current branches, parent and main-child dirt, both recorded
+gitlinks, predicted conflicts, blockers, and the expected commit sequence. It
+must not acquire mutation locks, create promotion logs, stage paths, commit,
+update refs, change either worktree, or enter `.worktrees/dev/.decision-os`.
+Its single authoritative result is exactly `READY` or `NO-GO`; never infer
+admission from another field or from the presence of the word `ready`.
+
+Run it only from the primary parent `main` checkout. The tool may automatically
+commit non-ignored state in main's `.decision-os` child, commit only that
+gitlink in parent `main`, merge the local `dev` ref with `--no-commit --no-ff`,
+restore main's `.decision-os` gitlink, and create the merge commit. It must never
+enter, update, commit, or reset `.worktrees/dev/.decision-os`, push a ref,
+resolve a conflict outside the exact `.decision-os` gitlink, or accept arbitrary
+Git strategy and dirty-state overrides.
+
+The parent index must be empty and parent dirt must be limited to the exact
+`.decision-os` marker before invocation. A non-submodule merge conflict is a
+rejection: resolve it through its owning implementation workflow, return both
+parent repositories to the admitted state, and run the tool again.
+
+Every invocation writes one local JSONL receipt under
+`.decision-os-merge-dev-logs/`. This directory is Git-ignored and must remain
+untracked. Doctor is observational and creates no receipt. Review and clean logs according to
+[`documentation/procedure/deployment/merge-dev-into-main.md`](documentation/procedure/deployment/merge-dev-into-main.md); the tool never deletes logs automatically.
+
 ### Server Restart Ownership
 
 - **Do not restart or stop the server unless the operator explicitly asks.**
@@ -303,6 +366,13 @@ node bin/decision-os-verify.mjs -- <command> [args...]
 - The command waits when another Decision OS verification owns the lease.
 - Pass one direct test or typecheck command. Shell wrappers are rejected.
 - `node bin/decision-os-workload-status.mjs` remains a read-only diagnostic.
+- Run the complete backend suite from the repository `backend/` directory with the direct Node runner and an explicit three-worker limit:
+
+```bash
+node ../bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH="$PWD/tsconfig.json" node --test --test-concurrency=3 --import tsx "test/**/*.test.ts"
+```
+
+- Never use `npm test --prefix backend` for the complete backend suite. The lease sees `npm` instead of the nested `node --test` command and therefore cannot inject its concurrency limit.
 
 ## Verification Hygiene
 

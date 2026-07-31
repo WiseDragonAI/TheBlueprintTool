@@ -21,6 +21,7 @@ export async function handleRemoteExecutionRoutes(input: {
   pipelinePresentation: (runId: string) => AnyRecord | null;
   presentationRegistry: ReturnType<typeof createTaskExecutionPresentationRegistry>;
   presentationRuntime: (executionId: string) => AnyRecord | null;
+  recordBackgroundFailure: (operation: string, error: unknown, context: AnyRecord) => void;
   projectId: string;
   projection: AnyRecord | null;
   queuePosition: (execution: Execution) => number | null;
@@ -95,6 +96,8 @@ export async function handleRemoteExecutionRoutes(input: {
     );
     if (!projection?.hydrated) {
       const hydrated = input.presentationRegistry.locallyHydrated(input.state, execution);
+      // WHAT: Return a presentation rebuilt from retained project artifacts before requesting its executor.
+      // WHY: Remote assignment does not invalidate locally synchronized immutable execution evidence.
       if (hydrated) {
         input.presentationRegistry.setHydrated(
           input.projectId,
@@ -105,22 +108,20 @@ export async function handleRemoteExecutionRoutes(input: {
         input.response.end(JSON.stringify(hydrated));
         return { handled: true };
       }
-      const remote = await input.presentationRegistry.remotePresentation({
-        projectId: input.projectId,
+      input.presentationRegistry.hydrateRemotePresentation(
+        input.projectId,
         execution,
-        request: input.request,
-        response: input.response,
-      });
-      if ('presentation' in remote) {
-        projection = {
-          events: remote.presentation.events,
-          hydrated: true,
-        };
-        input.response.end(JSON.stringify(input.presentationRegistry.replicated(execution, projection)));
-      } else {
-        input.response.statusCode = remote.statusCode;
-        input.response.end(remote.body);
-      }
+        (failure) => input.recordBackgroundFailure(
+          'hydrate-remote-execution-presentation',
+          failure.error,
+          failure.context as AnyRecord,
+        ),
+      );
+      input.response.end(JSON.stringify(input.presentationRegistry.replicated(
+        execution,
+        projection ?? { events: [], hydrated: false },
+        'hydrating',
+      )));
       return { handled: true };
     }
     input.response.end(JSON.stringify(input.presentationRegistry.replicated(execution, projection)));

@@ -33,6 +33,7 @@ export async function handleLedgerReadRoutes(input: {
   contentStore: ReturnType<typeof createFederationContentReplicaStore>;
   decisionOsRoot: string;
   localProject: DecisionOsProject | null;
+  recordBackgroundFailure: (operation: string, error: unknown, context: AnyRecord) => void;
   request: IncomingMessage;
   response: ServerResponse;
   revisions: ReturnType<typeof createLedgerRevisionTracker>;
@@ -94,6 +95,12 @@ export async function handleLedgerReadRoutes(input: {
         key,
         contentStore: input.contentStore,
         drain: input.contentDrain,
+        waitForContent: false,
+        recordBackgroundFailure: (error) => input.recordBackgroundFailure(
+          'hydrate-card-content-on-demand',
+          error,
+          { projectId: input.localProject!.id, key },
+        ),
       });
       projection.comment = { ...comment, what: content.body };
       projection.state = {
@@ -126,6 +133,12 @@ export async function handleLedgerReadRoutes(input: {
         key,
         contentStore: input.contentStore,
         drain: input.contentDrain,
+        waitForContent: false,
+        recordBackgroundFailure: (error) => input.recordBackgroundFailure(
+          'hydrate-thread-content-on-demand',
+          error,
+          { projectId: input.localProject!.id, key },
+        ),
       });
       projection.notes = { [threadId]: content.body ? parseThreadMarkdown(content.body) : [] };
       projection.state = {
