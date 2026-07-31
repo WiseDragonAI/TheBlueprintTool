@@ -234,14 +234,13 @@ function persistStateEntities(sender: Client, frame: RelayFrame): void {
   }
   stored.entities[projectId] = project;
   persistState();
-  const root = hashTaskCurrentRoot(stateBuckets(sender.federationId, projectId));
   sendSocket(sender.socket, {
     version: 1,
     type: 'state-relay-ack',
     from: 'relay',
     projectId,
     stateVersion: taskCurrentStateVersion,
-    payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted, root },
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted },
   });
   for (const target of activeClients(sender.federationId)) {
     if (target.nodeId === sender.nodeId || !participates(target.federationId, target.nodeId, projectId)) continue;
@@ -267,7 +266,19 @@ function reconcileStateSummary(sender: Client, frame: RelayFrame): void {
     });
   }
   const localRoot = hashTaskCurrentRoot(local);
-  sendStateSummary(sender, projectId);
+  const summary: RelayFrame = {
+    version: 1,
+    type: 'state-bucket-summary',
+    from: 'relay',
+    projectId,
+    stateVersion: taskCurrentStateVersion,
+    payload: { stateVersion: taskCurrentStateVersion, root: localRoot, buckets: local },
+  };
+  for (const target of activeClients(sender.federationId)) {
+    // WHAT: Publish the settled local-relay root to every online project participant.
+    // WHY: The canary transport must preserve the production relay's terminal repair boundary.
+    if (participates(target.federationId, target.nodeId, projectId)) sendSocket(target.socket, summary);
+  }
   if (missing.length === 0 && payload.root === localRoot) {
     sendSocket(sender.socket, {
       version: 1,
@@ -323,6 +334,7 @@ function handleFrame(sender: Client, text: string): void {
           throw new Error('invalid_state_missing_request');
         }
         sendStateEntities(sender, projectId, buckets);
+        sendStateSummary(sender, projectId);
       } else if (frame.type === 'state-execution-observation') {
         const projectId = String(frame.projectId ?? '');
         for (const target of activeClients(sender.federationId)) {
