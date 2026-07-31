@@ -110,9 +110,10 @@ test('compiler rejects missing references and recursive prompt cycles', () => {
 
 test('registered default roots preserve the pipeline wrapper and direct-run developer bytes', () => {
   const repositoryRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..');
-  const systemPrompt = readFileSync(resolve(repositoryRoot, '.decision-os/pipeline-prompts/SYSTEM_PROMPT.md'), 'utf8');
-  const skillPrompt = readFileSync(resolve(repositoryRoot, '.decision-os/pipeline-prompts/SKILL.md'), 'utf8');
-  const codexRunPrompt = readFileSync(resolve(repositoryRoot, '.decision-os/pipeline-prompts/CODEX_RUN.md'), 'utf8');
+  const defaultPromptRoot = resolve(repositoryRoot, 'backend/defaults/pipeline-prompts');
+  const systemPrompt = readFileSync(resolve(defaultPromptRoot, 'SYSTEM_PROMPT.md'), 'utf8');
+  const skillPrompt = readFileSync(resolve(defaultPromptRoot, 'SKILL.md'), 'utf8');
+  const codexRunPrompt = readFileSync(resolve(defaultPromptRoot, 'CODEX_RUN.md'), 'utf8');
   const context = runtimeContext({
     SKILL_NAME: () => 'analysis',
     PIPELINE_RUN_ID: () => 'run-1',
@@ -142,14 +143,15 @@ test('registered default roots preserve the pipeline wrapper and direct-run deve
     'Git commits you create, including merges, require a concise subject and body:',
     '- WHAT: changed boundary.',
     '- WHY: reason and decision evidence.',
+    '',
   ].join('\n'));
   assert.equal(
     renderPipelineDeveloperPrompt(skillPrompt, context),
-    buildPipelineSkillPrompt({
+    `${buildPipelineSkillPrompt({
       skillName: 'analysis',
       contentKind: 'federated-skill',
       runtimeContext: context,
-    }),
+    })}\n`,
   );
   const directSnapshot = compilePipelinePromptGraph({
     roots: ['SYSTEM_PROMPT', 'CODEX_RUN'],
