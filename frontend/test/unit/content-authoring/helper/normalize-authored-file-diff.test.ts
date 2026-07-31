@@ -27,7 +27,9 @@ test('normalizes additions and an end-of-file deletion from complete metadata', 
     },
   });
   assert.deepEqual(diff.hunks[0].additions, [{ from: 4, to: 12 }]);
-  assert.equal(diff.hunks[0].deletionAnchor, 4);
-  assert.equal(diff.hunks[0].deletedText, 'old\nremoved\n');
+  assert.deepEqual(diff.hunks[0].deletions, [
+    { anchor: 4, order: 0, text: 'old\n' },
+    { anchor: 12, order: 1, text: 'removed\n' },
+  ]);
   assert.equal(diff.document, document);
 });

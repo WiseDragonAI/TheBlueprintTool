@@ -13,9 +13,8 @@ const diff = {
     id: 'hunk-a',
     from: 7,
     to: 13,
-    deletionAnchor: 7,
     additions: [{ from: 7, to: 13 }],
-    deletedText: 'removed',
+    deletions: [{ anchor: 7, order: 0, text: 'removed' }],
   }],
 };
 
@@ -25,7 +24,7 @@ test('maps an untouched hunk through an edit before it', () => {
     mapPos: (position) => position + 2,
   }, 'xxbefore\nadded\n');
   assert.equal(mapped.hunks[0].from, 9);
-  assert.equal(mapped.hunks[0].deletionAnchor, 9);
+  assert.equal(mapped.hunks[0].deletions[0].anchor, 9);
 });
 
 test('withdraws a hunk touched by the same transaction', () => {

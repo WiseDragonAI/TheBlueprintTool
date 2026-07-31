@@ -289,6 +289,7 @@ test('history cursor traverses more than 500 affecting commits, follows rename, 
     });
     assert.equal(oldest.markdown, 'revision 0\n');
     assert.equal(oldest.baseMarkdown, '');
+    assert.equal(oldest.baselineAvailability, 'no_prior_revision');
     assert.equal(oldest.contentRevision, sha256AuthoredBytes('revision 0\n'));
     assert.equal(oldest.olderCommit, null);
     assert.match(oldest.patch, /^\+revision 0$/m);
@@ -300,6 +301,7 @@ test('history cursor traverses more than 500 affecting commits, follows rename, 
     });
     assert.equal(selected.markdown, 'revision 1\n');
     assert.equal(selected.baseMarkdown, 'revision 0\n');
+    assert.equal(selected.baselineAvailability, 'available');
     assert.match(selected.patch, /^-revision 0$/m);
     assert.match(selected.patch, /^\+revision 1$/m);
 
@@ -309,6 +311,7 @@ test('history cursor traverses more than 500 affecting commits, follows rename, 
     assert.equal(current.commit, revisions[0].commit);
     assert.equal(current.olderCommit, revisions[1].commit);
     assert.equal(current.baseMarkdown, 'revision 500\n');
+    assert.equal(current.baselineAvailability, 'available');
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }
