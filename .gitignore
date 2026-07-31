@@ -15,6 +15,7 @@ tmp/
 .decision-os/memories.sqlite3
 .decision-os/.settings.json
 .decision-os/runtime/
+.decision-os/frontend-telemetry.jsonl*
 **/.decision-os/codex-process-queue.json
 **/.decision-os/migrations/
 .decision-os/**/*.png

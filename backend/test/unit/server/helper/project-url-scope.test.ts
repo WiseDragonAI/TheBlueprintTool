@@ -13,6 +13,7 @@ test('separates global endpoints from project-sensitive endpoints', () => {
   assert.equal(isGlobalProjectEndpoint('/decision-os/projects/a'), true);
   assert.equal(isGlobalProjectEndpoint('/api/server/restart'), true);
   assert.equal(isGlobalProjectEndpoint('/api/federation/libraries/synchronize'), true);
+  assert.equal(isGlobalProjectEndpoint('/api/diagnostics/frontend-telemetry-config'), true);
   assert.equal(isGlobalProjectEndpoint('/api/codex/skill-library'), true);
   assert.equal(isGlobalProjectEndpoint('/api/codex/skill-library/example'), false);
   assert.equal(isGlobalProjectEndpoint('/api/codex/server-skills/example'), true);
