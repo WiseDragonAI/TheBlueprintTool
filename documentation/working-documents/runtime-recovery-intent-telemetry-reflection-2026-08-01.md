@@ -23,7 +23,7 @@
 2. Later pipeline-store incidents also demonstrate repeated read/resolution churn. The same `pipeline-content-kind-mismatch` fingerprint produced separate incidents and immediate resolutions at approximately 16-20 millisecond intervals. The ledger proves repeated classification, but it does not yet emit a stability-window decision event that distinguishes transient recovery from persistent corruption.
 3. Federated-library telemetry proves an affected scope can remain paused: `federated-skill-publication:psychoqwak` has two occurrences and no `resolvedAt`. It does not record the ordered component-recovery result, generic-recovery result, retained incident identities, and final pause state. The selected idempotence fix is source- and regression-backed but not production-proven by the current telemetry.
 4. Frontend telemetry records Codex Log binding, summary installation, HTTP settlement, presentation settlement, and render decisions. It does not record the Process Card pipeline sequence `optimistic projection -> handoff -> admission settlement -> deadline cleared -> rejection reconciliation`. The quality branch improves the contract and fixtures, but current telemetry cannot verify the complete behavior.
-5. The stale-waiting RCA is backed by durable task and execution timestamps plus an exact route regression. Current frontend telemetry does not record the terminal execution `finishedAt`, resolved master `taskId`, previous task `waitingAt`, applied task `waitingAt`, and resulting Control Room `waitingSince` in one causal sequence. The branch intentionally contains diagnosis and a red regression, not the correction.
+5. The stale-waiting RCA is backed by durable task and execution timestamps. On latest `dev`, its imported route regression no longer reaches settlement: admission returns `409 pipeline_prompt_missing` because the historical fixture does not create current pipeline-prompt storage. Current frontend telemetry does not record the terminal execution `finishedAt`, resolved master `taskId`, previous task `waitingAt`, applied task `waitingAt`, and resulting Control Room `waitingSince` in one causal sequence. The branch contains diagnosis and a drifted red regression, not the correction.
 
 ---
 
@@ -40,6 +40,6 @@
 ## E. Implementation Decision
 
 1. Keep all four changes in one runtime-transition integrity iteration because they share the same ownership invariant.
-2. Complete the missing stale-waiting correction before integration; its admitted regression is intentionally red.
+2. Update the stale-waiting fixture to satisfy current pipeline-prompt admission, prove the original lifecycle assertion still fails, then complete the missing correction before integration.
 3. Add the four telemetry sequences at their existing transition boundaries, without introducing a second state store.
 4. Use telemetry to prove ordering and final authority, then retain focused regression tests for each first incorrect transition.
