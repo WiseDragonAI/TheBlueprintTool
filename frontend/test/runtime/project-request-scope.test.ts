@@ -43,6 +43,13 @@ test('projectScopedRequestPath keeps manual federation synchronization global', 
   );
 });
 
+test('projectScopedRequestPath keeps frontend telemetry configuration global', () => {
+  assert.equal(
+    projectScopedRequestPath('/api/diagnostics/frontend-telemetry-config', 'project-id'),
+    '/api/diagnostics/frontend-telemetry-config',
+  );
+});
+
 test('replicaNodeIdFromLocation reads routing independently from project identity', () => {
   const originalLocation = globalThis.location;
   Object.defineProperty(globalThis, 'location', {

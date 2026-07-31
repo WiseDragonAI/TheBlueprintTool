@@ -7,6 +7,7 @@ import type {
   TaskExecutionStateSummary,
 } from '../../../../../shared/schemas/task-execution-presentation-types.js';
 import { projectReplicaRequestPath, replicaRequestInit } from '../../project/helper/project-request-scope.js';
+import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export type TaskExecutionReadResult<T> =
   | { ok: true; value: T }
@@ -18,6 +19,7 @@ async function requestJson<T>(input: {
   replicaNodeId: string;
   signal?: AbortSignal;
 }): Promise<TaskExecutionReadResult<T>> {
+  const startedAt = Date.now();
   const abort = new AbortController();
   const forwardAbort = (): void => abort.abort(input.signal?.reason);
   if (input.signal?.aborted) forwardAbort();
@@ -31,12 +33,28 @@ async function requestJson<T>(input: {
       projectReplicaRequestPath(input.path, input.projectId, input.replicaNodeId),
       replicaRequestInit({ cache: 'no-store', signal: abort.signal }, input.replicaNodeId),
     );
+    telemetry('task-execution-http-settled', {
+      path: input.path,
+      projectId: input.projectId,
+      replicaNodeId: input.replicaNodeId,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+    });
     const body = await response.json().catch(() => ({})) as Record<string, unknown>;
     if (!response.ok || body.ok === false) {
       return { ok: false, error: String(body.error ?? `Request failed with HTTP ${response.status}.`) };
     }
     return { ok: true, value: body as T };
   } catch (error) {
+    telemetry('task-execution-http-failed', {
+      path: input.path,
+      projectId: input.projectId,
+      replicaNodeId: input.replicaNodeId,
+      durationMs: Date.now() - startedAt,
+      aborted: abort.signal.aborted,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack ?? '' : '',
+    });
     return {
       ok: false,
       error: error instanceof Error && error.name === 'AbortError'

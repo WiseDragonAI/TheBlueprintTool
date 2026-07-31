@@ -17,6 +17,7 @@ export function isGlobalProjectEndpoint(pathname: string): boolean {
     || pathname === '/decision-os/directories'
     || pathname === '/decision-os/projects-canvas'
     || pathname === '/api/control-room-events'
+    || pathname === '/api/diagnostics/frontend-telemetry-config'
     || pathname === '/api/project-sync'
     || pathname.startsWith('/api/project-sync/')
     || pathname === '/api/codex/server-pipelines'

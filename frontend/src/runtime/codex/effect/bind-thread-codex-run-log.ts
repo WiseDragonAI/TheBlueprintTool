@@ -16,6 +16,7 @@ import { shouldAcceptReplicatedTaskState } from '../../refresh/helper/task-proje
 import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 import { stopThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
 import type { ThreadCodexRunLogIdentity } from './thread-codex-run-log-identity-types.js';
+import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export { syncThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
 export { bindThreadCodexActiveRunLog, unbindThreadCodexActiveRunLog } from './bind-thread-codex-active-run-log.js';
@@ -83,16 +84,30 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
   const abortController = new AbortController();
   poller.abortController = abortController;
   const { projectId, replicaNodeId, cardId: taskId, threadId } = poller.identity;
+  const startedAt = Date.now();
   let retryDelay: number | null = null;
   const ownsRequest = (): boolean => taskLogPollers.get(threadId) === poller
     && poller.generation === generation
     && poller.abortController === abortController;
   try {
+    telemetry('codex-log-refresh-started', {
+      projectId, replicaNodeId, taskId, threadId, generation,
+    });
     const summaryResult = await requestTaskExecutionState({
       projectId,
       replicaNodeId,
       taskId,
       signal: abortController.signal,
+    });
+    telemetry('codex-log-summary-settled', {
+      projectId,
+      replicaNodeId,
+      taskId,
+      threadId,
+      generation,
+      durationMs: Date.now() - startedAt,
+      outcome: 'error' in summaryResult ? 'error' : 'value',
+      error: 'error' in summaryResult ? summaryResult.error : '',
     });
     if (!ownsRequest()) return;
     if ('error' in summaryResult) {
@@ -102,6 +117,17 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
       return;
     }
     const summary = scopeTaskExecutionState(summaryResult.value, poller.identity.cardId);
+    telemetry('codex-log-summary-installed', {
+      projectId,
+      replicaNodeId,
+      taskId,
+      threadId,
+      generation,
+      sessions: summary.sessions.length,
+      executions: summary.sessions.reduce((count, session) => count + session.executions.length, 0),
+      activeExecutions: summary.activeExecutionIds.length,
+      defaultExecutionId: summary.defaultExecutionId,
+    });
     recordState('threadTaskExecutionStateByThreadId')[threadId] = summary;
     delete recordState('threadExecutionStateErrorByThreadId')[threadId];
     const selectedIds = recordState('threadSelectedExecutionIdByThreadId');
@@ -122,6 +148,17 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
       executionId: selectedExecutionId,
       signal: abortController.signal,
     });
+    telemetry('codex-log-presentation-settled', {
+      projectId,
+      replicaNodeId,
+      taskId,
+      threadId,
+      generation,
+      executionId: selectedExecutionId,
+      durationMs: Date.now() - startedAt,
+      outcome: 'error' in presentationResult ? 'error' : 'value',
+      error: 'error' in presentationResult ? presentationResult.error : '',
+    });
     if (!ownsRequest()
       || String(recordState('threadSelectedExecutionIdByThreadId')[threadId] ?? '') !== selectedExecutionId) return;
     if ('value' in presentationResult) {
@@ -135,7 +172,39 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
     // WHAT: Refresh complete snapshots only while the task has active execution work.
     // WHY: Terminal history is immutable and future admissions arrive through execution-change invalidation.
     if (retryDelay === null && summary.activeExecutionIds.length > 0) retryDelay = 900;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack ?? '' : '';
+    telemetry('codex-log-refresh-failed', {
+      projectId,
+      replicaNodeId,
+      taskId,
+      threadId,
+      generation,
+      durationMs: Date.now() - startedAt,
+      aborted: abortController.signal.aborted,
+      error: message,
+      stack,
+    });
+    // WHAT: Install a visible scoped read error and retry after an unexpected projection failure.
+    // WHY: A swallowed exception otherwise leaves the Codex Log in an indistinguishable permanent loading state.
+    if (ownsRequest()) {
+      recordState('threadExecutionStateErrorByThreadId')[threadId] = message;
+      paintThreadLog(threadId);
+      retryDelay = 1_500;
+    }
   } finally {
+    telemetry('codex-log-refresh-settled', {
+      projectId,
+      replicaNodeId,
+      taskId,
+      threadId,
+      generation,
+      durationMs: Date.now() - startedAt,
+      ownsRequest: ownsRequest(),
+      aborted: abortController.signal.aborted,
+      retryDelay,
+    });
     if (poller.abortController === abortController) poller.abortController = null;
     if (taskLogPollers.get(threadId) === poller && poller.generation === generation) {
       poller.inFlight = false;
