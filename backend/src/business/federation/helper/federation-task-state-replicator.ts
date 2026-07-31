@@ -65,6 +65,8 @@ export function createFederationTaskStateReplicator(input: {
   const convergence = new Map<string, { projectId: string; converged: boolean; lastRepairAt: string; missingBuckets: string[]; root: string }>();
   const runtimeDirty = new Map<string, Map<string, TaskCurrentEntity>>();
   const pendingDeliveries = new Map<string, PendingDelivery>();
+  const queuedRelayEntities = new Map<string, Map<string, TaskCurrentEntity>>();
+  const activeRepairRequests = new Set<string>();
 
   const dirtyFor = (projectId: string): Map<string, TaskCurrentEntity> => {
     const dirty = runtimeDirty.get(projectId) ?? new Map<string, TaskCurrentEntity>();
@@ -86,20 +88,68 @@ export function createFederationTaskStateReplicator(input: {
     input.publish(peerId, { type: 'state-bucket-summary', projectId, payload: { stateVersion: taskCurrentStateVersion, root: store.rootHash(), buckets: store.bucketManifest() } });
   };
 
+  const hasPendingRelayDelivery = (projectId: string): boolean => (
+    [...pendingDeliveries.values()].some((delivery) => delivery.projectId === projectId)
+  );
+
+  const enqueueRelayEntities = (projectId: string, entities: TaskCurrentEntity[]): void => {
+    const queued = queuedRelayEntities.get(projectId) ?? new Map<string, TaskCurrentEntity>();
+    for (const entity of entities) queued.set(taskCurrentEntityKey(entity), entity);
+    queuedRelayEntities.set(projectId, queued);
+  };
+
+  const flushRelayProject = (projectId: string, store: TaskCurrentStateStore): void => {
+    // WHAT: Keep the current project batch group in flight until every relay acknowledgement settles.
+    // WHY: Publishing a second group before the first settles creates intermediate roots and duplicate repair rounds.
+    if (hasPendingRelayDelivery(projectId)) return;
+    const queued = queuedRelayEntities.get(projectId);
+    // WHAT: Advertise the project root only when no entity batch remains queued.
+    // WHY: A root emitted before the final batch is an intermediate state that falsely starts another repair.
+    if (!queued?.size) {
+      queuedRelayEntities.delete(projectId);
+      advertise('relay', projectId, store);
+      return;
+    }
+    const entities = [...queued.values()];
+    const sent = publishEntities('relay', projectId, entities);
+    // WHAT: Remove a queued group only after every bounded frame entered the relay socket.
+    // WHY: A partial publication must remain retryable after its acknowledged subset settles.
+    if (sent) queuedRelayEntities.delete(projectId);
+    // WHAT: Advertise the durable local root when no frame entered the relay socket.
+    // WHY: The relay must discover and request the retained queue after a dropped live publication.
+    if (!sent && !hasPendingRelayDelivery(projectId)) advertise('relay', projectId, store);
+  };
+
   const publishDelta = (delta: TaskStateDelta): void => {
     if (delta.entities.length === 0) return;
     const dirty = dirtyFor(delta.projectId);
     for (const entity of delta.entities) dirty.set(taskCurrentEntityKey(entity), entity);
-    publishEntities('relay', delta.projectId, [...dirty.values()]);
-    const store = input.stores().get(delta.projectId);
-    if (store) advertise('relay', delta.projectId, store);
+    enqueueRelayEntities(delta.projectId, delta.entities);
+    const store = input.stores().get(delta.projectId) ?? input.storeFor?.(delta.projectId, 'relay');
+    // WHAT: Start the queued project group only when its local durable store remains available.
+    // WHY: The final summary must be derived from the same authoritative store as the queued entities.
+    if (store) flushRelayProject(delta.projectId, store);
   };
 
   const reconcileRelay = (): void => {
-    for (const [projectId, store] of input.stores()) {
+    const localStores = input.stores();
+    for (const [projectId, store] of localStores) {
       const dirty = runtimeDirty.get(projectId);
-      if (dirty?.size) publishEntities('relay', projectId, [...dirty.values()]);
-      advertise('relay', projectId, store);
+      // WHAT: Requeue every unacknowledged durable entity when relay connectivity returns.
+      // WHY: Disconnect cleanup removes transport deliveries while durable dirty state remains authoritative.
+      if (dirty?.size) enqueueRelayEntities(projectId, [...dirty.values()]);
+      flushRelayProject(projectId, store);
+    }
+    for (const [projectId, dirty] of runtimeDirty) {
+      // WHAT: Reconnect remote-project mutations through their materialized replica store.
+      // WHY: Federated execution changes are locally durable but are not present in the authoritative local-store map.
+      if (localStores.has(projectId)) continue;
+      const store = input.storeFor?.(projectId, 'relay');
+      // WHAT: Keep a dirty remote-project mutation queued when its replica store is unavailable.
+      // WHY: A terminal summary cannot be derived without the durable project store.
+      if (!store) continue;
+      enqueueRelayEntities(projectId, [...dirty.values()]);
+      flushRelayProject(projectId, store);
     }
   };
 
@@ -136,7 +186,6 @@ export function createFederationTaskStateReplicator(input: {
           }
         }
       }
-      advertise(frame.from, frame.projectId, store);
       return;
     }
 
@@ -145,8 +194,17 @@ export function createFederationTaskStateReplicator(input: {
       const missing = mismatchedBuckets(store.bucketManifest(), remote);
       const root = store.rootHash();
       const converged = missing.length === 0 && payload.root === root;
-      convergence.set(`${frame.from}\u0000${frame.projectId}`, { projectId: frame.projectId, converged, lastRepairAt: new Date().toISOString(), missingBuckets: missing, root });
-      if (missing.length > 0) input.publish(frame.from, { type: 'state-missing-request', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, buckets: missing } });
+      const repairKey = `${frame.from}\u0000${frame.projectId}`;
+      convergence.set(repairKey, { projectId: frame.projectId, converged, lastRepairAt: new Date().toISOString(), missingBuckets: missing, root });
+      activeRepairRequests.delete(repairKey);
+      // WHAT: Start one next repair round only after the peer's terminal summary settles the prior round.
+      // WHY: Re-requesting mismatched buckets while their batches are still arriving caused the Cloudflare feedback loop.
+      if (missing.length > 0) {
+        const published = input.publish(frame.from, { type: 'state-missing-request', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, buckets: missing } });
+        // WHAT: Mark only a successfully published missing-bucket request as active.
+        // WHY: Failed transport publication must remain eligible for explicit reconnect reconciliation.
+        if (published) activeRepairRequests.add(repairKey);
+      }
       else if (converged) input.publish(frame.from, { type: 'state-converged', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root } });
       else advertise(frame.from, frame.projectId, store);
       return;
@@ -154,7 +212,16 @@ export function createFederationTaskStateReplicator(input: {
 
     if (frame.type === 'state-missing-request') {
       const buckets = Array.isArray(payload.buckets) ? payload.buckets.map(String) : [];
-      publishEntities(frame.from, frame.projectId, store.entitiesForBuckets(buckets));
+      const entities = store.entitiesForBuckets(buckets);
+      // WHAT: Serialize relay repair responses through the same per-project publication lane as live changes.
+      // WHY: A repair response must not overlap a live batch group and expose another intermediate relay root.
+      if (frame.from === 'relay') {
+        enqueueRelayEntities(frame.projectId, entities);
+        flushRelayProject(frame.projectId, store);
+      } else {
+        publishEntities(frame.from, frame.projectId, entities);
+        advertise(frame.from, frame.projectId, store);
+      }
       return;
     }
 
@@ -171,12 +238,26 @@ export function createFederationTaskStateReplicator(input: {
       }
       pendingDeliveries.delete(deliveryId);
       if (dirty?.size === 0) runtimeDirty.delete(frame.projectId);
-      const relayRoot = String(payload.root ?? '');
-      const localRoot = store.rootHash();
-      const converged = Boolean(relayRoot && relayRoot === localRoot);
-      convergence.set(`relay\u0000${frame.projectId}`, { projectId: frame.projectId, converged, lastRepairAt: new Date().toISOString(), missingBuckets: [], root: localRoot });
-      if (!converged) advertise('relay', frame.projectId, store);
+      // WHAT: Advance the queued project lane only after its entire current batch group settles.
+      // WHY: Per-frame advancement would reintroduce intermediate summaries for multi-frame groups.
+      if (!hasPendingRelayDelivery(frame.projectId)) flushRelayProject(frame.projectId, store);
     }
+  };
+
+  const disconnectPeer = (peerId: string): void => {
+    for (const key of [...activeRepairRequests]) {
+      // WHAT: Remove repair ownership for the disconnected peer only.
+      // WHY: A replacement socket must be able to start a fresh bounded repair round.
+      if (key.startsWith(`${peerId}\u0000`)) activeRepairRequests.delete(key);
+    }
+    for (const key of [...convergence.keys()]) {
+      // WHAT: Remove convergence observations owned by the disconnected peer only.
+      // WHY: A prior socket's terminal root cannot prove the replacement socket has synchronized.
+      if (key.startsWith(`${peerId}\u0000`)) convergence.delete(key);
+    }
+    // WHAT: Retire relay delivery identities when the relay socket disconnects.
+    // WHY: Their acknowledgements can never arrive, while runtimeDirty retains the durable retry authority.
+    if (peerId === 'relay') pendingDeliveries.clear();
   };
 
   return {
@@ -184,10 +265,13 @@ export function createFederationTaskStateReplicator(input: {
     reconcileRelay,
     reconcileProject,
     handleFrame,
+    disconnectPeer,
     diagnostics: () => ({
       convergence: [...convergence].map(([key, value]) => ({ peerId: key.split('\u0000')[0], ...value })),
       runtimeDirty: [...runtimeDirty].flatMap(([projectId, entities]) => [...entities].map(([entityKey, entity]) => ({ projectId, entityKey, stateHash: entity.stateHash }))),
       pendingDeliveryIds: [...pendingDeliveries.keys()],
+      queuedRelayEntityCount: [...queuedRelayEntities.values()].reduce((count, entities) => count + entities.size, 0),
+      activeRepairCount: activeRepairRequests.size,
     }),
   };
 }
