@@ -4,7 +4,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { readLedgerCardRevisionHistoryController } from '../../src/business/ledger/controller/read-ledger-card-revisions-controller.js';
+import {
+  readLedgerCardRevisionContentController,
+  readLedgerCardRevisionHistoryController,
+} from '../../src/business/ledger/controller/read-ledger-card-revisions-controller.js';
 import { retryLedgerCardRevisionController } from '../../src/business/ledger/controller/retry-ledger-card-revision-controller.js';
 import { saveLedgerCardContentController } from '../../src/business/ledger/controller/save-ledger-card-content-controller.js';
 import { sha256AuthoredBytes } from '../../src/business/content-authoring/helper/authored-file-git-revisions.js';
@@ -159,6 +162,8 @@ test('card save mutates once, creates a focused revision, rejects stale/no-op wr
       reloadLedger: () => value.ledger,
     });
     assert.equal(saved.ok, true);
+    assert.equal((saved.snapshot as { markdown?: string }).markdown, '# Revised\n');
+    assert.equal((saved.snapshot as { baseMarkdown?: string }).baseMarkdown, '# Initial\n');
     assert.equal(counter.count, 1);
     assert.equal(readFileSync(value.file, 'utf8'), '# Revised\n');
     assert.equal(git(value.decisionOsRoot, ['log', '-1', '--format=%s']), 'Revise card card-a');
@@ -189,6 +194,7 @@ test('card save mutates once, creates a focused revision, rejects stale/no-op wr
       reloadLedger: () => value.ledger,
     });
     assert.equal(stale.statusCode, 409);
+    assert.equal((stale.snapshot as { markdown?: string }).markdown, '# Revised\n');
     assert.equal(counter.count, 1);
 
     const history = await readLedgerCardRevisionHistoryController({
@@ -199,6 +205,15 @@ test('card save mutates once, creates a focused revision, rejects stale/no-op wr
     assert.equal(history.ok, true);
     assert.ok(Array.isArray((history.history as { revisions?: unknown[] }).revisions));
     assert.equal(JSON.stringify(history).includes(value.root), false);
+    const current = await readLedgerCardRevisionContentController({
+      decisionOsRoot: value.decisionOsRoot,
+      ledger: value.ledger,
+      cardId: 'card-a',
+      commit: 'current',
+    });
+    assert.equal(current.ok, true);
+    assert.equal((current.revision as { markdown?: string }).markdown, '# Revised\n');
+    assert.equal((current.revision as { baseMarkdown?: string }).baseMarkdown, '# Initial\n');
   } finally {
     value.cleanup();
   }

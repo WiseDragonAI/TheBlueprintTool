@@ -16,7 +16,7 @@ import { canonicalDecisionOsGitIgnore } from '@backend/business/server/helper/en
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import type { CodexPipelineRun } from '../../../shared/schemas/codex-pipeline-types.js';
 
-type Frame = { type: string; requestId?: string; to?: string; projects?: unknown[]; path?: string };
+type Frame = { type: string; requestId?: string; to?: string; projects?: unknown[]; path?: string; projectId?: string; stateVersion?: number; payload?: Record<string, any> };
 
 async function projectHome(name: string): Promise<string> {
   const home = mkdtempSync(join(tmpdir(), `decision-os-federation-${name}-`));
@@ -191,6 +191,7 @@ test('stops retrying when another server owns the configured node identity', asy
   const relayHttp = createServer();
   const relay = new WebSocketServer({ noServer: true });
   let connectionCount = 0;
+  let disconnectCount = 0;
   relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
     connectionCount += 1;
     webSocket.close(4001, 'replaced');
@@ -206,6 +207,7 @@ test('stops retrying when another server owns the configured node identity', asy
     },
     localProjects: () => [],
     localServerUrl: () => 'http://127.0.0.1:1',
+    onStateDisconnected: () => { disconnectCount += 1; },
   });
   connector.start();
   try {
@@ -221,6 +223,7 @@ test('stops retrying when another server owns the configured node identity', asy
     assert.equal(status.connectTimeoutMs, 10_000);
     await new Promise((resolve) => setTimeout(resolve, 1_200));
     assert.equal(connectionCount, 1, 'a replaced connector must not fight the active owner');
+    assert.equal(disconnectCount, 1, 'the replaced socket retires its state-lane deliveries exactly once');
   } finally {
     connector.stop();
     relay.close();
@@ -495,10 +498,29 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
         for (const [targetId, target] of sockets) {
           if (targetId !== nodeId) target.send(JSON.stringify({ ...frame, from: 'relay' }));
         }
+        const entries = Array.isArray(frame.payload?.entries) ? frame.payload.entries : [];
+        // WHAT: Acknowledge the persisted relay batch before the node advances its project publication lane.
+        // WHY: The production relay owns delivery settlement; a test relay that omits it permanently blocks later state deltas.
+        webSocket.send(JSON.stringify({
+          version: 1,
+          type: 'state-relay-ack',
+          from: 'relay',
+          projectId: frame.projectId,
+          stateVersion: frame.stateVersion,
+          payload: {
+            stateVersion: frame.payload?.stateVersion,
+            deliveryId: frame.payload?.deliveryId,
+            accepted: entries.map((entry: Record<string, unknown>) => ({ key: entry.key, stateHash: entry.stateHash })),
+          },
+        }));
         return;
       }
       if (frame.type === 'state-bucket-summary' && !frame.to) {
-        webSocket.send(JSON.stringify({ ...frame, from: 'relay' }));
+        for (const target of sockets.values()) {
+          // WHAT: Broadcast the settled relay summary to every participating test node.
+          // WHY: Receivers no longer emit per-batch summaries and use this terminal frame to close repair and drain dependent content work.
+          target.send(JSON.stringify({ ...frame, from: 'relay' }));
+        }
         return;
       }
       if (frame.type === 'state-execution-observation' && !frame.to) {

@@ -12,6 +12,7 @@ import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type Page, type Response } from '@playwright/test';
+import { installPipelinePromptFixture } from '../../../backend/test/support/pipeline-prompt-fixture.js';
 
 type LedgerCard = {
   id?: string;
@@ -456,6 +457,7 @@ function createTemporaryWorkspace(): TemporaryWorkspace {
     '});',
   ].join('\n'), 'utf8');
   chmodSync(fakeCodexFile, 0o755);
+  installPipelinePromptFixture({ workspace, decisionOsRoot, commit: false });
   return { workspace, ledgerFile, threadFile, promptFile, lifecycleSignalFile, fakeCodexFile };
 }
 

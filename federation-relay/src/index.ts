@@ -185,10 +185,6 @@ export class FederationRelayV4 extends DurableObject<Env> {
     return [...entries.values()].sort((left, right) => left.bucket.localeCompare(right.bucket)).map(({ entries: _entries, ...summary }) => summary);
   }
 
-  private async stateRoot(projectId: string): Promise<string> {
-    return hashTaskCurrentRoot(await this.stateBuckets(projectId));
-  }
-
   private async deleteStatePrefix(prefix: string): Promise<number> {
     let deleted = 0;
     while (true) {
@@ -256,8 +252,7 @@ export class FederationRelayV4 extends DurableObject<Env> {
         return [stateBucketKey(projectId, bucket), value];
       })));
     });
-    const root = await this.stateRoot(projectId);
-    this.sendSocket(socket, { version: 1, type: 'state-relay-ack', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted, root } });
+    this.sendSocket(socket, { version: 1, type: 'state-relay-ack', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted } });
     for (const target of this.activeSockets()) {
       const targetNodeId = (target.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
       if (target !== socket && changed.length > 0 && this.participatesInProject(targetNodeId, projectId)) this.sendStateEntities(target, projectId, changed);
@@ -275,7 +270,13 @@ export class FederationRelayV4 extends DurableObject<Env> {
       this.sendSocket(socket, { version: 1, type: 'state-missing-request', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, buckets: missingFromRelay } });
     }
     const localRoot = hashTaskCurrentRoot(local);
-    this.sendSocket(socket, { version: 1, type: 'state-bucket-summary', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, root: localRoot, buckets: local } });
+    const summary: RelayFrame = { version: 1, type: 'state-bucket-summary', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, root: localRoot, buckets: local } };
+    for (const target of this.activeSockets()) {
+      const targetNodeId = (target.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
+      // WHAT: Publish the settled relay root to every online participant after one node finishes a batch group.
+      // WHY: Receivers no longer advertise intermediate roots after each entity batch and need one terminal convergence boundary.
+      if (this.participatesInProject(targetNodeId, projectId)) this.sendSocket(target, summary);
+    }
     if (missingFromRelay.length === 0 && payload.root === localRoot) {
       this.sendSocket(socket, { version: 1, type: 'state-converged', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, nodeId: sender, root: localRoot } });
     }
@@ -289,6 +290,7 @@ export class FederationRelayV4 extends DurableObject<Env> {
     if (buckets.size === 0) throw new Error('invalid_state_missing_request');
     const pages = await Promise.all([...buckets].map((bucket) => listAll<RelayEntity>(this.ctx.storage, stateEntityPrefix(projectId, bucket))));
     this.sendStateEntities(socket, projectId, pages.flatMap((page) => [...page.values()]));
+    await this.sendStateSummary(socket, projectId);
   }
 
   private async publishCatalog(): Promise<void> {
