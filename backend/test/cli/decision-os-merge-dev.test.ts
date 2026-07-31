@@ -74,7 +74,7 @@ test('commits main child state and merges dev without adopting the dev gitlink',
 
   const doctor = inspectMergeDev(fixture.parentRoot);
 
-  assert.equal(doctor.ready, true);
+  assert.equal(doctor.result, 'READY');
   assert.equal(doctor.expectedMerge.createDecisionOsCommit, true);
   assert.equal(doctor.expectedMerge.preservedGitlink, 'new main Decision OS snapshot commit');
   assert.equal(git(fixture.parentRoot, ['rev-parse', 'HEAD']), mainBeforeDoctor);
@@ -136,7 +136,7 @@ test('rejects source conflicts during simulation before committing child state',
 
   const doctor = inspectMergeDev(fixture.parentRoot);
 
-  assert.equal(doctor.ready, false);
+  assert.equal(doctor.result, 'NO-GO');
   assert.ok(doctor.blockers.some((blocker) => blocker.code === 'merge_dev_source_conflict'));
   assert.ok(doctor.expectedMerge.conflicts.some((conflict) => conflict.includes('shared.txt')));
 

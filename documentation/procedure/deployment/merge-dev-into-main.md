@@ -12,7 +12,7 @@
 
    **WHY:** Doctor reports both parent SHAs, main parent and child dirt, both gitlinks, predicted conflicts, blockers, and expected commits without staging, committing, updating refs, creating logs, or entering the dev child checkout.
 
-2. **WHAT:** Run the fixed promotion command from the primary `main` checkout only when doctor reports `READY yes`:
+2. **WHAT:** Run the fixed promotion command from the primary `main` checkout only when doctor reports `RESULT READY` or JSON field `"result":"READY"`:
 
    ```bash
    cd /home/jbb/dev/EditorBP/decision-os
@@ -25,9 +25,9 @@
 
    **WHY:** The receipt identifies the admitted `dev` SHA, committed child SHA, optional child and gitlink commits, and final merge SHA.
 
-4. **WHAT:** Treat doctor exit `0` as ready, doctor exit `2` as blocked, merge exit `2` as rejected repository state, and merge exit `3` as an execution failure.
+4. **WHAT:** Treat `READY` plus doctor exit `0` as admission, `NO-GO` plus doctor exit `2` as blocked, merge exit `2` as rejected repository state, and merge exit `3` as an execution failure.
 
-   **WHY:** Rejection is intentionally non-destructive; execution failures require inspection before retry.
+   **WHY:** The mutually exclusive result prevents automation from inferring admission from an ambiguous boolean or another occurrence of the word `ready`; rejection remains non-destructive.
 
 5. **WHAT:** Push separately only when explicitly authorized.
 

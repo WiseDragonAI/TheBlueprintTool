@@ -162,6 +162,8 @@ Doctor reports current branches, parent and main-child dirt, both recorded
 gitlinks, predicted conflicts, blockers, and the expected commit sequence. It
 must not acquire mutation locks, create promotion logs, stage paths, commit,
 update refs, change either worktree, or enter `.worktrees/dev/.decision-os`.
+Its single authoritative result is exactly `READY` or `NO-GO`; never infer
+admission from another field or from the presence of the word `ready`.
 
 Run it only from the primary parent `main` checkout. The tool may automatically
 commit non-ignored state in main's `.decision-os` child, commit only that

@@ -25,7 +25,7 @@ export type MergeDevReceipt = {
 
 export type MergeDevDoctorReport = {
   ok: true;
-  ready: boolean;
+  result: 'READY' | 'NO-GO';
   blockers: Array<{ code: string; message: string }>;
   state: {
     parentBranch: string;
@@ -269,9 +269,10 @@ export function inspectMergeDev(repositoryRoot: string): MergeDevDoctorReport {
   if (simulation.result.status !== 0 && simulation.conflicts.length === 0) doctorBlocker(blockers, 'merge_dev_simulation_failed', (simulation.result.stderr || simulation.result.stdout).trim());
 
   const createDecisionOsCommit = childChanges.length > 0;
+  const result = blockers.length === 0 ? 'READY' : 'NO-GO';
   return {
     ok: true,
-    ready: blockers.length === 0,
+    result,
     blockers,
     state: {
       parentBranch,
@@ -302,7 +303,7 @@ function formatDoctorReport(report: MergeDevDoctorReport): string {
     ? 'clean'
     : records.map((record) => `${record.staged ? 'staged' : 'unstaged'}:${record.path}`).join(', ');
   return [
-    `READY ${report.ready ? 'yes' : 'no'}`,
+    `RESULT ${report.result}`,
     `main ${report.state.mainSha} branch=${report.state.parentBranch} status=${changes(report.state.parentChanges)}`,
     `main-decision-os ${report.state.childSha} branch=${report.state.childBranch} status=${changes(report.state.childChanges)}`,
     `dev ${report.state.devSha}`,
@@ -480,7 +481,7 @@ export async function runMergeDevCli(argv = process.argv.slice(2), cwd = process
     if (doctor) {
       const report = inspectMergeDev(cwd);
       process.stdout.write(`${argv.includes('--json') ? JSON.stringify(report) : formatDoctorReport(report)}\n`);
-      return report.ready ? 0 : 2;
+      return report.result === 'READY' ? 0 : 2;
     }
     const receipt = await mergeDevIntoMain(cwd);
     process.stdout.write(`${JSON.stringify(receipt)}\n`);
