@@ -120,6 +120,28 @@
 
 ## decision-os Server Procedure
 
+## Decision OS Submodule Boundary
+
+Every workspace `.decision-os` directory is a Git submodule. Do not add
+workspace Decision OS cards, threads, ledgers, prompts, or other authored
+documents directly to the owning project repository. Initialize the child
+repository first, add it to the owning repository with `git submodule add`,
+and commit the parent gitlink plus `.gitmodules` entry before authored content
+is edited. Runtime, cache, settings, upload, and other ignored state remains
+inside the submodule and is not added to either repository.
+
+The parent repository must record only the `.decision-os` gitlink. A parent
+status showing individual `.decision-os/...` files means the submodule boundary
+is missing or has been removed and must be repaired before reporting the parent
+clean. A parent status showing `m .decision-os` means the submodule has
+uncommitted content; commit authored content in the child repository before
+updating the parent gitlink.
+
+This checkout uses the local-only submodule source
+`file:///home/jbb/dev/EditorBP/decision-os-data.git`. New local-only projects
+must use a local bare source repository that is available to the checkout;
+portable projects require a shared remote source instead.
+
 ### Server Restart Ownership
 
 - **Do not restart or stop the server unless the operator explicitly asks.**

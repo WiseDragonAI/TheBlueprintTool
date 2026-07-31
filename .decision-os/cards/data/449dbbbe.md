@@ -1,1 +1,0 @@
-Primary graph object grouping cards with label, color, geometry, notes, and hash identity.

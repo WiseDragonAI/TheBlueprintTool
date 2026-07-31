@@ -1,1 +1,0 @@
-Create idempotent durable queued executions before waking direct Run and Pipeline schedulers. Prove restart recovery and prevent child launch when queued persistence fails.
