@@ -311,7 +311,9 @@ node bin/decision-os-verify.mjs -- <command> [args...]
 - Typecheck once after code stabilizes. Scope changed package.
 - Full suite once after implementation and focused tests pass.
 - Failure: rerun smallest failing scope.
+- Full-suite test-only repair: when a completed full suite reports failures and making those failures pass requires changes only to test files, rerun every previously failing test in the smallest relevant scope. After all previously failing tests pass and no source file changed, do not rerun the full suite.
 - Passing check: do not repeat after docs-only edits.
+- Worktree dependency lifetime: keep an iteration worktree's installed dependencies or temporary `node_modules` link available until every planned test and typecheck has finished. Before removing that dependency access, verify that no later command still requires package-local binaries such as `tsc`; a `command not found` result is an environment failure and requires rerunning only the affected check after dependency access is restored.
 - On mobile, test and typecheck commands must use no more than `3`-way parallelism.
 
 ### Frontend Commands From An Iteration Worktree
