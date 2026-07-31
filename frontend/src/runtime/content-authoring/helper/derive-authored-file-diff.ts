@@ -2,10 +2,12 @@
  * WHAT: Owns one finite Pierre Worker request from creation through cancellation and termination.
  * WHY: Every diff generation must settle exactly once without leaving timers, listeners, or Workers alive.
  */
+import type { NormalizedAuthoredFileDiffHunk } from './normalize-authored-file-diff.js';
+
 export type AuthoredFileDiffDerivation = {
   generation: number;
   identity: string;
-  metadata: unknown;
+  hunks: NormalizedAuthoredFileDiffHunk[];
 };
 
 type WorkerLike = {
@@ -61,7 +63,7 @@ export async function deriveAuthoredFileDiff(input: {
         value: {
           generation: input.generation,
           identity: input.identity,
-          metadata: result.metadata,
+          hunks: result.hunks as NormalizedAuthoredFileDiffHunk[],
         },
       });
     };

@@ -3,6 +3,7 @@
  * WHY: Large Markdown comparisons must not block editor input or import Pierre interaction managers.
  */
 import { parseDiffFromFile } from '@pierre/diffs';
+import { normalizeAuthoredFileDiff } from '../helper/normalize-authored-file-diff.js';
 
 type DiffRequest = {
   generation: number;
@@ -21,11 +22,16 @@ self.addEventListener('message', (event: MessageEvent<DiffRequest>) => {
       { name: request.filename, contents: request.baseMarkdown, cacheKey: request.baseKey },
       { name: request.filename, contents: request.draftMarkdown, cacheKey: request.draftKey },
     );
+    const normalized = normalizeAuthoredFileDiff({
+      identity: request.identity,
+      document: request.draftMarkdown,
+      metadata,
+    });
     self.postMessage({
       ok: true,
       generation: request.generation,
       identity: request.identity,
-      metadata,
+      hunks: normalized.hunks,
     });
   } catch (error) {
     self.postMessage({

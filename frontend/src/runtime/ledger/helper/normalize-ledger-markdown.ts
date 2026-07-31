@@ -10,6 +10,14 @@ export function normalizeLedgerMarkdownWithSourceMap(source: string): {
   markdown: string;
   sourceOffset(normalizedOffset: number): number;
 } {
+  // WHAT: Return an identity source map when the authored bytes need no newline normalization.
+  // WHY: Building one boundary entry per byte blocks the input thread at the admitted 1,000,000-byte ceiling.
+  if (!source.includes('\\n') && !source.includes('\r')) {
+    return {
+      markdown: source,
+      sourceOffset: (normalizedOffset) => Math.max(0, Math.min(normalizedOffset, source.length)),
+    };
+  }
   let markdown = '';
   const boundaries = [0];
   for (let index = 0; index < source.length;) {

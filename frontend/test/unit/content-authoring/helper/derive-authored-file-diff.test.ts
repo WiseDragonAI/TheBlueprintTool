@@ -38,9 +38,9 @@ const input = {
 test('accepts only the matching Worker result and terminates once', async () => {
   const worker = new WorkerFixture();
   const pending = deriveAuthoredFileDiff({ ...input, createWorker: () => worker });
-  worker.emit('message', new MessageEvent('message', { data: { ok: true, generation: 1, identity: 'identity-a', metadata: { hunks: [] } } }));
+  worker.emit('message', new MessageEvent('message', { data: { ok: true, generation: 1, identity: 'identity-a', hunks: [] } }));
   const result = await pending;
-  assert.deepEqual(result.metadata, { hunks: [] });
+  assert.deepEqual(result.hunks, []);
   assert.equal(worker.terminated, 1);
   assert.equal(worker.listeners.get('message')?.size, 0);
 });
