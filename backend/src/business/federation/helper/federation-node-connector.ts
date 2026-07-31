@@ -297,13 +297,44 @@ export function createFederationNodeConnector(input: {
   };
 
   let catalogWritable = true;
-  const loadRetainedCatalog = (): void => {
+  type RemoteCatalogNodes = Map<string, { nodeLabel: string; online: boolean; projects: ProjectManifest[] }>;
+  const validateCatalogNodes = (
+    nodes: Array<{ nodeId?: unknown; nodeLabel?: unknown; online?: unknown; projects?: unknown }>,
+    retained: boolean,
+  ): RemoteCatalogNodes => {
+    const candidateNodes: RemoteCatalogNodes = new Map();
+    for (const node of nodes) {
+      const nodeId = String(node.nodeId ?? '').trim();
+      // WHAT: Reject one invalid node without installing any sibling candidates.
+      // WHY: Partial catalog installation would present an invalid snapshot as complete discovery state.
+      if (!nodeId
+        || nodeId === settings?.nodeId
+        || !Array.isArray(node.projects)
+        || node.projects.some((project) => {
+          // WHAT: Reject a project that lacks the complete path-free manifest contract.
+          // WHY: Remote discovery cannot safely route an incomplete or structurally ambiguous project.
+          if (!project || typeof project !== 'object' || Array.isArray(project)) return true;
+          const manifest = project as Record<string, unknown>;
+          return !String(manifest.id ?? '').trim()
+            || typeof manifest.name !== 'string'
+            || typeof manifest.description !== 'string'
+            || typeof manifest.color !== 'string'
+            || !Array.isArray(manifest.ledgers)
+            || typeof manifest.originFingerprint !== 'string';
+        })) throw new Error(retained ? 'invalid_federation_project_catalog_node' : 'invalid_federation_relay_catalog_node');
+      candidateNodes.set(nodeId, {
+        nodeLabel: String(node.nodeLabel || nodeId),
+        online: retained ? false : Boolean(node.online),
+        projects: node.projects as ProjectManifest[],
+      });
+    }
+    return candidateNodes;
+  };
+  const readRetainedCatalogCandidate = (): RemoteCatalogNodes => {
     // WHAT: Treat an absent retained catalog as a valid empty local cache.
     // WHY: First startup has no remote-catalog bytes to recover or preserve.
     if (!input.catalogFile || !existsSync(input.catalogFile)) {
-      remoteNodes.clear();
-      catalogWritable = true;
-      return;
+      return new Map();
     }
     const retained = JSON.parse(readFileSync(input.catalogFile, 'utf8')) as {
         version?: unknown;
@@ -315,34 +346,15 @@ export function createFederationNodeConnector(input: {
     if (retained.version !== 1
       || String(retained.federationId ?? '') !== String(settings?.federationId ?? '')
       || !Array.isArray(retained.nodes)) throw new Error('invalid_federation_project_catalog');
-    const candidateNodes = new Map<string, { nodeLabel: string; online: boolean; projects: ProjectManifest[] }>();
-    for (const node of retained.nodes) {
-      const nodeId = String(node.nodeId ?? '').trim();
-      // WHAT: Reject one invalid retained node without installing any sibling candidates.
-      // WHY: Partial catalog installation would present a corrupt durable snapshot as complete discovery state.
-      if (!nodeId
-        || nodeId === settings?.nodeId
-        || !Array.isArray(node.projects)
-        || node.projects.some((project) => {
-          // WHAT: Reject a retained project that lacks the complete path-free manifest contract.
-          // WHY: Remote discovery cannot safely route an incomplete or structurally ambiguous project.
-          if (!project || typeof project !== 'object' || Array.isArray(project)) return true;
-          const manifest = project as Record<string, unknown>;
-          return !String(manifest.id ?? '').trim()
-            || typeof manifest.name !== 'string'
-            || typeof manifest.description !== 'string'
-            || typeof manifest.color !== 'string'
-            || !Array.isArray(manifest.ledgers)
-            || typeof manifest.originFingerprint !== 'string';
-        })) throw new Error('invalid_federation_project_catalog_node');
-      candidateNodes.set(nodeId, {
-        nodeLabel: String(node.nodeLabel || nodeId),
-        online: false,
-        projects: node.projects as ProjectManifest[],
-      });
-    }
+    return validateCatalogNodes(retained.nodes, true);
+  };
+  const installRemoteCatalog = (candidateNodes: RemoteCatalogNodes): void => {
     remoteNodes.clear();
     for (const [nodeId, node] of candidateNodes) remoteNodes.set(nodeId, node);
+  };
+  const loadRetainedCatalog = (): void => {
+    const candidateNodes = readRetainedCatalogCandidate();
+    installRemoteCatalog(candidateNodes);
     catalogWritable = true;
   };
   try { loadRetainedCatalog(); }
@@ -352,29 +364,40 @@ export function createFederationNodeConnector(input: {
     reportError(error, 'read-retained-project-catalog');
   }
 
-  const persistRemoteCatalog = (propagateFailure = false): void => {
+  const persistRemoteCatalog = (
+    candidateNodes: RemoteCatalogNodes = remoteNodes,
+    propagateFailure = false,
+    allowRecoveryWrite = false,
+  ): boolean => {
     // WHAT: Skip catalog persistence when no durable catalog is configured or its current bytes failed validation.
     // WHY: Federation must preserve invalid retained state byte-identically until explicit recovery validates replacement bytes.
-    if (!input.catalogFile || !catalogWritable) return;
+    // WHAT: Treat an unconfigured retained catalog as a successful memory-only transaction.
+    // WHY: Connectors without durable catalog ownership must still install validated live discovery state.
+    if (!input.catalogFile) return true;
+    // WHAT: Permit writes over an invalid retained catalog only from the explicit recovery transaction.
+    // WHY: Live relay frames must not bypass validation and operator-owned recovery while the durable scope is paused.
+    if (!catalogWritable && !allowRecoveryWrite) return false;
     const temporary = `${input.catalogFile}.tmp`;
     try {
       mkdirSync(dirname(input.catalogFile), { recursive: true });
       writeFileSync(temporary, JSON.stringify({
         version: 1,
         federationId: settings?.federationId ?? '',
-        nodes: [...remoteNodes].map(([nodeId, node]) => ({
+        nodes: [...candidateNodes].map(([nodeId, node]) => ({
           nodeId,
           nodeLabel: node.nodeLabel,
           projects: node.projects,
         })),
       }, null, 2) + '\n', 'utf8');
       renameSync(temporary, input.catalogFile);
+      return true;
     } catch (error) {
       catalogWritable = false;
       reportError(error, 'persist-project-catalog');
       // WHAT: Propagate only an explicit recovery write failure to its recovery owner.
       // WHY: Normal connector callbacks remain contained while recovery must not resolve an unverified writable state.
       if (propagateFailure) throw error;
+      return false;
     }
   };
 
@@ -525,11 +548,17 @@ export function createFederationNodeConnector(input: {
 
   const handleFrame = async (frame: RelayFrame): Promise<void> => {
     if (frame.type === 'catalog') {
-      remoteNodes.clear();
-      for (const node of frame.nodes ?? []) {
-        if (node.nodeId !== settings?.nodeId) remoteNodes.set(node.nodeId, { nodeLabel: String(node.nodeLabel || node.nodeId), online: node.online, projects: node.projects });
-      }
-      persistRemoteCatalog();
+      // WHAT: Ignore live relay catalogs while retained catalog durability is paused.
+      // WHY: Network traffic cannot replace invalid durable authority before explicit validation and recovery succeeds.
+      if (!catalogWritable) return;
+      const candidateNodes = validateCatalogNodes(
+        (frame.nodes ?? []).filter((node) => node.nodeId !== settings?.nodeId),
+        false,
+      );
+      // WHAT: Install a live catalog only after its complete candidate has persisted successfully.
+      // WHY: Runtime discovery and retained recovery must advance through one atomic authority transition.
+      if (!persistRemoteCatalog(candidateNodes)) return;
+      installRemoteCatalog(candidateNodes);
       input.onRemoteCatalogChange?.();
       return;
     }
@@ -953,8 +982,12 @@ export function createFederationNodeConnector(input: {
       catch (error) { reportError(error, 'publish-manifest'); }
     },
     recoverRetainedProjectCatalog(): void {
-      loadRetainedCatalog();
-      persistRemoteCatalog(true);
+      const candidateNodes = readRetainedCatalogCandidate();
+      // WHAT: Persist the fully validated recovery candidate before installing it in runtime discovery.
+      // WHY: A failed recovery write must leave both the prior in-memory state and paused durable authority unchanged.
+      persistRemoteCatalog(candidateNodes, true, true);
+      installRemoteCatalog(candidateNodes);
+      catalogWritable = true;
     },
     publishContentChange(): void {
       if (socket?.readyState !== WebSocket.OPEN) return;

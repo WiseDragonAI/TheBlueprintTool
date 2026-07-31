@@ -413,14 +413,6 @@ node bin/decision-os-verify.mjs -- <command> [args...]
 - The command waits when another Decision OS verification owns the lease.
 - Pass one direct test or typecheck command. Shell wrappers are rejected.
 - `node bin/decision-os-workload-status.mjs` remains a read-only diagnostic.
-- Run the complete backend suite from the repository `backend/` directory with the direct Node runner and an explicit three-worker limit:
-
-```bash
-node ../bin/decision-os-verify.mjs -- env TSX_TSCONFIG_PATH="$PWD/tsconfig.json" node --test --test-concurrency=3 --import tsx "test/**/*.test.ts"
-```
-
-- Never use `npm test --prefix backend` for the complete backend suite. The lease sees `npm` instead of the nested `node --test` command and therefore cannot inject its concurrency limit.
-
 ## Verification Hygiene
 
 - During implementation: run smallest relevant test files.

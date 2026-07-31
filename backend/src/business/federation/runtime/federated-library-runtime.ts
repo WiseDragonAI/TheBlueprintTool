@@ -18,12 +18,14 @@ import type {
 } from '../helper/federation-node-connector.js';
 import type { createRuntimeIncidentLedger } from '../../server/helper/runtime-incident-ledger.js';
 import { createFederatedLibraryCatalog } from './federated-library-catalog.js';
+import { telemetry } from '@backend/telemetry/harness.js';
 
 type AnyRecord = Record<string, unknown>;
 type Skill = { name: string; favorite?: boolean; tags?: string[] };
 const requestTimeoutMs = 60_000;
 const retryDelaysMs = [1_000, 3_000] as const;
 const recoveryDelayMs = 30_000;
+const maximumConcurrentPublicationFlights = 2;
 
 class FederatedLibraryRequestError extends Error {
   constructor(readonly detail: {
@@ -78,6 +80,83 @@ export function createFederatedLibraryRuntime(input: {
   const publicationFlights = new Map<string, Promise<void>>();
   const latestPublicationRevision = new Map<string, string>();
   const acknowledgedPublicationRevision = new Map<string, string>();
+  const publicationControllers = new Set<AbortController>();
+  const publicationQueue: Array<{
+    run: (signal: AbortSignal) => Promise<'acknowledged' | 'pending' | 'failed'>;
+    resolve: (outcome: 'acknowledged' | 'pending' | 'failed') => void;
+    skillName: string;
+    revision: string;
+  }> = [];
+  let activePublicationFlights = 0;
+  let stopped = false;
+
+  const abortableDelay = (delayMs: number, signal: AbortSignal): Promise<void> => new Promise((resolveDelay, rejectDelay) => {
+    let timer: NodeJS.Timeout | null = null;
+    const settle = (): void => {
+      // WHAT: Clear the retry timer and cancellation listener through one settlement owner.
+      // WHY: Publication shutdown must not leave timers or abort listeners attached after a delay completes.
+      if (timer) clearTimeout(timer);
+      signal.removeEventListener('abort', abort);
+    };
+    const abort = (): void => {
+      settle();
+      rejectDelay(signal.reason instanceof Error ? signal.reason : new Error('federated_skill_publication_stopped'));
+    };
+    // WHAT: Reject before installing a retry timer when shutdown already owns cancellation.
+    // WHY: A stopped runtime must not create new asynchronous work.
+    if (signal.aborted) {
+      abort();
+      return;
+    }
+    timer = setTimeout(() => {
+      settle();
+      resolveDelay();
+    }, delayMs);
+    timer.unref?.();
+    signal.addEventListener('abort', abort, { once: true });
+  });
+
+  const drainPublicationQueue = (): void => {
+    // WHAT: Admit at most the configured runtime-wide number of publication flights.
+    // WHY: Per-revision deduplication cannot prevent many distinct skills from flooding the relay concurrently.
+    while (!stopped && activePublicationFlights < maximumConcurrentPublicationFlights && publicationQueue.length > 0) {
+      const queued = publicationQueue.shift()!;
+      const controller = new AbortController();
+      publicationControllers.add(controller);
+      activePublicationFlights += 1;
+      telemetry('federated-skill-publication-admitted', {
+        skillName: queued.skillName,
+        revision: queued.revision,
+        activePublicationFlights,
+        maximumConcurrentPublicationFlights,
+      });
+      void queued.run(controller.signal).then(queued.resolve, () => queued.resolve('pending')).finally(() => {
+        publicationControllers.delete(controller);
+        activePublicationFlights -= 1;
+        telemetry('federated-skill-publication-settled', {
+          skillName: queued.skillName,
+          revision: queued.revision,
+          activePublicationFlights,
+        });
+        drainPublicationQueue();
+      });
+    }
+  };
+
+  const enqueuePublication = (
+    skillName: string,
+    revision: string,
+    run: (signal: AbortSignal) => Promise<'acknowledged' | 'pending' | 'failed'>,
+  ): Promise<'acknowledged' | 'pending' | 'failed'> => new Promise((resolvePublication) => {
+    // WHAT: Settle new publication admission immediately after runtime shutdown.
+    // WHY: Callers must never retain a promise that no queue owner can execute.
+    if (stopped) {
+      resolvePublication('pending');
+      return;
+    }
+    publicationQueue.push({ run, resolve: resolvePublication, skillName, revision });
+    drainPublicationQueue();
+  });
   const parseResponse = <T>(response: {
     result: FederationInternalResponse;
     nodeId: string;
@@ -256,6 +335,7 @@ export function createFederatedLibraryRuntime(input: {
   const acknowledgePublishedRevision = async (
     skillName: string,
     revision: string,
+    signal: AbortSignal,
   ): Promise<'acknowledged' | 'pending' | 'failed'> => {
     const peers = input.federation()?.nodes().filter((node) => node.online) ?? [];
     // WHAT: Keep publication pending without creating an incident when no peer is currently available.
@@ -271,6 +351,7 @@ export function createFederatedLibraryRuntime(input: {
           headers: { 'content-type': 'application/json' },
           body,
           timeoutMs: requestTimeoutMs,
+          signal,
         });
         const receipt = parseResponse<FederatedSkillReceipt>({
           result,
@@ -288,10 +369,7 @@ export function createFederatedLibraryRuntime(input: {
       const delayMs = retryDelaysMs[attempt];
       // WHAT: Delay only between the three bounded sequential receipt attempts.
       // WHY: Sequential retries prevent publication bursts against the relay and give the selected peer time to import.
-      if (delayMs !== undefined) await new Promise<void>((resolveDelay) => {
-        const timer = setTimeout(resolveDelay, delayMs);
-        timer.unref?.();
-      });
+      if (delayMs !== undefined) await abortableDelay(delayMs, signal);
     }
     return 'failed';
   };
@@ -336,7 +414,11 @@ export function createFederatedLibraryRuntime(input: {
         // WHAT: Create one acknowledgement flight per exact skill revision.
         // WHY: Repeated save and retry callbacks must not multiply relay requests for identical content.
         if (!flight) {
-          flight = acknowledgePublishedRevision(skillName, revision).then((outcome) => {
+          flight = enqueuePublication(
+            skillName,
+            revision,
+            (signal) => acknowledgePublishedRevision(skillName, revision, signal),
+          ).then((outcome) => {
             // WHAT: Ignore a superseded revision after a newer authored revision owns publication.
             // WHY: A late older flight must neither resolve nor create an incident for current content.
             if (latestPublicationRevision.get(skillName) !== revision) return;
@@ -374,8 +456,15 @@ export function createFederatedLibraryRuntime(input: {
     receivePublishedSkill,
     readSkillIndex: catalog.readIndex,
     stop: () => {
+      stopped = true;
       if (retryTimer) clearTimeout(retryTimer);
       retryTimer = null;
+      // WHAT: Settle queued publication work without admitting it after shutdown begins.
+      // WHY: The stopped runtime no longer owns relay capacity for queued revisions.
+      while (publicationQueue.length > 0) publicationQueue.shift()!.resolve('pending');
+      // WHAT: Abort every active publication request and retry delay through its owning signal.
+      // WHY: Server shutdown must propagate cancellation and force detached publication promises to settle.
+      for (const controller of publicationControllers) controller.abort(new Error('federated_skill_publication_stopped'));
     },
     synchronize,
   };

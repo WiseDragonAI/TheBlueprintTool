@@ -294,3 +294,117 @@ test('authored skill publication deduplicates one exact-revision peer acknowledg
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('bounds aggregate publication flights and cancels active plus queued work on stop', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-publication-bound-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  for (const skillName of ['bound-a', 'bound-b', 'bound-c', 'bound-d']) {
+    const directory = join(workspace, '.skills', skillName);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(join(directory, 'SKILL.md'), `---\nname: ${skillName}\ndescription: Bound ${skillName}\n---\n\n# Instructions\n\nBound relay traffic.\n`);
+  }
+  writeFileSync(join(decisionOsRoot, 'codex-pipelines.json'), JSON.stringify({ version: 1, pipelines: [], steps: [], runs: [], skillLibrary: [], authoredContent: [], activeWorkspaceRun: null }));
+  execFileSync('git', ['init', '-q'], { cwd: workspace });
+  execFileSync('git', ['add', '.skills'], { cwd: workspace });
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', 'commit', '-q', '-m', 'Publication bound'], { cwd: workspace });
+  let activeRequests = 0;
+  let maximumActiveRequests = 0;
+  let requestCount = 0;
+  const connector = {
+    nodes: () => [{ nodeId: 'peer-a', nodeLabel: 'Peer A', online: true, projects: [] }],
+    publishManifest: () => undefined,
+    request: async (_nodeId: string, _path: string, options: { signal?: AbortSignal }) => {
+      requestCount += 1;
+      activeRequests += 1;
+      maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests);
+      return await new Promise<Record<string, unknown>>((resolveRequest) => {
+        const finish = (): void => {
+          activeRequests -= 1;
+          resolveRequest({ status: 499, headers: {}, body: Buffer.from('{"ok":false,"error":"client_cancelled"}'), requestId: 'cancelled' });
+        };
+        // WHAT: Settle the injected relay request through the runtime publication cancellation signal.
+        // WHY: The regression must prove stop propagation across the real request option boundary.
+        if (options.signal?.aborted) finish();
+        else options.signal?.addEventListener('abort', finish, { once: true });
+      }) as never;
+    },
+    status: () => ({ phase: 'connected' }),
+  };
+  const incidentLedger = createRuntimeIncidentLedger({ decisionOsRoot });
+  const federatedLibrary = createFederatedLibraryRuntime({
+    federation: () => connector as never,
+    clearPaused: () => undefined,
+    incidentLedger,
+    localDecisionOsRoots: () => [decisionOsRoot],
+    localWorkspaceRoots: () => [workspace],
+    masterDecisionOsRoot: decisionOsRoot,
+    masterRoot: workspace,
+    paused: () => false,
+    recordBackgroundFailure: () => undefined,
+    recordIncident: (input) => incidentLedger.record(input as never),
+    runtime: {},
+  });
+  try {
+    for (const skillName of ['bound-a', 'bound-b', 'bound-c', 'bound-d']) federatedLibrary.publishAuthoredSkill(skillName, 'save');
+    for (let attempt = 0; attempt < 200 && requestCount < 2; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(requestCount, 2);
+    assert.equal(maximumActiveRequests, 2);
+    federatedLibrary.stop();
+    for (let attempt = 0; attempt < 100 && activeRequests > 0; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(activeRequests, 0);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(requestCount, 2);
+  } finally {
+    federatedLibrary.stop();
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('cancels publication retry delay without opening another relay request', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-publication-retry-cancel-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const skillDirectory = join(workspace, '.skills', 'retry-cancel');
+  mkdirSync(skillDirectory, { recursive: true });
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(join(skillDirectory, 'SKILL.md'), '---\nname: retry-cancel\ndescription: Retry cancellation\n---\n\n# Instructions\n\nCancel retry.\n');
+  writeFileSync(join(decisionOsRoot, 'codex-pipelines.json'), JSON.stringify({ version: 1, pipelines: [], steps: [], runs: [], skillLibrary: [], authoredContent: [], activeWorkspaceRun: null }));
+  execFileSync('git', ['init', '-q'], { cwd: workspace });
+  execFileSync('git', ['add', '.skills'], { cwd: workspace });
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', 'commit', '-q', '-m', 'Retry cancellation'], { cwd: workspace });
+  let requestCount = 0;
+  const connector = {
+    nodes: () => [{ nodeId: 'peer-a', nodeLabel: 'Peer A', online: true, projects: [] }],
+    publishManifest: () => undefined,
+    request: async () => {
+      requestCount += 1;
+      return { status: 503, headers: {}, body: Buffer.from('{"ok":false,"error":"unavailable"}'), requestId: 'unavailable' };
+    },
+    status: () => ({ phase: 'connected' }),
+  };
+  const incidentLedger = createRuntimeIncidentLedger({ decisionOsRoot });
+  const federatedLibrary = createFederatedLibraryRuntime({
+    federation: () => connector as never,
+    clearPaused: () => undefined,
+    incidentLedger,
+    localDecisionOsRoots: () => [decisionOsRoot],
+    localWorkspaceRoots: () => [workspace],
+    masterDecisionOsRoot: decisionOsRoot,
+    masterRoot: workspace,
+    paused: () => false,
+    recordBackgroundFailure: () => undefined,
+    recordIncident: (input) => incidentLedger.record(input as never),
+    runtime: {},
+  });
+  try {
+    federatedLibrary.publishAuthoredSkill('retry-cancel', 'save');
+    for (let attempt = 0; attempt < 100 && requestCount === 0; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(requestCount, 1);
+    federatedLibrary.stop();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(requestCount, 1);
+  } finally {
+    federatedLibrary.stop();
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

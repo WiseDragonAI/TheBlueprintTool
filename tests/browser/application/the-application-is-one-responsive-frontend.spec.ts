@@ -3,8 +3,8 @@
  * WHY: Control Room and project workflows must not diverge into separate mobile and desktop implementations.
  */
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
@@ -27,15 +27,33 @@ function browserWorkspaceRoot(): string {
   // WHY: Every server must remain disconnected from production federation without recopying the large fixture per test.
   if (isolatedWorkspaceRoot) return isolatedWorkspaceRoot;
   isolatedWorkspaceRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-responsive-browser-'));
-  cpSync(resolve(repoRoot, '.decision-os'), resolve(isolatedWorkspaceRoot, '.decision-os'), {
-    recursive: true,
-    filter: (source) => {
-      const relativePath = source.slice(resolve(repoRoot, '.decision-os').length).replace(/^\//, '');
-      const firstSegment = relativePath.split('/')[0] ?? '';
-      return !['.settings.json', 'cache', 'runtime', 'runs', 'voice-uploads'].includes(firstSegment);
-    },
-  });
+  materializeCommittedDecisionOsFixture(isolatedWorkspaceRoot);
   return isolatedWorkspaceRoot;
+}
+
+function materializeCommittedDecisionOsFixture(workspaceRoot: string): void {
+  const fixtureRoot = resolve(workspaceRoot, '.decision-os');
+  // WHAT: Materialize the exact Decision OS child commit recorded by this feature checkout.
+  // WHY: The configured child source owns committed objects even when this linked worktree's submodule is uninitialized or on another commit.
+  const recordedCommit = execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD:.decision-os'], { encoding: 'utf8' }).trim();
+  const childSourceUrl = execFileSync('git', ['-C', repoRoot, 'config', '-f', '.gitmodules', '--get', 'submodule..decision-os.url'], { encoding: 'utf8' }).trim();
+  // WHAT: Bound the in-memory archive above the committed fixture size while retaining synchronous setup ordering.
+  // WHY: Node's 1 MiB default maxBuffer terminates a valid child archive before tar can receive it.
+  const archive = execFileSync('git', [`--git-dir=${fileURLToPath(childSourceUrl)}`, 'archive', '--format=tar', recordedCommit], {
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  mkdirSync(fixtureRoot, { recursive: true });
+  const extraction = spawnSync('tar', ['-x', '-C', fixtureRoot], { input: archive, encoding: 'buffer' });
+  // WHAT: Reject an incomplete authored-state extraction before starting the browser server.
+  // WHY: Continuing with a partial fixture would turn a setup failure into misleading missing-card and missing-project behavior.
+  if (extraction.status !== 0) {
+    throw new Error(`Unable to materialize committed Decision OS browser fixture: ${String(extraction.stderr)}`);
+  }
+  // WHAT: Remove settings and runtime-owned paths even when an older child commit tracked them.
+  // WHY: Browser verification must never inherit credentials, federation identity, caches, runs, or uploads.
+  for (const relativePath of ['.settings.json', 'cache', 'runtime', 'runs', 'voice-uploads']) {
+    rmSync(resolve(fixtureRoot, relativePath), { recursive: true, force: true });
+  }
 }
 
 test('The responsive application preserves the mobile Control Room and expands the same shell on desktop.', { timeout: 60_000 }, async () => {
@@ -880,8 +898,11 @@ function executionProjection(projection: PipelineLaunchProjection, target: Pipel
 }
 
 function localResponsiveCardFixture(projectId?: string): { route: string; task: PipelineLaunchTask } {
-  const project = JSON.parse(readFileSync(resolve(repoRoot, '.decision-os/project.json'), 'utf8')) as { id?: string };
-  const registry = JSON.parse(readFileSync(resolve(repoRoot, '.decision-os/state.json'), 'utf8')) as {
+  // WHAT: Resolve every authored fixture file from the same isolated workspace served by the browser server.
+  // WHY: The implementation worktree's .decision-os submodule is not the fixture authority and may lack the copied project data.
+  const workspaceRoot = browserWorkspaceRoot();
+  const project = JSON.parse(readFileSync(resolve(workspaceRoot, '.decision-os/project.json'), 'utf8')) as { id?: string };
+  const registry = JSON.parse(readFileSync(resolve(workspaceRoot, '.decision-os/state.json'), 'utf8')) as {
     ledgers?: Array<{ id?: string; ledgerFile?: string }>;
   };
   assert.ok(project.id, 'The browser fixture must expose a project identity.');
@@ -892,7 +913,7 @@ function localResponsiveCardFixture(projectId?: string): { route: string; task: 
     // WHAT: Ignore incomplete registry entries that cannot address a card.
     // WHY: Only a concrete ledger identity and file can produce a deterministic served route.
     if (!ledgerRef.id || !ledgerRef.ledgerFile) continue;
-    const ledgerFile = resolve(repoRoot, ledgerRef.ledgerFile);
+    const ledgerFile = resolve(workspaceRoot, ledgerRef.ledgerFile);
     // WHAT: Skip runtime-owned ledgers that are intentionally absent from a clean worktree.
     // WHY: Browser fixtures must rely only on committed workspace content.
     if (!existsSync(ledgerFile)) continue;
