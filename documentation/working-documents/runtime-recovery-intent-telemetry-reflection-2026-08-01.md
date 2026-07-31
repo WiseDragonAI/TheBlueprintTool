@@ -43,3 +43,15 @@
 2. Update the stale-waiting fixture to satisfy current pipeline-prompt admission, prove the original lifecycle assertion still fails, then complete the missing correction before integration.
 3. Add the four telemetry sequences at their existing transition boundaries, without introducing a second state store.
 4. Use telemetry to prove ordering and final authority, then retain focused regression tests for each first incorrect transition.
+
+---
+
+## F. Engineering Audit
+
+1. No test file or test case was deleted from `dev`. The consolidated diff adds one unit-test file and extends four existing test surfaces. Removed test lines replace duplicated fixtures and mutable route setup; they do not remove assertions.
+2. The branch is not green. Focused frontend checks pass `26/26`. Focused backend recovery checks pass, while the stale-waiting regression fails at current prompt admission with `409 pipeline_prompt_missing` before reaching lifecycle reconciliation. The full suite and typechecks have not been admitted.
+3. Pipeline-store stability is placed at the correct downstream pause-promotion boundary in `createCodexProcessCoordinator()`. It uses a bounded runtime-owned timer and preserves persistent-corruption containment. Missing coverage: timer cancellation, scope replacement, concurrent projects, and emitted stability decisions.
+4. Federated recovery is factored through `resumeBackgroundRuntime()` and preserves the existing component-owned synchronization boundary. Its unit test proves pause deletion and suppression of duplicate generic resolution, but it does not prove incident-ledger resolution and synchronized-state installation together.
+5. Optimistic handoff is a small change at the existing `startPipeline()` settlement boundary. The focused frontend tests pass, but the larger browser fixture remains mocked evidence; no served success, rejection, and timeout sequence has been verified.
+6. Stale waiting has no production correction. Until its fixture reaches terminal settlement and fails on `waitingAt`, it is historical RCA evidence rather than a current executable proof.
+7. Dev telemetry proves only the pipeline-store failure class and the stale durable timestamp mismatch. It does not prove any of the four proposed corrections, the federated double-resolution sequence, the optimistic handoff sequence, or terminal requeue ordering.
