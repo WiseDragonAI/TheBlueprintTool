@@ -11,6 +11,7 @@ import { createRuntimeIncidentLedger } from '@backend/business/server/helper/run
 import { runtimeIncidentReviewCardId, runtimeIncidentReviewProjectId } from '@backend/business/server/helper/synchronize-runtime-incident-review-task.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import { createTaskExecutionLaunchRequest, type TaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
+import { traces } from '@backend/telemetry/harness.js';
 
 test('normal health reports the active release identity', async (context) => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-release-health-'));
@@ -384,6 +385,11 @@ test('invalid project pipeline store pauses only its Codex runtime while global 
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const invalidStore = join(projectRoots[1].root, '.decision-os', 'codex-pipelines.json');
   const projectIncidentFile = join(projectRoots[1].root, '.decision-os', 'runtime-incidents.json');
+  const invalidDecisionOsRoot = join(projectRoots[1].root, '.decision-os');
+  const stabilityDecisions = (): Array<Record<string, unknown>> => traces
+    .filter((trace) => trace.name === 'pipeline-store-stability-decision')
+    .map((trace) => trace.args as Record<string, unknown>)
+    .filter((args) => args.decisionOsRoot === invalidDecisionOsRoot);
   const validStoreBytes = JSON.stringify({
     version: 1,
     pipelines: [],
@@ -424,6 +430,12 @@ test('invalid project pipeline store pauses only its Codex runtime while global 
       pausedBackgroundComponents: string[];
     };
     assert.equal(recoveredTransientHealth.pausedBackgroundComponents.includes('codex-runtime:invalid-project'), false);
+    await waitUntil(() => stabilityDecisions().some((decision) => decision.outcome === 'recovered'));
+    const recoveredDecision = stabilityDecisions().find((decision) => decision.outcome === 'recovered');
+    assert.equal(recoveredDecision?.projectId, 'invalid-project');
+    assert.equal(recoveredDecision?.scope, `codex-pipeline-store:${invalidStore}`);
+    assert.equal(typeof recoveredDecision?.incidentId, 'string');
+    assert.equal(recoveredDecision?.stabilityDelayMs, 1_000);
 
     writeFileSync(invalidStore, JSON.stringify({
       version: 1,
@@ -450,6 +462,10 @@ test('invalid project pipeline store pauses only its Codex runtime while global 
     assert.equal(health.pausedBackgroundComponents.includes('codex-runtime:healthy-project'), false);
     assert.equal((await fetch(`${baseUrl}/`)).status, 200);
     assert.equal((await fetch(`${baseUrl}/api/federation/nodes`)).status, 200);
+    const pausedDecision = stabilityDecisions().find((decision) => decision.outcome === 'paused');
+    assert.equal(pausedDecision?.projectId, 'invalid-project');
+    assert.equal(pausedDecision?.scope, `codex-pipeline-store:${invalidStore}`);
+    assert.ok(Number(pausedDecision?.elapsedMs) >= 1_000);
 
     const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`)
       .then((response) => response.json()) as {

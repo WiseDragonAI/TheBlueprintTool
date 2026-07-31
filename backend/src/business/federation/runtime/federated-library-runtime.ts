@@ -5,10 +5,12 @@
 import {
   importFederatedPipelineSnapshot,
   importFederatedSkillSnapshot,
+  federatedSkillReceipt,
   type FederatedPipelineSnapshot,
   type FederatedSkillExportIndex,
   type FederatedSkillManifest,
   type FederatedSkillSnapshot,
+  type FederatedSkillReceipt,
 } from '../helper/federated-library-cache.js';
 import type {
   FederationInternalResponse,
@@ -57,6 +59,7 @@ export function createFederatedLibraryRuntime(input: {
   initialize: () => void;
   invalidateIndex: () => void;
   publishAuthoredSkill: (skillName: string, operation: 'create' | 'save' | 'retry') => void;
+  receivePublishedSkill: (sourceNodeId: string, skillName: string, revision: string) => Promise<FederatedSkillReceipt>;
   readSkillIndex: () => Promise<FederatedSkillExportIndex>;
   stop: () => void;
   synchronize: (forceRefresh?: boolean) => Promise<void>;
@@ -72,6 +75,9 @@ export function createFederatedLibraryRuntime(input: {
   let forceRefreshRequested = false;
   let synchronization: Promise<void> | null = null;
   let retryTimer: NodeJS.Timeout | null = null;
+  const publicationFlights = new Map<string, Promise<void>>();
+  const latestPublicationRevision = new Map<string, string>();
+  const acknowledgedPublicationRevision = new Map<string, string>();
   const parseResponse = <T>(response: {
     result: FederationInternalResponse;
     nodeId: string;
@@ -224,6 +230,71 @@ export function createFederatedLibraryRuntime(input: {
     });
     return run;
   };
+  const receivePublishedSkill = async (
+    sourceNodeId: string,
+    skillName: string,
+    revision: string,
+  ): Promise<FederatedSkillReceipt> => {
+    const peer = input.federation()?.nodes().find((node) => node.nodeId === sourceNodeId && node.online);
+    // WHAT: Reject a receipt request whose authenticated source is no longer an online federation peer.
+    // WHY: A public local HTTP caller must not be able to trigger an arbitrary federation pull.
+    if (!peer) throw new Error('federated_skill_receipt_source_unavailable');
+    const snapshot = await request<FederatedSkillSnapshot>(
+      peer,
+      `/api/federation/skills-snapshot?name=${encodeURIComponent(skillName)}`,
+    );
+    const published = snapshot.skills.find((skill) => skill.name === skillName);
+    // WHAT: Import only the exact revision named by the publisher's receipt request.
+    // WHY: A stale or substituted snapshot cannot acknowledge the authored revision being settled.
+    if (!published || published.revision !== revision) {
+      return { version: 1, name: skillName, revision, acknowledged: false };
+    }
+    importFederatedSkillSnapshot({ serverRoot: input.masterRoot, snapshot: { version: 1, skills: [published] } });
+    catalog.invalidate();
+    return federatedSkillReceipt(input.masterRoot, skillName, revision);
+  };
+  const acknowledgePublishedRevision = async (
+    skillName: string,
+    revision: string,
+  ): Promise<'acknowledged' | 'pending' | 'failed'> => {
+    const peers = input.federation()?.nodes().filter((node) => node.online) ?? [];
+    // WHAT: Keep publication pending without creating an incident when no peer is currently available.
+    // WHY: Ordinary peer absence is federation status, while an incident requires a failed attempted acknowledgement.
+    if (peers.length === 0) return 'pending';
+    for (let attempt = 0; attempt < retryDelaysMs.length + 1; attempt += 1) {
+      const peer = peers[attempt % peers.length];
+      try {
+        const body = Buffer.from(JSON.stringify({ skillName, revision }));
+        const startedAt = Date.now();
+        const result = await input.federation()!.request(peer.nodeId, '/api/federation/skills-receipt', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body,
+          timeoutMs: requestTimeoutMs,
+        });
+        const receipt = parseResponse<FederatedSkillReceipt>({
+          result,
+          nodeId: peer.nodeId,
+          nodeLabel: peer.nodeLabel,
+          path: '/api/federation/skills-receipt',
+          startedAt,
+        });
+        // WHAT: Accept only an exact imported-revision acknowledgement from the selected peer.
+        // WHY: HTTP success without identity and revision equality does not prove publication convergence.
+        if (receipt.acknowledged && receipt.name === skillName && receipt.revision === revision) return 'acknowledged';
+      } catch {
+        // The bounded acknowledgement loop owns final incident classification after all attempts settle.
+      }
+      const delayMs = retryDelaysMs[attempt];
+      // WHAT: Delay only between the three bounded sequential receipt attempts.
+      // WHY: Sequential retries prevent publication bursts against the relay and give the selected peer time to import.
+      if (delayMs !== undefined) await new Promise<void>((resolveDelay) => {
+        const timer = setTimeout(resolveDelay, delayMs);
+        timer.unref?.();
+      });
+    }
+    return 'failed';
+  };
   const publishAuthoredSkill = (
     skillName: string,
     operation: 'create' | 'save' | 'retry',
@@ -242,21 +313,50 @@ export function createFederatedLibraryRuntime(input: {
     const publish = async (): Promise<void> => {
       try {
         catalog.invalidate();
+        const revision = (await catalog.readIndex()).manifest.skills
+          .find((skill) => skill.name === skillName)?.revision ?? '';
+        // WHAT: Reject publication when the just-authored package is absent from the export authority.
+        // WHY: No peer can acknowledge a revision that local committed-content admission excluded.
+        if (!revision) {
+          failed(new Error('The authored skill is not available in the federated export index.'));
+          return;
+        }
+        latestPublicationRevision.set(skillName, revision);
         input.federation()?.publishManifest();
+        // WHAT: Keep disconnected publication pending without classifying ordinary relay state as an incident.
+        // WHY: The local commit remains authoritative and a later explicit retry can republish it.
         if (input.federation()?.status().phase !== 'connected') {
-          failed(new Error('The federation relay is not connected.'));
           return;
         }
-        await synchronize(true);
-        const status = input.runtime.federatedLibrarySyncStatus as AnyRecord | undefined;
-        if (status?.phase !== 'synchronized') {
-          failed(new Error('Federated library synchronization did not reach synchronized state.'));
-          return;
+        const flightKey = `${skillName}\0${revision}`;
+        // WHAT: Treat a revision already acknowledged during this runtime as settled without opening another peer request.
+        // WHY: A duplicate callback can finish Git indexing after the original flight has settled and left the in-flight map.
+        if (acknowledgedPublicationRevision.get(skillName) === revision) return;
+        let flight = publicationFlights.get(flightKey);
+        // WHAT: Create one acknowledgement flight per exact skill revision.
+        // WHY: Repeated save and retry callbacks must not multiply relay requests for identical content.
+        if (!flight) {
+          flight = acknowledgePublishedRevision(skillName, revision).then((outcome) => {
+            // WHAT: Ignore a superseded revision after a newer authored revision owns publication.
+            // WHY: A late older flight must neither resolve nor create an incident for current content.
+            if (latestPublicationRevision.get(skillName) !== revision) return;
+            // WHAT: Resolve publication only after one peer acknowledges the exact imported revision.
+            // WHY: Local pull synchronization is not evidence that another node received authored content.
+            if (outcome === 'acknowledged') {
+              acknowledgedPublicationRevision.set(skillName, revision);
+              input.incidentLedger.resolveScope(
+                `federated-skill-publication:${skillName}`,
+                `Peer acknowledged federated skill revision ${revision}.`,
+              );
+              return;
+            }
+            // WHAT: Record failure only after at least one online peer exhausted the bounded receipt attempts.
+            // WHY: No-peer and disconnected states remain status, not incidents.
+            if (outcome === 'failed') failed(new Error(`No peer acknowledged federated skill revision ${revision}.`));
+          }).finally(() => publicationFlights.delete(flightKey));
+          publicationFlights.set(flightKey, flight);
         }
-        input.incidentLedger.resolveScope(
-          `federated-skill-publication:${skillName}`,
-          'Federated skill publication succeeded.',
-        );
+        await flight;
       } catch (error) {
         failed(error);
       }
@@ -271,6 +371,7 @@ export function createFederatedLibraryRuntime(input: {
     initialize: catalog.initialize,
     invalidateIndex: catalog.invalidate,
     publishAuthoredSkill,
+    receivePublishedSkill,
     readSkillIndex: catalog.readIndex,
     stop: () => {
       if (retryTimer) clearTimeout(retryTimer);

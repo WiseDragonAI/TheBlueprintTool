@@ -15,10 +15,16 @@ import {
 } from '../helper/codex-runtime-run-store.js';
 import { RuntimeScopePausedError } from '../../server/helper/runtime-incident-ledger.js';
 import type { IncidentSupervisor } from '../../server/runtime/incident-supervisor.js';
+import { telemetry } from '../../../telemetry/harness.js';
 
 type AnyRecord = Record<string, unknown>;
 type SchedulerContext = { root: string; runtime: AnyRecord };
-type DeferredPipelineStoreInspection = { scope: string; retryAt: number };
+type DeferredPipelineStoreInspection = {
+  incidentId: string;
+  scope: string;
+  startedAt: number;
+  retryAt: number;
+};
 
 const pipelineStoreStabilityDelayMs = 1_000;
 
@@ -54,7 +60,7 @@ export function createCodexProcessCoordinator(input: {
   const runningCount = (): number => (
     scheduledRunningCount() + sharedCapacitySlots.reservedCount()
   );
-  const deferredPipelineStoreInspections = new Map<string, DeferredPipelineStoreInspection>();
+  const deferredPipelineStoreInspections = new WeakMap<AnyRecord, DeferredPipelineStoreInspection>();
   const deferPipelineStorePause = (
     candidate: SchedulerContext,
     error: unknown,
@@ -64,12 +70,18 @@ export function createCodexProcessCoordinator(input: {
     if (!(error instanceof RuntimeScopePausedError) || !error.scope.startsWith('codex-pipeline-store:')) {
       return false;
     }
-    const current = deferredPipelineStoreInspections.get(candidate.root);
+    const current = deferredPipelineStoreInspections.get(candidate.runtime);
     // WHAT: Start one bounded stability window for a newly observed upstream store incident.
     // WHY: Git checkout and another non-atomic external writer can expose incomplete JSON briefly despite canonical app writes being atomic.
     if (!current || current.scope !== error.scope) {
+      const startedAt = Date.now();
       const retryAt = Date.now() + pipelineStoreStabilityDelayMs;
-      deferredPipelineStoreInspections.set(candidate.root, { scope: error.scope, retryAt });
+      deferredPipelineStoreInspections.set(candidate.runtime, {
+        incidentId: error.incidentId,
+        scope: error.scope,
+        startedAt,
+        retryAt,
+      });
       scheduleCodexRuntimeTimer(
         candidate.runtime,
         'pipeline-store-stability-reinspection',
@@ -87,7 +99,16 @@ export function createCodexProcessCoordinator(input: {
     // WHAT: Keep the queue closed without promoting the upstream incident before its bounded re-read is due.
     // WHY: Concurrent queue-position reads must not shorten the stability window and recreate the false durable pause.
     if (Date.now() < current.retryAt) return true;
-    deferredPipelineStoreInspections.delete(candidate.root);
+    deferredPipelineStoreInspections.delete(candidate.runtime);
+    telemetry('pipeline-store-stability-decision', {
+      projectId: String(candidate.runtime.projectId ?? ''),
+      decisionOsRoot: candidate.root,
+      scope: current.scope,
+      incidentId: current.incidentId,
+      stabilityDelayMs: pipelineStoreStabilityDelayMs,
+      elapsedMs: Math.max(0, Date.now() - current.startedAt),
+      outcome: 'paused',
+    });
     return false;
   };
   const inspect = <Value>(
@@ -98,7 +119,21 @@ export function createCodexProcessCoordinator(input: {
     if (candidate.runtime.codexRuntimePaused === true) return null;
     try {
       const result = read();
-      deferredPipelineStoreInspections.delete(candidate.root);
+      const recovered = deferredPipelineStoreInspections.get(candidate.runtime);
+      deferredPipelineStoreInspections.delete(candidate.runtime);
+      // WHAT: Record a successful bounded re-read only when this project owned a deferred store inspection.
+      // WHY: Ordinary queue reads must not produce misleading recovery telemetry.
+      if (recovered) {
+        telemetry('pipeline-store-stability-decision', {
+          projectId: String(candidate.runtime.projectId ?? ''),
+          decisionOsRoot: candidate.root,
+          scope: recovered.scope,
+          incidentId: recovered.incidentId,
+          stabilityDelayMs: pipelineStoreStabilityDelayMs,
+          elapsedMs: Math.max(0, Date.now() - recovered.startedAt),
+          outcome: 'recovered',
+        });
+      }
       return result;
     } catch (error) {
       // WHAT: Suppress the downstream runtime pause only during the single pipeline-store stability window.

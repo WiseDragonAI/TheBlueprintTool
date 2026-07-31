@@ -4,7 +4,8 @@
  */
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
@@ -13,6 +14,29 @@ import { chromium, type Browser, type Page } from '@playwright/test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const chromiumExecutablePath = '/snap/bin/chromium';
+let isolatedWorkspaceRoot = '';
+
+test.after(() => {
+  // WHAT: Remove only the browser suite's isolated workspace after every server has stopped.
+  // WHY: Browser verification must not leave copied authored state or runtime artifacts behind.
+  if (isolatedWorkspaceRoot) rmSync(isolatedWorkspaceRoot, { recursive: true, force: true });
+});
+
+function browserWorkspaceRoot(): string {
+  // WHAT: Reuse one isolated authored-state copy across this file's sequential browser servers.
+  // WHY: Every server must remain disconnected from production federation without recopying the large fixture per test.
+  if (isolatedWorkspaceRoot) return isolatedWorkspaceRoot;
+  isolatedWorkspaceRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-responsive-browser-'));
+  cpSync(resolve(repoRoot, '.decision-os'), resolve(isolatedWorkspaceRoot, '.decision-os'), {
+    recursive: true,
+    filter: (source) => {
+      const relativePath = source.slice(resolve(repoRoot, '.decision-os').length).replace(/^\//, '');
+      const firstSegment = relativePath.split('/')[0] ?? '';
+      return !['.settings.json', 'cache', 'runtime', 'runs', 'voice-uploads'].includes(firstSegment);
+    },
+  });
+  return isolatedWorkspaceRoot;
+}
 
 test('The responsive application preserves the mobile Control Room and expands the same shell on desktop.', { timeout: 60_000 }, async () => {
   const server = await startDecisionOsServer();
@@ -241,7 +265,7 @@ test('An interrupted responsive thread hydration recovers without an operator re
       executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
-    const route = localResponsiveCardRoute();
+    const route = await resolveResponsiveCardRoute(server.url);
     const expectedThreadId = `thread-${decodeURIComponent(route.split('/').at(-1) ?? '')}`;
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     let threadRequestCount = 0;
@@ -294,7 +318,7 @@ test('A hydrated responsive thread remains visible while navigation refresh is p
       executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
-    const route = localResponsiveCardRoute();
+    const route = await resolveResponsiveCardRoute(server.url);
     const expectedThreadId = `thread-${decodeURIComponent(route.split('/').at(-1) ?? '')}`;
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const refreshGate = new Promise<void>((resolveRefresh) => { releaseRefresh = resolveRefresh; });
@@ -482,23 +506,32 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
     successfulProjection = executionProjection(fixture.projection, fixture.task, String(successfulRequest.requestId));
     releaseSuccessfulAdmission();
     await pendingTask.getByText(/^Queued/).waitFor({ state: 'visible' });
+    const successfulTelemetry = await pipelineAdmissionTelemetry(successful, String(successfulRequest.requestId));
+    assert.deepEqual(successfulTelemetry.map((entry) => entry.name), [
+      'optimistic-projection-installed',
+      'handoff-published',
+      'admission-settled',
+      'admission-deadline-cleared',
+      'admission-reconciled',
+    ]);
+    assert.equal(successfulTelemetry.find((entry) => entry.name === 'admission-settled')?.args.outcome, 'accepted');
     await successful.reload({ waitUntil: 'domcontentloaded' });
     await successful.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).waitFor({ state: 'visible' });
 
     const rejected = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    let observeRejectedAdmission!: () => void;
-    const rejectedAdmissionObserved = new Promise<void>((resolveObserved) => { observeRejectedAdmission = resolveObserved; });
+    let observeRejectedAdmission!: (request: Record<string, unknown>) => void;
+    const rejectedAdmissionObserved = new Promise<Record<string, unknown>>((resolveObserved) => { observeRejectedAdmission = resolveObserved; });
     const rejectedAdmissionGate = new Promise<void>((resolveAdmission) => { releaseRejectedAdmission = resolveAdmission; });
     await installFixturePipelineCatalog(rejected);
     await rejected.route('**/api/control-room', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture.projection) }));
     await rejected.route('**/api/codex/pipelines/runs', async (route) => {
-      observeRejectedAdmission();
+      observeRejectedAdmission(route.request().postDataJSON() as Record<string, unknown>);
       await rejectedAdmissionGate;
       await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Pipeline admission rejected.' }) });
     });
     await rejected.goto(`${server.url}${fixture.route}`, { waitUntil: 'domcontentloaded' });
     await startFixturePipeline(rejected);
-    await waitForSignal(rejectedAdmissionObserved, 'Timed out waiting for the deferred rejected admission.');
+    const rejectedRequest = await waitForSignal(rejectedAdmissionObserved, 'Timed out waiting for the deferred rejected admission.');
     await rejected.waitForURL(`${server.url}/?tab=exec`);
     await rejected.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).getByText(/^Preparing/).waitFor({ state: 'visible' });
     releaseRejectedAdmission();
@@ -509,8 +542,18 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
     await rejected.locator(`[data-control-column="${fixture.confirmedTab}"] .control-task`).filter({ hasText: fixture.task.title }).waitFor({ state: 'visible' });
     await rejectedAlert.waitFor({ state: 'visible' });
     assert.equal(await rejected.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).count(), 0);
+    const rejectedTelemetry = await pipelineAdmissionTelemetry(rejected, String(rejectedRequest.requestId));
+    assert.deepEqual(rejectedTelemetry.map((entry) => entry.name), [
+      'optimistic-projection-installed',
+      'handoff-published',
+      'admission-settled',
+      'admission-deadline-cleared',
+      'rejection-reconciled',
+    ]);
+    assert.equal(rejectedTelemetry.find((entry) => entry.name === 'admission-settled')?.args.outcome, 'rejected');
 
     const timedOut = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    let timedOutRequest: Record<string, unknown> | undefined;
     await timedOut.addInitScript(() => {
       const nativeSetTimeout = window.setTimeout.bind(window);
       // WHAT: Accelerate only the fixed production admission deadline inside this timeout fixture.
@@ -522,6 +565,7 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
     await installFixturePipelineCatalog(timedOut);
     await timedOut.route('**/api/control-room', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture.projection) }));
     await timedOut.route('**/api/codex/pipelines/runs', async (route) => {
+      timedOutRequest = route.request().postDataJSON() as Record<string, unknown>;
       await delay(1_000);
       await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ ok: true }) }).catch(() => undefined);
     });
@@ -534,6 +578,16 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
     await timedOut.locator(`[data-control-column="${fixture.confirmedTab}"] .control-task`).filter({ hasText: fixture.task.title }).waitFor({ state: 'visible' });
     await timedOut.locator('#mutation-error:not([hidden])').waitFor({ state: 'visible' });
     assert.equal(await timedOut.locator('[data-control-column="exec"] .control-task').filter({ hasText: fixture.task.title }).count(), 0);
+    assert.ok(timedOutRequest?.requestId);
+    const timedOutTelemetry = await pipelineAdmissionTelemetry(timedOut, String(timedOutRequest.requestId));
+    assert.deepEqual(timedOutTelemetry.map((entry) => entry.name), [
+      'optimistic-projection-installed',
+      'handoff-published',
+      'admission-settled',
+      'admission-deadline-cleared',
+      'rejection-reconciled',
+    ]);
+    assert.equal(timedOutTelemetry.find((entry) => entry.name === 'admission-settled')?.args.outcome, 'timed-out');
   } finally {
     // WHAT: Release deferred admissions and close every browser resource after each outcome.
     // WHY: A failed assertion must not leave fixture promises or Chromium processes unsettled.
@@ -543,6 +597,24 @@ test('Process Card pipelines reconcile pending admission, replicated success, re
     await stopDecisionOsServer(server.process);
   }
 });
+
+async function pipelineAdmissionTelemetry(page: Page, requestId: string): Promise<Array<{
+  name: string;
+  args: Record<string, unknown>;
+}>> {
+  const admittedNames = new Set([
+    'optimistic-projection-installed',
+    'handoff-published',
+    'admission-settled',
+    'admission-deadline-cleared',
+    'admission-reconciled',
+    'rejection-reconciled',
+  ]);
+  return await page.evaluate(({ expectedRequestId, names }) => (
+    ((window as typeof window & { __coreTelemetry?: Array<{ name: string; args: Record<string, unknown> }> }).__coreTelemetry ?? [])
+      .filter((entry) => names.includes(entry.name) && String(entry.args.requestId ?? '') === expectedRequestId)
+  ), { expectedRequestId: requestId, names: [...admittedNames] });
+}
 
 test('Master-task completion exposes manual and configured pipeline actions at desktop and mobile widths.', { timeout: 60_000 }, async () => {
   const server = await startDecisionOsServer();
@@ -655,7 +727,7 @@ async function resolveResponsiveCardRoute(serverUrl: string): Promise<string> {
   const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
     projects?: Array<{ id: string; root: string; ledgers?: Array<{ id: string }> }>;
   };
-  const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
+  const project = catalog.projects?.find((candidate) => candidate.root === browserWorkspaceRoot());
   assert.ok(project, 'The test workspace must be registered in its project catalog.');
   for (const ledger of project.ledgers ?? []) {
     const canvas = await fetch(`${serverUrl}/p/${encodeURIComponent(project.id)}/api/ledgers/${encodeURIComponent(ledger.id)}/canvas`).then((response) => response.json()) as {
@@ -850,15 +922,11 @@ function localResponsiveCardFixture(projectId?: string): { route: string; task: 
   assert.fail('The browser fixture must expose one local card, zone, and thread.');
 }
 
-function localResponsiveCardRoute(): string {
-  return localResponsiveCardFixture().route;
-}
-
 async function resolveCurrentProject(serverUrl: string): Promise<{ id: string; name: string }> {
   const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
     projects?: Array<{ id: string; name: string; root: string }>;
   };
-  const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
+  const project = catalog.projects?.find((candidate) => candidate.root === browserWorkspaceRoot());
   assert.ok(project, 'The test workspace must be registered in its project catalog.');
   return project;
 }
@@ -880,7 +948,7 @@ async function startDecisionOsServer(): Promise<{ process: ChildProcess; url: st
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, [resolve(repoRoot, 'bin/decision-os-server.mjs')], {
-    cwd: repoRoot,
+    cwd: browserWorkspaceRoot(),
     detached: true,
     env: {
       ...process.env,

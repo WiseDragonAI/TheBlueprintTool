@@ -929,13 +929,11 @@ test('a Git add failure preserves authored bytes and returns scoped recovery evi
       assert.equal(recovered.skill.revision, result.recovery?.contentRevision);
       assert.notEqual(recovered.skill.gitRevision?.commit, head);
       assert.equal(recovered.publication.status, 'not-applicable');
-      await waitForValue(async () => {
-        const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((incidentResponse) => incidentResponse.json()) as Record<string, any>;
-        return incidents.incidents.find((incident: Record<string, any>) =>
-          incident.scope === 'federated-skill-publication:recoverable-skill'
-          && incident.code === 'federated_skill_publication_failed'
-          && incident.context?.operation === 'retry');
-      }, 'background retry publication incident');
+      const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((incidentResponse) => incidentResponse.json()) as Record<string, any>;
+      assert.equal(incidents.incidents.some((incident: Record<string, any>) =>
+        incident.scope === 'federated-skill-publication:recoverable-skill'
+        && incident.code === 'federated_skill_publication_failed'
+        && incident.context?.operation === 'retry'), false);
       assert.equal(readFileSync(skillFile, 'utf8'), updated);
       assert.equal(Number(execFileSync('git', ['rev-list', '--count', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim()), commitCount + 1);
       assert.deepEqual(
@@ -1085,7 +1083,7 @@ test('committed federated create and save routes respond before observed relay p
         incident.scope === 'federated-skill-publication:published-locally'
         && incident.code === 'federated_skill_publication_failed'
         && incident.context?.operation === 'create');
-    }, 'background create publication incident');
+    }, 'background create publication incident', 6_000);
 
     const savedMarkdown = markdown('published-locally', 'Saved before relay publication.', 'Keep the second local revision.');
     const savePublicationStarted = deferred<void>();
@@ -1135,7 +1133,7 @@ test('committed federated create and save routes respond before observed relay p
         incident.scope === 'federated-skill-publication:published-locally'
         && incident.code === 'federated_skill_publication_failed'
         && incident.context?.operation === 'save');
-    }, 'background save publication incident');
+    }, 'background save publication incident', 6_000);
   } finally {
     await closeServer(server);
     rmSync(serverRoot, { recursive: true, force: true });

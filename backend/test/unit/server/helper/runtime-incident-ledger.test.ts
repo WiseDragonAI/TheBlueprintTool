@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -242,4 +242,53 @@ test('retains incidents that own live pauses before newer diagnostic history', (
   const snapshot = ledger.snapshot();
   assert.equal(snapshot.incidents.length, 10);
   assert.equal(snapshot.incidents.some((incident) => incident.id === protectedIncident.id), true);
+});
+
+test('retains failed primary writes in the fallback ledger until explicit persistence recovery', (context) => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-runtime-incidents-persistence-'));
+  const primaryRoot = join(root, 'primary');
+  const file = join(primaryRoot, 'runtime-incidents.json');
+  context.after(() => {
+    chmodSync(primaryRoot, 0o700);
+    rmSync(root, { recursive: true, force: true });
+  });
+  mkdirSync(primaryRoot, { recursive: true });
+  writeFileSync(file, `${JSON.stringify({ version: 2, updatedAt: '', historyTruncatedBefore: '', incidents: [] })}\n`);
+  const originalBytes = readFileSync(file, 'utf8');
+  const ledger = createRuntimeIncidentLedger({ decisionOsRoot: root, file, maxObservationsPerIncident: 2 });
+  chmodSync(primaryRoot, 0o500);
+
+  ledger.record({
+    scope: 'background:proof',
+    component: 'proof',
+    operation: 'persist-proof',
+    error: new Error('proof failure'),
+  });
+  ledger.record({ scope: 'background:proof', component: 'proof', operation: 'persist-proof', error: new Error('proof failure') });
+  ledger.record({ scope: 'background:proof', component: 'proof', operation: 'persist-proof', error: new Error('proof failure') });
+
+  assert.equal(readFileSync(file, 'utf8'), originalBytes);
+  assert.deepEqual(
+    ledger.active().map((incident) => incident.scope).sort(),
+    ['background:proof', 'runtime-incident-ledger'],
+  );
+  assert.equal(
+    ledger.active('runtime-incident-ledger')[0]?.observations?.length,
+    2,
+  );
+  const pendingFile = join(root, 'runtime', 'runtime-incidents.pending.json');
+  assert.equal(existsSync(pendingFile), true);
+  const reopened = createRuntimeIncidentLedger({ decisionOsRoot: root, file });
+  assert.deepEqual(
+    reopened.active().map((incident) => incident.scope).sort(),
+    ['background:proof', 'runtime-incident-ledger'],
+  );
+
+  chmodSync(primaryRoot, 0o700);
+  const resolved = reopened.recoverPersistence('Primary incident persistence is writable again.');
+  assert.equal(resolved.length, 1);
+  assert.equal(resolved[0]?.scope, 'runtime-incident-ledger');
+  assert.equal(existsSync(pendingFile), false);
+  assert.deepEqual(reopened.active().map((incident) => incident.scope), ['background:proof']);
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).incidents.length, 2);
 });
