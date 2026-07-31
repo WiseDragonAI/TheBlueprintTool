@@ -137,6 +137,9 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
       executions: summary.sessions.reduce((count, session) => count + session.executions.length, 0),
       activeExecutions: summary.activeExecutionIds.length,
       defaultExecutionId: summary.defaultExecutionId,
+      requestedRunId: poller.identity.runId,
+      sessionIds: summary.sessions.map((session) => session.sessionId),
+      executionIds: summary.sessions.flatMap((session) => session.executions.map((execution) => execution.executionId)),
     });
     recordState('threadTaskExecutionStateByThreadId')[threadId] = summary;
     delete recordState('threadExecutionStateErrorByThreadId')[threadId];
@@ -290,6 +293,18 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   const expectsAdmission = Boolean(identity.runId)
     && (input.expectedStatus === 'pending' || input.expectedStatus === 'running');
   const cachedSummary = recordState('threadTaskExecutionStateByThreadId')[identity.threadId] as TaskExecutionStateSummary | undefined;
+  telemetry('codex-log-binding-resolved', {
+    ...identity,
+    expectedExecutionId: input.expectedExecutionId ?? '',
+    expectedStatus: input.expectedStatus ?? '',
+    expectsAdmission,
+    forceRevalidate: input.forceRevalidate === true,
+    existingPollerKey: current?.key ?? '',
+    resolvedPollerKey: key,
+    cachedSessionIds: cachedSummary?.sessions.map((session) => session.sessionId) ?? [],
+    cachedExecutionIds: cachedSummary?.sessions.flatMap((session) => session.executions.map((execution) => execution.executionId)) ?? [],
+    selectedExecutionId: String(recordState('threadSelectedExecutionIdByThreadId')[identity.threadId] ?? ''),
+  });
   if (cachedSummary) syncControlsFromSummary(identity.threadId, cachedSummary);
   if (current?.key === key) {
     current.identity = identity;
@@ -325,6 +340,15 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
 
 export function unbindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   const poller = taskLogPollers.get(input.threadId);
+  telemetry('codex-log-unbind-requested', {
+    projectId: input.projectId ?? projectIdFromLocation(),
+    replicaNodeId: input.replicaNodeId ?? replicaNodeIdFromLocation(),
+    ledgerId: input.ledgerId,
+    cardId: input.cardId,
+    threadId: input.threadId,
+    runId: input.runId,
+    installedPollerKey: poller?.key ?? '',
+  });
   if (!poller) return;
   poller.generation += 1;
   if (poller.timer) clearTimeout(poller.timer);

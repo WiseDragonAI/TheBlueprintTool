@@ -103,12 +103,31 @@ test('accepted session keeps reading until its delayed execution identity appear
     state.threadTaskExecutionStateByThreadId = {};
     state.threadExecutionPresentationByThreadId = {};
     state.threadSelectedExecutionIdByThreadId = {};
+    state.telemetry = [];
     bindThreadCodexRunLog(identity);
     await waitFor(() => state.threadSelectedExecutionIdByThreadId[threadId] === 'execution-delayed'
       && state.threadExecutionPresentationByThreadId[threadId]?.execution?.executionId === 'execution-delayed');
     assert.equal(summaryReads, 2);
     assert.equal(state.threadTaskExecutionStateByThreadId[threadId].activeExecutionIds[0], 'execution-delayed');
     assert.equal(state.threadExecutionPresentationByThreadId[threadId].execution.executionId, 'execution-delayed');
+    const causalNames = state.telemetry
+      .map((entry: { name: string }) => entry.name)
+      .filter((name: string) => name.startsWith('codex-log-'));
+    assert.deepEqual(causalNames, [
+      'codex-log-binding-resolved',
+      'codex-log-refresh-started',
+      'codex-log-summary-settled',
+      'codex-log-summary-installed',
+      'codex-log-refresh-settled',
+      'codex-log-refresh-started',
+      'codex-log-summary-settled',
+      'codex-log-summary-installed',
+      'codex-log-presentation-settled',
+      'codex-log-refresh-settled',
+    ]);
+    const installed = state.telemetry.filter((entry: { name: string }) => entry.name === 'codex-log-summary-installed').at(-1);
+    assert.deepEqual(installed.args.sessionIds, ['session-delayed']);
+    assert.deepEqual(installed.args.executionIds, ['execution-delayed']);
   } finally {
     unbindThreadCodexRunLog(identity);
     globalThis.fetch = previousFetch;

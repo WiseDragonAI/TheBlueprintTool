@@ -13,6 +13,7 @@ let socket: WebSocket | null = null;
 let endpoint = '';
 let enabled = false;
 let installed = false;
+let configurationSettled = false;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
@@ -89,19 +90,21 @@ function connect(): void {
 }
 
 export function enqueueFrontendTelemetry(trace: FrontendTelemetryTrace): void {
-  // WHAT: Ignore global traces until the server explicitly enables browser telemetry.
-  // WHY: Diagnostics remain opt-in and impose no storage or transport cost by default.
-  if (!enabled) return;
+  // WHAT: Retain the bounded boot sequence until the one-time telemetry configuration read settles.
+  // WHY: Task-entry hydration happens before that asynchronous read and is the decisive evidence for reload-only failures.
+  if (configurationSettled && !enabled) return;
   queue.push({
     ...trace,
     args: sanitize(trace.args),
     browserSessionId: sessionId,
-    route: `${globalThis.location.pathname}${globalThis.location.search}`,
+    route: `${globalThis.location?.pathname ?? ''}${globalThis.location?.search ?? ''}`,
   });
   // WHAT: Evict the oldest unsent observation after reaching the browser queue budget.
   // WHY: A disconnected server must not allow telemetry to consume unbounded tab memory.
   if (queue.length > maxQueuedRecords) queue.shift();
-  scheduleFlush();
+  // WHAT: Schedule transport work only after the server has explicitly enabled telemetry.
+  // WHY: Pre-configuration evidence must not add timers to normal application and test execution.
+  if (enabled) scheduleFlush();
 }
 
 export async function installFrontendTelemetryWebSocket(): Promise<void> {
@@ -114,13 +117,20 @@ export async function installFrontendTelemetryWebSocket(): Promise<void> {
     const config = await response.json() as { enabled?: boolean; endpoint?: string };
     // WHAT: Keep telemetry disabled unless the server confirms the exact opt-in and endpoint.
     // WHY: Missing, invalid, and failed configuration reads must degrade without application impact.
-    if (!response.ok || config.enabled !== true || typeof config.endpoint !== 'string') return;
+    if (!response.ok || config.enabled !== true || typeof config.endpoint !== 'string') {
+      configurationSettled = true;
+      queue.splice(0, queue.length);
+      return;
+    }
     enabled = true;
+    configurationSettled = true;
     endpoint = config.endpoint;
     connect();
   } catch {
     // WHAT: Contain configuration failure inside the optional diagnostics scope.
     // WHY: Telemetry availability must never affect application boot or user operations.
+    configurationSettled = true;
+    queue.splice(0, queue.length);
   }
 }
 
