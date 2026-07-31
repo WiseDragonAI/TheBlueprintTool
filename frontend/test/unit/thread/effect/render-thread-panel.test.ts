@@ -919,7 +919,7 @@ test('live Codex Log events preserve the viewport and every disclosure state', a
   const prompt = {
     id: 'prompt',
     kind: 'run_status',
-    title: 'User prompt',
+    title: 'Thread started',
     text: 'Inspect the current task.',
     status: 'running',
     severity: 'info',

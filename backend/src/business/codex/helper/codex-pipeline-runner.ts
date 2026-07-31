@@ -1109,10 +1109,6 @@ export async function executePipelineSkillInWorkspace(input: {
         prompt: developerPrompt,
       })}\n`, 'utf8');
     }
-    appendFileSync(stdoutFile, `${JSON.stringify({
-      type: 'decision_os.user_prompt',
-      prompt: userPrompt,
-    })}\n`, 'utf8');
     const stdoutOffset = existsSync(stdoutFile) ? statSync(stdoutFile).size : 0;
     const stderrOffset = existsSync(stderrFile) ? statSync(stderrFile).size : 0;
     const promptFile = `${stderrFile}.${input.executionId ?? input.skillRunId}.stdin`;
