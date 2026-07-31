@@ -317,11 +317,13 @@ node bin/decision-os-verify.mjs -- <command> [args...]
 Run these commands from the iteration worktree root, where `bin/decision-os-verify.mjs` and `frontend/package.json` are both present:
 
 ```bash
+npm --prefix frontend ci --ignore-scripts
 node bin/decision-os-verify.mjs -- npm --prefix frontend test -- --test-concurrency=1
 node bin/decision-os-verify.mjs -- npm --prefix frontend run typecheck
 node bin/decision-os-verify.mjs -- env --chdir=frontend TSX_TSCONFIG_PATH=tsconfig.json node --test --test-concurrency=1 --import tsx test/<focused-test-file>.test.ts
 ```
 
+- Run the package install once in each fresh isolated worktree before verification; dependencies installed in another worktree are not visible to Node module resolution.
 - Use the package-owned test command so `TSX_TSCONFIG_PATH=tsconfig.json` resolves relative to `frontend/` and frontend path aliases remain valid.
 - Keep the complete frontend suite at `--test-concurrency=1`; its integration files mutate shared browser globals and higher concurrency creates cross-file interference while increasing workstation load.
 - Do not invoke the complete frontend suite as direct `node --test` from the worktree root. That changes the expected package cwd and can leave failed test children holding the verification lease.
