@@ -258,6 +258,15 @@ test('new task detail is installed when the navigation snapshot does not list it
   assert.doesNotMatch(applicationSource, /state\.ledger\.cards = state\.ledger\.cards\.map\(\(entry\) => String\(entry\.id\) === requestedCard/);
 });
 
+test('responsive task ledgers preserve causal ownership across optimistic creation and route hydration', () => {
+  assert.match(applicationSource, /import \{ taskClockFromResponse \} from '\/src\/runtime\/refresh\/helper\/task-causal-clock\.js';/);
+  assert.match(applicationSource, /activeResponsiveTaskClock = taskClockFromResponse\(response\);/);
+  assert.match(applicationSource, /taskClock: activeResponsiveTaskClock/);
+  assert.match(applicationSource, /localProjection: true/);
+  assert.match(source, /if \(input\.localProjection === true\) return \{ \.\.\.\(canvasState\.ledgerReconciliation\?\.lastAppliedTaskClock \?\? \{\}\) \};/);
+  assert.match(source, /taskClock: responsiveReconciliationTaskClock\(input\)/);
+});
+
 test('mobile thread history and async refreshes are owned by the active presentation', () => {
   const refresh = source.match(/async function refreshThreadLedger\(optimisticRunId = ''\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   assert.match(source, /history\.pushState\(\{[\s\S]*responsiveThreadLayer: \{/);
