@@ -26,8 +26,50 @@ import { resolveMasterTaskGate, resolveSessionContext } from '../helper/resolve-
 
 type JsonObject = Record<string, unknown>;
 
+type FactMutationOperation = {
+  append: readonly string[];
+  appendMissingValue: boolean;
+  replace: readonly string[];
+  replaceMissingValue: boolean;
+};
+
 function isRecord(value: unknown): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function resolveFactMutation(input: {
+  card: JsonObject;
+  operation: FactMutationOperation;
+}): Result<string[] | undefined> {
+  const appendRequested = input.operation.append.length > 0 || input.operation.appendMissingValue;
+  const replaceRequested = input.operation.replace.length > 0 || input.operation.replaceMissingValue;
+  // WHAT: Leave facts untouched when the command did not request a facts mutation.
+  // WHY: Existing title and layout mutations must preserve the card's independent facts lane.
+  if (!appendRequested && !replaceRequested) return { ok: true, value: undefined };
+  // WHAT: Reject a mode flag without its required fact argument.
+  // WHY: The operator selected repeatable value flags, not implicit empty-array operations.
+  if (input.operation.appendMissingValue || input.operation.replaceMissingValue) {
+    return { ok: false, error: 'Each --append and --replace flag requires one fact.' };
+  }
+  // WHAT: Reject mixed append and replace modes in one card mutation.
+  // WHY: One command must have one unambiguous next facts array for the replicated card lane.
+  if (appendRequested && replaceRequested) {
+    return { ok: false, error: 'Use either --append or --replace for card facts.' };
+  }
+  const supplied = appendRequested ? input.operation.append : input.operation.replace;
+  // WHAT: Reject blank facts before constructing a scoped task patch.
+  // WHY: Facts are non-empty strings in the persistent and rendered card contract.
+  if (supplied.some((fact) => !fact.trim())) return { ok: false, error: 'Card facts must be non-empty strings.' };
+  // WHAT: Use supplied facts as the complete replacement when replace mode was selected.
+  // WHY: Replace mode gives the operator deterministic exact-array control.
+  if (!appendRequested) return { ok: true, value: supplied.map((fact) => fact.trim()) };
+  const current = input.card.facts;
+  // WHAT: Reject legacy facts that do not already satisfy the string-array contract.
+  // WHY: Append must not silently coerce unrecognized durable data into the new replicated schema.
+  if (!Array.isArray(current) || current.some((fact) => typeof fact !== 'string' || !fact.trim())) {
+    return { ok: false, error: 'Existing card facts must be non-empty strings before --append can be used.' };
+  }
+  return { ok: true, value: [...current.map((fact) => fact.trim()), ...supplied.map((fact) => fact.trim())] };
 }
 
 function validQuestionnaires(value: unknown): value is Record<string, { contextRevision: string; responses: Record<string, { status: string }> }> {
@@ -83,6 +125,10 @@ async function applyLedgerMutationOperation(
     }>;
     cardComment?: string;
     cardCommentFile?: string;
+    cardFactsAppend?: string[];
+    cardFactsAppendMissingValue?: boolean;
+    cardFactsReplace?: string[];
+    cardFactsReplaceMissingValue?: boolean;
     cardQuestionnairesFile?: string;
     cardH?: number;
     cardId?: string;
@@ -98,8 +144,14 @@ async function applyLedgerMutationOperation(
   fs?: FileSystemPort,
 ): Promise<Result<unknown>> {
   const hasCardLabels = (operation?.cardLabels ?? []).length > 0;
+  const hasFactOperation = (operation?.cardFactsAppend ?? []).length > 0
+    || (operation?.cardFactsReplace ?? []).length > 0
+    || Boolean(operation?.cardFactsAppendMissingValue)
+    || Boolean(operation?.cardFactsReplaceMissingValue);
   const hasCardLayout = operation?.cardX !== undefined || operation?.cardY !== undefined || operation?.cardW !== undefined || operation?.cardH !== undefined;
-  if (!operation || (!operation.addCardFile && operation.cardComment === undefined && !operation.cardCommentFile && !operation.cardQuestionnairesFile && !operation.cardId && !operation.cardTitle && !hasCardLabels && !hasCardLayout && (operation.removeCardIds ?? []).length === 0 && (operation.removeRelationshipIds ?? []).length === 0 && (operation.addRelationships ?? []).length === 0)) {
+  // WHAT: Treat a requested facts mutation as a card mutation that needs normal admission.
+  // WHY: Facts are stored on the card and must not be discarded by the no-op fast path.
+  if (!operation || (!operation.addCardFile && operation.cardComment === undefined && !operation.cardCommentFile && !operation.cardQuestionnairesFile && !operation.cardId && !operation.cardTitle && !hasCardLabels && !hasFactOperation && !hasCardLayout && (operation.removeCardIds ?? []).length === 0 && (operation.removeRelationshipIds ?? []).length === 0 && (operation.addRelationships ?? []).length === 0)) {
     return { ok: true, value: ledger };
   }
 
@@ -143,7 +195,9 @@ async function applyLedgerMutationOperation(
     });
   }
 
-  if (operation.cardComment !== undefined || operation.cardCommentFile || operation.cardQuestionnairesFile || operation.cardTitle || hasCardLabels || hasCardLayout || operation.cardId) {
+  // WHAT: Enter the card mutation path when facts were requested alongside existing card operations.
+  // WHY: Facts require the same card lookup and task-worker routing boundary as title and layout changes.
+  if (operation.cardComment !== undefined || operation.cardCommentFile || operation.cardQuestionnairesFile || operation.cardTitle || hasCardLabels || hasFactOperation || hasCardLayout || operation.cardId) {
     if (!operation.cardId) {
       return { ok: false, error: 'Card mutation requires --card-id.' };
     }
@@ -154,9 +208,26 @@ async function applyLedgerMutationOperation(
       return { ok: false, error: `Card not found: ${operation.cardId}` };
     }
 
+    const facts = resolveFactMutation({
+      card,
+      operation: {
+        append: operation.cardFactsAppend ?? [],
+        appendMissingValue: Boolean(operation.cardFactsAppendMissingValue),
+        replace: operation.cardFactsReplace ?? [],
+        replaceMissingValue: Boolean(operation.cardFactsReplaceMissingValue),
+      },
+    });
+    // WHAT: Stop the mutation when the requested facts operation has no valid next array.
+    // WHY: The task worker must receive only an explicit, validated facts replacement.
+    if (!facts.ok) return facts;
+
     if (operation.cardTitle) {
       card.title = operation.cardTitle;
     }
+
+    // WHAT: Store the resolved facts array only when the command selected a facts mode.
+    // WHY: Unrelated card mutations must not rewrite the replicated facts lane.
+    if (facts.value !== undefined) card.facts = facts.value;
 
     if (operation.cardX !== undefined) card.x = operation.cardX;
     if (operation.cardY !== undefined) card.y = operation.cardY;
@@ -258,6 +329,10 @@ export async function manageLedgerJsonController(
       cardH?: number;
       cardComment?: string;
       cardCommentFile?: string;
+      cardFactsAppend?: string[];
+      cardFactsAppendMissingValue?: boolean;
+      cardFactsReplace?: string[];
+      cardFactsReplaceMissingValue?: boolean;
       cardQuestionnairesFile?: string;
       cardId?: string;
       cardLabels?: string[];
@@ -292,10 +367,27 @@ export async function manageLedgerJsonController(
     const operation = actionPayload.mutationOperation;
     const title = String(operation?.cardTitle ?? '').trim();
     const cardId = String(operation?.cardId ?? '').trim();
-    const titleOnly = !actionPayload.mutation
+    const card = isRecord(ledger.value) && Array.isArray(ledger.value.cards)
+      ? ledger.value.cards.find((entry) => isRecord(entry) && String(entry.id ?? '') === cardId)
+      : undefined;
+    const facts = isRecord(card) && operation
+      ? resolveFactMutation({
+        card,
+        operation: {
+          append: operation.cardFactsAppend ?? [],
+          appendMissingValue: Boolean(operation.cardFactsAppendMissingValue),
+          replace: operation.cardFactsReplace ?? [],
+          replaceMissingValue: Boolean(operation.cardFactsReplaceMissingValue),
+        },
+      })
+      : { ok: true as const, value: undefined };
+    // WHAT: Stop task mutation admission when fact flags do not resolve to a valid next array.
+    // WHY: The task worker must never receive an ambiguous or malformed replicated facts patch.
+    if (!facts.ok) return facts;
+    const taskPatchOnly = !actionPayload.mutation
       && !actionPayload.mutationFile
       && Boolean(cardId)
-      && Boolean(title)
+      && (Boolean(title) || facts.value !== undefined)
       && !operation?.addCardFile
       && (operation?.addRelationships ?? []).length === 0
       && operation?.cardComment === undefined
@@ -308,10 +400,17 @@ export async function manageLedgerJsonController(
       && operation?.cardH === undefined
       && (operation?.removeCardIds ?? []).length === 0
       && (operation?.removeRelationshipIds ?? []).length === 0;
-    if (titleOnly) {
-      // WHAT: Submit the one declared title patch through the task worker.
-      // WHY: Skill outputs need meaningful titles without reopening aggregate Tasks writes.
-      return submitTaskMutation({ action: 'patch-card', cardPatch: { id: cardId, title } });
+    // WHAT: Submit one title and facts patch through the scoped task worker.
+    // WHY: Task facts are causal card data and cannot use an aggregate Tasks write.
+    if (taskPatchOnly) {
+      return submitTaskMutation({
+        action: 'patch-card',
+        cardPatch: {
+          id: cardId,
+          ...(title ? { title } : {}),
+          ...(facts.value !== undefined ? { facts: facts.value } : {}),
+        },
+      });
     }
     // WHAT: Reject an undeclared aggregate task mutation before helper-side file effects.
     // WHY: Only typed task commands may select current-state lanes.

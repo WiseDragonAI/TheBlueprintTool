@@ -122,6 +122,32 @@ test('ledger cards render markdown descriptions as DOM elements', () => {
   }
 });
 
+test('ledger cards render facts as bullet points between the title and Markdown body', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = renderDetail({
+      id: 'card-facts',
+      title: 'Fact card',
+      facts: ['First fact', 'Second fact'],
+      comment: { what: 'Card body.' },
+    }) as unknown as FakeElement;
+    const facts = findElementByClass(card, 'ledger-card-facts') as FakeElement;
+    const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
+    assert.equal(facts.tagName, 'ul');
+    assert.equal((facts.children[0] as FakeElement).tagName, 'li');
+    assert.equal((facts.children[0] as FakeElement).textContent, 'First fact');
+    assert.equal((facts.children[1] as FakeElement).textContent, 'Second fact');
+    assert.equal(card.children.indexOf(facts) < card.children.indexOf(body), true);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
 test('ledger cards render numbered markdown as semantic ordered lists', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {

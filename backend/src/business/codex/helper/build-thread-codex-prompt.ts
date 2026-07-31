@@ -65,6 +65,7 @@ export function buildThreadCodexPrompt(input: {
       SERVER_SKILL_CONTEXT: empty,
       MASTER_TASK: () => input.cardMarkdown,
       SUB_CONTEXT: empty,
+      SUB_TASKS: empty,
       FULL_THREAD: () => input.threadMarkdown,
       FILE_MAP: empty,
       PREVIOUS_SKILL_RESULT: empty,

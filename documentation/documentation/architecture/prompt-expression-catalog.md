@@ -82,16 +82,19 @@ Runtime values are rendered once and are not scanned recursively. An unknown upp
 2. `<SUB_CONTEXT>`
    1. **WHAT:** Supplies the admitted local subtask context selected for the active stage.
    2. **WHY:** Recursive work needs its relevant child boundary without loading unrelated task history.
-3. `<FULL_THREAD>`
+3. `<SUB_TASKS>`
+   1. **WHAT:** Supplies direct canonical subtasks in position order as each subtask title followed only by its facts bullet list; an empty facts array emits the title alone.
+   2. **WHY:** Gates can inspect the task breakdown without receiving editable card Markdown, `what`, status, IDs, or thread content.
+4. `<FULL_THREAD>`
    1. **WHAT:** Supplies the complete admitted thread conversation.
    2. **WHY:** A gate or authored prompt may require the full operator-agent decision history.
-4. `<FILE_MAP>`
+5. `<FILE_MAP>`
    1. **WHAT:** Supplies the generated repository file map when the compiled prompt references it.
    2. **WHY:** Code-oriented stages can navigate the repository from a bounded structural inventory instead of broad discovery.
-5. `<PREVIOUS_SKILL_RESULT>`
+6. `<PREVIOUS_SKILL_RESULT>`
    1. **WHAT:** Supplies the direct result produced by the preceding pipeline skill.
    2. **WHY:** Dynamic gate recursion needs an explicit one-step handoff without conflating it with the full task context.
-6. `<EXECUTION_CONTEXT>`
+7. `<EXECUTION_CONTEXT>`
    1. **WHAT:** Supplies the admitted execution-context object serialized as formatted JSON.
    2. **WHY:** Authored prompts need one structured boundary for execution-specific facts that do not belong in prompt Markdown.
 

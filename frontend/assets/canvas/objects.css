@@ -367,6 +367,17 @@
   margin-bottom: 0;
 }
 
+.ledger-card-facts {
+  margin: 0 0 10px;
+  padding-left: 17px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.ledger-card-facts li + li {
+  margin-top: 3px;
+}
+
 .ledger-card-title {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -170,6 +170,7 @@ function runtimeContext(overrides: Partial<Record<string, string>> = {}) {
     SERVER_SKILL_CONTEXT: value('SERVER_SKILL_CONTEXT'),
     MASTER_TASK: value('MASTER_TASK', '# Master task'),
     SUB_CONTEXT: value('SUB_CONTEXT', '{}'),
+    SUB_TASKS: value('SUB_TASKS'),
     FULL_THREAD: value('FULL_THREAD', '# OPERATOR'),
     FILE_MAP: value('FILE_MAP', '.'),
     PREVIOUS_SKILL_RESULT: value('PREVIOUS_SKILL_RESULT', 'Input'),
@@ -458,6 +459,7 @@ test('pipeline prompt construction injects runtime tokens into only the admitted
     '# Dynamic gate',
     'MASTER=<MASTER_TASK>',
     'SUBTASKS=<SUB_CONTEXT>',
+    'FACTS=<SUB_TASKS>',
     'THREAD=<FULL_THREAD>',
     'FILES=<FILE_MAP>',
     'PREVIOUS=<PREVIOUS_SKILL_RESULT>',
@@ -473,6 +475,7 @@ test('pipeline prompt construction injects runtime tokens into only the admitted
     runtimeContext: runtimeContext({
       MASTER_TASK: '# Master task\n\nComplete objective.',
       SUB_CONTEXT: '## Subtask 1: Analyze\n\nAnalysis body.',
+      SUB_TASKS: '## Analyze\n- Confirm evidence',
       FULL_THREAD: '# OPERATOR\n\nContinue the iteration.',
       FILE_MAP: '.\n backend/\n  src/\n   server.ts',
       PREVIOUS_SKILL_RESULT: '# Worker result\n\nVerified analysis.',
@@ -486,6 +489,7 @@ test('pipeline prompt construction injects runtime tokens into only the admitted
   assert.equal(prompt.startsWith('# Dynamic gate\n'), true);
   assert.match(prompt, /Complete objective\./);
   assert.match(prompt, /SUBTASKS=## Subtask 1: Analyze[\s\S]*Analysis body\./);
+  assert.match(prompt, /FACTS=## Analyze\n- Confirm evidence/);
   assert.match(prompt, /Continue the iteration\./);
   assert.match(prompt, /FILES=\.\n backend\/\n  src\/\n   server\.ts/);
   assert.match(prompt, /PREVIOUS=# Worker result[\s\S]*Verified analysis\./);

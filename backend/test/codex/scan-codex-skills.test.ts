@@ -37,6 +37,7 @@ function promptRuntimeContext(input: {
     SERVER_SKILL_CONTEXT: () => input.serverSkillContext ?? '',
     MASTER_TASK: empty,
     SUB_CONTEXT: empty,
+    SUB_TASKS: empty,
     FULL_THREAD: empty,
     FILE_MAP: empty,
     PREVIOUS_SKILL_RESULT: empty,
