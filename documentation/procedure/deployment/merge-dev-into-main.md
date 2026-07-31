@@ -23,7 +23,7 @@
 
 3. **WHAT:** Treat exit `0` and the JSON receipt as successful local promotion.
 
-   **WHY:** The receipt identifies the admitted `dev` SHA, committed child SHA, optional child and gitlink commits, and final merge SHA.
+   **WHY:** The receipt identifies the admitted `dev` SHA, committed child SHA, optional child and gitlink commits, final merge SHA, exact merge parents, preserved Decision OS gitlink, and final parent and child status.
 
 4. **WHAT:** Treat `READY` plus doctor exit `0` as admission, `NO-GO` plus doctor exit `2` as blocked, merge exit `2` as rejected repository state, and merge exit `3` as an execution failure.
 

@@ -21,6 +21,12 @@ export type MergeDevReceipt = {
   gitlinkCommitCreated: boolean;
   logFile: string;
   mainSha: string;
+  verification: {
+    childStatus: StatusRecord[];
+    decisionOsGitlink: string;
+    mergeParents: [string, string];
+    parentStatus: StatusRecord[];
+  };
 };
 
 export type MergeDevDoctorReport = {
@@ -437,6 +443,23 @@ export async function mergeDevIntoMain(repositoryRoot: string): Promise<MergeDev
     if (parents.length !== 2 || parents[0] !== priorMainSha || parents[1] !== devSha) {
       throw new MergeDevError('merge_dev_parent_proof_failed', `Unexpected merge parents: ${parents.join(' ')}.`, 3);
     }
+    const decisionOsGitlink = gitText(root, ['rev-parse', 'HEAD:.decision-os']);
+    // WHAT: Reject a final merge tree that does not retain the protected main gitlink.
+    // WHY: The success receipt must prove the committed tree, not only the pre-commit index.
+    if (decisionOsGitlink !== protectedGitlink) {
+      throw new MergeDevError('merge_dev_final_gitlink_changed', `Final Decision OS gitlink changed from ${protectedGitlink} to ${decisionOsGitlink}.`, 3);
+    }
+    const parentStatus = statusRecords(root, 'none');
+    const childStatus = statusRecords(childRoot, 'all');
+    // WHAT: Reject a completed promotion that leaves parent or child repository changes behind.
+    // WHY: A successful fixed merge must return both owning repositories to a clean observable state.
+    if (parentStatus.length > 0 || childStatus.length > 0) {
+      throw new MergeDevError(
+        'merge_dev_final_status_dirty',
+        `Promotion left repository changes: parent=${parentStatus.map((record) => record.path).join(', ') || 'clean'}; child=${childStatus.map((record) => record.path).join(', ') || 'clean'}.`,
+        3,
+      );
+    }
     const receipt: MergeDevReceipt = {
       ok: true,
       devSha,
@@ -445,6 +468,12 @@ export async function mergeDevIntoMain(repositoryRoot: string): Promise<MergeDev
       gitlinkCommitCreated,
       logFile,
       mainSha,
+      verification: {
+        childStatus,
+        decisionOsGitlink,
+        mergeParents: [parents[0], parents[1]],
+        parentStatus,
+      },
     };
     log('promotion-completed', receipt);
     return receipt;

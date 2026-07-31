@@ -91,6 +91,12 @@ test('commits main child state and merges dev without adopting the dev gitlink',
   assert.notEqual(receipt.decisionOsSha, devChildSha);
   assert.equal(git(fixture.parentRoot, ['rev-parse', 'HEAD:.decision-os']), receipt.decisionOsSha);
   assert.equal(git(fixture.parentRoot, ['show', '-s', '--format=%P', 'HEAD']).split(' ')[1], devSha);
+  assert.deepEqual(receipt.verification, {
+    childStatus: [],
+    decisionOsGitlink: receipt.decisionOsSha,
+    mergeParents: git(fixture.parentRoot, ['show', '-s', '--format=%P', 'HEAD']).split(' '),
+    parentStatus: [],
+  });
   assert.equal(readFileSync(join(fixture.parentRoot, 'dev.txt'), 'utf8'), 'dev source\n');
   assert.equal(git(fixture.parentRoot, ['status', '--porcelain']), '');
   assert.equal(git(fixture.childRoot, ['status', '--porcelain']), '');
