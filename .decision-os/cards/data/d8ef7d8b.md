@@ -1,1 +1,0 @@
-Pending and recent save lifecycle state for the active surface.

@@ -1,1 +1,0 @@
-The CLI resolves imports during generation; the agent does not specify dependency import paths manually.
