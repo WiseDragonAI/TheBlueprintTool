@@ -265,6 +265,34 @@ To inspect the underlying command without starting the server:
 /home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs --print-command
 ```
 
+## Frontend Telemetry Processing
+
+Frontend telemetry is retained on disk as JSONL under the server launch
+workspace:
+
+```text
+<workspace>/.decision-os/frontend-telemetry.jsonl
+```
+
+Read retained telemetry directly from that file with `tail`, `rg`, and `jq`.
+Do not use HTTP requests to retrieve records already available in the JSONL
+file. Start with the smallest relevant tail or exact event-name search, then
+expand only when the retained evidence requires it.
+
+Use HTTP only to check whether telemetry is currently enabled or to probe the
+actual behavior of a live route:
+
+```bash
+curl -sS http://127.0.0.1:50150/api/diagnostics/frontend-telemetry-config | jq .
+tail -n 200 /home/jbb/.decision-os/frontend-telemetry.jsonl | jq -c .
+rg 'task-execution-http-settled|codex-log-summary-settled' \
+  /home/jbb/.decision-os/frontend-telemetry.jsonl
+```
+
+Treat a missing follow-up telemetry event as the first unobserved transition,
+not proof of a specific internal failure. Corroborate the cause with the next
+boundary's telemetry, browser evidence, or one focused live-route probe.
+
 ## Voice Transcription
 
 Voice transcription is configured per target workspace through:
