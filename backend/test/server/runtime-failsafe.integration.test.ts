@@ -436,6 +436,8 @@ test('invalid project pipeline store pauses only its Codex runtime while global 
     assert.equal(recoveredDecision?.scope, `codex-pipeline-store:${invalidStore}`);
     assert.equal(typeof recoveredDecision?.incidentId, 'string');
     assert.equal(recoveredDecision?.stabilityDelayMs, 1_000);
+    assert.deepEqual(recoveredDecision?.firstReadIssueCodes, ['invalid-store']);
+    assert.deepEqual(recoveredDecision?.rereadResult, { availability: 'available', issueCodes: [] });
 
     writeFileSync(invalidStore, JSON.stringify({
       version: 1,
@@ -466,6 +468,11 @@ test('invalid project pipeline store pauses only its Codex runtime while global 
     assert.equal(pausedDecision?.projectId, 'invalid-project');
     assert.equal(pausedDecision?.scope, `codex-pipeline-store:${invalidStore}`);
     assert.ok(Number(pausedDecision?.elapsedMs) >= 1_000);
+    assert.deepEqual(pausedDecision?.firstReadIssueCodes, ['invalid-authored-content-id']);
+    assert.deepEqual(pausedDecision?.rereadResult, {
+      availability: 'unavailable',
+      issueCodes: ['invalid-authored-content-id'],
+    });
 
     const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`)
       .then((response) => response.json()) as {

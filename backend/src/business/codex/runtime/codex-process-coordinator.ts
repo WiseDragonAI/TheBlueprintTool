@@ -22,6 +22,7 @@ type SchedulerContext = { root: string; runtime: AnyRecord };
 type DeferredPipelineStoreInspection = {
   incidentId: string;
   scope: string;
+  firstReadIssueCodes: string[];
   startedAt: number;
   retryAt: number;
 };
@@ -79,6 +80,7 @@ export function createCodexProcessCoordinator(input: {
       deferredPipelineStoreInspections.set(candidate.runtime, {
         incidentId: error.incidentId,
         scope: error.scope,
+        firstReadIssueCodes: [...error.issueCodes],
         startedAt,
         retryAt,
       });
@@ -105,6 +107,8 @@ export function createCodexProcessCoordinator(input: {
       decisionOsRoot: candidate.root,
       scope: current.scope,
       incidentId: current.incidentId,
+      firstReadIssueCodes: current.firstReadIssueCodes,
+      rereadResult: { availability: 'unavailable', issueCodes: [...error.issueCodes] },
       stabilityDelayMs: pipelineStoreStabilityDelayMs,
       elapsedMs: Math.max(0, Date.now() - current.startedAt),
       outcome: 'paused',
@@ -129,6 +133,8 @@ export function createCodexProcessCoordinator(input: {
           decisionOsRoot: candidate.root,
           scope: recovered.scope,
           incidentId: recovered.incidentId,
+          firstReadIssueCodes: recovered.firstReadIssueCodes,
+          rereadResult: { availability: 'available', issueCodes: [] },
           stabilityDelayMs: pipelineStoreStabilityDelayMs,
           elapsedMs: Math.max(0, Date.now() - recovered.startedAt),
           outcome: 'recovered',

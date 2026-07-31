@@ -207,6 +207,73 @@ test('preserves invalid retained project catalog bytes and reports the owning sc
   }
 });
 
+test('keeps relay catalogs paused and installs recovery only after durable persistence succeeds', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-paused-federation-catalog-'));
+  const catalogFile = join(workspace, 'federation-project-catalog.json');
+  const invalid = '{"version":1,"nodes":';
+  writeFileSync(catalogFile, invalid);
+  const relayHttp = createServer();
+  const relay = new WebSocketServer({ noServer: true });
+  relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
+    webSocket.send(JSON.stringify({
+      type: 'catalog',
+      nodes: [{
+        nodeId: 'node-b',
+        nodeLabel: 'Node B',
+        online: true,
+        projects: [{ id: 'relay-project', name: 'Relay', description: '', color: '#000000', ledgers: [], originFingerprint: 'relay-origin' }],
+      }],
+    }));
+  }));
+  relayHttp.listen(0, '127.0.0.1');
+  await once(relayHttp, 'listening');
+  const connector = createFederationNodeConnector({
+    settings: {
+      federationRelayUrl: `http://127.0.0.1:${(relayHttp.address() as AddressInfo).port}`,
+      federationId: 'proof',
+      federationNodeId: 'node-a',
+      federationNodeCredential: 'credential',
+    },
+    catalogFile,
+    localProjects: () => [],
+    localServerUrl: () => 'http://127.0.0.1:1',
+  });
+  // WHAT: Start the connector so the fixture completes the same authenticated WebSocket handshake as production.
+  // WHY: Creating a connector does not open its relay transport, so an unstarted fixture can never reach the connected phase or receive its catalog.
+  connector.start();
+  try {
+    await waitFor(async () => connector.status().phase === 'connected' ? true : null);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(connector.remoteProjects(), []);
+    assert.equal(readFileSync(catalogFile, 'utf8'), invalid);
+
+    writeFileSync(catalogFile, JSON.stringify({
+      version: 1,
+      federationId: 'proof',
+      nodes: [{
+        nodeId: 'node-c',
+        nodeLabel: 'Node C',
+        projects: [{ id: 'recovered-project', name: 'Recovered', description: '', color: '#000000', ledgers: [], originFingerprint: 'recovered-origin' }],
+      }],
+    }));
+    mkdirSync(`${catalogFile}.tmp`);
+    assert.throws(() => connector.recoverRetainedProjectCatalog());
+    assert.equal(connector.status().catalogWritable, false);
+    assert.deepEqual(connector.remoteProjects(), []);
+
+    rmSync(`${catalogFile}.tmp`, { recursive: true, force: true });
+    connector.recoverRetainedProjectCatalog();
+    assert.equal(connector.status().catalogWritable, true);
+    assert.deepEqual(connector.remoteProjects().map((project) => project.localProjectId), ['recovered-project']);
+  } finally {
+    connector.stop();
+    relay.clients.forEach((client) => client.close());
+    await new Promise<void>((resolve) => relayHttp.close(() => resolve()));
+    relay.close();
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('stops retrying when another server owns the configured node identity', async () => {
   const relayHttp = createServer();
   const relay = new WebSocketServer({ noServer: true });

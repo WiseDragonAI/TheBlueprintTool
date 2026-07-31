@@ -51,7 +51,14 @@ test('hosted project card read demands an empty phone-owned migrated object by e
     webSocket.on('message', (data) => {
       const frame = JSON.parse(data.toString()) as Record<string, any>;
       if (frame.type === 'manifest') {
-        const project = { id: projectId, name: 'Shared', description: '', color: '#38d9e8', ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] };
+        const project = {
+          id: projectId,
+          name: 'Shared',
+          description: '',
+          color: '#38d9e8',
+          ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+          originFingerprint: '',
+        };
         webSocket.send(JSON.stringify({ version: 1, type: 'catalog', nodes: [
           { nodeId: 'workstation', nodeLabel: 'Workstation', online: true, projects: [project] },
           { nodeId: 'phone', nodeLabel: 'Phone', online: true, projects: [project] },

@@ -193,7 +193,11 @@ export class RuntimeScopePausedError extends Error {
   readonly code = 'runtime_scope_paused';
   readonly statusCode = 503;
 
-  constructor(readonly scope: string, readonly incidentId: string) {
+  constructor(
+    readonly scope: string,
+    readonly incidentId: string,
+    readonly issueCodes: string[] = [],
+  ) {
     super(`Runtime scope ${scope} is paused by incident ${incidentId}.`);
     this.name = 'RuntimeScopePausedError';
   }
@@ -214,9 +218,62 @@ export function createRuntimeIncidentLedger(input: {
   const now = input.now ?? (() => new Date());
   let persistenceBlockedReason = '';
   let pendingRecoveryDocument: CurrentIncidentDocument | null = null;
+  let pendingRecoveryInvalid = false;
   let persistenceFailureReported = false;
 
+  const pendingCorruptionDocument = (error: unknown): CurrentIncidentDocument => {
+    const observedAt = now().toISOString();
+    const normalized = normalizedError(error);
+    const scope = 'runtime-incident-ledger';
+    const code = 'runtime_incident_ledger_pending_corrupt';
+    const message = normalized.message;
+    let document = emptyDocument();
+    try {
+      // WHAT: Retain readable primary incidents alongside the pending-file recovery blocker.
+      // WHY: Invalid fallback evidence must not hide older actionable diagnostics that remain structurally valid.
+      if (existsSync(file)) {
+        const primary: unknown = JSON.parse(readFileSync(file, 'utf8'));
+        // WHAT: Admit the primary document only through the normal incident-ledger validation contract.
+        // WHY: A corrupt primary file cannot become diagnostic authority while classifying a separate pending failure.
+        if (isIncidentDocument(primary)) document = writableDocument(primary, observedAt);
+      }
+    } catch {
+      // Primary corruption remains owned by the existing primary read boundary after pending recovery.
+    }
+    const incidentFingerprint = fingerprint({
+      scope,
+      component: 'runtime-incident-ledger',
+      operation: 'read-pending',
+      code,
+      message,
+    });
+    document.incidents.push({
+      id: `incident-${randomUUID()}`,
+      fingerprint: incidentFingerprint,
+      status: 'paused',
+      severity: 'fatal',
+      scope,
+      component: 'runtime-incident-ledger',
+      operation: 'read-pending',
+      code,
+      message,
+      stack: normalized.stack,
+      context: boundedContext({ pendingFile, validationError: normalized.message }),
+      firstObservedAt: observedAt,
+      lastObservedAt: observedAt,
+      occurrences: 1,
+      resolvedAt: '',
+      observations: [observedAt],
+      legacyHistoryBefore: '',
+    });
+    document.updatedAt = observedAt;
+    return document;
+  };
+
   const writePendingDocument = (document: CurrentIncidentDocument): void => {
+    // WHAT: Refuse to replace an invalid pending ledger through normal incident recording.
+    // WHY: Its exact bytes remain recovery evidence until explicit validation succeeds.
+    if (pendingRecoveryInvalid) return;
     const temporary = `${pendingFile}.${process.pid}.${randomUUID()}.tmp`;
     try {
       mkdirSync(dirname(pendingFile), { recursive: true });
@@ -309,6 +366,9 @@ export function createRuntimeIncidentLedger(input: {
   };
 
   const persist = (document: CurrentIncidentDocument): void => {
+    // WHAT: Block ordinary primary persistence while invalid pending evidence owns recovery.
+    // WHY: A later incident write must not delete the invalid fallback and silently clear its diagnostic blocker.
+    if (pendingRecoveryInvalid) throw new Error('Runtime incident ledger pending recovery remains invalid.');
     if (persistenceBlockedReason) throw new Error(persistenceBlockedReason);
     mkdirSync(dirname(file), { recursive: true });
     const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
@@ -316,6 +376,7 @@ export function createRuntimeIncidentLedger(input: {
       writeFileSync(temporary, `${JSON.stringify(document, null, 2)}\n`, { mode: 0o600 });
       renameSync(temporary, file);
       pendingRecoveryDocument = null;
+      pendingRecoveryInvalid = false;
       rmSync(pendingFile, { force: true });
       persistenceFailureReported = false;
     } catch (error) {
@@ -339,7 +400,12 @@ export function createRuntimeIncidentLedger(input: {
         pendingRecoveryDocument = writableDocument(pending, now().toISOString());
         return pendingRecoveryDocument;
       } catch (error) {
+        // WHAT: Keep invalid pending bytes in place and expose their owning failure through the live diagnostic projection.
+        // WHY: Falling back silently to the older primary ledger would erase evidence that explicit persistence recovery is blocked.
+        pendingRecoveryInvalid = true;
+        pendingRecoveryDocument = pendingCorruptionDocument(error);
         reportPersistenceFailure(error, 'runtime-incident-ledger-pending-read');
+        return pendingRecoveryDocument;
       }
     }
     if (!existsSync(file)) return pendingRecoveryDocument ?? emptyDocument();
@@ -528,6 +594,32 @@ export function createRuntimeIncidentLedger(input: {
       return resolved;
     },
     recoverPersistence(resolution = ''): RuntimeIncident[] {
+      // WHAT: Re-read an invalid pending ledger before allowing explicit persistence recovery.
+      // WHY: Recovery must preserve its bytes until an operator supplies a structurally valid replacement authority.
+      if (pendingRecoveryInvalid) {
+        try {
+          const pending: unknown = JSON.parse(readFileSync(pendingFile, 'utf8'));
+          // WHAT: Keep recovery paused when replacement pending bytes still fail validation.
+          // WHY: Invalid diagnostic evidence cannot be rewritten into the primary ledger as if it were recovered state.
+          if (!isIncidentDocument(pending)) return [];
+          const recoveredPending = writableDocument(pending, now().toISOString());
+          const retainedInMemoryIncidents = pendingRecoveryDocument?.incidents ?? [];
+          // WHAT: Carry every incident observed while pending bytes were invalid into the validated replacement.
+          // WHY: Structural recovery must preserve both the owning blocker and concurrent application evidence that could not be written.
+          for (const incident of retainedInMemoryIncidents) {
+            // WHAT: Avoid duplicating evidence already supplied by the validated replacement document.
+            // WHY: Incident identity must remain stable across recovery installation.
+            if (!recoveredPending.incidents.some((candidate) => candidate.id === incident.id)) {
+              recoveredPending.incidents.push(incident);
+            }
+          }
+          pendingRecoveryDocument = recoveredPending;
+          pendingRecoveryInvalid = false;
+        } catch (error) {
+          reportPersistenceFailure(error, 'runtime-incident-ledger-pending-recovery');
+          return [];
+        }
+      }
       const document = writableDocument(read(), now().toISOString());
       const resolvedAt = now().toISOString();
       const resolved: RuntimeIncident[] = [];
