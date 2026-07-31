@@ -297,45 +297,64 @@ export function createFederationNodeConnector(input: {
   };
 
   let catalogWritable = true;
-  if (input.catalogFile && existsSync(input.catalogFile)) {
-    try {
-      const retained = JSON.parse(readFileSync(input.catalogFile, 'utf8')) as {
+  const loadRetainedCatalog = (): void => {
+    // WHAT: Treat an absent retained catalog as a valid empty local cache.
+    // WHY: First startup has no remote-catalog bytes to recover or preserve.
+    if (!input.catalogFile || !existsSync(input.catalogFile)) {
+      remoteNodes.clear();
+      catalogWritable = true;
+      return;
+    }
+    const retained = JSON.parse(readFileSync(input.catalogFile, 'utf8')) as {
         version?: unknown;
         federationId?: unknown;
         nodes?: Array<{ nodeId?: unknown; nodeLabel?: unknown; projects?: unknown }>;
-      };
-      if (retained.version !== 1
-        || String(retained.federationId ?? '') !== String(settings?.federationId ?? '')
-        || !Array.isArray(retained.nodes)) throw new Error('invalid_federation_project_catalog');
-      for (const node of retained.nodes) {
-        const nodeId = String(node.nodeId ?? '').trim();
-        if (!nodeId
-          || nodeId === settings?.nodeId
-          || !Array.isArray(node.projects)
-          || node.projects.some((project) => {
-            if (!project || typeof project !== 'object' || Array.isArray(project)) return true;
-            const manifest = project as Record<string, unknown>;
-            return !String(manifest.id ?? '').trim()
-              || typeof manifest.name !== 'string'
-              || typeof manifest.description !== 'string'
-              || typeof manifest.color !== 'string'
-              || !Array.isArray(manifest.ledgers)
-              || typeof manifest.originFingerprint !== 'string';
-          })) throw new Error('invalid_federation_project_catalog_node');
-        remoteNodes.set(nodeId, {
-          nodeLabel: String(node.nodeLabel || nodeId),
-          online: false,
-          projects: node.projects as ProjectManifest[],
-        });
-      }
-    } catch (error) {
-      catalogWritable = false;
-      remoteNodes.clear();
-      reportError(error, 'read-retained-project-catalog');
+    };
+    // WHAT: Reject the complete retained document before constructing any candidate remote-node state.
+    // WHY: Version, federation identity, and node collection must share one validated durable authority.
+    if (retained.version !== 1
+      || String(retained.federationId ?? '') !== String(settings?.federationId ?? '')
+      || !Array.isArray(retained.nodes)) throw new Error('invalid_federation_project_catalog');
+    const candidateNodes = new Map<string, { nodeLabel: string; online: boolean; projects: ProjectManifest[] }>();
+    for (const node of retained.nodes) {
+      const nodeId = String(node.nodeId ?? '').trim();
+      // WHAT: Reject one invalid retained node without installing any sibling candidates.
+      // WHY: Partial catalog installation would present a corrupt durable snapshot as complete discovery state.
+      if (!nodeId
+        || nodeId === settings?.nodeId
+        || !Array.isArray(node.projects)
+        || node.projects.some((project) => {
+          // WHAT: Reject a retained project that lacks the complete path-free manifest contract.
+          // WHY: Remote discovery cannot safely route an incomplete or structurally ambiguous project.
+          if (!project || typeof project !== 'object' || Array.isArray(project)) return true;
+          const manifest = project as Record<string, unknown>;
+          return !String(manifest.id ?? '').trim()
+            || typeof manifest.name !== 'string'
+            || typeof manifest.description !== 'string'
+            || typeof manifest.color !== 'string'
+            || !Array.isArray(manifest.ledgers)
+            || typeof manifest.originFingerprint !== 'string';
+        })) throw new Error('invalid_federation_project_catalog_node');
+      candidateNodes.set(nodeId, {
+        nodeLabel: String(node.nodeLabel || nodeId),
+        online: false,
+        projects: node.projects as ProjectManifest[],
+      });
     }
+    remoteNodes.clear();
+    for (const [nodeId, node] of candidateNodes) remoteNodes.set(nodeId, node);
+    catalogWritable = true;
+  };
+  try { loadRetainedCatalog(); }
+  catch (error) {
+    catalogWritable = false;
+    remoteNodes.clear();
+    reportError(error, 'read-retained-project-catalog');
   }
 
-  const persistRemoteCatalog = (): void => {
+  const persistRemoteCatalog = (propagateFailure = false): void => {
+    // WHAT: Skip catalog persistence when no durable catalog is configured or its current bytes failed validation.
+    // WHY: Federation must preserve invalid retained state byte-identically until explicit recovery validates replacement bytes.
     if (!input.catalogFile || !catalogWritable) return;
     const temporary = `${input.catalogFile}.tmp`;
     try {
@@ -351,7 +370,11 @@ export function createFederationNodeConnector(input: {
       }, null, 2) + '\n', 'utf8');
       renameSync(temporary, input.catalogFile);
     } catch (error) {
+      catalogWritable = false;
       reportError(error, 'persist-project-catalog');
+      // WHAT: Propagate only an explicit recovery write failure to its recovery owner.
+      // WHY: Normal connector callbacks remain contained while recovery must not resolve an unverified writable state.
+      if (propagateFailure) throw error;
     }
   };
 
@@ -881,6 +904,7 @@ export function createFederationNodeConnector(input: {
         ownerRequestTimeoutMs,
         requesterStreamCount: requesterStreams.size,
         ownerStreamCount: ownerStreams.size,
+        catalogWritable,
         lastError,
         lastCloseCode,
         lastCloseReason,
@@ -927,6 +951,10 @@ export function createFederationNodeConnector(input: {
       if (socket?.readyState !== WebSocket.OPEN) return;
       try { send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, stateProtocol: taskStateProtocol, stateSchema: taskCurrentStateVersion, baselineEpoch: taskCurrentBaselineEpoch, projects: manifest() }); }
       catch (error) { reportError(error, 'publish-manifest'); }
+    },
+    recoverRetainedProjectCatalog(): void {
+      loadRetainedCatalog();
+      persistRemoteCatalog(true);
     },
     publishContentChange(): void {
       if (socket?.readyState !== WebSocket.OPEN) return;

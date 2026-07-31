@@ -208,12 +208,96 @@ export function createRuntimeIncidentLedger(input: {
   protectedScopes?: () => Iterable<string>;
 }) {
   const file = resolve(input.file ?? resolve(input.decisionOsRoot, 'runtime-incidents.json'));
+  const pendingFile = resolve(input.decisionOsRoot, 'runtime', 'runtime-incidents.pending.json');
   const maxIncidents = Math.max(10, input.maxIncidents ?? 500);
   const maxObservationsPerIncident = Math.max(1, input.maxObservationsPerIncident ?? defaultMaximumObservationsPerIncident);
   const now = input.now ?? (() => new Date());
   let persistenceBlockedReason = '';
   let pendingRecoveryDocument: CurrentIncidentDocument | null = null;
   let persistenceFailureReported = false;
+
+  const writePendingDocument = (document: CurrentIncidentDocument): void => {
+    const temporary = `${pendingFile}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      mkdirSync(dirname(pendingFile), { recursive: true });
+      writeFileSync(temporary, `${JSON.stringify(document, null, 2)}\n`, { mode: 0o600 });
+      renameSync(temporary, pendingFile);
+    } catch (error) {
+      rmSync(temporary, { force: true });
+      reportPersistenceFailure(error, 'runtime-incident-ledger-pending');
+    }
+  };
+
+  const retainPersistenceFailure = (
+    document: CurrentIncidentDocument,
+    persistenceError: unknown,
+    failedScope: string,
+  ): void => {
+    const observedAt = now().toISOString();
+    const normalized = normalizedError(persistenceError);
+    const scope = 'runtime-incident-ledger';
+    const code = 'runtime_incident_ledger_write_failed';
+    const message = 'Runtime incident ledger primary persistence failed.';
+    const incidentFingerprint = fingerprint({
+      scope,
+      component: 'runtime-incident-ledger',
+      operation: 'persist',
+      code,
+      message,
+    });
+    const existing = document.incidents.find((entry) => (
+      entry.status === 'paused' && entry.fingerprint === incidentFingerprint
+    ));
+    const incident = existing ?? {
+      id: `incident-${randomUUID()}`,
+      fingerprint: incidentFingerprint,
+      status: 'paused' as const,
+      severity: 'fatal' as const,
+      scope,
+      component: 'runtime-incident-ledger',
+      operation: 'persist',
+      code,
+      message,
+      stack: normalized.stack,
+      context: {},
+      firstObservedAt: observedAt,
+      lastObservedAt: observedAt,
+      occurrences: 0,
+      resolvedAt: '',
+      observations: [],
+      legacyHistoryBefore: '',
+    };
+    incident.lastObservedAt = observedAt;
+    incident.occurrences += 1;
+    incident.observations.push(observedAt);
+    // WHAT: Bound repeated diagnostic-storage failure timestamps to the standard incident observation limit.
+    // WHY: A prolonged primary-ledger outage must not make the fallback document grow without limit.
+    if (incident.observations.length > maxObservationsPerIncident) {
+      const discarded = incident.observations.splice(
+        0,
+        incident.observations.length - maxObservationsPerIncident,
+      );
+      document.historyTruncatedBefore = laterHistoryWatermark(
+        document.historyTruncatedBefore,
+        discarded.at(-1) ?? '',
+      );
+    }
+    incident.context = boundedContext({
+      ...incident.context,
+      file,
+      pendingFile,
+      failedScope,
+      persistenceCode: normalized.code,
+      persistenceMessage: normalized.message,
+    });
+    // WHAT: Add the diagnostic-storage incident to the pending authority exactly once per fingerprint.
+    // WHY: Recursive calls to record() would attempt the same failed primary persistence boundary again.
+    if (!existing) document.incidents.push(incident);
+    document.updatedAt = observedAt;
+    pendingRecoveryDocument = document;
+    writePendingDocument(document);
+    reportPersistenceFailure(persistenceError, failedScope);
+  };
 
   const reportPersistenceFailure = (error: unknown, scope: string): void => {
     const normalized = normalizedError(error);
@@ -232,6 +316,7 @@ export function createRuntimeIncidentLedger(input: {
       writeFileSync(temporary, `${JSON.stringify(document, null, 2)}\n`, { mode: 0o600 });
       renameSync(temporary, file);
       pendingRecoveryDocument = null;
+      rmSync(pendingFile, { force: true });
       persistenceFailureReported = false;
     } catch (error) {
       rmSync(temporary, { force: true });
@@ -240,6 +325,23 @@ export function createRuntimeIncidentLedger(input: {
   };
 
   const read = (): IncidentDocument => {
+    // WHAT: Serve pending incident evidence before the older primary ledger.
+    // WHY: A failed primary write must remain visible to diagnostics and survive process restart through the bounded fallback file.
+    if (pendingRecoveryDocument) return pendingRecoveryDocument;
+    // WHAT: Restore the emergency fallback before consulting the stale primary ledger after process restart.
+    // WHY: The fallback contains incidents that the failed primary persistence boundary never committed.
+    if (existsSync(pendingFile)) {
+      try {
+        const pending: unknown = JSON.parse(readFileSync(pendingFile, 'utf8'));
+        // WHAT: Reject a structurally invalid fallback document before making it diagnostic authority.
+        // WHY: Emergency persistence cannot weaken the primary incident-ledger validation contract.
+        if (!isIncidentDocument(pending)) throw new Error('Unsupported pending runtime incident ledger format.');
+        pendingRecoveryDocument = writableDocument(pending, now().toISOString());
+        return pendingRecoveryDocument;
+      } catch (error) {
+        reportPersistenceFailure(error, 'runtime-incident-ledger-pending-read');
+      }
+    }
     if (!existsSync(file)) return pendingRecoveryDocument ?? emptyDocument();
     try {
       const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
@@ -373,7 +475,7 @@ export function createRuntimeIncidentLedger(input: {
     try {
       persist(document);
     } catch (persistenceError) {
-      reportPersistenceFailure(persistenceError, incident.scope);
+      retainPersistenceFailure(document, persistenceError, incident.scope);
     }
     telemetry('runtime-incident', {
       incidentId: incident.id,
@@ -419,10 +521,39 @@ export function createRuntimeIncidentLedger(input: {
       document.updatedAt = resolvedAt;
       try { persist(document); }
       catch (error) {
-        reportPersistenceFailure(error, scope);
+        retainPersistenceFailure(document, error, scope);
         return [];
       }
       telemetry('runtime-incident-resolved', { scope, incidentIds: resolved.map((incident) => incident.id), resolvedAt });
+      return resolved;
+    },
+    recoverPersistence(resolution = ''): RuntimeIncident[] {
+      const document = writableDocument(read(), now().toISOString());
+      const resolvedAt = now().toISOString();
+      const resolved: RuntimeIncident[] = [];
+      for (const incident of document.incidents) {
+        // WHAT: Resolve only the diagnostic-storage scope during explicit persistence recovery.
+        // WHY: Restoring the ledger must not settle the application incidents whose writes were being preserved.
+        if (incident.status !== 'paused' || incident.scope !== 'runtime-incident-ledger') continue;
+        incident.status = 'resolved';
+        incident.resolvedAt = resolvedAt;
+        incident.context = boundedContext({ ...incident.context, resolution: boundedText(resolution, 2_000) });
+        resolved.push(structuredClone(incident));
+      }
+      // WHAT: Require an active persistence incident before rewriting the primary ledger.
+      // WHY: A recovery request must not become an unrelated no-op durable mutation.
+      if (resolved.length === 0) return [];
+      document.updatedAt = resolvedAt;
+      try { persist(document); }
+      catch (error) {
+        retainPersistenceFailure(document, error, 'runtime-incident-ledger');
+        return [];
+      }
+      telemetry('runtime-incident-resolved', {
+        scope: 'runtime-incident-ledger',
+        incidentIds: resolved.map((incident) => incident.id),
+        resolvedAt,
+      });
       return resolved;
     },
   };

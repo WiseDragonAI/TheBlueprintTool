@@ -48,6 +48,7 @@ import {
 } from '/src/runtime/codex/effect/render-skill-library-editor-modal.js';
 import { loadRuntimeDiagnostics, projectRuntimeRows } from './runtime-status.js';
 import { taskClockFromResponse } from '/src/runtime/refresh/helper/task-causal-clock.js';
+import { telemetry } from '/src/runtime/telemetry/effect/telemetry.js';
 
 installProjectRequestScope();
 
@@ -449,6 +450,7 @@ function beginOptimisticExecution(detail) {
   // WHY: A directly opened card has no hydrated task from which to build its preparing intent.
   if (!state.controlRoom) {
     pendingOptimisticExecutionDetails.set(String(detail.requestId), detail);
+    telemetry('optimistic-projection-installed', { requestId: String(detail.requestId), kind: String(detail.kind ?? ''), outcome: 'pending-control-room' });
     return String(detail.requestId);
   }
   const task = controlRoomTaskForExecution(state.controlRoom, detail);
@@ -459,6 +461,7 @@ function beginOptimisticExecution(detail) {
   const identity = taskIdentity(task);
   optimisticExecutionIntents.set(identity, intent);
   applyOptimisticExecutionIntent(state.controlRoom, intent);
+  telemetry('optimistic-projection-installed', { requestId: String(detail.requestId), kind: String(detail.kind ?? ''), outcome: 'projected', taskIdentity: identity });
   if (location.pathname === '/') renderControlRoom();
   return identity;
 }
@@ -466,8 +469,9 @@ function beginOptimisticExecution(detail) {
 function acknowledgeOptimisticExecution(detail) {
   const clientRequestId = String(detail?.clientRequestId ?? detail?.requestId ?? '');
   pendingOptimisticExecutionDetails.delete(clientRequestId);
-  removeAcknowledgedExecutionIntent(optimisticExecutionIntents, detail);
+  const removed = removeAcknowledgedExecutionIntent(optimisticExecutionIntents, detail);
   void loadControlRoom({ force: true }).then(() => {
+    telemetry('admission-reconciled', { requestId: clientRequestId, kind: String(detail?.kind ?? ''), outcome: 'accepted', removed });
     if (location.pathname === '/') renderControlRoom();
   }).catch((error) => console.error('Execution admission confirmation failed.', error));
 }
@@ -475,10 +479,11 @@ function acknowledgeOptimisticExecution(detail) {
 function rejectOptimisticExecution(detail) {
   const rejectedRequestId = String(detail?.requestId ?? '');
   pendingOptimisticExecutionDetails.delete(rejectedRequestId);
-  removeRejectedExecutionIntent(optimisticExecutionIntents, detail);
+  const removed = removeRejectedExecutionIntent(optimisticExecutionIntents, detail);
   elements['mutation-error-message'].textContent = String(detail?.error || 'Execution admission was rejected and confirmed state was restored.');
   elements['mutation-error'].hidden = false;
   void loadControlRoom({ force: true }).then(() => {
+    telemetry('rejection-reconciled', { requestId: rejectedRequestId, kind: String(detail?.kind ?? ''), outcome: 'rejected', removed });
     if (location.pathname === '/') renderControlRoom();
   }).catch((error) => console.error('Execution admission reconciliation failed.', error));
 }

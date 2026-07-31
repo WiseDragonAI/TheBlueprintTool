@@ -12,11 +12,30 @@ import {
 
 type AnyRecord = Record<string, unknown>;
 
+async function readReceiptRequest(request: IncomingMessage): Promise<{
+  skillName: string;
+  revision: string;
+}> {
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes += buffer.byteLength;
+    // WHAT: Reject a receipt command after its bounded metadata envelope is exceeded.
+    // WHY: Revision acknowledgement never transports skill content in the command body.
+    if (bytes > 16 * 1024) throw new Error('Federated skill receipt request is too large.');
+    chunks.push(buffer);
+  }
+  const payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) as AnyRecord;
+  return { skillName: String(payload.skillName ?? '').trim(), revision: String(payload.revision ?? '').trim() };
+}
+
 export async function handleFederatedLibraryRoutes(input: {
   exportPipelines: () => AnyRecord;
   invalidateSkillIndex: () => void;
   projectScoped: boolean;
   readSkillIndex: () => Promise<FederatedSkillExportIndex>;
+  receivePublishedSkill: (sourceNodeId: string, skillName: string, revision: string) => Promise<AnyRecord>;
   request: IncomingMessage;
   response: ServerResponse;
   status: () => AnyRecord | undefined;
@@ -55,6 +74,34 @@ export async function handleFederatedLibraryRoutes(input: {
     input.response.setHeader('cache-control', 'no-store');
     input.response.setHeader('content-type', 'application/json');
     input.response.end(JSON.stringify(input.exportPipelines()));
+    return HTTP_ROUTE_HANDLED;
+  }
+
+  // WHAT: Accept one internal targeted skill receipt command outside project-scoped routing.
+  // WHY: Publication proof belongs to the server-authored federation library authority.
+  if (input.url === '/api/federation/skills-receipt' && input.request.method === 'POST') {
+    input.response.setHeader('cache-control', 'no-store');
+    input.response.setHeader('content-type', 'application/json');
+    try {
+      const sourceNodeId = String(input.request.headers['x-decision-os-federation-node'] ?? '').trim();
+      const { skillName, revision } = await readReceiptRequest(input.request);
+      // WHAT: Require the authenticated source identity and exact bounded skill identity before pulling content.
+      // WHY: The receipt endpoint must not become a generic unauthenticated federation import trigger.
+      if (!sourceNodeId || !skillName || !/^[a-f0-9]{64}$/.test(revision)) {
+        input.response.statusCode = 400;
+        input.response.end(JSON.stringify({ ok: false, error: 'federated_skill_receipt_request_invalid' }));
+        return HTTP_ROUTE_HANDLED;
+      }
+      input.response.end(JSON.stringify(
+        await input.receivePublishedSkill(sourceNodeId, skillName, revision),
+      ));
+    } catch (error) {
+      input.response.statusCode = 502;
+      input.response.end(JSON.stringify({
+        ok: false,
+        error: error instanceof Error ? error.message : 'Federated skill receipt failed.',
+      }));
+    }
     return HTTP_ROUTE_HANDLED;
   }
 

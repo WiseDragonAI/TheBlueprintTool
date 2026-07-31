@@ -1,10 +1,9 @@
 ## A. Consolidated Intent
 
-1. The four selected branches protect one invariant: once an owning subsystem reaches an authoritative transition, a later observer must not reverse, duplicate, or misrepresent it.
+1. The three retained changes protect one invariant: once an owning subsystem reaches an authoritative transition, a later observer must not reverse, duplicate, or misrepresent it.
 2. `Stabilize transient pipeline store reads` protects a valid store from being promoted into a latched project-runtime pause after one transient partial read.
 3. `Keep successful library recovery resumed` protects a component-owned successful recovery from being reversed when generic recovery resolves the same incidents again and receives an empty result.
 4. `FIX - clarify pipeline handoff and stabilize fixtures` makes the optimistic Process Card handoff explicit and guarantees its admission deadline is retired after request settlement.
-5. `Document stale waiting timestamp RCA` identifies the missing authoritative transition: terminal execution settlement must reset the owning task's Queue-entry clock from the execution's canonical `finishedAt`.
 
 ---
 
@@ -13,7 +12,6 @@
 1. Pipeline store: a first invalid read immediately creates an upstream store incident; the scheduler observes that incident and creates a second runtime pause before a bounded stability re-read can prove the file valid.
 2. Federated library recovery: component recovery resolves its incidents successfully; generic recovery performs a second resolution, treats the empty result as failure, and re-pauses the recovered subsystem.
 3. Optimistic pipeline handoff: the frontend completed admission through an unnamed boolean contract and retained an admission timer until implicit cleanup, obscuring which settlement owned navigation and rejection reconciliation.
-4. Task requeue: a terminal temporary pipeline removes the execution from the active projection without updating the master task's `waitingAt`; the Control Room then correctly renders Queue age from stale durable task state.
 
 ---
 
@@ -23,7 +21,6 @@
 2. Later pipeline-store incidents also demonstrate repeated read/resolution churn. The same `pipeline-content-kind-mismatch` fingerprint produced separate incidents and immediate resolutions at approximately 16-20 millisecond intervals. The ledger proves repeated classification, but it does not yet emit a stability-window decision event that distinguishes transient recovery from persistent corruption.
 3. Federated-library telemetry proves an affected scope can remain paused: `federated-skill-publication:psychoqwak` has two occurrences and no `resolvedAt`. It does not record the ordered component-recovery result, generic-recovery result, retained incident identities, and final pause state. The selected idempotence fix is source- and regression-backed but not production-proven by the current telemetry.
 4. Frontend telemetry records Codex Log binding, summary installation, HTTP settlement, presentation settlement, and render decisions. It does not record the Process Card pipeline sequence `optimistic projection -> handoff -> admission settlement -> deadline cleared -> rejection reconciliation`. The quality branch improves the contract and fixtures, but current telemetry cannot verify the complete behavior.
-5. The stale-waiting RCA is backed by durable task and execution timestamps. On latest `dev`, its imported route regression no longer reaches settlement: admission returns `409 pipeline_prompt_missing` because the historical fixture does not create current pipeline-prompt storage. Current frontend telemetry does not record the terminal execution `finishedAt`, resolved master `taskId`, previous task `waitingAt`, applied task `waitingAt`, and resulting Control Room `waitingSince` in one causal sequence. The branch contains diagnosis and a drifted red regression, not the correction.
 
 ---
 
@@ -32,26 +29,24 @@
 1. Emit one bounded `pipeline-store-stability-decision` record containing project scope, incident identity, first-read issue codes, first observation time, re-read result, elapsed stability time, and final action `recovered` or `paused`.
 2. Emit one `background-runtime-recovery-settled` record containing component, scope, recovery operation, candidate incident identities, resolved incident identities, final paused state, and outcome.
 3. Emit Process Card events keyed by `clientRequestId`: `optimistic-projection-installed`, `handoff-published`, `admission-settled`, `admission-deadline-cleared`, and `rejection-reconciled`. Record identifiers and status only; exclude prompts, Markdown, tokens, and relay payloads.
-4. Emit one `task-terminal-requeue-settled` record containing project, execution identity, canonical task identity, terminal phase, execution `finishedAt`, previous task `waitingAt`, applied task `waitingAt`, and mutation outcome.
-5. Keep every event locally bounded by the existing frontend telemetry queue and durable incident ledger. These events must not trigger relay publication or Cloudflare synchronization.
+4. Keep every event locally bounded by the existing frontend telemetry queue and backend telemetry harness. These events must not trigger relay publication or Cloudflare synchronization.
 
 ---
 
 ## E. Implementation Decision
 
-1. Keep all four changes in one runtime-transition integrity iteration because they share the same ownership invariant.
-2. Update the stale-waiting fixture to satisfy current pipeline-prompt admission, prove the original lifecycle assertion still fails, then complete the missing correction before integration.
-3. Add the four telemetry sequences at their existing transition boundaries, without introducing a second state store.
-4. Use telemetry to prove ordering and final authority, then retain focused regression tests for each first incorrect transition.
+1. Keep the three retained changes in one runtime-transition integrity iteration because they share the same ownership invariant.
+2. Add the three telemetry sequences at their existing transition boundaries, without introducing a second state store.
+3. Use telemetry to prove ordering and final authority, then retain focused regression tests for each first incorrect transition.
 
 ---
 
 ## F. Engineering Audit
 
 1. No test file or test case was deleted from `dev`. The consolidated diff adds one unit-test file and extends four existing test surfaces. Removed test lines replace duplicated fixtures and mutable route setup; they do not remove assertions.
-2. The branch is not green. Focused frontend checks pass `26/26`. Focused backend recovery checks pass, while the stale-waiting regression fails at current prompt admission with `409 pipeline_prompt_missing` before reaching lifecycle reconciliation. The full suite and typechecks have not been admitted.
-3. Pipeline-store stability is placed at the correct downstream pause-promotion boundary in `createCodexProcessCoordinator()`. It uses a bounded runtime-owned timer and preserves persistent-corruption containment. Missing coverage: timer cancellation, scope replacement, concurrent projects, and emitted stability decisions.
-4. Federated recovery is factored through `resumeBackgroundRuntime()` and preserves the existing component-owned synchronization boundary. Its unit test proves pause deletion and suppression of duplicate generic resolution, but it does not prove incident-ledger resolution and synchronized-state installation together.
-5. Optimistic handoff is a small change at the existing `startPipeline()` settlement boundary. The focused frontend tests pass, but the larger browser fixture remains mocked evidence; no served success, rejection, and timeout sequence has been verified.
-6. Stale waiting has no production correction. Until its fixture reaches terminal settlement and fails on `waitingAt`, it is historical RCA evidence rather than a current executable proof.
-7. Dev telemetry proves only the pipeline-store failure class and the stale durable timestamp mismatch. It does not prove any of the four proposed corrections, the federated double-resolution sequence, the optimistic handoff sequence, or terminal requeue ordering.
+2. The obsolete stale-waiting regression and RCA were removed because current `dev` already owns that behavior; their net diff against `dev` is empty.
+3. Pipeline-store stability is placed at the downstream pause-promotion boundary in `createCodexProcessCoordinator()`. The integration test injects transient and persistent invalid reads, proves unrelated routes remain available, and asserts the emitted `recovered` and `paused` decisions with their exact incident and project scopes.
+4. Federated recovery remains factored through `resumeBackgroundRuntime()`. Its unit test uses the real durable incident ledger, supervisor, and federated runtime to prove synchronized-state installation, original-incident resolution, pause deletion, and suppression of duplicate generic resolution through an isolated in-process peer connector.
+5. Optimistic handoff remains at the existing admission and reconciliation boundaries. Focused tests prove the telemetry contract and source ordering; the served Chromium sequence is encoded for success, rejection, and timeout but is not executed because this run has no authoritative injected `platform` value required by `BROWSER_RUNBOOK.md`.
+6. Verification passed: backend focused tests `8/8`, frontend focused tests `26/26`, backend and frontend typechecks, frontend full suite `623/623`, and the complete backend suite at concurrency `3`. The only observed failure was a test-only use of `Array.findLast()` outside the backend TypeScript target; replacing it with reverse-and-find corrected the compatibility error before the green typecheck and suites.
+7. Historical `dev` telemetry proves the pipeline-store failure class. The branch now proves all three corrected transition paths with local telemetry and isolated fixtures; deployment proof remains distinct from branch verification.

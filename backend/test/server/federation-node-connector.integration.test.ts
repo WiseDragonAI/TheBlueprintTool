@@ -181,6 +181,26 @@ test('preserves invalid retained project catalog bytes and reports the owning sc
     assert.deepEqual(connector.remoteProjects(), []);
     assert.equal(readFileSync(catalogFile, 'utf8'), invalid);
     assert.deepEqual(operations, ['read-retained-project-catalog']);
+    assert.equal(connector.status().catalogWritable, false);
+    writeFileSync(catalogFile, JSON.stringify({
+      version: 1,
+      federationId: 'proof',
+      nodes: [{
+        nodeId: 'node-b',
+        nodeLabel: 'Node B',
+        projects: [{
+          id: 'project-b',
+          name: 'Project B',
+          description: '',
+          color: '#000000',
+          ledgers: [],
+          originFingerprint: 'proof-origin',
+        }],
+      }],
+    }));
+    connector.recoverRetainedProjectCatalog();
+    assert.equal(connector.status().catalogWritable, true);
+    assert.deepEqual(connector.remoteProjects().map((project) => project.localProjectId), ['project-b']);
   } finally {
     connector.stop();
     rmSync(workspace, { recursive: true, force: true });

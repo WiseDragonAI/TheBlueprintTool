@@ -7,6 +7,7 @@ import { recoverTaskExecutions } from '../../codex/helper/recover-task-execution
 import type { createCodexProcessCoordinator } from '../../codex/runtime/codex-process-coordinator.js';
 import type { createFederationContentScheduler } from '../../federation/helper/federation-content-scheduler.js';
 import type { createFederationTaskStateReplicator } from '../../federation/helper/federation-task-state-replicator.js';
+import type { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
 import type { createFederatedLibraryRuntime } from '../../federation/runtime/federated-library-runtime.js';
 import type { createProjectSyncRuntime } from '../../project-sync/runtime/project-sync-runtime.js';
 import { recoverProjectTaskCurrentState } from '../../task-state/helper/recover-project-task-current-state.js';
@@ -25,6 +26,7 @@ export function createRuntimeRecoveryService(input: {
   contentObjectRoots: string[];
   contentScheduler: () => ReturnType<typeof createFederationContentScheduler> | null;
   federatedLibrary: ReturnType<typeof createFederatedLibraryRuntime>;
+  federation: ReturnType<typeof createFederationNodeConnector>;
   federatedTaskRuntime: ReturnType<typeof createFederatedTaskRuntime>;
   incidentLedger: ReturnType<typeof createRuntimeIncidentLedger>;
   incidentSupervisor: ReturnType<typeof createIncidentSupervisor>;
@@ -233,7 +235,12 @@ export function createRuntimeRecoveryService(input: {
 
   const resume = async (scope: string, resolution: string): Promise<AnyRecord> => {
     let resolvedIncidentIds: string[] = [];
-    if (scope.startsWith('project-task-state:')) {
+    // WHAT: Retry the primary incident ledger before dispatching application-scope recovery.
+    // WHY: The diagnostic-storage scope is not owned by a project or background component supervisor set.
+    if (scope === 'runtime-incident-ledger') {
+      resolvedIncidentIds = input.incidentLedger.recoverPersistence(resolution)
+        .map((incident) => incident.id);
+    } else if (scope.startsWith('project-task-state:')) {
       resolvedIncidentIds = await resumeLocalProject(
         scope.slice('project-task-state:'.length),
         scope,
@@ -253,6 +260,7 @@ export function createRuntimeRecoveryService(input: {
         codexCoordinator: input.codexCoordinator,
         component: scope.slice('background:'.length),
         contentScheduler: input.contentScheduler,
+        federation: input.federation,
         federatedLibrary: input.federatedLibrary,
         incidentSupervisor: input.incidentSupervisor,
         initializePipelineCatalog: input.initializePipelineCatalog,
