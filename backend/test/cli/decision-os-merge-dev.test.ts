@@ -8,7 +8,12 @@ import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
-import { MergeDevError, inspectMergeDev, mergeDevIntoMain } from '../../src/cli/decision-os-merge-dev.js';
+import {
+  MergeDevError,
+  formatDoctorReport,
+  inspectMergeDev,
+  mergeDevIntoMain,
+} from '../../src/cli/decision-os-merge-dev.js';
 
 function git(root: string, args: string[]): string {
   return execFileSync('git', args, {
@@ -59,7 +64,7 @@ test('commits main child state and merges dev without adopting the dev gitlink',
   git(fixture.parentRoot, ['worktree', 'add', devRoot, 'dev']);
   git(devRoot, ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '.decision-os']);
   configureIdentity(join(devRoot, '.decision-os'));
-  commitFile(devRoot, 'dev.txt', 'dev source\n', 'Add dev source');
+  const devSourceSha = commitFile(devRoot, 'dev.txt', 'dev source\n', 'Add dev source');
   const devChildSha = commitFile(join(devRoot, '.decision-os'), 'dev-card.md', 'dev child\n', 'Advance dev child');
   git(devRoot, ['add', '.decision-os']);
   git(devRoot, ['commit', '-m', 'Advance dev child pointer']);
@@ -77,6 +82,11 @@ test('commits main child state and merges dev without adopting the dev gitlink',
   assert.equal(doctor.result, 'READY');
   assert.equal(doctor.expectedMerge.createDecisionOsCommit, true);
   assert.equal(doctor.expectedMerge.preservedGitlink, 'new main Decision OS snapshot commit');
+  assert.deepEqual(doctor.expectedMerge.commits, [
+    { hash: devSourceSha, message: 'Add dev source\n' },
+    { hash: devSha, message: 'Advance dev child pointer\n' },
+  ]);
+  assert.match(formatDoctorReport(doctor), new RegExp(`---\\n${devSourceSha}\\nAdd dev source`));
   assert.equal(git(fixture.parentRoot, ['rev-parse', 'HEAD']), mainBeforeDoctor);
   assert.equal(git(fixture.childRoot, ['rev-parse', 'HEAD']), childBeforeDoctor);
   assert.equal(git(fixture.parentRoot, ['status', '--porcelain=v2', '--branch']), parentStatusBeforeDoctor);

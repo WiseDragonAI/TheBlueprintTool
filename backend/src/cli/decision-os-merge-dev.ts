@@ -47,6 +47,10 @@ export type MergeDevDoctorReport = {
     submoduleBoundaryValid: boolean;
   };
   expectedMerge: {
+    commits: Array<{
+      hash: string;
+      message: string;
+    }>;
     conflicts: string[];
     createDecisionOsCommit: boolean;
     createGitlinkCommit: boolean;
@@ -101,6 +105,20 @@ function git(root: string, args: readonly string[], acceptedStatuses: readonly n
 
 function gitText(root: string, args: readonly string[]): string {
   return git(root, args).stdout.trim();
+}
+
+function sourceCommitPreview(root: string, mainSha: string, devSha: string): Array<{ hash: string; message: string }> {
+  const fields = git(root, ['log', '--reverse', '--format=%H%x00%B%x00', `${mainSha}..${devSha}`]).stdout
+    .split('\0');
+  const commits: Array<{ hash: string; message: string }> = [];
+  for (let index = 0; index + 1 < fields.length; index += 2) {
+    const hash = (fields[index] ?? '').trim();
+    const message = fields[index + 1] ?? '';
+    // WHAT: retain only complete Git log records with a commit identity.
+    // WHY: doctor must not describe a truncated diagnostic record as a promotable commit.
+    if (hash) commits.push({ hash, message });
+  }
+  return commits;
 }
 
 export type StatusRecord = { path: string; staged: boolean };
@@ -275,6 +293,7 @@ export function inspectMergeDev(repositoryRoot: string): MergeDevDoctorReport {
   if (simulation.result.status !== 0 && simulation.conflicts.length === 0) doctorBlocker(blockers, 'merge_dev_simulation_failed', (simulation.result.stderr || simulation.result.stdout).trim());
 
   const createDecisionOsCommit = childChanges.length > 0;
+  const commits = sourceCommitPreview(root, mainSha, devSha);
   const result = blockers.length === 0 ? 'READY' : 'NO-GO';
   return {
     ok: true,
@@ -294,6 +313,7 @@ export function inspectMergeDev(repositoryRoot: string): MergeDevDoctorReport {
       submoduleBoundaryValid,
     },
     expectedMerge: {
+      commits,
       conflicts: simulation.conflicts,
       createDecisionOsCommit,
       createGitlinkCommit: createDecisionOsCommit || childSha !== mainGitlink,
@@ -304,7 +324,7 @@ export function inspectMergeDev(repositoryRoot: string): MergeDevDoctorReport {
   };
 }
 
-function formatDoctorReport(report: MergeDevDoctorReport): string {
+export function formatDoctorReport(report: MergeDevDoctorReport): string {
   const changes = (records: StatusRecord[]): string => records.length === 0
     ? 'clean'
     : records.map((record) => `${record.staged ? 'staged' : 'unstaged'}:${record.path}`).join(', ');
@@ -319,6 +339,12 @@ function formatDoctorReport(report: MergeDevDoctorReport): string {
     `expected-gitlink-commit ${report.expectedMerge.createGitlinkCommit ? 'yes' : 'no'}`,
     `expected-merge-commit ${report.expectedMerge.createMergeCommit ? 'yes' : 'no'}`,
     `expected-preserved-gitlink ${report.expectedMerge.preservedGitlink}`,
+    `expected-source-commits ${report.expectedMerge.commits.length}`,
+    ...report.expectedMerge.commits.flatMap((commit) => [
+      '---',
+      commit.hash,
+      commit.message.trimEnd(),
+    ]),
     `conflicts ${report.expectedMerge.conflicts.length === 0 ? 'none' : report.expectedMerge.conflicts.join(' | ')}`,
     `blockers ${report.blockers.length === 0 ? 'none' : report.blockers.map((blocker) => `${blocker.code}: ${blocker.message}`).join(' | ')}`,
   ].join('\n');
