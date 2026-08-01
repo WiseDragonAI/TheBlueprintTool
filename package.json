@@ -12,6 +12,8 @@
     "decision-os-projects-migrate": "./bin/decision-os-projects-migrate.mjs",
     "decision-os-migrate-node": "./bin/decision-os-migrate-node.mjs",
     "decision-os-node": "./bin/decision-os-node.mjs",
+    "trace-evidence": "./bin/trace-evidence.mjs",
+    "decision-os-trace": "./bin/decision-os-trace.mjs",
     "ledger-cli": "./bin/ledger-cli.mjs",
     "normalize-card-heights": "./bin/normalize-card-heights.mjs",
     "save-html": "./bin/save-html.mjs"
