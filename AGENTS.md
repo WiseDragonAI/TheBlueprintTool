@@ -168,6 +168,10 @@ command directly. Do not run doctor first: the normal command performs the
 same critical admission checks before mutation, so a separate preview adds no
 decision value.
 
+After the normal promotion command succeeds, treat its JSON receipt as the
+authoritative merge, release-tag, commit, and cleanliness result. Do not run
+follow-up Git status, branch, log, tag, submodule, or cleanliness checks.
+
 Use the read-only doctor only when merge authorization has not been given and
 the operator needs an observational admission preview:
 
