@@ -167,6 +167,21 @@ test('parse-ledger-cli-argv parses ID-only card reads', () => {
   assert.equal(command.json, false);
 });
 
+test('parse-ledger-cli-argv parses repeated prompt query names', () => {
+  const command = parseLedgerCliArgv([
+    'prompt',
+    'query',
+    '--name',
+    'CLI_TOOLS',
+    '--name',
+    'SYSTEM_PROMPT',
+  ]);
+
+  assert.equal(command.mode, 'prompt');
+  assert.equal(command.promptOperation?.action, 'query');
+  assert.deepEqual(command.promptOperation?.names, ['CLI_TOOLS', 'SYSTEM_PROMPT']);
+});
+
 test('parse-ledger-cli-argv parses ledger export command', () => {
   const command = parseLedgerCliArgv([
     'export',

@@ -25,6 +25,7 @@ import { applyScopedMasterTaskPlan } from '../../ledger/effect/apply-scoped-mast
 import { applyScopedMasterTaskProgress } from '../../ledger/effect/apply-scoped-master-task-progress.js';
 import { queueSkill } from '../../codex/effect/queue-skill.js';
 import { readCardMarkdown } from '../../ledger/helper/read-card-markdown.js';
+import { queryPipelinePrompts } from '../../prompt/helper/query-pipeline-prompts.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -48,6 +49,17 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'card-read') {
     const result = await readCardMarkdown({ cardIds: command.cardOperation?.cardIds });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'prompt') {
+    // WHAT: reject prompt commands that do not select the supported query operation.
+    // WHY: prompt writes and catalog-wide reads have no authorized CLI contract.
+    if (command.promptOperation?.action !== 'query') {
+      return { ok: false, error: 'prompt requires the query operation.' };
+    }
+    const result = await queryPipelinePrompts(command.promptOperation);
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

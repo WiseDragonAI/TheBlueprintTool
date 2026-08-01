@@ -23,6 +23,14 @@ ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id <maste
 
 `card-read` accepts one to 30 repeated `--card-id` flags, discovers their local projects and ledgers with one catalog scan, and returns each selected card body plus its full thread as Markdown in argument order.
 
+## Inspect prompts
+
+```sh
+ledger-cli prompt query --name <prompt-name> [--name <prompt-name>]...
+```
+
+`prompt query` reads named server-owned pipeline prompts and prints each prompt verbatim in argument order. Each prompt starts with `---` and `# <Prompt Name>`.
+
 ## Inspect repository maps
 
 ```sh
