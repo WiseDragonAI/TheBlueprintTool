@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { verificationCommand } from '../../bin/decision-os-verify.mjs';
+import { formatVerificationWait, verificationCommand, verificationOwner } from '../../bin/decision-os-verify.mjs';
 
 const wrapper = fileURLToPath(new URL('../../bin/decision-os-verify.mjs', import.meta.url));
 
@@ -55,6 +55,22 @@ test('verification command preserves lower Node test concurrency and non-test co
   );
 });
 
+test('verification wait reports the active lease owner', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'decision-os-verification-owner-'));
+  const lockFile = join(directory, 'verification.lock');
+  try {
+    const owner = { pid: 42, cwd: '/repo/.worktrees/dev/backend', command: 'node --test test/example.test.ts' };
+    writeFileSync(lockFile, JSON.stringify(owner));
+    assert.deepEqual(verificationOwner(lockFile), owner);
+    assert.equal(
+      formatVerificationWait(lockFile, owner),
+      `WAIT verification=${lockFile} owner_pid=42 owner_cwd=/repo/.worktrees/dev/backend owner_command=node --test test/example.test.ts`,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('verification lease serializes simultaneous commands', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'decision-os-verification-'));
   const lockFile = join(directory, 'verification.lock');
@@ -66,7 +82,7 @@ test('verification lease serializes simultaneous commands', async () => {
     assert.equal(firstResult.code, 0, firstResult.stderr);
     assert.equal(second.code, 0, second.stderr);
     assert.match(firstResult.stdout, /GO verification=/);
-    assert.match(second.stdout, /WAIT verification=/);
+    assert.match(second.stdout, /WAIT verification=.* owner_pid=\d+ owner_cwd=.* owner_command=.*setTimeout/);
     assert.match(second.stdout, /GO verification=/);
     assert.ok(second.elapsed >= 250, `second command elapsed ${second.elapsed}ms`);
   } finally {
