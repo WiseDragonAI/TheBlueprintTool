@@ -21,6 +21,7 @@ export type MergeDevReceipt = {
   gitlinkCommitCreated: boolean;
   logFile: string;
   mainSha: string;
+  release: { tags: Array<{ name: string; repository: 'parent' | 'child'; target: string }>; version: string };
   verification: {
     childStatus: StatusRecord[];
     decisionOsGitlink: string;
@@ -119,6 +120,35 @@ function sourceCommitPreview(root: string, mainSha: string, devSha: string): Arr
     if (hash) commits.push({ hash, message });
   }
   return commits;
+}
+
+function releaseTagNames(version: string): string[] {
+  return [`rel-${version}`, `devrel-${version}`];
+}
+
+function assertReleaseTagsAvailable(root: string, childRoot: string, version: string): void {
+  for (const tag of releaseTagNames(version)) {
+    // WHAT: reject an existing parent tag before promotion mutates either repository.
+    // WHY: release tags are immutable rollback boundaries.
+    if (git(root, ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}`], [0, 1]).status === 0) throw new MergeDevError('merge_dev_release_tag_exists', `Parent release tag already exists: ${tag}`);
+    // WHAT: reject an existing child tag before promotion mutates either repository.
+    // WHY: parent and child release references must be created as one matching set.
+    if (git(childRoot, ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}`], [0, 1]).status === 0) throw new MergeDevError('merge_dev_release_tag_exists', `Decision OS release tag already exists: ${tag}`);
+  }
+}
+
+function createReleaseTags(root: string, childRoot: string, version: string, mainSha: string, devSha: string, mainChildSha: string, devChildSha: string): Array<{ name: string; repository: 'parent' | 'child'; target: string }> {
+  const tags = [
+    { name: `rel-${version}`, repository: 'parent' as const, target: mainSha },
+    { name: `devrel-${version}`, repository: 'parent' as const, target: devSha },
+    { name: `rel-${version}`, repository: 'child' as const, target: mainChildSha },
+    { name: `devrel-${version}`, repository: 'child' as const, target: devChildSha },
+  ];
+  for (const tag of tags) {
+    const repository = tag.repository === 'parent' ? root : childRoot;
+    git(repository, ['tag', '-a', tag.name, tag.target, '-m', `Mark ${tag.repository} release ${version}`, '-m', `WHAT: Mark the ${tag.repository} rollback boundary for release ${version}.\n\nWHY: Parent and Decision OS history must be recoverable as one release.`]);
+  }
+  return tags;
 }
 
 export type StatusRecord = { path: string; staged: boolean };
@@ -431,7 +461,7 @@ function releaseLock(lock: RepositoryMutationLock | undefined): void {
   if (lock) lock.release();
 }
 
-export async function mergeDevIntoMain(repositoryRoot: string): Promise<MergeDevReceipt> {
+export async function mergeDevIntoMain(repositoryRoot: string, bump: ReleaseBump = 'fix'): Promise<MergeDevReceipt> {
   const root = resolve(repositoryRoot);
   const childRoot = resolve(root, '.decision-os');
   assertLogDirectoryIgnored(root);
@@ -448,6 +478,9 @@ export async function mergeDevIntoMain(repositoryRoot: string): Promise<MergeDev
     assertNoUnmergedPaths(childRoot, 'Decision OS repository');
     assertParentDirtyBoundary(root);
     const devSha = gitText(root, ['rev-parse', '--verify', 'dev^{commit}']);
+    const devChildSha = gitText(root, ['rev-parse', `${devSha}:.decision-os`]);
+    const version = inferredRelease(root, bump);
+    assertReleaseTagsAvailable(root, childRoot, version);
     assertMergeSimulation(root, devSha);
     log('promotion-admitted', { devSha, mainSha: gitText(root, ['rev-parse', 'HEAD']) });
     const child = commitChildState(childRoot);
@@ -486,6 +519,7 @@ export async function mergeDevIntoMain(repositoryRoot: string): Promise<MergeDev
         3,
       );
     }
+    const releaseTags = createReleaseTags(root, childRoot, version, mainSha, devSha, decisionOsGitlink, devChildSha);
     const receipt: MergeDevReceipt = {
       ok: true,
       devSha,
@@ -494,6 +528,7 @@ export async function mergeDevIntoMain(repositoryRoot: string): Promise<MergeDev
       gitlinkCommitCreated,
       logFile,
       mainSha,
+      release: { tags: releaseTags, version },
       verification: {
         childStatus,
         decisionOsGitlink,
@@ -538,7 +573,7 @@ export async function runMergeDevCli(argv = process.argv.slice(2), cwd = process
       process.stdout.write(`${argv.includes('--json') ? JSON.stringify(report) : formatDoctorReport(report)}\n`);
       return report.result === 'READY' ? 0 : 2;
     }
-    const receipt = await mergeDevIntoMain(cwd);
+    const receipt = await mergeDevIntoMain(cwd, bump);
     process.stdout.write(`${JSON.stringify(receipt)}\n`);
     return 0;
   } catch (error) {
