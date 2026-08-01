@@ -3,6 +3,7 @@
  * WHY: The former mobile feature set is the single application contract for every viewport.
  */
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
+import { renderLedgerCardFacts } from '/src/runtime/ledger/component/render-ledger-card-facts.js';
 import { ledgerCardBody, ledgerCardHasHydratedBody } from '/src/runtime/ledger/helper/ledger-card-body.js';
 import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
 import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex-pipeline-run.js';
@@ -2657,14 +2658,7 @@ function renderResponsiveCardFacts(card) {
   // WHAT: Omit the responsive facts list when the replicated card has no facts.
   // WHY: The title must remain directly adjacent to the card body until facts exist.
   if (facts.length === 0) return null;
-  const list = document.createElement('ul');
-  list.className = 'responsive-card-facts';
-  for (const fact of facts) {
-    const item = document.createElement('li');
-    item.textContent = fact;
-    list.appendChild(item);
-  }
-  return list;
+  return renderLedgerCardFacts(facts, 'responsive-card-facts');
 }
 
 function renderCard(card) {

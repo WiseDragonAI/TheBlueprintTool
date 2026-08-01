@@ -10,6 +10,7 @@ import { ledgerCardBody } from '../helper/ledger-card-body.js';
 import { resolveCardWorkStatus } from '../../card/helper/resolve-card-work-status.js';
 import { appendTitleText } from './append-title-text.js';
 import { renderLedgerCardLabels } from './render-ledger-card-labels.js';
+import { renderLedgerCardFacts } from './render-ledger-card-facts.js';
 import { renderLedgerCardMarkdown } from './render-ledger-card-markdown.js';
 import { renderLedgerCardTabFrame } from './render-ledger-card-tab-frame.js';
 import { renderLedgerCardTabs } from './render-ledger-card-tabs.js';
@@ -52,17 +53,6 @@ function cardFacts(card: Record<string, unknown>): string[] {
   return Array.isArray(card.facts)
     ? card.facts.filter((fact): fact is string => typeof fact === 'string').map((fact) => fact.trim()).filter(Boolean)
     : [];
-}
-
-export function renderLedgerCardFacts(facts: readonly string[]): HTMLUListElement {
-  const list = document.createElement('ul');
-  list.className = 'ledger-card-facts';
-  for (const fact of facts) {
-    const item = document.createElement('li');
-    item.textContent = fact;
-    list.appendChild(item);
-  }
-  return list;
 }
 
 export function createCardStatusIndicator(status: string, className = 'card-status-indicator'): HTMLElement {
