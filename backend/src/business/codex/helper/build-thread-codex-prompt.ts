@@ -1,5 +1,5 @@
 /**
- * WHAT: Renders the admitted SYSTEM_PROMPT plus CODEX_RUN graph and builds the current thread user payload.
+ * WHAT: Renders the admitted direct-run developer graph and builds the current thread user payload.
  * WHY: Direct Codex runs must use the same registered, single-pass prompt compiler as pipeline executions.
  */
 import { readProtectedGitPatch } from '../../git-review/helper/git-review-patch.js';

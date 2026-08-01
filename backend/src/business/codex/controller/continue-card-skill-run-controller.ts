@@ -1,5 +1,5 @@
 /**
- * WHAT: Continues an existing card run and re-admits SYSTEM_PROMPT plus CODEX_RUN when recovery requires a fresh session.
+ * WHAT: Continues an existing card run and re-admits CODEX_RUN when recovery requires a fresh session.
  * WHY: A durable run id must resume its captured session while every replacement process retains committed prompt authority.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -282,11 +282,11 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   let developerPrompt: string | undefined;
   if (newSession) {
     try {
-      // WHAT: Re-admit SYSTEM_PROMPT plus CODEX_RUN before replacing a missing direct-run Codex session.
-      // WHY: Recovery is a new process launch and must retain the same committed developer-prompt authority as the initial run.
+      // WHAT: Re-admit CODEX_RUN before replacing a missing direct-run Codex session.
+      // WHY: Recovery must retain the same authored direct-run graph as initial admission without restoring a code-owned prepend.
       const evidence = await admitPipelineDeveloperPrompt({
         ownerDecisionOsRoot: serverPipelineDecisionOsRoot(runtime, decisionOsRoot),
-        roots: ['SYSTEM_PROMPT', 'CODEX_RUN'],
+        roots: ['CODEX_RUN'],
       });
       developerPrompt = buildThreadCodexPrompt({
         developerPromptSnapshot: evidence.developerPromptSnapshot,

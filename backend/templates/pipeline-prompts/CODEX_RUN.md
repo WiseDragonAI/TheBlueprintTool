@@ -1,3 +1,5 @@
+{{SYSTEM_PROMPT}}
+
 Decision OS card run:
 - Project: `<PROJECT_ID>`.
 - `ledger-cli` writes only; use `master-task-apply`.

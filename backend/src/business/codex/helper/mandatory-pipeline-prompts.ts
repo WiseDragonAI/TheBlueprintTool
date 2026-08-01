@@ -238,7 +238,7 @@ export function ensureMandatoryPipelinePrompts(input: {
     ?? readPipelinePrompt(decisionOsRoot, name)?.markdown
     ?? null;
   compilePipelinePromptGraph({ roots: ['SYSTEM_PROMPT', 'SKILL'], resolve: resolvePrompt });
-  compilePipelinePromptGraph({ roots: ['SYSTEM_PROMPT', 'CODEX_RUN'], resolve: resolvePrompt });
+  compilePipelinePromptGraph({ roots: ['CODEX_RUN'], resolve: resolvePrompt });
   compilePipelinePromptGraph({ roots: ['CLI_TOOLS'], resolve: resolvePrompt });
 
   const missingMetadata = mandatoryPipelinePromptDefinitions

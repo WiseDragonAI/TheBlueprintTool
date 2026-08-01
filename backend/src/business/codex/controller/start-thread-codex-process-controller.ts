@@ -343,11 +343,11 @@ export async function startThreadCodexProcessController(input: { action_payload?
   if (!epoch4Dispatch) return queueExecution!();
   let developerPromptEvidence: Awaited<ReturnType<typeof admitPipelineDeveloperPrompt>>;
   try {
-    // WHAT: Admit SYSTEM_PROMPT plus CODEX_RUN on the assigned executor before creating run artifacts.
-    // WHY: A queued or remotely assigned card run must launch from one clean committed prompt graph, never mutable hard-coded instructions.
+    // WHAT: Admit CODEX_RUN as the sole code-selected root before creating run artifacts.
+    // WHY: Direct-run shared policy is owned by an explicit authored SYSTEM_PROMPT reference, never a controller prepend.
     developerPromptEvidence = await admitPipelineDeveloperPrompt({
       ownerDecisionOsRoot: serverPipelineDecisionOsRoot(runtime, decisionOsRoot),
-      roots: ['SYSTEM_PROMPT', 'CODEX_RUN'],
+      roots: ['CODEX_RUN'],
     });
   } catch (error) {
     if (error instanceof PipelinePromptAdmissionError) {

@@ -159,7 +159,7 @@
 3. The required default graphs are:
    1. Normal skill — `SYSTEM_PROMPT` followed by `SKILL`.
    2. Authored gate — `SYSTEM_PROMPT` followed by the selected authored prompt.
-   3. Direct card and thread run — `SYSTEM_PROMPT` followed by `CODEX_RUN`.
+   3. Direct card and thread run — `CODEX_RUN`, which may reference `{{SYSTEM_PROMPT}}` explicitly.
 4. Admission recursively includes every dependency. Each record and Markdown file must be present, contained, tracked, clean relative to `HEAD`, kind-matched, payload-bounded, and committed in the owner repository.
 5. Every new pipeline execution persists `syntaxVersion: 2`, exact compiled `developerPromptSnapshot`, SHA-256 `developerPromptRevision`, and `developerPromptCommit`.
 6. Pipeline launch uses the fixed user turn `Execute this admitted Decision OS pipeline stage.` Direct card launch and fresh-session recovery keep card, thread, and execution context in their user prompts. These process launches serialize the compiled snapshot as the exact Codex `developer_instructions`.

@@ -155,7 +155,7 @@ test('registered template roots preserve the pipeline wrapper and direct-run dev
     })}\n`,
   );
   const directSnapshot = compilePipelinePromptGraph({
-    roots: ['SYSTEM_PROMPT', 'CODEX_RUN'],
+    roots: ['CODEX_RUN'],
     resolve: (name) => name === 'SYSTEM_PROMPT'
       ? systemPrompt
       : name === 'CODEX_RUN'
@@ -186,4 +186,25 @@ test('registered template roots preserve the pipeline wrapper and direct-run dev
       THREAD_ID: () => 'thread-card-a',
     })),
   );
+});
+
+test('direct runs include shared policy only when CODEX_RUN authors the reference', () => {
+  const authoredPrompts = new Map([
+    ['SYSTEM_PROMPT', 'shared policy'],
+    ['CODEX_RUN', '{{SYSTEM_PROMPT}}\n\ndirect run'],
+  ]);
+  const authored = compilePipelinePromptGraph({
+    roots: ['CODEX_RUN'],
+    resolve: (name) => authoredPrompts.get(name) ?? null,
+  });
+  const standalonePrompts = new Map([['CODEX_RUN', 'direct run']]);
+  const standalone = compilePipelinePromptGraph({
+    roots: ['CODEX_RUN'],
+    resolve: (name) => standalonePrompts.get(name) ?? null,
+  });
+
+  assert.equal(authored.developerPromptSnapshot, 'shared policy\n\ndirect run');
+  assert.equal(standalone.developerPromptSnapshot, 'direct run');
+  assert.deepEqual(authored.dependencies, ['CODEX_RUN', 'SYSTEM_PROMPT']);
+  assert.deepEqual(standalone.dependencies, ['CODEX_RUN']);
 });
