@@ -9,6 +9,7 @@
 2. Pass one direct test or typecheck command.
 3. Do not wrap the admitted command in a shell command.
 4. Use `node bin/decision-os-workload-status.mjs` only as a read-only workload diagnostic.
+5. When the lease is occupied, the wrapper reports the active holder's PID, working directory, and admitted command once before waiting.
 
 ---
 

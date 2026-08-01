@@ -12,7 +12,6 @@ import {
 } from '../business/content-authoring/helper/repository-mutation-lock.js';
 
 type GitResult = { status: number; stdout: string; stderr: string };
-type ReleaseBump = 'maj' | 'min' | 'fix';
 
 export type MergeDevReceipt = {
   ok: true;
@@ -49,7 +48,10 @@ export type MergeDevDoctorReport = {
     submoduleBoundaryValid: boolean;
   };
   expectedMerge: {
-    release: { tags: string[]; version: string };
+    commits: Array<{
+      hash: string;
+      message: string;
+    }>;
     conflicts: string[];
     createDecisionOsCommit: boolean;
     createGitlinkCommit: boolean;
@@ -106,19 +108,18 @@ function gitText(root: string, args: readonly string[]): string {
   return git(root, args).stdout.trim();
 }
 
-function inferredRelease(root: string, bump: ReleaseBump): string {
-  const releases = git(root, ['tag', '--list', 'rel-*']).stdout.split('\n').flatMap((tag) => {
-    const match = /^rel-(\d+)\.(\d+)\.(\d+)$/.exec(tag.trim());
-    return match ? [[Number(match[1]), Number(match[2]), Number(match[3])] as const] : [];
-  }).sort((left, right) => left[0] - right[0] || left[1] - right[1] || left[2] - right[2]);
-  const latest = releases.at(-1);
-  // WHAT: reject release inference without a canonical SemVer release baseline.
-  // WHY: a bump token cannot safely invent a starting release version.
-  if (!latest) throw new MergeDevError('merge_dev_release_baseline_missing', 'No canonical rel-X.Y.Z tag exists.');
-  const [major, minor, fix] = latest;
-  if (bump === 'maj') return `${major + 1}.0.0`;
-  if (bump === 'min') return `${major}.${minor + 1}.0`;
-  return `${major}.${minor}.${fix + 1}`;
+function sourceCommitPreview(root: string, mainSha: string, devSha: string): Array<{ hash: string; message: string }> {
+  const fields = git(root, ['log', '--reverse', '--format=%H%x00%B%x00', `${mainSha}..${devSha}`]).stdout
+    .split('\0');
+  const commits: Array<{ hash: string; message: string }> = [];
+  for (let index = 0; index + 1 < fields.length; index += 2) {
+    const hash = (fields[index] ?? '').trim();
+    const message = fields[index + 1] ?? '';
+    // WHAT: retain only complete Git log records with a commit identity.
+    // WHY: doctor must not describe a truncated diagnostic record as a promotable commit.
+    if (hash) commits.push({ hash, message });
+  }
+  return commits;
 }
 
 function releaseTagNames(version: string): string[] {
@@ -260,7 +261,7 @@ function doctorBlocker(blockers: MergeDevDoctorReport['blockers'], code: string,
   blockers.push({ code, message });
 }
 
-export function inspectMergeDev(repositoryRoot: string, bump: ReleaseBump = 'fix'): MergeDevDoctorReport {
+export function inspectMergeDev(repositoryRoot: string): MergeDevDoctorReport {
   const root = resolve(repositoryRoot);
   const childRoot = resolve(root, '.decision-os');
   const parentBranch = gitText(root, ['branch', '--show-current']);
@@ -322,7 +323,7 @@ export function inspectMergeDev(repositoryRoot: string, bump: ReleaseBump = 'fix
   if (simulation.result.status !== 0 && simulation.conflicts.length === 0) doctorBlocker(blockers, 'merge_dev_simulation_failed', (simulation.result.stderr || simulation.result.stdout).trim());
 
   const createDecisionOsCommit = childChanges.length > 0;
-  const version = inferredRelease(root, bump);
+  const commits = sourceCommitPreview(root, mainSha, devSha);
   const result = blockers.length === 0 ? 'READY' : 'NO-GO';
   return {
     ok: true,
@@ -342,7 +343,7 @@ export function inspectMergeDev(repositoryRoot: string, bump: ReleaseBump = 'fix
       submoduleBoundaryValid,
     },
     expectedMerge: {
-      release: { version, tags: [`rel-${version}`, `devrel-${version}`] },
+      commits,
       conflicts: simulation.conflicts,
       createDecisionOsCommit,
       createGitlinkCommit: createDecisionOsCommit || childSha !== mainGitlink,
@@ -353,7 +354,7 @@ export function inspectMergeDev(repositoryRoot: string, bump: ReleaseBump = 'fix
   };
 }
 
-function formatDoctorReport(report: MergeDevDoctorReport): string {
+export function formatDoctorReport(report: MergeDevDoctorReport): string {
   const changes = (records: StatusRecord[]): string => records.length === 0
     ? 'clean'
     : records.map((record) => `${record.staged ? 'staged' : 'unstaged'}:${record.path}`).join(', ');
@@ -368,8 +369,12 @@ function formatDoctorReport(report: MergeDevDoctorReport): string {
     `expected-gitlink-commit ${report.expectedMerge.createGitlinkCommit ? 'yes' : 'no'}`,
     `expected-merge-commit ${report.expectedMerge.createMergeCommit ? 'yes' : 'no'}`,
     `expected-preserved-gitlink ${report.expectedMerge.preservedGitlink}`,
-    `expected-release ${report.expectedMerge.release.version}`,
-    `expected-tags ${report.expectedMerge.release.tags.join(' ')}`,
+    `expected-source-commits ${report.expectedMerge.commits.length}`,
+    ...report.expectedMerge.commits.flatMap((commit) => [
+      '---',
+      commit.hash,
+      commit.message.trimEnd(),
+    ]),
     `conflicts ${report.expectedMerge.conflicts.length === 0 ? 'none' : report.expectedMerge.conflicts.join(' | ')}`,
     `blockers ${report.blockers.length === 0 ? 'none' : report.blockers.map((blocker) => `${blocker.code}: ${blocker.message}`).join(' | ')}`,
   ].join('\n');
@@ -552,23 +557,20 @@ export async function mergeDevIntoMain(repositoryRoot: string, bump: ReleaseBump
 
 export async function runMergeDevCli(argv = process.argv.slice(2), cwd = process.cwd()): Promise<number> {
   const doctor = argv[0] === 'doctor';
-  const bump = (doctor ? argv[1] : argv[0]) as ReleaseBump;
-  const json = argv.includes('--json');
-  const bumpValid = bump === 'maj' || bump === 'min' || bump === 'fix';
-  const doctorArgsValid = doctor && bumpValid && (argv.length === 2 || (argv.length === 3 && json));
-  const mergeArgsValid = !doctor && bumpValid && (argv.length === 1 || (argv.length === 2 && json));
+  const doctorArgsValid = doctor && (argv.length === 1 || (argv.length === 2 && argv[1] === '--json'));
+  const mergeArgsValid = !doctor && (argv.length === 0 || (argv.length === 1 && argv[0] === '--json'));
   // WHAT: Accept only the fixed merge and read-only doctor forms.
   // WHY: Strategy, branch, push, and dirty-state overrides would weaken the safety contract.
   if (!doctorArgsValid && !mergeArgsValid) {
-    process.stderr.write(`${JSON.stringify({ ok: false, code: 'merge_dev_usage', message: 'Usage: decision-os-merge-dev <maj|min|fix> [--json] | decision-os-merge-dev doctor <maj|min|fix> [--json]' })}\n`);
+    process.stderr.write(`${JSON.stringify({ ok: false, code: 'merge_dev_usage', message: 'Usage: decision-os-merge-dev [--json] | decision-os-merge-dev doctor [--json]' })}\n`);
     return 2;
   }
   try {
     // WHAT: Return the predicted merge without locks, logs, staging, commits, or ref updates.
     // WHY: Doctor is the explicit read-only admission preview requested by operators.
     if (doctor) {
-      const report = inspectMergeDev(cwd, bump);
-      process.stdout.write(`${json ? JSON.stringify(report) : formatDoctorReport(report)}\n`);
+      const report = inspectMergeDev(cwd);
+      process.stdout.write(`${argv.includes('--json') ? JSON.stringify(report) : formatDoctorReport(report)}\n`);
       return report.result === 'READY' ? 0 : 2;
     }
     const receipt = await mergeDevIntoMain(cwd, bump);

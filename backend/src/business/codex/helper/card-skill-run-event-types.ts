@@ -25,6 +25,10 @@ export type NormalizedRunEvent = {
   exitCode: string;
   severity: RunEventSeverity;
   persist: boolean;
+  collaborationAgents?: readonly {
+    threadId: string;
+    status: string;
+  }[];
 };
 
 export type CardSkillRunEventIngestor = {

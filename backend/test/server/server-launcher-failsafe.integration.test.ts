@@ -11,6 +11,8 @@ import { resolve } from 'node:path';
 import test from 'node:test';
 
 const releaseSha = 'a'.repeat(40);
+const retainedIncidentAt = new Date(Date.now() - 60_000).toISOString();
+const retainedIncidentResolvedAt = new Date(Date.now() - 30_000).toISOString();
 
 async function freePort(): Promise<number> {
   const server = createServer();
@@ -33,7 +35,7 @@ test('launcher serves durable diagnostics after its server child exits', async (
   mkdirSync(resolve(workspace, '.decision-os'), { recursive: true });
   writeFileSync(resolve(workspace, '.decision-os/runtime-incidents.json'), `${JSON.stringify({
     version: 1,
-    updatedAt: '2026-07-31T00:00:00.000Z',
+    updatedAt: retainedIncidentAt,
     incidents: [{
       id: 'legacy-resolved',
       fingerprint: 'legacy-resolved-fingerprint',
@@ -46,10 +48,10 @@ test('launcher serves durable diagnostics after its server child exits', async (
       message: 'Legacy resolved evidence.',
       stack: '',
       context: { projectId: 'legacy' },
-      firstObservedAt: '2026-07-31T00:00:00.000Z',
-      lastObservedAt: '2026-07-31T00:00:00.000Z',
+      firstObservedAt: retainedIncidentAt,
+      lastObservedAt: retainedIncidentAt,
       occurrences: 2,
-      resolvedAt: '2026-07-31T00:01:00.000Z',
+      resolvedAt: retainedIncidentResolvedAt,
     }],
   }, null, 2)}\n`);
   const releaseRoot = resolve(workspace, '.decision-os', 'delivery');
@@ -117,8 +119,8 @@ test('launcher serves durable diagnostics after its server child exits', async (
   assert.equal(Number.isFinite(Date.parse(String((launcherIncident?.observations as string[])[0]))), true);
   const legacyIncident = incidents.find((entry) => entry.id === 'legacy-resolved');
   assert.equal(legacyIncident?.status, 'resolved');
-  assert.deepEqual(legacyIncident?.observations, ['2026-07-31T00:00:00.000Z']);
-  assert.equal(legacyIncident?.legacyHistoryBefore, '2026-07-31T00:00:00.000Z');
+  assert.deepEqual(legacyIncident?.observations, [retainedIncidentAt]);
+  assert.equal(legacyIncident?.legacyHistoryBefore, retainedIncidentAt);
   assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 503);
   const persisted = JSON.parse(readFileSync(resolve(workspace, '.decision-os/runtime-incidents.json'), 'utf8')) as { version: number; incidents: Array<{ id: string }> };
   assert.equal(persisted.version, 2);

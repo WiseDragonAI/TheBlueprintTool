@@ -3,7 +3,7 @@
  * WHAT: Runs one verification command under a repository-wide exclusive lease.
  * WHY: A read-only admission check has a race in which several agents can all observe GO.
  */
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
@@ -62,6 +62,26 @@ export function verificationCommand(argv) {
   return boundedNodeTestCommand(command);
 }
 
+export function verificationOwner(lockFile) {
+  try {
+    const owner = JSON.parse(readFileSync(lockFile, 'utf8'));
+    // WHAT: Return only a complete lease-owner record written by the active holder.
+    // WHY: A stale, empty, or partially written lock file must not produce misleading ownership diagnostics.
+    if (!Number.isInteger(owner.pid) || owner.pid <= 0 || typeof owner.cwd !== 'string' || typeof owner.command !== 'string') return null;
+    return owner;
+  } catch {
+    return null;
+  }
+}
+
+export function formatVerificationWait(lockFile, owner) {
+  const prefix = `WAIT verification=${lockFile}`;
+  // WHAT: Include the active holder identity when the lock file contains a valid owner record.
+  // WHY: A waiting agent needs the owning PID, worktree, and command without repeatedly polling the process table.
+  if (owner) return `${prefix} owner_pid=${owner.pid} owner_cwd=${owner.cwd} owner_command=${owner.command}`;
+  return prefix;
+}
+
 export async function runVerification(argv = process.argv.slice(2), env = process.env) {
   let command;
   try {
@@ -73,15 +93,22 @@ export async function runVerification(argv = process.argv.slice(2), env = proces
   const lockFile = verificationLockFile(env);
   mkdirSync(dirname(lockFile), { recursive: true });
   const probe = spawnSync('flock', ['--exclusive', '--nonblock', lockFile, 'true'], { stdio: 'ignore' });
-  if (probe.status !== 0) process.stdout.write(`WAIT verification=${lockFile}\n`);
+  // WHAT: Report the current lease holder before joining the blocking flock queue.
+  // WHY: The prior path exposed only the lock path and forced repeated workload-status and ps calls to identify active verification.
+  if (probe.status !== 0) process.stdout.write(`${formatVerificationWait(lockFile, verificationOwner(lockFile))}\n`);
 
-  const lockedCommand = 'printf "GO verification=%s\\n" "$DECISION_OS_VERIFICATION_LOCK_FILE"; exec "$@"';
+  const lockedCommand = 'printf \'{"pid":%s,"cwd":%s,"command":%s}\' "$$" "$DECISION_OS_VERIFICATION_OWNER_CWD" "$DECISION_OS_VERIFICATION_OWNER_COMMAND" > "$DECISION_OS_VERIFICATION_LOCK_FILE"; printf "GO verification=%s\\n" "$DECISION_OS_VERIFICATION_LOCK_FILE"; exec "$@"';
   const child = spawn('flock', [
     '--exclusive', lockFile,
     'sh', '-c', lockedCommand, 'decision-os-verify',
     command[0], ...command.slice(1),
   ], {
-    env: { ...env, DECISION_OS_VERIFICATION_LOCK_FILE: lockFile },
+    env: {
+      ...env,
+      DECISION_OS_VERIFICATION_LOCK_FILE: lockFile,
+      DECISION_OS_VERIFICATION_OWNER_CWD: JSON.stringify(process.cwd()),
+      DECISION_OS_VERIFICATION_OWNER_COMMAND: JSON.stringify(command.join(' ')),
+    },
     stdio: 'inherit',
   });
   const forward = (signal) => { if (child.exitCode === null) child.kill(signal); };
