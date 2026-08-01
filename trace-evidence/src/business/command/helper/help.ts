@@ -28,6 +28,7 @@ Discovery and events:
 Common options:
   --repo-root <path> --runtime-root <path> --telemetry-root <path>
   --output <path> --cwd <path> --timeout <duration>
+      --cwd is the sole child working directory; do not combine it with env --chdir or -C.
 
 Test selection:
   --test-file <path>                 Repeatable.

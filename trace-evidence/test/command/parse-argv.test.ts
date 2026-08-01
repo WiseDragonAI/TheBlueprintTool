@@ -11,3 +11,8 @@ test('preserves repeated selectors and child argv', () => {
   assert.deepEqual(values(action, 'test-file'), ['a.test.ts', 'b.test.ts']);
   assert.deepEqual(action.childCommand, ['node', '--test', 'a.test.ts', 'b.test.ts']);
 });
+
+test('rejects trace cwd combined with a second env working directory', () => {
+  assert.throws(() => parseArgv(['start-tests', '--cwd', 'backend', '--', 'env', '--chdir=backend', 'node', '--test']), /conflicting_working_directory:use_trace_cwd_only/);
+  assert.throws(() => parseArgv(['start-tests', '--cwd', 'backend', '--', 'env', '-C', 'backend', 'node', '--test']), /conflicting_working_directory:use_trace_cwd_only/);
+});
