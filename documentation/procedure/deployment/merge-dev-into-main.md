@@ -6,34 +6,43 @@
 
    ```bash
    cd /home/jbb/dev/EditorBP/decision-os
-   node bin/decision-os-merge-dev.mjs doctor
-   node bin/decision-os-merge-dev.mjs doctor --json
+   node bin/decision-os-merge-dev.mjs doctor min
+   node bin/decision-os-merge-dev.mjs doctor min --json
    ```
 
-   **WHY:** Doctor reports both parent SHAs, main parent and child dirt, both gitlinks, predicted conflicts, blockers, and expected commits without staging, committing, updating refs, creating logs, or entering the dev child checkout.
+   **WHY:** Doctor infers the next canonical SemVer release from the latest `rel-X.Y.Z` tag, reports the planned `rel-<version>` and `devrel-<version>` tags, both parent SHAs, main parent and child dirt, both gitlinks, predicted conflicts, blockers, and expected commits without staging, committing, updating refs, creating logs, or entering the dev child checkout.
 
 2. **WHAT:** Run the fixed promotion command from the primary `main` checkout only when doctor reports `RESULT READY` or JSON field `"result":"READY"`:
 
    ```bash
    cd /home/jbb/dev/EditorBP/decision-os
-   node bin/decision-os-merge-dev.mjs --json
+   node bin/decision-os-merge-dev.mjs min --json
    ```
 
-   **WHY:** The command commits main-owned Decision OS content, records its gitlink, and merges the local `dev` ref without adopting the `dev` gitlink.
+   **WHY:** The command commits main-owned Decision OS content, records its gitlink, merges the local `dev` ref without adopting the `dev` gitlink, and creates one matching rollback version across the parent and child repositories.
 
 3. **WHAT:** Treat exit `0` and the JSON receipt as successful local promotion.
 
-   **WHY:** The receipt identifies the admitted `dev` SHA, committed child SHA, optional child and gitlink commits, final merge SHA, exact merge parents, preserved Decision OS gitlink, and final parent and child status.
+   **WHY:** The receipt identifies the admitted `dev` SHA, committed child SHA, optional child and gitlink commits, final merge SHA, exact merge parents, preserved Decision OS gitlink, four release tag targets, and final parent and child status.
 
 4. **WHAT:** Treat `READY` plus doctor exit `0` as admission, `NO-GO` plus doctor exit `2` as blocked, merge exit `2` as rejected repository state, and merge exit `3` as an execution failure.
 
    **WHY:** The mutually exclusive result prevents automation from inferring admission from an ambiguous boolean or another occurrence of the word `ready`; rejection remains non-destructive.
 
-5. **WHAT:** Push separately only when explicitly authorized.
+5. **WHAT:** Select exactly one bump token: `maj`, `min`, or `fix`.
 
-   **WHY:** This command never pushes, deploys, restarts a server, updates a remote submodule, or activates a release.
+   **WHY:** The command never accepts a manual version. It increments the latest canonical parent `rel-X.Y.Z` tag: `maj` resets minor and fix, `min` resets fix, and `fix` increments only fix.
 
-6. **WHAT:** Read the `logFile` path from the success or rejection JSON.
+6. **WHAT:** Push parent and child tags separately only when explicitly authorized.
+
+   ```bash
+   git push origin rel-<version> devrel-<version>
+   git -C .decision-os push local-submodule rel-<version> devrel-<version>
+   ```
+
+   **WHY:** The promotion command creates local rollback references but never pushes, deploys, restarts a server, updates a remote submodule, or activates a release.
+
+7. **WHAT:** Read the `logFile` path from the success or rejection JSON.
 
    **WHY:** Every admitted, rejected, failed, and completed invocation writes a durable local JSONL receipt.
 
@@ -77,6 +86,19 @@
 
    **WHY:** Exact ancestry is the completion proof for the local promotion.
 
+5. **WHAT:** Create annotated tags with the inferred version after final ancestry, gitlink, and clean-status proofs pass.
+
+   | Repository | `rel-<version>` | `devrel-<version>` |
+   |---|---|---|
+   | Parent | Final `main` merge commit | Admitted `dev` commit |
+   | `.decision-os` | Preserved main child snapshot | Gitlink recorded by admitted `dev` |
+
+   **WHY:** The parent release tag is a complete rollback boundary because its tree records the exact child gitlink; the matching child tags provide independent integrity and recovery references.
+
+6. **WHAT:** Reject the promotion before mutation when either release tag already exists in either repository.
+
+   **WHY:** Release tags are immutable rollback boundaries and must never be moved or silently replaced.
+
 ---
 
 ## D. Rejection And Recovery
@@ -96,6 +118,15 @@
 4. **WHAT:** Do not use `git merge -s ours`, `git submodule update --remote`, or edit `.gitmodules` to suppress Decision OS drift.
 
    **WHY:** Those operations respectively discard dev source, change child authority, or hide main gitlink evidence globally.
+
+5. **WHAT:** Roll back by checking out the parent release tag and initializing its recorded submodule revision.
+
+   ```bash
+   git switch --detach rel-<version>
+   git submodule update --init --recursive
+   ```
+
+   **WHY:** The parent `rel-<version>` tree restores the matching `.decision-os` gitlink as one release boundary.
 
 ---
 
