@@ -31,15 +31,13 @@
    {{GateTest}}
    ```
 
-3. A direct card and thread Codex run, including a fresh-session recovery, admits and compiles these roots:
+3. A direct card and thread Codex run, including a fresh-session recovery, admits and compiles this root:
 
    ```text
-   {{SYSTEM_PROMPT}}
-
    {{CODEX_RUN}}
    ```
 
-4. Root order is byte-significant. The compiled result is the exact `developer_instructions` value passed to Codex.
+4. `CODEX_RUN` may reference `{{SYSTEM_PROMPT}}` explicitly when shared policy is required. Root order is byte-significant. The compiled result is the exact `developer_instructions` value passed to Codex.
 5. A pipeline stage receives the fixed user turn `Execute this admitted Decision OS pipeline stage.` A direct card run retains its card, thread, and execution context in the separately recorded user prompt.
 
 ---

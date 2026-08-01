@@ -60,6 +60,10 @@ test('installs, registers, commits, and then preserves every mandatory server pr
       readFileSync(join(decisionOsRoot, 'pipeline-prompts', 'CLI_TOOLS.md'), 'utf8'),
       /ledger-cli prompt query --name <prompt-name> \[--name <prompt-name>\]\.\.\./,
     );
+    assert.match(
+      readFileSync(join(decisionOsRoot, 'pipeline-prompts', 'CODEX_RUN.md'), 'utf8'),
+      /\{\{SYSTEM_PROMPT\}\}/,
+    );
     assert.equal(git(decisionOsRoot, ['status', '--short']), '');
     const commitMessage = git(decisionOsRoot, ['show', '-s', '--format=%B', 'HEAD']);
     assert.match(commitMessage, /^Install mandatory pipeline prompts/);

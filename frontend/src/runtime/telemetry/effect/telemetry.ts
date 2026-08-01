@@ -3,7 +3,9 @@ import { snapshotArgs } from '../../persistence/helper/snapshot-args.js';
 import { enqueueFrontendTelemetry } from './frontend-telemetry-websocket.js';
 
 export function telemetry(name: string, args: unknown = {}): void {
-  const trace = { name, args: snapshotArgs(args), at: new Date().toISOString() };
+  const error = new Error();
+  Error.captureStackTrace(error, telemetry);
+  const trace = { name, args: snapshotArgs(args), at: new Date().toISOString(), rawStack: error.stack ?? '' };
   state.telemetry.push(trace);
   // WHAT: Mirror and transmit telemetry only when this runtime owns a browser window.
   // WHY: Shared runtime effects execute in Node tests where the in-process telemetry ledger remains valid but DOM globals do not exist.

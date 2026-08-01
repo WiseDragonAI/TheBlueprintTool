@@ -402,6 +402,10 @@ GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 
 - It is a code smell to do expensive operations for many more elements than are needed in the end.
 
+## Trace Evidence Agent Runbook
+
+Before operating `trace-evidence`, follow [`documentation/procedure/testing/use-trace-evidence.md`](documentation/procedure/testing/use-trace-evidence.md). The tool produces evidence; the agent owns diagnosis and interpretation.
+
 ## Test Admission
 
 Run every test and typecheck through the repository-wide lease:

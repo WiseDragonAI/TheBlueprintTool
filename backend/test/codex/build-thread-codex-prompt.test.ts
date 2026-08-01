@@ -5,7 +5,7 @@ import { compilePipelinePromptGraph } from '@backend/business/codex/helper/pipel
 import { testCodexRunPrompt } from '../support/pipeline-prompt-fixture.js';
 
 const developerPromptSnapshot = compilePipelinePromptGraph({
-  roots: ['SYSTEM_PROMPT', 'CODEX_RUN'],
+  roots: ['CODEX_RUN'],
   resolve: (name) => name === 'SYSTEM_PROMPT'
     ? 'platform: <PLATFORM>'
     : name === 'CODEX_RUN'

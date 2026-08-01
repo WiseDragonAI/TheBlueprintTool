@@ -13,6 +13,7 @@ type TelemetryRecord = {
   browserSessionId: string;
   route: string;
   args: unknown;
+  rawStack: string;
 };
 
 const endpoint = '/api/diagnostics/frontend-telemetry';
@@ -46,7 +47,7 @@ function telemetryRecord(value: unknown): TelemetryRecord | null {
   // WHAT: Require stable diagnostic identity and a valid observation timestamp.
   // WHY: Anonymous or temporally invalid entries cannot support causal reproduction.
   if (!name || !browserSessionId || !Number.isFinite(Date.parse(at))) return null;
-  return { name, at, browserSessionId, route, args: record.args ?? {} };
+  return { name, at, browserSessionId, route, args: record.args ?? {}, rawStack: String(record.rawStack ?? '').slice(0, 16_000) };
 }
 
 export function installFrontendTelemetryWebSocket(input: {

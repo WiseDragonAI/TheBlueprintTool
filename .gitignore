@@ -31,6 +31,11 @@ generator-cli/dist/
 generator-cli/node_modules/
 ledger-cli/dist/
 ledger-cli/node_modules/
+trace-evidence/node_modules/
+trace-evidence/dist/
+trace-evidence/.graphify-venv/
+trace-evidence/.graphify-runtime/
+.trace/
 frontend/node_modules/
 backend/node_modules/
 frontend/dist/

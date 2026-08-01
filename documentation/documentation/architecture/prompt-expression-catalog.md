@@ -137,7 +137,7 @@ Runtime values are rendered once and are not scanned recursively. An unknown upp
    1. **WHAT:** Wraps a direct card and thread Codex run with its operator-facing behavior, formatting, CLI guidance, and referenced direct-run context.
    2. **WHY:** Direct runs need a dedicated prompt boundary distinct from pipeline-stage execution while retaining the shared system policy.
 
-The admitted root graphs are `SYSTEM_PROMPT` followed by `SKILL` for a normal skill, `SYSTEM_PROMPT` followed by the selected authored prompt for a gate, and `SYSTEM_PROMPT` followed by `CODEX_RUN` for a direct card or thread run. `CLI_TOOLS` is included only when another prompt references it.
+The admitted root graphs are `SYSTEM_PROMPT` followed by `SKILL` for a normal skill, `SYSTEM_PROMPT` followed by the selected authored prompt for a gate, and `CODEX_RUN` for a direct card or thread run. `CODEX_RUN` includes shared policy only when it explicitly references `{{SYSTEM_PROMPT}}`. `CLI_TOOLS` is included only when another prompt references it.
 
 ---
 

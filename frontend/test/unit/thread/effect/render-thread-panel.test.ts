@@ -246,6 +246,7 @@ function executionState(input: {
   sourceCardId?: string;
   queuePosition?: number | null;
   requestedAt?: string;
+  error?: { code: string; message: string } | null;
 }) {
   return {
     executionId: input.executionId,
@@ -261,7 +262,7 @@ function executionState(input: {
     executorNodeId: 'workstation',
     revision: 1,
     queuePosition: input.queuePosition ?? null,
-    error: null,
+    error: input.error ?? null,
     artifacts: { jsonl: true, stderr: true, telemetry: false, result: false },
   };
 }
@@ -821,6 +822,45 @@ test('Codex Log renders the settled empty state when the local task replica has 
     state.threadId = '';
     state.activeLedger = null;
     state.threadTaskExecutionStateByThreadId = {};
+  }
+});
+
+test('Codex Log renders a durable launch failure instead of waiting for output', async () => {
+  const { codexLog } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadCodexLog } = await import('../../../../src/runtime/thread/effect/render-thread-codex-log.js');
+  const threadId = 'thread-card-launch-failed';
+  const execution = executionState({
+    executionId: 'execution-launch-failed',
+    sessionId: 'codex-skill-launch-failed',
+    phase: 'failed',
+    error: { code: 'codex_pipeline_skill_start_failed', message: 'spawn E2BIG' },
+  });
+  try {
+    state.activeLedger = {
+      cards: [{ id: 'card-launch-failed', title: 'Launch failed' }],
+      annotations: [],
+      relationships: [],
+      notes: { [threadId]: [] },
+    };
+    state.threadId = threadId;
+    state.threadTaskExecutionStateByThreadId = {
+      [threadId]: taskExecutionSummary('card-launch-failed', [{ sessionId: execution.sessionId, executions: [execution] }]),
+    };
+    state.threadExecutionPresentationByThreadId = {
+      [threadId]: executionPresentation(execution),
+    };
+
+    renderThreadCodexLog();
+
+    const error = codexLog.querySelector('.codex-log-execution-error');
+    assert.equal(error?.textContent, 'Codex failed: codex_pipeline_skill_start_failed — spawn E2BIG');
+    assert.equal(codexLog.querySelector('.codex-log-waiting'), null);
+  } finally {
+    state.threadId = '';
+    state.activeLedger = null;
+    state.threadTaskExecutionStateByThreadId = {};
+    state.threadExecutionPresentationByThreadId = {};
   }
 });
 

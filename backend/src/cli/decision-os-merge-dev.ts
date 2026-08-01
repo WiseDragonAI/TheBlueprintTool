@@ -154,12 +154,12 @@ function assertReleaseTagsAvailable(root: string, childRoot: string, version: st
   }
 }
 
-function createReleaseTags(root: string, childRoot: string, version: string, mainSha: string, devSha: string, mainChildSha: string, devChildSha: string): Array<{ name: string; repository: 'parent' | 'child'; target: string }> {
+function createReleaseTags(root: string, childRoot: string, version: string, mainSha: string, devSha: string, mainChildSha: string): Array<{ name: string; repository: 'parent' | 'child'; target: string }> {
   const tags = [
     { name: `rel-${version}`, repository: 'parent' as const, target: mainSha },
     { name: `devrel-${version}`, repository: 'parent' as const, target: devSha },
     { name: `rel-${version}`, repository: 'child' as const, target: mainChildSha },
-    { name: `devrel-${version}`, repository: 'child' as const, target: devChildSha },
+    { name: `devrel-${version}`, repository: 'child' as const, target: mainChildSha },
   ];
   for (const tag of tags) {
     const repository = tag.repository === 'parent' ? root : childRoot;
@@ -540,7 +540,7 @@ export async function mergeDevIntoMain(repositoryRoot: string, bump: ReleaseBump
         3,
       );
     }
-    const releaseTags = createReleaseTags(root, childRoot, version, mainSha, devSha, decisionOsGitlink, devChildSha);
+    const releaseTags = createReleaseTags(root, childRoot, version, mainSha, devSha, decisionOsGitlink);
     const receipt: MergeDevReceipt = {
       ok: true,
       devSha,

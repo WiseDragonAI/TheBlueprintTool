@@ -54,6 +54,7 @@ function createFixture(): Fixture {
   configureIdentity(join(parentRoot, '.decision-os'));
   git(parentRoot, ['add', '.gitmodules', '.decision-os']);
   git(parentRoot, ['commit', '-m', 'Add Decision OS submodule']);
+  git(parentRoot, ['tag', 'rel-0.1.0']);
   return { childRoot: join(parentRoot, '.decision-os'), fixtureRoot, parentRoot, initialChildSha };
 }
 
@@ -82,6 +83,7 @@ test('commits main child state and merges dev without adopting the dev gitlink',
   assert.equal(doctor.result, 'READY');
   assert.equal(doctor.expectedMerge.createDecisionOsCommit, true);
   assert.equal(doctor.expectedMerge.preservedGitlink, 'new main Decision OS snapshot commit');
+  assert.deepEqual(doctor.expectedMerge.release, { version: '0.1.1', tags: ['rel-0.1.1', 'devrel-0.1.1'] });
   assert.deepEqual(doctor.expectedMerge.commits, [
     { hash: devSourceSha, message: 'Add dev source\n' },
     { hash: devSha, message: 'Advance dev child pointer\n' },
@@ -99,6 +101,12 @@ test('commits main child state and merges dev without adopting the dev gitlink',
   assert.equal(receipt.decisionOsCommitCreated, true);
   assert.equal(receipt.gitlinkCommitCreated, true);
   assert.notEqual(receipt.decisionOsSha, devChildSha);
+  assert.deepEqual(receipt.release.tags, [
+    { name: 'rel-0.1.1', repository: 'parent', target: receipt.mainSha },
+    { name: 'devrel-0.1.1', repository: 'parent', target: devSha },
+    { name: 'rel-0.1.1', repository: 'child', target: receipt.decisionOsSha },
+    { name: 'devrel-0.1.1', repository: 'child', target: receipt.decisionOsSha },
+  ]);
   assert.equal(git(fixture.parentRoot, ['rev-parse', 'HEAD:.decision-os']), receipt.decisionOsSha);
   assert.equal(git(fixture.parentRoot, ['show', '-s', '--format=%P', 'HEAD']).split(' ')[1], devSha);
   assert.deepEqual(receipt.verification, {
