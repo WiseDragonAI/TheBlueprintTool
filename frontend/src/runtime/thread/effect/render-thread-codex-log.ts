@@ -437,7 +437,15 @@ export function renderThreadCodexLog(): void {
         block.event.kind === 'subagent' ? subagentExecutionByEventId.get(block.event.id) ?? null : null,
       ));
   }
-  if (selectedExecution?.phase === 'queued'
+  // WHAT: Render the selected execution's durable lifecycle failure before considering artifact output.
+  // WHY: Process-launch failures can terminate before Codex produces any presentation event.
+  if (selectedExecution?.error) {
+    const error = document.createElement('p');
+    error.className = 'codex-log-execution-error codex-log-unavailable';
+    error.setAttribute('role', 'alert');
+    error.textContent = `Codex failed: ${selectedExecution.error.code} — ${selectedExecution.error.message}`;
+    stream.append(error);
+  } else if (selectedExecution?.phase === 'queued'
     && (!selectedPresentation || selectedPresentation.events.length === 0)) {
     stream.append(renderQueuedWaiting(selectedExecution.queuePosition));
   } else if (!selectedPresentation && !readError) {
