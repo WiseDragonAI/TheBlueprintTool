@@ -378,6 +378,17 @@
   margin-top: 3px;
 }
 
+.ledger-card-facts code {
+  color: var(--card-code-color);
+  font-family: inherit;
+  font-size: 1em;
+}
+
+.ledger-card-facts strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
 .ledger-card-title {
   overflow: hidden;
   text-overflow: ellipsis;

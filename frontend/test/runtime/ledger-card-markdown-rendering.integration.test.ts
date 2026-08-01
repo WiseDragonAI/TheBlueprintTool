@@ -203,6 +203,15 @@ test('ledger card facts keep malformed Markdown and HTML-like input inert', () =
   }
 });
 
+test('ledger card fact inline nodes use the same visible code and strong contract as card Markdown', () => {
+  const canvasCss = readFileSync(new URL('frontend/assets/canvas/objects.css', root), 'utf8');
+  const responsiveCss = readFileSync(new URL('frontend/assets/application.css', root), 'utf8');
+  assert.match(canvasCss, /\.ledger-card-facts code\s*\{[\s\S]*color:\s*var\(--card-code-color\);[\s\S]*font-family:\s*inherit;/);
+  assert.match(canvasCss, /\.ledger-card-facts strong\s*\{[\s\S]*color:\s*var\(--text\);[\s\S]*font-weight:\s*800;/);
+  assert.match(responsiveCss, /\.responsive-card-facts code\s*\{[\s\S]*color:\s*color-mix\(in srgb, var\(--zone-color\), white 52%\);[\s\S]*font-family:\s*inherit;/);
+  assert.match(responsiveCss, /\.responsive-card-facts strong\s*\{[\s\S]*color:\s*var\(--text\);[\s\S]*font-weight:\s*800;/);
+});
+
 test('thread command markdown preserves each backtick span as a code element', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
