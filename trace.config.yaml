@@ -1,0 +1,14 @@
+trace:
+  adapter: decision-os
+  artifacts: .trace/jobs
+  lease:
+    strategy: repository-adapter
+  telemetry:
+    format: jsonl
+    runIdField: traceRunId
+  sourceMaps:
+    strategy: build-manifest
+  graphify:
+    package: graphifyy
+    version: 0.9.22
+    defaultScope: touched

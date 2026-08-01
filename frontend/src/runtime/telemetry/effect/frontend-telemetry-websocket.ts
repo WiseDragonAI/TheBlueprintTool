@@ -2,7 +2,7 @@
  * WHAT: Sends bounded global browser telemetry to the same-origin Decision OS diagnostic socket.
  * WHY: Failures occurring only in the operator browser need server-readable causal evidence when explicitly enabled.
  */
-export type FrontendTelemetryTrace = { name: string; args: unknown; at: string };
+export type FrontendTelemetryTrace = { name: string; args: unknown; at: string; rawStack?: string };
 
 const maxQueuedRecords = 200;
 const maxBatchRecords = 50;
@@ -96,6 +96,7 @@ export function enqueueFrontendTelemetry(trace: FrontendTelemetryTrace): void {
   queue.push({
     ...trace,
     args: sanitize(trace.args),
+    rawStack: String(trace.rawStack ?? '').slice(0, 16_000),
     browserSessionId: sessionId,
     route: `${globalThis.location?.pathname ?? ''}${globalThis.location?.search ?? ''}`,
   });
