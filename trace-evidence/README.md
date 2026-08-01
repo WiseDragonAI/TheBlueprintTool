@@ -4,7 +4,7 @@ Generalized background evidence production for tests and repository task adapter
 
 See `documentation/working-documents/generalized-trace-evidence-tool-plan-and-specification.md` in the Decision OS repository for the complete contract.
 
-Decision OS agent operation is documented in the repository `AGENTS.md` under `Trace Evidence Agent Runbook`. Cross-repository installation and adapter adoption are documented in `documentation/procedure/testing/install-trace-evidence-in-another-repository.md`.
+Decision OS agent operation is documented in `documentation/procedure/testing/use-trace-evidence.md`, referenced by the repository `AGENTS.md`. Cross-repository installation and adapter adoption are documented in `documentation/procedure/testing/install-trace-evidence-in-another-repository.md`.
 
 ## Build
 
