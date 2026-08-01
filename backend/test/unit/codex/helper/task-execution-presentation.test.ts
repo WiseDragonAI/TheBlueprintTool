@@ -72,6 +72,79 @@ test('presents the captured developer prompt separately from provider start reco
   }]);
 });
 
+test('presents native collaboration subagents by child thread lifecycle', () => {
+  const events = [
+    {
+      type: 'item.completed',
+      item: {
+        id: 'spawn-1',
+        type: 'collab_tool_call',
+        tool: 'spawn_agent',
+        receiver_thread_ids: ['019fbcde-775b-7fe0-891e-f79dcb51f6de'],
+        agents_states: {
+          '019fbcde-775b-7fe0-891e-f79dcb51f6de': { status: 'pending_init', message: null },
+        },
+        status: 'completed',
+      },
+    },
+    {
+      type: 'item.completed',
+      item: {
+        id: 'wait-1',
+        type: 'collab_tool_call',
+        tool: 'wait',
+        receiver_thread_ids: ['019fbcde-775b-7fe0-891e-f79dcb51f6de'],
+        agents_states: {
+          '019fbcde-775b-7fe0-891e-f79dcb51f6de': { status: 'completed', message: 'Done.' },
+        },
+        status: 'completed',
+      },
+    },
+  ].map((event, index) => normalizeCardSkillRunEvent({ line: index + 1, event }));
+
+  assert.deepEqual(taskExecutionPresentationEvents(events.slice(0, 1))[0], {
+    id: 'subagent:019fbcde-775b-7fe0-891e-f79dcb51f6de',
+    kind: 'subagent',
+    title: 'Subagent · native · 019fbcde',
+    status: 'running',
+    severity: 'info',
+    skillName: 'native · 019fbcde',
+    model: '',
+    effort: '',
+  });
+
+  assert.deepEqual(taskExecutionPresentationEvents(events), [
+    {
+      id: 'subagent:019fbcde-775b-7fe0-891e-f79dcb51f6de',
+      kind: 'subagent',
+      title: 'Subagent · native · 019fbcde',
+      status: 'completed',
+      severity: 'info',
+      skillName: 'native · 019fbcde',
+      model: '',
+      effort: '',
+    },
+    {
+      id: 'tool_call:spawn-1',
+      kind: 'tool_call',
+      title: 'spawn_agent',
+      status: 'completed',
+      severity: 'info',
+      command: 'spawn_agent',
+      exitCode: '',
+    },
+    {
+      id: 'tool_call:wait-1',
+      kind: 'tool_call',
+      title: 'wait',
+      status: 'completed',
+      severity: 'info',
+      command: 'wait',
+      exitCode: '',
+    },
+  ]);
+});
+
 test('returns one exact snapshot with typed todos and no raw tool result bytes', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-execution-presentation-'));
   const jsonlFile = join(workspace, 'session.jsonl');

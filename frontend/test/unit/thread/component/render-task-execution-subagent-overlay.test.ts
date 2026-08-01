@@ -66,3 +66,34 @@ test('renders skill configuration and correlated child execution phase', () => {
     globalThis.document = previousDocument;
   }
 });
+
+test('renders a native subagent without an invented model or effort', () => {
+  const previousDocument = globalThis.document;
+  try {
+    globalThis.document = { createElement: (tag: string) => new FakeElement(tag) } as unknown as Document;
+    const overlay = renderTaskExecutionSubagentOverlay([{
+      event: {
+        id: 'subagent:019fbcde-775b-7fe0-891e-f79dcb51f6de',
+        kind: 'subagent',
+        title: 'Subagent · native · 019fbcde',
+        status: 'running',
+        severity: 'info',
+        skillName: 'native · 019fbcde',
+        model: '',
+        effort: '',
+      },
+      execution: null,
+    }]) as unknown as FakeElement;
+
+    assert.equal(overlay.children[0].children[0].textContent, '0/1 settled');
+    const row = overlay.children[1].children[0];
+    assert.equal(row.dataset.runStatus, 'running');
+    assert.deepEqual(row.children.map((child) => child.textContent), [
+      'native · 019fbcde',
+      '',
+      'running',
+    ]);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});

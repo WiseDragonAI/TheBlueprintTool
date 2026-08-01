@@ -69,6 +69,29 @@ function queuedSubagent(event: NormalizedRunEvent): TaskExecutionPresentationEve
   };
 }
 
+function nativeSubagentStatus(status: string): string {
+  // WHAT: Present a successfully spawned pending-init child as running.
+  // WHY: pending_init is provider initialization inside an active native subagent lifecycle, not a settled state.
+  if (status === 'pending_init') return 'running';
+  return status;
+}
+
+function nativeSubagents(event: NormalizedRunEvent): TaskExecutionPresentationEvent[] {
+  return (event.collaborationAgents ?? []).map((agent) => {
+    const shortId = agent.threadId.slice(0, 8);
+    return {
+      id: `subagent:${agent.threadId}`,
+      kind: 'subagent',
+      title: `Subagent · native · ${shortId}`,
+      status: nativeSubagentStatus(agent.status),
+      severity: event.severity,
+      skillName: `native · ${shortId}`,
+      model: '',
+      effort: '',
+    };
+  });
+}
+
 function presentationEvent(event: NormalizedRunEvent): TaskExecutionPresentationEvent | null {
   const base = {
     id: presentationId(event),
@@ -130,11 +153,11 @@ export function taskExecutionPresentationEvents(events: NormalizedRunEvent[]): T
     const presentedEvent = event;
     // WHAT: Add a typed subagent card beside the underlying tool call.
     // WHY: The inventory needs the launch contract while tool counts must continue to include the real CLI invocation.
-    const items = [queuedSubagent(presentedEvent), presentationEvent(presentedEvent)]
+    const items = [queuedSubagent(presentedEvent), ...nativeSubagents(presentedEvent), presentationEvent(presentedEvent)]
       .filter((item): item is TaskExecutionPresentationEvent => Boolean(item));
     for (const item of items) {
       const lifecycleKey = event.itemId && (item.kind === 'tool_call' || item.kind === 'file_change' || item.kind === 'todo_list' || item.kind === 'subagent')
-        ? `${item.kind}:${event.itemId}`
+        ? item.id
         : '';
       // WHAT: Replace lifecycle updates in their original chronological position.
       // WHY: Started, updated, and completed records describe one operator-visible tool, subagent, or todo snapshot.

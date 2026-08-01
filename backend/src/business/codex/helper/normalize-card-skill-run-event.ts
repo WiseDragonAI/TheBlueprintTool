@@ -45,6 +45,21 @@ function itemRecord(event: AnyRecord): AnyRecord {
   return event.item && typeof event.item === 'object' && !Array.isArray(event.item) ? event.item as AnyRecord : {};
 }
 
+function collaborationAgents(item: AnyRecord): Array<{ threadId: string; status: string }> {
+  const states = item.agents_states && typeof item.agents_states === 'object' && !Array.isArray(item.agents_states)
+    ? item.agents_states as AnyRecord
+    : {};
+  const receiverIds = Array.isArray(item.receiver_thread_ids)
+    ? item.receiver_thread_ids.map((entry) => String(entry).trim()).filter(Boolean)
+    : [];
+  const threadIds = new Set([...receiverIds, ...Object.keys(states)]);
+  return [...threadIds].map((threadId) => {
+    const state = states[threadId];
+    const record = state && typeof state === 'object' && !Array.isArray(state) ? state as AnyRecord : {};
+    return { threadId, status: String(record.status ?? item.status ?? '').trim() };
+  });
+}
+
 function changesText(changes: unknown): string {
   // WHAT: Retain a non-array change payload through the generic text normalizer.
   // WHY: Older producers do not always emit the current change-list shape.
@@ -214,7 +229,9 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
   // WHAT: Format command execution details as one Markdown tool-call note.
   // WHY: Commands, status, exit code, and output must remain readable without raw JSON inspection.
   if (itemType === 'command_execution' || itemType === 'web_search' || /tool_call/i.test(itemType)) {
-    const tool = commandText(item.command ?? item.query ?? item.name);
+    // WHAT: Preserve the native collaboration tool name when Codex emits a collab_tool_call.
+    // WHY: Native spawn and wait records use item.tool instead of command, query, or name.
+    const tool = commandText(item.command ?? item.query ?? item.name ?? item.tool);
     const output = textBlock(item.aggregated_output ?? item.output ?? item.stderr ?? item.stdout);
     const exitCode = item.exit_code === undefined || item.exit_code === null ? '' : String(item.exit_code);
     const command = tool ? `\`${tool}\`` : 'command';
@@ -222,7 +239,20 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
     if (status) parts.push(`Status: ${status}`);
     if (exitCode) parts.push(`Exit code: ${exitCode}`);
     if (output) parts.push('', fencedTextBlock(output));
-    return normalizedJsonlEvent(line.line, { type, kind: 'tool_call', title: tool || (itemType === 'web_search' ? 'Web search' : 'Tool call'), text: parts.join('\n'), status, itemId, tool, output, exitCode, severity: status === 'failed' ? 'error' : 'info', persist: true });
+    return normalizedJsonlEvent(line.line, {
+      type,
+      kind: 'tool_call',
+      title: tool || (itemType === 'web_search' ? 'Web search' : 'Tool call'),
+      text: parts.join('\n'),
+      status,
+      itemId,
+      tool,
+      output,
+      exitCode,
+      severity: status === 'failed' ? 'error' : 'info',
+      persist: true,
+      collaborationAgents: itemType === 'collab_tool_call' ? collaborationAgents(item) : undefined,
+    });
   }
   // WHAT: Normalize file changes as tool calls with the same lifecycle identity as commands.
   // WHY: Started and completed records must coalesce inside the compact tool disclosure.
