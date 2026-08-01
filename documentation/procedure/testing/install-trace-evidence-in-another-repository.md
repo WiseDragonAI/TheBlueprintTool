@@ -179,7 +179,7 @@ The reusable controller supplies sanitized inputs and fixed extraction arguments
 
 ## 7. Add the Agent Runbook
 
-Add a repository-specific `Trace Evidence Agent Runbook` section to the target `AGENTS.md`. It must state:
+Create a repository procedure for operating the tool. Keep `AGENTS.md` concise: add only a mandatory link to that procedure and the boundary that the tool produces evidence while agents interpret it. The procedure must state:
 
 1. The exact installation/build commands.
 2. The direct test command and repository lease behavior.
@@ -190,7 +190,7 @@ Add a repository-specific `Trace Evidence Agent Runbook` section to the target `
 7. Graphify configuration.
 8. The boundary that agents diagnose while the tool only produces evidence.
 
-Adapt the Decision OS runbook in this repository; do not copy Decision OS server routes or task selectors into a repository that does not own those concepts.
+Adapt [`use-trace-evidence.md`](use-trace-evidence.md); do not copy Decision OS server routes or task selectors into a repository that does not own those concepts.
 
 ## 8. Run Adapter Conformance
 
