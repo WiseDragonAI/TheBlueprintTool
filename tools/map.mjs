@@ -12,10 +12,12 @@ import {
 
 export function runFileMapCli(args, workspaceRoot = process.cwd()) {
   if (args.length === 0) return buildInjectedFileMap(workspaceRoot);
-  if (args.length < 1 || args.length > 2) {
-    throw new Error('usage: tools/map.mjs <c|t|d> [domain]');
+  // WHAT: Accept one map kind plus optional repository-relative base directory and depth.
+  // WHY: Agents need to query nested directories without receiving an unbounded tree.
+  if (args.length < 1 || args.length > 3) {
+    throw new Error('usage: tools/map.mjs <c|t|d> [base-directory] [depth]');
   }
-  return buildQueryFileMap(workspaceRoot, args[0], args[1]);
+  return buildQueryFileMap(workspaceRoot, args[0], args[1], args[2]);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
