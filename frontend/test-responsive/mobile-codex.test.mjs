@@ -206,6 +206,7 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /skill-reference-card/);
   assert.match(script, /aria-expanded/);
   assert.match(script, /skill-detail-scroll/);
+  assert.match(script, /skill-detail-controls/);
   assert.match(script, /skill-detail-actions/);
   assert.match(script, /detail\.classList\.remove\('skill-detail-layout'\)/);
   assert.doesNotMatch(sharedRow, /project-record-label|skill-source-label|skill-favorite-label/);
@@ -222,6 +223,8 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(styles, /\.skill-reference-toggle \{[^}]*background: transparent;[^}]*box-shadow: none/);
   assert.match(styles, /\.skill-document-edit \{[^}]*background: transparent;[^}]*box-shadow: none/);
   assert.match(styles, /\.process-modal \{ height: min\(80dvh, 860px\); \}/);
+  assert.match(styles, /@media \(min-width: 760px\) \{\s*\.process-modal \{ height: 95dvh; \}/);
+  assert.match(styles, /\.process-detail\.skill-detail-layout \{[^}]*grid-template-columns: minmax\(0, 2fr\) minmax\(240px, 1fr\)/);
   assert.match(styles, /\.skill-detail-scroll \{[^}]*overflow-y: auto/);
   assert.doesNotMatch(styles, /\.skill-markdown-section \.ledger-card-body[^}]*background:/);
   assert.match(styles, /\.codex-list-item \.project-record-label, \.codex-list-item \.skill-category-label[^}]*padding: 4px 7px/);
