@@ -3,17 +3,91 @@
  * WHAT: Runs one verification command under a repository-wide exclusive lease.
  * WHY: A read-only admission check has a race in which several agents can all observe GO.
  */
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, symlinkSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 
 const scriptRepoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const decisionOsRoot = basename(dirname(scriptRepoRoot)) === '.worktrees'
+const isIsolatedWorktree = basename(dirname(scriptRepoRoot)) === '.worktrees';
+const decisionOsRoot = isIsolatedWorktree
   ? dirname(dirname(scriptRepoRoot))
   : scriptRepoRoot;
 const forbiddenShells = new Set(['bash', 'dash', 'fish', 'sh', 'zsh']);
 const maxNodeTestConcurrency = 3;
+const dependencyPackages = [
+  { name: 'frontend', loader: 'tsx/dist/esm/index.mjs' },
+  { name: 'backend', loader: 'tsx/dist/loader.mjs' },
+];
+
+function realPathOrNull(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return null;
+  }
+}
+
+function pathEntryExists(path) {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function provisionWorktreeDependencies(repoRoot = scriptRepoRoot, sharedDevRoot = resolve(decisionOsRoot, '.worktrees', 'dev')) {
+  // WHAT: Keep the dependency-owning dev checkout unchanged when it verifies itself.
+  // WHY: The shared source must remain a real installation instead of becoming a self-referential link.
+  if (resolve(repoRoot) === resolve(sharedDevRoot)) return [];
+
+  const provisioned = [];
+  for (const dependencyPackage of dependencyPackages) {
+    const packageRoot = resolve(repoRoot, dependencyPackage.name);
+    const sharedPackageRoot = resolve(sharedDevRoot, dependencyPackage.name);
+    const dependencyPath = resolve(packageRoot, 'node_modules');
+    const sharedDependencyPath = resolve(sharedPackageRoot, 'node_modules');
+    const sharedLoaderPath = resolve(sharedDependencyPath, dependencyPackage.loader);
+    const lockFile = resolve(packageRoot, 'package-lock.json');
+    const sharedLockFile = resolve(sharedPackageRoot, 'package-lock.json');
+    const dependencyEntryExists = pathEntryExists(dependencyPath);
+    const dependencyEntry = realPathOrNull(dependencyPath);
+
+    // WHAT: Preserve a real package installation already owned by the current worktree.
+    // WHY: A feature that intentionally installed changed dependencies must not be overwritten or compared with dev.
+    if (dependencyEntryExists && !lstatSync(dependencyPath).isSymbolicLink()) continue;
+    // WHAT: Refuse shared dependencies when the feature worktree changes the package lock.
+    // WHY: A dependency link is valid only while the feature and dev dependency contracts are byte-identical.
+    if (readFileSync(lockFile, 'utf8') !== readFileSync(sharedLockFile, 'utf8')) {
+      throw new Error(`${dependencyPackage.name}/package-lock.json differs from dev; run npm --prefix ${dependencyPackage.name} ci --ignore-scripts in this worktree.`);
+    }
+    // WHAT: Require the package-specific tsx entrypoint before creating a shared dependency link.
+    // WHY: A partial dev installation would defer the same environment failure until after test admission.
+    if (!existsSync(sharedLoaderPath)) {
+      throw new Error(`Shared ${dependencyPackage.name} dependencies are unavailable at ${sharedDependencyPath}; install them in .worktrees/dev.`);
+    }
+    // WHAT: Accept only an existing link that resolves to the canonical dev dependency tree.
+    // WHY: Reusing an arbitrary or stale worktree link makes verification depend on unrelated checkout lifetime.
+    if (dependencyEntry === realpathSync(sharedDependencyPath)) continue;
+    // WHAT: Reject an existing noncanonical dependency link instead of replacing it.
+    // WHY: The verifier must not destroy agent-owned filesystem state to repair admission.
+    if (dependencyEntryExists) {
+      throw new Error(`${dependencyPath} does not point to ${sharedDependencyPath}; remove it explicitly before verification.`);
+    }
+
+    try {
+      symlinkSync(sharedDependencyPath, dependencyPath, 'dir');
+    } catch (error) {
+      // WHAT: Accept a canonical link created concurrently by another verifier in the same worktree.
+      // WHY: Dependency admission occurs before the repository lease and must remain idempotent under simultaneous starts.
+      if (error?.code === 'EEXIST' && realpathSync(dependencyPath) === realpathSync(sharedDependencyPath)) continue;
+      throw error;
+    }
+    provisioned.push(dependencyPath);
+  }
+  return provisioned;
+}
 
 function ownsNodeTestRunner(command) {
   return ['node', 'nodejs'].includes(basename(command[0])) && command.slice(1).includes('--test');
@@ -89,6 +163,14 @@ export async function runVerification(argv = process.argv.slice(2), env = proces
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 64;
+  }
+  try {
+    // WHAT: Provision shared dependencies only for linked iteration worktrees.
+    // WHY: The primary checkout is not an iteration target and must never be mutated as a verifier side effect.
+    if (isIsolatedWorktree) provisionWorktreeDependencies();
+  } catch (error) {
+    process.stderr.write(`Could not provision worktree dependencies: ${error instanceof Error ? error.message : String(error)}\n`);
+    return 66;
   }
   const lockFile = verificationLockFile(env);
   mkdirSync(dirname(lockFile), { recursive: true });
