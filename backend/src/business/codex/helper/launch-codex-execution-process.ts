@@ -19,7 +19,7 @@ import { codexRunSegmentMarker, codexRunTurnStartedMarker, type CodexRunSegment,
 import { createTerminalCodexProcessReconciler, signalCodexProcessTree, type TerminalCodexStatus } from './reconcile-terminal-codex-process.js';
 import type { CodexCommand } from './resolve-codex-command.js';
 import { codexExecutionTimeoutMs, reportCodexBackgroundFailure } from './codex-runtime-run-store.js';
-import { taskExecutionState } from './task-execution-runtime.js';
+import { taskExecutionProcess, taskExecutionState } from './task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -158,6 +158,7 @@ export async function launchCodexExecutionProcess(input: {
   }
   child.unref();
   let terminalStatus: TerminalCodexStatus | null = null;
+  let providerSessionId = '';
   let backgroundStopRequested = false;
   let executionDeadline: NodeJS.Timeout | undefined;
   let forceStopDeadline: NodeJS.Timeout | undefined;
@@ -223,6 +224,13 @@ export async function launchCodexExecutionProcess(input: {
       }
       if (input.onTurnStarted) invokeCallback('publish-codex-turn-started', () => input.onTurnStarted?.({ line: event.line }, observedAt));
     },
+    onProviderSessionStarted: (observedProviderSessionId) => {
+      const process = taskExecutionProcess(input.runtime, input.executionId);
+      // WHAT: Publish the just-created provider identity through running process state.
+      // WHY: A live replicated mutation would replace request runtime during recursive gate admission.
+      if (process) process.providerSessionId = observedProviderSessionId;
+      providerSessionId = observedProviderSessionId;
+    },
   });
   const stdoutTail = createFileTail({
     path: input.stdoutFile,
@@ -260,6 +268,17 @@ export async function launchCodexExecutionProcess(input: {
       flushCardSkillRunEventIngestor(ingestor, input.runId);
     } catch (error) {
       reportFailure('flush-codex-output-events', error);
+    }
+    const state = taskExecutionState(input.runtime);
+    const execution = state?.executions.find(input.executionId) ?? null;
+    // WHAT: Persist the provider identity before the terminal lifecycle transition is requested.
+    // WHY: Settlement serialization preserves identity without disrupting running admissions.
+    if (state && execution && execution.lifecycle.providerSessionId === null && providerSessionId) {
+      try {
+        await state.executions.transition(input.executionId, { phase: execution.lifecycle.phase, providerSessionId });
+      } catch (error) {
+        reportFailure('persist-codex-provider-session', error);
+      }
     }
     invokeCallback('settle-codex-process', () => input.onSettled(settlement));
   };

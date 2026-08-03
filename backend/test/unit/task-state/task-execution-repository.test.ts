@@ -93,7 +93,10 @@ test('indexes pipeline identity and preserves legal awaited lifecycle plus termi
     repository.transition('execution-pipeline', { phase: 'running', executorNodeId: 'phone' }),
     /task_execution_executor_immutable:execution-pipeline/,
   );
-  await repository.transition('execution-pipeline', { phase: 'running', providerSessionId: 'provider-a' });
+  await repository.transition('execution-pipeline', { phase: 'running' });
+  const bound = await repository.transition('execution-pipeline', { phase: 'running', providerSessionId: 'provider-a' });
+  assert.equal(bound.lifecycle.phase, 'running');
+  assert.equal(bound.lifecycle.providerSessionId, 'provider-a');
   await assert.rejects(
     repository.transition('execution-pipeline', { phase: 'cancelling', providerSessionId: 'provider-b' }),
     /task_execution_provider_session_immutable:execution-pipeline/,
@@ -112,7 +115,7 @@ test('indexes pipeline identity and preserves legal awaited lifecycle plus termi
     result: { status: 'cancelled', summary: 'Cancelled by operator.' },
   });
 
-  assert.equal(cancelled.lifecycle.revision, 6);
+  assert.equal(cancelled.lifecycle.revision, 7);
   assert.equal(cancelled.lifecycle.providerSessionId, 'provider-a');
   assert.equal(cancelled.lifecycle.finishedAt, stopAcceptedAt);
   assert.equal(cancelled.lifecycle.phaseSince, cleanupSettledAt);
