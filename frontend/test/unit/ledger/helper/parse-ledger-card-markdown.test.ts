@@ -150,3 +150,36 @@ test('parse-ledger-card-markdown parses a card questionnaire directive', () => {
 test('parse-ledger-card-markdown leaves unsafe questionnaire identifiers inert', () => {
   assert.equal(parseLedgerCardMarkdown('::questions[Unsafe](questions:?id=../../outside)')[0]?.kind, 'paragraph');
 });
+
+test('parse-ledger-card-markdown groups quote lines and terminates before following Markdown', () => {
+  assert.deepEqual(parseLedgerCardMarkdown('> **First** line\n> second line\n\nAfter quote\n\n> Adjacent quote'), [
+    {
+      kind: 'blockquote',
+      blocks: [
+        { kind: 'paragraph', children: [{ kind: 'strong', text: 'First' }, { kind: 'text', text: ' line' }] },
+        { kind: 'paragraph', children: [{ kind: 'text', text: 'second line' }] },
+      ],
+    },
+    { kind: 'paragraph', children: [{ kind: 'text', text: 'After quote' }] },
+    {
+      kind: 'blockquote',
+      blocks: [{ kind: 'paragraph', children: [{ kind: 'text', text: 'Adjacent quote' }] }],
+    },
+  ]);
+});
+
+test('parse-ledger-card-markdown preserves nested block content inside quotes', () => {
+  assert.deepEqual(parseLedgerCardMarkdown('> ## Quoted heading\n> - item\n> > nested quote'), [
+    {
+      kind: 'blockquote',
+      blocks: [
+        { kind: 'heading', level: 2, children: [{ kind: 'text', text: 'Quoted heading' }] },
+        { kind: 'list', ordered: false, start: 1, items: [[{ kind: 'text', text: 'item' }]] },
+        {
+          kind: 'blockquote',
+          blocks: [{ kind: 'paragraph', children: [{ kind: 'text', text: 'nested quote' }] }],
+        },
+      ],
+    },
+  ]);
+});

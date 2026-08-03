@@ -70,3 +70,30 @@ test('renders thread and turn starts as closed prompt disclosures', () => {
     globalThis.document = previousDocument;
   }
 });
+
+test('renders Codex Log quote content through the shared disclosure renderer', () => {
+  const previousDocument = globalThis.document;
+  try {
+    globalThis.document = {
+      createElement: (tag: string) => new FakeElement(tag),
+      createTextNode: (text: string) => Object.assign(new FakeElement('#text'), { textContent: text }),
+    } as unknown as Document;
+    const event = {
+      runId: 'run-1', line: 3, source: 'jsonl', sourceLine: 3, type: 'item.completed', kind: 'agent_message',
+      title: 'Agent message', text: '> Shared quote\n\nFollowing event text', status: 'complete', itemId: 'message-1',
+      tool: '', output: '', exitCode: '', severity: 'info', persist: true,
+      eventKey: 'run-1:event:message-1', toolKey: '',
+    } satisfies ThreadRunLogEvent;
+    const rendered = renderThreadCodexLogEvent(event) as unknown as FakeElement;
+    const quote = descendants(rendered).find((node) => node.className === 'ledger-card-blockquote');
+    assert.ok(quote);
+    assert.equal(quote.tagName, 'details');
+    assert.equal(quote.open, false);
+    assert.equal(quote.children[0].tagName, 'summary');
+    assert.equal(quote.children[0].textContent, 'Quoted content');
+    assert.equal(descendants(quote).some((node) => node.textContent === 'Shared quote'), true);
+    assert.equal(descendants(rendered).some((node) => node.textContent === 'Following event text'), true);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
