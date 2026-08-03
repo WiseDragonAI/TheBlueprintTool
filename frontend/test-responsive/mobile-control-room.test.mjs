@@ -38,6 +38,13 @@ test('projects master-task lifecycle and positioned relationships without Markdo
   assert.deepEqual(parsed.subtasks.map((entry) => entry.cardId), ['card-r', 'card-b']);
 });
 
+test('renders master-detail rows and progress from the presentation-only visible subtask list', () => {
+  assert.match(mobile, /const visibleSubtasks = visibleMasterTaskSubtasks\(parsedTask\.subtasks\)/);
+  assert.match(mobile, /`\$\{visibleSubtasks\.filter\(\(subtask\) => subtask\.status === 'complete'\)\.length\} of \$\{visibleSubtasks\.length\} complete`/);
+  assert.match(mobile, /subtasks\.replaceChildren\(\.\.\.visibleSubtasks\.map\(\(subtask\) => \{/);
+  assert.doesNotMatch(mobile, /subtasks\.replaceChildren\(\.\.\.parsedTask\.subtasks\.map/);
+});
+
 test('replicated execution is the only local task execution authority', () => {
   const projected = projectMasterTask(task({
     executions: [{

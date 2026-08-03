@@ -9,7 +9,7 @@ import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { upsertResponsiveRouteCard } from './upsert-responsive-route-card.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
-import { compareControlRoomQueueTasks, executionPresentation, parentMasterTask, projectMasterTask, waitingAge } from './control-room.js';
+import { compareControlRoomQueueTasks, executionPresentation, parentMasterTask, projectMasterTask, visibleMasterTaskSubtasks, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
@@ -2801,18 +2801,19 @@ function renderCard(card) {
     persistenceFailure.append(message, retry);
   }
   if (parsedTask.masterTask) {
+    const visibleSubtasks = visibleMasterTaskSubtasks(parsedTask.subtasks);
     const overview = document.createElement('section');
     overview.className = 'task-overview';
     const status = document.createElement('p');
     status.className = 'task-status-line';
     status.innerHTML = '<strong></strong><span></span>';
     status.querySelector('strong').textContent = parsedTask.status.replace('task-', '');
-    status.querySelector('span').textContent = `${parsedTask.complete} of ${parsedTask.subtasks.length} complete`;
+    status.querySelector('span').textContent = `${visibleSubtasks.filter((subtask) => subtask.status === 'complete').length} of ${visibleSubtasks.length} complete`;
     const heading = document.createElement('h2');
     heading.textContent = 'Subtasks';
     const subtasks = document.createElement('div');
     subtasks.className = 'task-subtasks';
-    subtasks.replaceChildren(...parsedTask.subtasks.map((subtask) => {
+    subtasks.replaceChildren(...visibleSubtasks.map((subtask) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'subtask-row';
