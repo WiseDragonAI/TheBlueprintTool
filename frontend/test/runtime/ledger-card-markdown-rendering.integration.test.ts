@@ -36,6 +36,7 @@ class FakeElement {
   });
   textContent = '';
   innerHTML = '';
+  open = false;
   title = '';
   type = '';
   children: Array<FakeElement | FakeText> = [];
@@ -117,6 +118,44 @@ test('ledger cards render markdown descriptions as DOM elements', () => {
     assert.equal((paragraph.children[2] as FakeElement).textContent, 'mode');
     assert.equal(list.tagName, 'ul');
     assert.equal((list.children[0] as FakeElement).tagName, 'li');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
+test('ledger cards render blockquotes as closed native disclosures with nested Markdown', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = renderDetail({
+      id: 'card-blockquote',
+      title: 'Blockquote card',
+      comment: { what: '> **Quoted** detail\n> - nested item\n\nFollowing paragraph' }
+    });
+    const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
+    const disclosure = body.children[0] as FakeElement;
+    const summary = disclosure.children[0] as FakeElement;
+    const content = disclosure.children[1] as FakeElement;
+
+    assert.equal(disclosure.tagName, 'details');
+    assert.equal(disclosure.className, 'ledger-card-blockquote');
+    assert.equal(disclosure.open, false);
+    assert.equal(summary.tagName, 'summary');
+    assert.equal(summary.textContent, 'Quoted content');
+    assert.equal((content.children[0] as FakeElement).tagName, 'p');
+    assert.equal(((content.children[0] as FakeElement).children[0] as FakeElement).tagName, 'strong');
+    assert.equal((content.children[1] as FakeElement).tagName, 'ul');
+    assert.equal((body.children[1] as FakeElement).tagName, 'p');
+    assert.equal((body.children[1] as FakeElement).children[0].textContent, 'Following paragraph');
+
+    disclosure.open = true;
+    assert.equal(disclosure.open, true);
+    disclosure.open = false;
+    assert.equal(disclosure.open, false);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }

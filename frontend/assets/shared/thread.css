@@ -507,6 +507,64 @@
   line-height: 1.45;
 }
 
+.thread-note-message .ledger-card-blockquote,
+.codex-log-event-body .ledger-card-blockquote {
+  margin: 6px 0 9px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--thread-accent), rgba(255, 255, 255, 0.16) 24%);
+  border-left: 3px solid var(--thread-accent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--thread-accent), transparent 92%);
+}
+
+.thread-note-message .ledger-card-blockquote-summary,
+.codex-log-event-body .ledger-card-blockquote-summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  color: var(--thread-accent);
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+  user-select: none;
+}
+
+.thread-note-message .ledger-card-blockquote-summary::-webkit-details-marker,
+.codex-log-event-body .ledger-card-blockquote-summary::-webkit-details-marker {
+  display: none;
+}
+
+.thread-note-message .ledger-card-blockquote-summary::before,
+.codex-log-event-body .ledger-card-blockquote-summary::before {
+  content: '›';
+  font-size: 1.25em;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.thread-note-message .ledger-card-blockquote[open] > .ledger-card-blockquote-summary::before,
+.codex-log-event-body .ledger-card-blockquote[open] > .ledger-card-blockquote-summary::before {
+  transform: rotate(90deg);
+}
+
+.thread-note-message .ledger-card-blockquote-summary:focus-visible,
+.codex-log-event-body .ledger-card-blockquote-summary:focus-visible {
+  outline: 2px solid var(--thread-accent);
+  outline-offset: -2px;
+}
+
+.thread-note-message .ledger-card-blockquote-content,
+.codex-log-event-body .ledger-card-blockquote-content {
+  padding: 2px 10px 10px;
+  color: inherit;
+}
+
+.thread-note-message .ledger-card-blockquote-content > :last-child,
+.codex-log-event-body .ledger-card-blockquote-content > :last-child {
+  margin-bottom: 0;
+}
+
 .thread-note-meta {
   color: var(--muted);
   font-size: 12px;

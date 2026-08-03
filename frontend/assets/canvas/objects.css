@@ -896,6 +896,56 @@
   margin: 0 0 8px;
 }
 
+.ledger-card-blockquote {
+  margin: 6px 0 10px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--card-zone-color), rgba(255, 255, 255, 0.18) 28%);
+  border-left: 3px solid var(--card-code-color);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--card-zone-color), transparent 92%);
+}
+
+.ledger-card-blockquote-summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  color: var(--card-code-color);
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+  user-select: none;
+}
+
+.ledger-card-blockquote-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ledger-card-blockquote-summary::before {
+  content: '›';
+  font-size: 1.25em;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.ledger-card-blockquote[open] > .ledger-card-blockquote-summary::before {
+  transform: rotate(90deg);
+}
+
+.ledger-card-blockquote-summary:focus-visible {
+  outline: 2px solid var(--card-code-color);
+  outline-offset: -2px;
+}
+
+.ledger-card-blockquote-content {
+  padding: 2px 10px 10px;
+  color: var(--card-muted-text);
+}
+
+.ledger-card-blockquote-content > :last-child {
+  margin-bottom: 0;
+}
+
 .ledger-card-link {
   color: color-mix(in srgb, var(--card-code-color), white 16%);
   overflow-wrap: anywhere;

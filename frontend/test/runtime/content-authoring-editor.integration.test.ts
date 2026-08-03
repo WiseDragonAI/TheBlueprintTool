@@ -268,6 +268,12 @@ test('CodeMirror adapter owns Markdown, wrapping, dirty state, toolbox actions, 
       && spec.tag.includes('url')
       && spec.textDecoration === 'underline'
     )));
+    assert.ok(highlightSpecs.some((spec) => (
+      spec.tag === 'quote'
+      && spec.color === 'color-mix(in srgb, var(--accent), white 38%)'
+      && spec.fontWeight === '700'
+    )));
+    assert.equal(highlightSpecs.some((spec) => Array.isArray(spec.tag) && spec.tag.includes('quote')), false);
     assert.equal(view?.state.doc.toString(), initial);
     assert.match(parent.textContent, /SKILL\.md · abcdef123456/);
     assert.deepEqual(parent.querySelectorAll('button').map((button) => button.textContent), ['Undo', 'Redo', 'Find', 'Wrap lines']);
