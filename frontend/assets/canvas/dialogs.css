@@ -543,8 +543,8 @@
 .skill-library-editor-modal {
   width: min(900px, calc(100vw - 48px));
   max-width: min(900px, calc(100vw - 48px));
-  height: 95vh;
-  max-height: 95vh;
+  height: 95dvh;
+  max-height: 95dvh;
 }
 
 .codex-modal-head,
@@ -1236,11 +1236,22 @@
 
 .skill-library-editor-body {
   display: grid;
-  grid-template-rows: max-content max-content minmax(280px, 1fr);
+  grid-template-areas:
+    "state"
+    "editor";
+  grid-template-rows: max-content minmax(280px, 1fr);
   gap: 12px;
   min-height: 0;
   overflow-y: auto;
   padding-top: 14px;
+}
+
+.skill-editor-state-panel {
+  display: grid;
+  grid-area: state;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
 }
 
 .skill-tags-field {
@@ -1322,6 +1333,7 @@
 
 .skill-editor-pane {
   display: grid;
+  grid-area: editor;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
 }
@@ -1477,6 +1489,26 @@
   min-width: 0;
   font-weight: 400;
   text-transform: none;
+}
+
+@media (min-width: 1160px) {
+  .skill-library-editor-modal {
+    width: min(1200px, 95vw);
+    min-width: 1100px;
+    max-width: none;
+  }
+  .skill-library-editor-body {
+    grid-template-areas: "editor state";
+    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .skill-editor-state-panel {
+    overflow-y: auto;
+    padding-left: 16px;
+    border-left: 1px solid var(--line);
+    scrollbar-gutter: stable;
+  }
 }
 
 @media (max-width: 760px) {
