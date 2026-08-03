@@ -769,9 +769,10 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .codex-list-item .skill-source-label { padding-inline: 2px; text-transform: capitalize; }
 .codex-message.error { color: var(--danger); }
 .process-detail { display: grid; gap: 16px; min-height: 0; overflow-y: auto; }
-.process-detail.skill-detail-layout { grid-template-rows: auto auto minmax(0, 1fr) auto; flex: 1 1 auto; overflow: hidden; }
+.process-detail.skill-detail-layout { grid-template-rows: minmax(0, 1fr) auto; flex: 1 1 auto; overflow: hidden; }
 .skill-detail-title { color: var(--accent); font-size: 20px; line-height: 1.25; overflow-wrap: anywhere; }
 .skill-detail-scroll { --zone-color: var(--accent); min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+.skill-detail-controls { display: grid; align-content: start; gap: 16px; min-width: 0; min-height: 0; }
 .skill-detail-actions { display: grid; gap: 12px; min-width: 0; padding-top: 12px; border-top: 1px solid var(--line); }
 .skill-markdown-section, .skill-reference-map { display: grid; gap: 10px; min-width: 0; }
 .skill-markdown-section > h4, .skill-reference-map > h4 { margin: 0; color: var(--text); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
@@ -843,6 +844,9 @@ html[data-task-back-handoff="true"]::view-transition-new(root) { animation: task
 @keyframes task-back-fade-in { from { opacity: 0; } }
 
 @media (min-width: 760px) {
+  .process-modal { height: 95dvh; }
+  .process-detail.skill-detail-layout { grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .skill-detail-controls { overflow-y: auto; padding-left: 16px; border-left: 1px solid var(--line); scrollbar-gutter: stable; }
   body.card-thread-open .app-shell { margin-right: clamp(420px, 33vw, 620px); }
   .mobile-thread-inspector {
     inset: 0 0 0 auto;

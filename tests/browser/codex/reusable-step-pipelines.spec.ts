@@ -139,7 +139,7 @@ test('Process card keeps an overflowing skill catalog readable.', { timeout: 30_
   }
 });
 
-test('Skills Library keeps canonical Markdown in a bounded scroll view above persistent actions.', { timeout: 45_000 }, async () => {
+test('Skills Library splits bounded Markdown from persistent desktop controls.', { timeout: 45_000 }, async () => {
   const fixture = createFixture({ extraSkillCount: 2 });
   let server: ServerHandle | undefined;
   let browser: Browser | undefined;
@@ -223,9 +223,12 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
       const detail = document.querySelector<HTMLElement>('.process-detail');
       const scroll = document.querySelector<HTMLElement>('.skill-detail-scroll');
       const markdown = document.querySelector<HTMLElement>('.skill-markdown-section > .ledger-card-body');
+      const controls = document.querySelector<HTMLElement>('.skill-detail-controls');
       const actions = document.querySelector<HTMLElement>('.skill-detail-actions');
       const favorite = document.querySelector<HTMLElement>('.skill-favorite-toggle');
       const modalRect = modal?.getBoundingClientRect();
+      const scrollRect = scroll?.getBoundingClientRect();
+      const controlsRect = controls?.getBoundingClientRect();
       const actionsRect = actions?.getBoundingClientRect();
       const favoriteRect = favorite?.getBoundingClientRect();
       const markdownStyle = markdown ? getComputedStyle(markdown) : undefined;
@@ -236,6 +239,15 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
         documentClientHeight: scroll?.clientHeight ?? 0,
         documentScrollHeight: scroll?.scrollHeight ?? 0,
         documentOverflowY: scroll ? getComputedStyle(scroll).overflowY : '',
+        markdownIsLeftOfControls: (scrollRect?.left ?? Infinity) < (controlsRect?.left ?? -Infinity),
+        panelsDoNotOverlap: (scrollRect?.right ?? Infinity) <= (controlsRect?.left ?? -Infinity),
+        controlsInsideModal: (controlsRect?.right ?? Infinity) <= (modalRect?.right ?? -Infinity)
+          && (controlsRect?.bottom ?? Infinity) <= (modalRect?.bottom ?? -Infinity),
+        controlsOwnMetadata: controls?.contains(document.querySelector('.skill-detail-title')) === true
+          && controls?.contains(document.querySelector('.skill-detail-actions')) === true,
+        markdownPanelContainsOnlyMarkdown: [...(scroll?.children ?? [])].every((child) => (
+          child.classList.contains('skill-markdown-section') || child.classList.contains('skill-reference-map')
+        )) && scroll?.querySelector('.skill-detail-title, .skill-detail-actions, .skill-tags-field') === null,
         actionsInsideModal: (actionsRect?.bottom ?? Infinity) <= (modalRect?.bottom ?? -Infinity),
         favoriteInsideModal: (favoriteRect?.bottom ?? Infinity) <= (modalRect?.bottom ?? -Infinity),
         markdownPadding: markdownStyle?.padding ?? '',
@@ -243,10 +255,15 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
         markdownShadow: markdownStyle?.boxShadow ?? '',
       };
     });
-    assert.ok(Math.abs(geometry.modalHeight - 720) <= 2, `Expected an 80vh modal, received ${geometry.modalHeight}px.`);
+    assert.ok(Math.abs(geometry.modalHeight - 855) <= 2, `Expected a 95dvh modal, received ${geometry.modalHeight}px.`);
     assert.equal(geometry.detailScrollHeight, geometry.detailClientHeight, 'The detail shell must not own document overflow.');
     assert.ok(geometry.documentScrollHeight > geometry.documentClientHeight, 'The Markdown document must own vertical scrolling.');
     assert.equal(geometry.documentOverflowY, 'auto');
+    assert.equal(geometry.markdownIsLeftOfControls, true);
+    assert.equal(geometry.panelsDoNotOverlap, true);
+    assert.equal(geometry.controlsInsideModal, true);
+    assert.equal(geometry.controlsOwnMetadata, true);
+    assert.equal(geometry.markdownPanelContainsOnlyMarkdown, true);
     assert.equal(geometry.actionsInsideModal, true);
     assert.equal(geometry.favoriteInsideModal, true);
     assert.equal(geometry.markdownPadding, '18px');
