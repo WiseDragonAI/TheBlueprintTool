@@ -103,6 +103,7 @@ export async function handleProjectDataRequestStage(input: {
   });
   const execution = await handleTaskExecutionReadRoutes({
     presentation: presentation.presentation,
+    providerSessionId: presentation.providerSessionId,
     queuePosition: presentation.queuePosition,
     request: input.request,
     response: input.response,

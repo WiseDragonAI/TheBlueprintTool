@@ -8,6 +8,7 @@ import { buildTaskExecutionPresentation } from '../helper/task-execution-present
 import { taskExecutionPresentationHttpResult } from '../helper/task-execution-presentation-http-result.js';
 import {
   taskExecutionNodeId,
+  taskExecutionProcess,
   taskExecutionState,
 } from '../helper/task-execution-runtime.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
@@ -118,5 +119,10 @@ export function createTaskExecutionPresentationReader(input: {
     runtime: input.runtime,
   });
 
-  return { presentation, queuePosition, state };
+  const providerSessionId = (executionId: string): string | null => {
+    const runtime = input.runtimeForExecution(executionId) ?? input.runtime;
+    return taskExecutionProcess(runtime, executionId)?.providerSessionId ?? null;
+  };
+
+  return { presentation, providerSessionId, queuePosition, state };
 }

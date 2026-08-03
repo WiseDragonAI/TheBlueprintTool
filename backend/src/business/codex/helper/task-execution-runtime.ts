@@ -22,6 +22,7 @@ export type TaskExecutionProcess = {
   startedAt: string;
   stdoutFile: string;
   stderrFile: string;
+  providerSessionId?: string;
 };
 
 export type TaskExecutionCancellationResult = {
