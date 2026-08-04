@@ -4,7 +4,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchCardContentFiles } from '@backend/business/refresh/helper/watch-card-content-files.js';
@@ -153,6 +153,134 @@ test('retries one failed content publication once without reporting a recovered 
     while (attempts < 2 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(attempts, 2);
     assert.deepEqual(errors, []);
+  } finally {
+    await watcher.close();
+  }
+});
+
+test('flushes one exact pending content path without publishing unrelated editor work', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-content-watch-exact-flush-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const firstFile = join(decisionOsRoot, 'cards', 'tasks', 'card-a.md');
+  const secondFile = join(decisionOsRoot, 'cards', 'tasks', 'card-b.md');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(decisionOsRoot, 'threads'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [
+      { id: 'card-a', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } },
+      { id: 'card-b', comment: { contentFile: '.decision-os/cards/tasks/card-b.md' } },
+    ],
+  }));
+  writeFileSync(firstFile, '# Initial A\n');
+  writeFileSync(secondFile, '# Initial B\n');
+  const changes: string[] = [];
+  const watcher = watchCardContentFiles({
+    decisionOsRoot,
+    onChange: (change) => { changes.push(change.file); },
+  });
+
+  try {
+    writeFileSync(firstFile, '# Changed A\n');
+    writeFileSync(secondFile, '# Changed B\n');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const result = await watcher.flushFile(firstFile);
+    assert.deepEqual(result, { observed: true, settled: true });
+    assert.deepEqual(changes, [firstFile]);
+    assert.deepEqual(await watcher.flushFile(join(decisionOsRoot, 'cards', 'tasks', 'missing.md')), {
+      observed: false,
+      settled: false,
+    });
+  } finally {
+    await watcher.close();
+  }
+});
+
+test('ownership refresh attaches a watcher to a newly committed content directory', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-content-watch-new-directory-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const contentFile = join(decisionOsRoot, 'cards', 'tasks', 'card-a.md');
+  mkdirSync(join(decisionOsRoot, 'cards'), { recursive: true });
+  mkdirSync(join(decisionOsRoot, 'threads'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [] }));
+  let projection: Record<string, unknown> = { cards: [] };
+  const changes: string[] = [];
+  const watcher = watchCardContentFiles({
+    decisionOsRoot,
+    taskProjection: () => projection,
+    onChange: (change) => { changes.push(change.file); },
+  });
+
+  try {
+    mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+    writeFileSync(contentFile, '# Initial\n');
+    projection = { cards: [{ id: 'card-a', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } }] };
+    watcher.refreshOwnership();
+    writeFileSync(contentFile, '# External edit\n');
+    const deadline = Date.now() + 2_000;
+    while (changes.length === 0 && Date.now() < deadline) await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    assert.deepEqual(changes, [contentFile]);
+  } finally {
+    await watcher.close();
+  }
+});
+
+test('watcher recovery audit reprocesses a preserved edit after task ownership becomes available', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-content-watch-delayed-ownership-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const contentFile = join(decisionOsRoot, 'cards', 'tasks', 'card-a.md');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(decisionOsRoot, 'threads'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [] }));
+  writeFileSync(contentFile, '# Initial\n');
+  let projection: Record<string, unknown> = { cards: [] };
+  const changes: string[] = [];
+  const watcher = watchCardContentFiles({
+    decisionOsRoot,
+    taskProjection: () => projection,
+    auditIntervalMs: 30,
+    onChange: (change) => { changes.push(change.file); },
+  });
+
+  try {
+    projection = { cards: [{ id: 'card-a', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } }] };
+    writeFileSync(contentFile, '# Preserved delayed edit\n');
+    const deadline = Date.now() + 2_000;
+    while (changes.length === 0 && Date.now() < deadline) await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    assert.deepEqual(changes, [contentFile]);
+  } finally {
+    await watcher.close();
+  }
+});
+
+test('delete then editor rename within debounce publishes only the final replacement', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-content-watch-delete-rename-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const contentFile = join(decisionOsRoot, 'cards', 'tasks', 'card-a.md');
+  const replacement = join(decisionOsRoot, 'cards', 'tasks', '.card-a.md.replacement');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(decisionOsRoot, 'threads'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{ id: 'card-a', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } }],
+  }));
+  writeFileSync(contentFile, '# Initial\n');
+  const changes: string[] = [];
+  const watcher = watchCardContentFiles({ decisionOsRoot, onChange: (change) => { changes.push(change.file); } });
+
+  try {
+    writeFileSync(replacement, '# Final replacement\n');
+    rmSync(contentFile);
+    renameSync(replacement, contentFile);
+    await new Promise((resolveWait) => setTimeout(resolveWait, 90));
+    await watcher.flush();
+    assert.deepEqual(changes, [contentFile]);
   } finally {
     await watcher.close();
   }

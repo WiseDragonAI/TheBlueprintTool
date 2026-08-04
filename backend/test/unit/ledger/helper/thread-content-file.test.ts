@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatThreadMarkdown, parseThreadMarkdown } from '@backend/business/ledger/helper/thread-content-file.js';
+import {
+  formatThreadMarkdown,
+  parseThreadMarkdown,
+  validateExternalThreadMarkdown,
+} from '@backend/business/ledger/helper/thread-content-file.js';
 
 test('thread markdown parser ignores message headings inside fenced code blocks', () => {
   const markdown = [
@@ -61,4 +65,37 @@ test('thread markdown parser round-trips codex artifact output with nested fence
   assert.equal(notes[0]?.codexKind, 'tool_call');
   assert.match(String(notes[0]?.message ?? ''), /# OPERATOR/);
   assert.match(String(notes[0]?.message ?? ''), /# AGENT/);
+});
+
+test('external thread validation accepts stable canonical identities and an empty thread', () => {
+  const markdown = formatThreadMarkdown([
+    { id: 'note-a', role: 'operator', message: 'First.' },
+    { id: 'note-b', role: 'agent', message: 'Second.' },
+  ]);
+
+  assert.deepEqual(validateExternalThreadMarkdown(markdown), { ok: true });
+  assert.deepEqual(validateExternalThreadMarkdown(''), { ok: true });
+});
+
+test('external thread validation rejects malformed and duplicate note identities', () => {
+  const duplicate = [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-a"} -->',
+    '',
+    'First.',
+    '',
+    '# AGENT',
+    '<!-- decision-os:note {"id":"note-a"} -->',
+    '',
+    'Second.',
+  ].join('\n');
+
+  assert.deepEqual(validateExternalThreadMarkdown('# OPERATOR\nNot metadata.\n'), {
+    ok: false,
+    error: 'thread_note_metadata_invalid:2',
+  });
+  assert.deepEqual(validateExternalThreadMarkdown(duplicate), {
+    ok: false,
+    error: 'thread_note_id_duplicate:note-a',
+  });
 });

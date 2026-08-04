@@ -15,6 +15,7 @@ import {
 import { createFederationContentReplicaStore } from '../../../src/business/federation/helper/federation-content-replica-store.js';
 import { readTaskContentOnDemand } from '../../../src/business/federation/helper/read-task-content-on-demand.js';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
+import { parseThreadMarkdown } from '../../../src/business/ledger/helper/thread-content-file.js';
 
 const projectId = 'project-a';
 const threadId = 'thread-card-a';
@@ -123,7 +124,7 @@ test('returns unavailable without creating a sidecar when the object cannot be o
   assert.equal(existsSync(state.file), false);
 });
 
-test('demands and installs verified relay bytes when the local object is absent', async (context) => {
+test('fresh local and replica reload installs and renders the exact manually edited thread', async (context) => {
   const state = fixture();
   context.after(async () => { await state.store.flush(); rmSync(state.workspace, { recursive: true, force: true }); });
   const body = '# OPERATOR\n<!-- decision-os:note {"id":"note-relay"} -->\n\nRelay question.\n';
@@ -147,6 +148,22 @@ test('demands and installs verified relay bytes when the local object is absent'
 
   assert.equal(drainCount, 1);
   assert.equal(readFileSync(state.file, 'utf8'), body);
+  assert.deepEqual(parseThreadMarkdown(readFileSync(state.file, 'utf8')).map((note) => note.id), ['note-relay']);
+  await state.store.flush();
+  rmSync(state.file);
+  const restarted = createTaskCurrentStateStore({ decisionOsRoot: state.decisionOsRoot, projectId });
+  await materializeTaskMutationInputs({
+    projectId,
+    decisionOsRoot: state.decisionOsRoot,
+    ledger: state.ledger,
+    mutation,
+    store: restarted,
+    contentStore: state.contentStore,
+    drain: null,
+  });
+  assert.equal(readFileSync(state.file, 'utf8'), body);
+  assert.deepEqual(parseThreadMarkdown(readFileSync(state.file, 'utf8')).map((note) => note.id), ['note-relay']);
+  await restarted.flush();
 });
 
 test('returns missing content immediately while demand hydration continues in background', async (context) => {
