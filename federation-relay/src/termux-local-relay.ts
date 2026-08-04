@@ -25,6 +25,14 @@ import {
 import { joinRelayEntity, type RelayEntity } from './current-state.js';
 import { stateEntityFrames } from './state-entity-frames.js';
 import {
+  assertFederationRepairManifest,
+  canonicalFederationRepairBuckets,
+  claimFederationRepairBuckets,
+  createFederationRepairRecord,
+  federationRepairRecordKey,
+  type FederationRepairRecord,
+} from '../../shared/federation-repair-guard.js';
+import {
   hashTaskCurrentRoot,
   taskCurrentBucketForEntityKey,
   taskCurrentEntityKey,
@@ -44,6 +52,9 @@ type StoredFederation = {
   manifests: Record<string, ProjectManifest[]>;
   labels: Record<string, string>;
   entities: Record<string, Record<string, RelayEntity>>;
+  stateGenerations?: Record<string, number>;
+  stateBroadcastGenerations?: Record<string, number>;
+  stateRepairRecords?: Record<string, FederationRepairRecord>;
 };
 
 type StoredRelayState = {
@@ -76,7 +87,7 @@ if (!/^[a-f0-9]{40}$/.test(releaseSha)) throw new Error('invalid_termux_relay_re
 if (administratorSecret.length < 32) throw new Error('invalid_termux_relay_admin_secret');
 
 function emptyFederation(): StoredFederation {
-  return { credentials: {}, manifests: {}, labels: {}, entities: {} };
+  return { credentials: {}, manifests: {}, labels: {}, entities: {}, stateGenerations: {}, stateBroadcastGenerations: {}, stateRepairRecords: {} };
 }
 
 function readState(): StoredRelayState {
@@ -105,7 +116,11 @@ function persistState(): void {
 
 function federation(federationId: string): StoredFederation {
   state.federations[federationId] ??= emptyFederation();
-  return state.federations[federationId];
+  const stored = state.federations[federationId];
+  stored.stateGenerations ??= {};
+  stored.stateBroadcastGenerations ??= {};
+  stored.stateRepairRecords ??= {};
+  return stored;
 }
 
 function digest(value: string): string {
@@ -233,6 +248,9 @@ function persistStateEntities(sender: Client, frame: RelayFrame): void {
     project[entry.entityKey] = joined;
   }
   stored.entities[projectId] = project;
+  // WHAT: Advance the project generation only when the accepted batch changes durable relay state.
+  // WHY: Duplicate delivery must not renew any node's repair allowance.
+  if (changed.length > 0) stored.stateGenerations![projectId] = (stored.stateGenerations![projectId] ?? 0) + 1;
   persistState();
   sendSocket(sender.socket, {
     version: 1,
@@ -253,8 +271,20 @@ function reconcileStateSummary(sender: Client, frame: RelayFrame): void {
   if (!projectId || !participates(sender.federationId, sender.nodeId, projectId)) throw new Error('unknown_state_project');
   const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
   const remote = Array.isArray(payload.buckets) ? payload.buckets as StateBucket[] : [];
+  const peerRoot = String(payload.root ?? '');
+  const peerManifestDigest = assertFederationRepairManifest(peerRoot, remote);
+  const stored = federation(sender.federationId);
+  const generation = stored.stateGenerations![projectId] ?? 0;
+  const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
+  // WHAT: Suppress every later summary from this node in the same durable root generation.
+  // WHY: A divergent peer must not repeat full in-memory scans after reconnect.
+  if (stored.stateRepairRecords![repairKey]?.generation === generation) return;
+  stored.stateRepairRecords![repairKey] = createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation, peerRoot, peerManifestDigest });
+  persistState();
   const local = stateBuckets(sender.federationId, projectId);
   const missing = mismatchedBuckets(local, remote);
+  // WHAT: Request relay-missing buckets once for the admitted generation.
+  // WHY: Normal reverse convergence remains available without repeating unchanged work.
   if (missing.length > 0) {
     sendSocket(sender.socket, {
       version: 1,
@@ -274,11 +304,22 @@ function reconcileStateSummary(sender: Client, frame: RelayFrame): void {
     stateVersion: taskCurrentStateVersion,
     payload: { stateVersion: taskCurrentStateVersion, root: localRoot, buckets: local },
   };
-  for (const target of activeClients(sender.federationId)) {
-    // WHAT: Publish the settled local-relay root to every online project participant.
-    // WHY: The canary transport must preserve the production relay's terminal repair boundary.
-    if (participates(target.federationId, target.nodeId, projectId)) sendSocket(target.socket, summary);
+  const broadcastGeneration = stored.stateBroadcastGenerations![projectId] ?? 0;
+  // WHAT: Broadcast the terminal root once after durable state changes.
+  // WHY: Unchanged peer summaries must not amplify onto healthy participants.
+  if (generation > 0 && broadcastGeneration < generation) {
+    for (const target of activeClients(sender.federationId)) {
+      // WHAT: Deliver the changed root only to project participants.
+      // WHY: A repair must not affect unrelated nodes.
+      if (participates(target.federationId, target.nodeId, projectId)) sendSocket(target.socket, summary);
+    }
+    stored.stateBroadcastGenerations![projectId] = generation;
+    persistState();
+  } else {
+    sendSocket(sender.socket, summary);
   }
+  // WHAT: Confirm exact equality after answering the admitted summary.
+  // WHY: Existing epoch-4 nodes settle relay publication with this frame.
   if (missing.length === 0 && payload.root === localRoot) {
     sendSocket(sender.socket, {
       version: 1,
@@ -329,11 +370,26 @@ function handleFrame(sender: Client, text: string): void {
       else if (frame.type === 'state-missing-request') {
         const projectId = String(frame.projectId ?? '');
         const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
-        const buckets = new Set(Array.isArray(payload.buckets) ? payload.buckets.map(String) : []);
-        if (!projectId || buckets.size === 0 || !participates(sender.federationId, sender.nodeId, projectId)) {
+        // WHAT: Reject missing project participation before repair-state mutation.
+        // WHY: Only authenticated participants may spend relay repair work.
+        if (!projectId || !participates(sender.federationId, sender.nodeId, projectId)) {
           throw new Error('invalid_state_missing_request');
         }
-        sendStateEntities(sender, projectId, buckets);
+        const buckets = canonicalFederationRepairBuckets(Array.isArray(payload.buckets) ? payload.buckets : []);
+        const stored = federation(sender.federationId);
+        const generation = stored.stateGenerations![projectId] ?? 0;
+        const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
+        const retained = stored.stateRepairRecords![repairKey];
+        const existing = retained?.generation === generation
+          ? retained
+          : createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation });
+        const claimed = claimFederationRepairBuckets(existing, buckets);
+        stored.stateRepairRecords![repairKey] = claimed.record;
+        persistState();
+        // WHAT: End a fully repeated request before entity selection and summary generation.
+        // WHY: Durable served-bucket ownership must survive reconnects.
+        if (claimed.admitted.length === 0) return;
+        sendStateEntities(sender, projectId, new Set(claimed.admitted));
         sendStateSummary(sender, projectId);
       } else if (frame.type === 'state-execution-observation') {
         const projectId = String(frame.projectId ?? '');

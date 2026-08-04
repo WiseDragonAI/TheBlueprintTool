@@ -22,6 +22,14 @@ import {
 import { joinRelayEntity, type RelayEntity } from './current-state';
 import { stateEntityFrames } from './state-entity-frames';
 import {
+  assertFederationRepairManifest,
+  canonicalFederationRepairBuckets,
+  claimFederationRepairBuckets,
+  createFederationRepairRecord,
+  federationRepairRecordKey,
+  type FederationRepairRecord,
+} from '../../shared/federation-repair-guard';
+import {
   hashTaskCurrentRoot,
   taskCurrentEntityKey,
   taskCurrentStateVersion,
@@ -185,6 +193,14 @@ export class FederationRelayV4 extends DurableObject<Env> {
     return [...entries.values()].sort((left, right) => left.bucket.localeCompare(right.bucket)).map(({ entries: _entries, ...summary }) => summary);
   }
 
+  private stateGenerationKey(projectId: string): string {
+    return `state:v4:generation:${encodeURIComponent(projectId)}`;
+  }
+
+  private stateBroadcastGenerationKey(projectId: string): string {
+    return `state:v4:broadcast-generation:${encodeURIComponent(projectId)}`;
+  }
+
   private async deleteStatePrefix(prefix: string): Promise<number> {
     let deleted = 0;
     while (true) {
@@ -208,6 +224,8 @@ export class FederationRelayV4 extends DurableObject<Env> {
     }
     const entitiesDeleted = await this.deleteStatePrefix(stateEntityPrefix(projectId));
     const bucketsDeleted = await this.deleteStatePrefix(stateBucketPrefix(projectId));
+    await this.deleteStatePrefix(`state:v4:repair:${encodeURIComponent(projectId)}:`);
+    await this.ctx.storage.delete([this.stateGenerationKey(projectId), this.stateBroadcastGenerationKey(projectId)]);
     const resetAt = new Date().toISOString();
     await this.ctx.storage.put(`state:v4:reset:${encodeURIComponent(projectId)}:${resetAt}`, { projectId, resetAt, entitiesDeleted, bucketsDeleted });
     return json({ ok: true, projectId, entitiesDeleted, bucketsDeleted, root: hashTaskCurrentRoot([]), resetAt });
@@ -237,6 +255,8 @@ export class FederationRelayV4 extends DurableObject<Env> {
       const joined = entries.map((entry) => ({ ...entry, value: joinRelayEntity(existing.get(entry.key), entry.entity) }));
       accepted.push(...joined.map((entry) => ({ key: entry.entityKey, stateHash: entry.value.stateHash })));
       const additions = joined.filter((entry) => existing.get(entry.key)?.stateHash !== entry.value.stateHash);
+      // WHAT: Leave the relay root generation unchanged when every accepted entity is already durable.
+      // WHY: Duplicate deliveries must not create a fresh repair budget.
       if (additions.length === 0) return;
       changed.push(...additions.map((entry) => entry.value));
       const bucketNames = [...new Set(additions.map((entry) => entry.bucket))];
@@ -251,6 +271,9 @@ export class FederationRelayV4 extends DurableObject<Env> {
         const value = summarizeBucket(bucket, bucketEntries);
         return [stateBucketKey(projectId, bucket), value];
       })));
+      const generationKey = this.stateGenerationKey(projectId);
+      const generation = await transaction.get<number>(generationKey) ?? 0;
+      await transaction.put(generationKey, generation + 1);
     });
     this.sendSocket(socket, { version: 1, type: 'state-relay-ack', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted } });
     for (const target of this.activeSockets()) {
@@ -264,19 +287,52 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
     const remote = Array.isArray(payload.buckets) ? payload.buckets as StateBucket[] : [];
     this.assertProjectParticipation(sender, projectId);
-    const local = await this.stateBuckets(projectId);
+    const peerRoot = String(payload.root ?? '');
+    const peerManifestDigest = assertFederationRepairManifest(peerRoot, remote);
+    const generation = await this.ctx.storage.get<number>(this.stateGenerationKey(projectId)) ?? 0;
+    const repairKey = federationRepairRecordKey(sender, projectId);
+    const admitted = await this.ctx.storage.transaction(async (transaction) => {
+      const existing = await transaction.get<FederationRepairRecord>(repairKey);
+      // WHAT: Suppress every later peer summary in the same relay-root generation.
+      // WHY: Varying peer manifests must not purchase repeated project scans.
+      if (existing?.generation === generation) return false;
+      await transaction.put(repairKey, createFederationRepairRecord({ nodeId: sender, projectId, generation, peerRoot, peerManifestDigest }));
+      return true;
+    });
+    // WHAT: End duplicate summary handling before the first bucket storage read.
+    // WHY: Durable admission is the relay's final flood-containment boundary.
+    if (!admitted) return;
+    let local: StateBucket[];
+    try {
+      local = await this.stateBuckets(projectId);
+    } catch (error) {
+      await this.ctx.storage.delete(repairKey);
+      throw error;
+    }
     const missingFromRelay = mismatchedBuckets(local, remote);
+    // WHAT: Ask once for buckets absent from the admitted relay-root generation.
+    // WHY: A first valid peer summary must retain normal reverse convergence.
     if (missingFromRelay.length > 0) {
       this.sendSocket(socket, { version: 1, type: 'state-missing-request', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, buckets: missingFromRelay } });
     }
     const localRoot = hashTaskCurrentRoot(local);
     const summary: RelayFrame = { version: 1, type: 'state-bucket-summary', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, root: localRoot, buckets: local } };
-    for (const target of this.activeSockets()) {
-      const targetNodeId = (target.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
-      // WHAT: Publish the settled relay root to every online participant after one node finishes a batch group.
-      // WHY: Receivers no longer advertise intermediate roots after each entity batch and need one terminal convergence boundary.
-      if (this.participatesInProject(targetNodeId, projectId)) this.sendSocket(target, summary);
+    const broadcastGeneration = await this.ctx.storage.get<number>(this.stateBroadcastGenerationKey(projectId)) ?? 0;
+    // WHAT: Broadcast one terminal summary only after durable state advanced to an unannounced generation.
+    // WHY: Healthy participants need the changed root once, while unchanged peer summaries must not fan out.
+    if (generation > 0 && broadcastGeneration < generation) {
+      for (const target of this.activeSockets()) {
+        const targetNodeId = (target.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
+        // WHAT: Deliver the changed root only to authenticated project participants.
+        // WHY: Unrelated nodes must remain outside this repair generation.
+        if (this.participatesInProject(targetNodeId, projectId)) this.sendSocket(target, summary);
+      }
+      await this.ctx.storage.put(this.stateBroadcastGenerationKey(projectId), generation);
+    } else {
+      this.sendSocket(socket, summary);
     }
+    // WHAT: Confirm exact equality after the admitted summary has been answered.
+    // WHY: Existing epoch-4 nodes use this frame to settle relay-bound publication.
     if (missingFromRelay.length === 0 && payload.root === localRoot) {
       this.sendSocket(socket, { version: 1, type: 'state-converged', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, nodeId: sender, root: localRoot } });
     }
@@ -285,11 +341,28 @@ export class FederationRelayV4 extends DurableObject<Env> {
   private async sendMissingStateEntities(sender: string, socket: WebSocket, frame: RelayFrame): Promise<void> {
     const projectId = String(frame.projectId ?? '');
     const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
-    const buckets = new Set(Array.isArray(payload.buckets) ? payload.buckets.map(String) : []);
     this.assertProjectParticipation(sender, projectId);
-    if (buckets.size === 0) throw new Error('invalid_state_missing_request');
-    const pages = await Promise.all([...buckets].map((bucket) => listAll<RelayEntity>(this.ctx.storage, stateEntityPrefix(projectId, bucket))));
-    this.sendStateEntities(socket, projectId, pages.flatMap((page) => [...page.values()]));
+    const buckets = canonicalFederationRepairBuckets(Array.isArray(payload.buckets) ? payload.buckets : []);
+    const generation = await this.ctx.storage.get<number>(this.stateGenerationKey(projectId)) ?? 0;
+    const repairKey = federationRepairRecordKey(sender, projectId);
+    const admitted = await this.ctx.storage.transaction(async (transaction) => {
+      const retained = await transaction.get<FederationRepairRecord>(repairKey);
+      const existing = retained?.generation === generation
+        ? retained
+        : createFederationRepairRecord({ nodeId: sender, projectId, generation });
+      const claimed = claimFederationRepairBuckets(existing, buckets);
+      await transaction.put(repairKey, claimed.record);
+      return claimed.admitted;
+    });
+    // WHAT: Suppress a request whose buckets were already served in this durable generation.
+    // WHY: Reconnect and repeated frames must perform zero new entity reads.
+    if (admitted.length === 0) return;
+    const entities: RelayEntity[] = [];
+    for (const bucket of admitted) {
+      const page = await listAll<RelayEntity>(this.ctx.storage, stateEntityPrefix(projectId, bucket));
+      entities.push(...page.values());
+    }
+    this.sendStateEntities(socket, projectId, entities);
     await this.sendStateSummary(socket, projectId);
   }
 
