@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
 import { applyLedgerMutation, type LedgerMutation } from '../../../src/business/ledger/helper/apply-ledger-mutation.js';
+import { validateExternalThreadMarkdown } from '../../../src/business/ledger/helper/thread-content-file.js';
 import { createProjectTaskState } from '../../../src/business/task-state/helper/project-task-state.js';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { taskCommandForMutation } from '../../../src/business/task-state/helper/task-mutation-command.js';
@@ -744,6 +745,52 @@ test('unchanged content bytes do not create a second resource mutation when file
   assert.equal(state.store.contentHeads('.decision-os/cards/tasks/card-a.md').length, 1);
   assert.equal(publishedContent.length, 1);
   assert.equal(published.flatMap((delta) => delta.entities).filter((entity) => entity.entityType === 'resource').length, 1);
+});
+
+test('invalid external thread metadata preserves mutable bytes and the prior causal head', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-invalid-thread-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const key = '.decision-os/threads/tasks/thread-card-a.md';
+  const threadFile = resolve(root, 'threads', 'tasks', 'thread-card-a.md');
+  mkdirSync(dirname(threadFile), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Task', status: 'todo' }], annotations: [], relationships: [], threadFiles: { 'thread-card-a': key },
+  }));
+  writeFileSync(threadFile, '# OPERATOR\n<!-- decision-os:note {"id":"note-a"} -->\n\nValid.\n');
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  await state.recordContentContribution('card-a', key);
+  const priorHead = state.store.contentHeads(key);
+  const invalid = '# OPERATOR\n<!-- malformed -->\n\nPreserve these bytes.\n';
+  writeFileSync(threadFile, invalid);
+
+  await assert.rejects(
+    state.recordContentContribution('', key, async (_head, body) => {
+      const validation = validateExternalThreadMarkdown(body);
+      if (validation.ok === false) throw new Error(validation.error);
+    }),
+    /thread_note_metadata_invalid/,
+  );
+  assert.equal(readFileSync(threadFile, 'utf8'), invalid);
+  assert.deepEqual(state.store.contentHeads(key), priorHead);
+});
+
+test('permanent deletion rejects contribution and retains the prior causal head', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-deleted-content-'));
+  const ledgerPath = resolve(root, 'tasks.json');
+  const key = '.decision-os/cards/tasks/card-a.md';
+  const contentFile = resolve(root, 'cards', 'tasks', 'card-a.md');
+  mkdirSync(dirname(contentFile), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify({ cards: [{ id: 'card-a', title: 'Task', status: 'todo' }], annotations: [], relationships: [] }));
+  writeFileSync(contentFile, 'Retained body.');
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  await state.recordContentContribution('card-a', key);
+  const priorHead = state.store.contentHeads(key);
+  rmSync(contentFile);
+
+  await assert.rejects(state.recordContentContribution('', key), /task_content_capture_failed/);
+  assert.deepEqual(state.store.contentHeads(key), priorHead);
 });
 
 test('reasserting preserved local bytes causally resolves concurrent content heads', async (context) => {

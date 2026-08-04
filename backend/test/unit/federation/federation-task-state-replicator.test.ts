@@ -145,6 +145,50 @@ test('offline replica repairs current mismatched buckets without an outbox or sn
   assert.equal((b.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].status, 'done');
 });
 
+test('two-node task-content head converges after its live notification is dropped and the replica reconnects', async (context) => {
+  const local = fixture('decision-os-content-reconnect-local-');
+  const remote = fixture('decision-os-content-reconnect-remote-');
+  const relay = fixture('decision-os-content-reconnect-relay-');
+  const harness = relayHarness(relay.store);
+  context.after(async () => {
+    await harness.settle();
+    await Promise.all([local.store.flush(), remote.store.flush(), relay.store.flush()]);
+    [local, remote, relay].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  const create = (nodeId: string, store: TaskCurrentStateStore) => createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', store]]),
+    storeFor: () => store,
+    publish: (target, frame) => { void harness.publish(nodeId, target, frame); return true; },
+  });
+  const localReplicator = create('desktop', local.store);
+  const remoteReplicator = create('mobile', remote.store);
+  harness.register('desktop', localReplicator);
+  harness.register('mobile', remoteReplicator);
+  harness.online('mobile', false);
+  const key = '.decision-os/threads/tasks/thread-card-a.md';
+  const head = { type: 'thread-markdown', key, hash: 'a'.repeat(64), bytes: 91, changedAt: '2026-08-04T00:00:00.000Z' };
+  const mutation = await local.store.mutate({
+    replicaId: 'desktop',
+    changes: [{ entityType: 'resource', entityId: key, changes: [{ path: 'head', operation: 'set', value: head }] }],
+  });
+  localReplicator.publishDelta(mutation.delta);
+  await waitFor(() => relay.store.contentHeads(key)[0]?.hash === head.hash);
+  assert.deepEqual(remote.store.contentHeads(key), []);
+
+  harness.online('mobile', true);
+  remoteReplicator.reconcileRelay();
+  await waitFor(() => remote.store.contentHeads(key)[0]?.hash === head.hash);
+  assert.deepEqual(remote.store.contentHeads(key).map((candidate) => ({
+    type: candidate.type,
+    key: candidate.key,
+    hash: candidate.hash,
+    bytes: candidate.bytes,
+    changedAt: candidate.changedAt,
+  })), [head]);
+  assert.equal(remote.store.contentHeads(key)[0].sourceReplicaId, 'desktop');
+  assert.equal(remote.store.rootHash(), relay.store.rootHash());
+});
+
 test('relay publication failure retains a completed execution as dirty state and converges after reconnect', async (context) => {
   const local = fixture('decision-os-execution-outage-local-');
   const remote = fixture('decision-os-execution-outage-remote-');

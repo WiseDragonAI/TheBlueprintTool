@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { basename, dirname } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import type { createTaskExecutionPresentationRegistry } from '../../codex/runtime/task-execution-presentation-registry.js';
 import { taskExecutionState } from '../../codex/helper/task-execution-runtime.js';
 import { readReplicatedCardSkillRun } from '../../codex/runtime/read-replicated-card-skill-run.js';
@@ -156,6 +156,7 @@ export function createProjectRequestHandler(input: {
         ),
         localProject,
         projectId: activeProject?.id ?? '',
+        publishCardContentChange: context.publishCard,
         publishContentChange: () => input.federation.publishContentChange(),
         revisions: context.revisions,
         stateForProject: localTaskRuntime.stateForProject,
@@ -237,19 +238,48 @@ export function createProjectRequestHandler(input: {
       localProject,
       masterDecisionOsRoot: input.masterDecisionOsRoot,
       materializeTaskMutation: async (before, mutation) => {
+        // WHAT: Skip local task materialization for a request without local project authority.
+        // WHY: Remote and unavailable projects use their owning transport boundary.
         if (!localProject) return null;
+        const materialize = () => materializeTaskMutationInputs({
+          projectId: localProject.id,
+          decisionOsRoot,
+          ledger: before,
+          mutation,
+          store: localTaskRuntime.stateForProject(localProject).store,
+          contentStore: input.contentStore,
+          drain: input.federationState.contentScheduler.drain,
+        });
         try {
-          await materializeTaskMutationInputs({
-            projectId: localProject.id,
-            decisionOsRoot,
-            ledger: before,
-            mutation,
-            store: localTaskRuntime.stateForProject(localProject).store,
-            contentStore: input.contentStore,
-            drain: input.federationState.contentScheduler.drain,
-          });
+          const ready = await Promise.resolve(requestRuntime.taskContentReady ?? true);
+          // WHAT: Reject a task mutation until startup content reconciliation succeeds.
+          // WHY: The legacy PATCH path must not materialize a retained stale head over a pre-start edit.
+          if (ready !== true) throw new Error('task_content_reconciliation_failed');
+          await materialize();
           return null;
         } catch (error) {
+          // WHAT: Flush the exact debounced file and retry read-only materialization once after a local mismatch.
+          // WHY: Direct Markdown edit and immediate append can reach this boundary before watcher head publication settles.
+          if (error instanceof TaskContentMaterializationError && error.code === 'task_content_local_mismatch') {
+            const flushTaskContentFile = requestRuntime.flushTaskContentFile;
+            const file = resolve(decisionOsRoot, error.key.replace(/^\/?\.decision-os\//, ''));
+            // WHAT: Await a tracked publication when this runtime observed the mismatched file.
+            // WHY: The retry must see the watcher commit rather than race its causal head write.
+            if (typeof flushTaskContentFile === 'function') await flushTaskContentFile(file);
+            try {
+              await materialize();
+              return null;
+            } catch (retryError) {
+              // WHAT: Preserve the retry's task-content conflict response without hiding unrelated failures.
+              // WHY: A mismatch with no settling head must remain a 409 and retain the mutable bytes.
+              if (retryError instanceof TaskContentMaterializationError) {
+                return { error: retryError.code, key: retryError.key, statusCode: retryError.statusCode };
+              }
+              throw retryError;
+            }
+          }
+          // WHAT: Translate only task-content materialization failures into the legacy HTTP conflict contract.
+          // WHY: Other failures remain server containment incidents rather than fabricated content conflicts.
           if (!(error instanceof TaskContentMaterializationError)) throw error;
           return { error: error.code, key: error.key, statusCode: error.statusCode };
         }

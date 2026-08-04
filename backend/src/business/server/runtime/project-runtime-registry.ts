@@ -130,7 +130,6 @@ export function createProjectRuntimeRegistry(input: {
     });
     const content = createProjectContentRuntime({
       activeDecisionOsRoot,
-      activeTaskState: configured.activeTaskState,
       globalClients: input.globalClients,
       invalidateProject: input.invalidateProject,
       pauseWatcher: (activeProjectId) => input.pausedProjectWatchers.add(activeProjectId),
@@ -139,15 +138,26 @@ export function createProjectRuntimeRegistry(input: {
       projectId,
       publishFederationChange: () => input.federation()?.publishContentChange(),
       publishPipelineSnapshot: input.publishPipelineSnapshot,
-      recordContentFailure: (project, error) => input.recordContentFailure(
-        project,
-        error,
-        'capture-watched-task-content',
-      ),
       recordWatcherIncident: input.recordIncident,
       refreshProject: (activeProjectId) => input.projectCatalogStore.refresh(activeProjectId),
       serverClosing: input.serverClosing,
       stateForProject: input.stateForProject,
+      taskState: () => {
+        const project = input.projectCatalogStore.projects().find((entry) => entry.id === projectId) ?? null;
+        // WHAT: Resolve available task authority dynamically without throwing into watcher construction.
+        // WHY: A corrupt project is paused by its task-state runtime while catalog and diagnostics must remain online.
+        return configured.activeTaskState ?? (project ? input.tryStateForProject(project) : null);
+      },
+    });
+    Object.defineProperty(configured.runtime, 'flushTaskContentFile', {
+      value: content.watcher.flushContentFile,
+      configurable: true,
+      enumerable: false,
+    });
+    Object.defineProperty(configured.runtime, 'taskContentReady', {
+      value: content.ready,
+      configurable: true,
+      enumerable: false,
     });
     configureProjectCodexEvents({
       activeTaskState: configured.activeTaskState,
