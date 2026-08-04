@@ -3,6 +3,7 @@
  * WHY: Dirty state clears only after exact relay acknowledgement and synchronization requires equal roots.
  */
 import { randomUUID } from 'node:crypto';
+import { assertFederationRepairManifest, canonicalFederationRepairBuckets } from '../../../../../shared/federation-repair-guard.js';
 import { taskCurrentEntityKey } from '../../../../../shared/task-current-state-core.js';
 import type { TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskCurrentBucket, type TaskCurrentEntity, type TaskStateDelta } from '../../task-state/helper/task-current-state-types.js';
@@ -66,7 +67,8 @@ export function createFederationTaskStateReplicator(input: {
   const runtimeDirty = new Map<string, Map<string, TaskCurrentEntity>>();
   const pendingDeliveries = new Map<string, PendingDelivery>();
   const queuedRelayEntities = new Map<string, Map<string, TaskCurrentEntity>>();
-  const activeRepairRequests = new Set<string>();
+  const activeRepairRequests = new Map<string, string>();
+  const servedRepairRequests = new Map<string, { root: string; buckets: Set<string> }>();
 
   const dirtyFor = (projectId: string): Map<string, TaskCurrentEntity> => {
     const dirty = runtimeDirty.get(projectId) ?? new Map<string, TaskCurrentEntity>();
@@ -191,28 +193,48 @@ export function createFederationTaskStateReplicator(input: {
 
     if (frame.type === 'state-bucket-summary') {
       const remote = Array.isArray(payload.buckets) ? payload.buckets as TaskCurrentBucket[] : [];
+      const remoteRoot = String(payload.root ?? '');
+      const manifestDigest = assertFederationRepairManifest(remoteRoot, remote);
       const missing = mismatchedBuckets(store.bucketManifest(), remote);
       const root = store.rootHash();
-      const converged = missing.length === 0 && payload.root === root;
+      const converged = missing.length === 0 && remoteRoot === root;
       const repairKey = `${frame.from}\u0000${frame.projectId}`;
       convergence.set(repairKey, { projectId: frame.projectId, converged, lastRepairAt: new Date().toISOString(), missingBuckets: missing, root });
-      activeRepairRequests.delete(repairKey);
-      // WHAT: Start one next repair round only after the peer's terminal summary settles the prior round.
-      // WHY: Re-requesting mismatched buckets while their batches are still arriving caused the Cloudflare feedback loop.
+      // WHAT: Settle the active repair when this summary proves exact local and peer root equality.
+      // WHY: In node-behind-relay repair the node emits convergence; it does not wait to receive it.
+      if (converged) {
+        activeRepairRequests.delete(repairKey);
+        input.publish(frame.from, { type: 'state-converged', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root } });
+        return;
+      }
+      const repairIdentity = `${remoteRoot}\u0000${manifestDigest}`;
+      // WHAT: Suppress an identical summary while its root generation remains unresolved.
+      // WHY: Repeating the same missing request cannot make a permanently divergent peer progress.
+      if (activeRepairRequests.get(repairKey) === repairIdentity) return;
+      // WHAT: Admit one missing request for a newly observed peer root and manifest.
+      // WHY: A changed peer state must remain eligible for normal epoch-4 convergence.
       if (missing.length > 0) {
         const published = input.publish(frame.from, { type: 'state-missing-request', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, buckets: missing } });
-        // WHAT: Mark only a successfully published missing-bucket request as active.
-        // WHY: Failed transport publication must remain eligible for explicit reconnect reconciliation.
-        if (published) activeRepairRequests.add(repairKey);
+        // WHAT: Remember only a successfully published repair request.
+        // WHY: Failed transport publication must remain eligible for reconnect reconciliation.
+        if (published) activeRepairRequests.set(repairKey, repairIdentity);
       }
-      else if (converged) input.publish(frame.from, { type: 'state-converged', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root } });
-      else advertise(frame.from, frame.projectId, store);
       return;
     }
 
     if (frame.type === 'state-missing-request') {
-      const buckets = Array.isArray(payload.buckets) ? payload.buckets.map(String) : [];
-      const entities = store.entitiesForBuckets(buckets);
+      const buckets = canonicalFederationRepairBuckets(Array.isArray(payload.buckets) ? payload.buckets : []);
+      const requestKey = `${frame.from}\u0000${frame.projectId}`;
+      const localRoot = store.rootHash();
+      const retained = servedRepairRequests.get(requestKey);
+      const served = retained?.root === localRoot ? retained.buckets : new Set<string>();
+      const admitted = buckets.filter((bucket) => !served.has(bucket));
+      // WHAT: Suppress selections whose buckets were all served for this local root.
+      // WHY: Varying overlapping selections must not replay one bucket indefinitely.
+      if (admitted.length === 0) return;
+      for (const bucket of admitted) served.add(bucket);
+      servedRepairRequests.set(requestKey, { root: localRoot, buckets: served });
+      const entities = store.entitiesForBuckets(admitted);
       // WHAT: Serialize relay repair responses through the same per-project publication lane as live changes.
       // WHY: A repair response must not overlap a live batch group and expose another intermediate relay root.
       if (frame.from === 'relay') {
@@ -245,11 +267,6 @@ export function createFederationTaskStateReplicator(input: {
   };
 
   const disconnectPeer = (peerId: string): void => {
-    for (const key of [...activeRepairRequests]) {
-      // WHAT: Remove repair ownership for the disconnected peer only.
-      // WHY: A replacement socket must be able to start a fresh bounded repair round.
-      if (key.startsWith(`${peerId}\u0000`)) activeRepairRequests.delete(key);
-    }
     for (const key of [...convergence.keys()]) {
       // WHAT: Remove convergence observations owned by the disconnected peer only.
       // WHY: A prior socket's terminal root cannot prove the replacement socket has synchronized.

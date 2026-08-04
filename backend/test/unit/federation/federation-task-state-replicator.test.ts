@@ -38,15 +38,16 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<voi
 }
 
 function relayHarness(relayStore: TaskCurrentStateStore) {
-  const nodes = new Map<string, { online: boolean; replicator: Replicator }>();
+  const nodes = new Map<string, { online: boolean; replicator: Replicator; queue: Promise<void> }>();
   const pending = new Set<Promise<void>>();
   let relaySequence = Promise.resolve();
   const deliver = (nodeId: string, frame: Omit<FederationStateFrame, 'from'>, source = 'relay'): void => {
     const node = nodes.get(nodeId);
     // WHAT: Deliver relay frames on a fresh event-loop turn, as a socket would.
-    // WHY: Recursive summary repair must not starve timers or accumulate an unbounded microtask chain.
+    // WHY: Recursive summary repair must not starve timers, while each socket still preserves frame order.
     if (node?.online) setImmediate(() => {
-      const operation = node.replicator.handleFrame({ ...frame, from: source });
+      const operation = node.queue.then(() => node.replicator.handleFrame({ ...frame, from: source }));
+      node.queue = operation.catch(() => undefined);
       pending.add(operation);
       void operation.finally(() => pending.delete(operation));
     });
@@ -79,7 +80,7 @@ function relayHarness(relayStore: TaskCurrentStateStore) {
     }
   };
   return {
-    register(nodeId: string, replicator: Replicator): void { nodes.set(nodeId, { online: true, replicator }); },
+    register(nodeId: string, replicator: Replicator): void { nodes.set(nodeId, { online: true, replicator, queue: Promise.resolve() }); },
     online(nodeId: string, value: boolean): void { nodes.get(nodeId)!.online = value; },
     async settle(): Promise<void> {
       await relaySequence;
@@ -700,4 +701,63 @@ test('large current-state publication is split by encoded bytes as well as entit
     assert.ok(Buffer.byteLength(encoded) <= 512 * 1024);
     assert.ok(((frame.payload as { entries: unknown[] }).entries).length <= 128);
   }
+});
+
+test('one peer root generation emits one missing request until the remote manifest changes', async (context) => {
+  const source = fixture('decision-os-repair-source-');
+  const target = fixture('decision-os-repair-target-');
+  context.after(async () => {
+    await Promise.all([source.store.flush(), target.store.flush()]);
+    [source, target].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  await source.store.mutate({ replicaId: 'source', changes: [{ entityType: 'card', entityId: 'first', changes: [{ path: 'title', operation: 'set', value: 'First' }] }] });
+  const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', target.store]]),
+    publish: (_peer, frame) => { sent.push(frame); return true; },
+  });
+  const summary = (): FederationStateFrame => ({
+    type: 'state-bucket-summary',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, root: source.store.rootHash(), buckets: source.store.bucketManifest() },
+  });
+
+  await replicator.handleFrame(summary());
+  await replicator.handleFrame(summary());
+  assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, 1);
+
+  await source.store.mutate({ replicaId: 'source', changes: [{ entityType: 'card', entityId: 'second', changes: [{ path: 'title', operation: 'set', value: 'Second' }] }] });
+  await replicator.handleFrame(summary());
+  assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, 2);
+});
+
+test('one peer missing request replays a local root only once', async (context) => {
+  const node = fixture('decision-os-served-repair-');
+  context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
+  await node.store.mutate({ replicaId: 'node', changes: [{ entityType: 'card', entityId: 'first', changes: [{ path: 'title', operation: 'set', value: 'First' }] }] });
+  const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', node.store]]),
+    publish: (_peer, frame) => { sent.push(frame); return true; },
+  });
+  const request: FederationStateFrame = {
+    type: 'state-missing-request',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, buckets: node.store.bucketManifest().map((entry) => entry.bucket) },
+  };
+
+  await replicator.handleFrame(request);
+  await replicator.handleFrame({ ...request, payload: { stateVersion: taskCurrentStateVersion, buckets: [...(request.payload as { buckets: string[] }).buckets, ...(request.payload as { buckets: string[] }).buckets] } });
+  assert.equal(sent.filter((frame) => frame.type === 'state-entity-batch').length, 1);
+  const delivery = sent.find((frame) => frame.type === 'state-entity-batch')!;
+  const entries = (delivery.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> });
+  await replicator.handleFrame({
+    type: 'state-relay-ack',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId: entries.deliveryId, accepted: entries.entries.map(({ key, stateHash }) => ({ key, stateHash })) },
+  });
+  assert.equal(sent.filter((frame) => frame.type === 'state-bucket-summary').length, 1);
 });
