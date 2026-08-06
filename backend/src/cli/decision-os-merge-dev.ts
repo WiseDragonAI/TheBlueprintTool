@@ -17,7 +17,7 @@ import {
   protectedMergeConflicts,
   type ProtectedMergeReceipt,
   unownedProtectedMergeConflicts,
-} from '../business/delivery/helper/protected-dev-main-merge.js';
+} from './protected-dev-main-merge.js';
 
 type GitResult = { status: number; stdout: string; stderr: string };
 type ReleaseBump = 'maj' | 'min' | 'fix';

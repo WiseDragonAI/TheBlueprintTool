@@ -1,5 +1,5 @@
 /**
- * WHAT: Performs one no-fast-forward dev-to-main merge while preserving the admitted main gitlink.
+ * WHAT: Performs the standalone no-fast-forward dev-to-main merge while preserving the admitted main gitlink.
  * WHY: Standalone promotion and production delivery must resolve the protected Decision OS boundary identically.
  */
 export type ProtectedMergeCommandResult = {
