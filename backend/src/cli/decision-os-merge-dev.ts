@@ -10,6 +10,14 @@ import {
   acquireRepositoryMutationLock,
   type RepositoryMutationLock,
 } from '../business/content-authoring/helper/repository-mutation-lock.js';
+import {
+  assertProtectedMergeSimulation,
+  mergeDevPreservingMainGitlink,
+  ProtectedMergeError,
+  protectedMergeConflicts,
+  type ProtectedMergeReceipt,
+  unownedProtectedMergeConflicts,
+} from './protected-dev-main-merge.js';
 
 type GitResult = { status: number; stdout: string; stderr: string };
 type ReleaseBump = 'maj' | 'min' | 'fix';
@@ -250,26 +258,23 @@ function assertNoUnmergedPaths(root: string, scope: string): void {
 }
 
 function assertMergeSimulation(root: string, devSha: string): void {
-  const { conflicts, result } = inspectMergeSimulation(root, devSha);
-  const unexpected = conflicts.filter((line) => line !== 'CONFLICT (submodule): Merge conflict in .decision-os');
-  // WHAT: Reject every simulated conflict outside the exact gitlink.
-  // WHY: An infrastructure command must not select source-code conflict outcomes.
-  if (unexpected.length > 0) {
-    throw new MergeDevError('merge_dev_source_conflict', `Dev cannot be promoted automatically: ${unexpected.join(' | ')}.`);
-  }
-  // WHAT: Reject unexplained merge-tree failure when no recognized gitlink conflict accounts for it.
-  // WHY: A failed simulation without a classified conflict is not safe promotion evidence.
-  if (result.status !== 0 && conflicts.length === 0) {
-    throw new MergeDevError('merge_dev_simulation_failed', (result.stderr || result.stdout).trim(), 3);
+  try {
+    assertProtectedMergeSimulation(inspectMergeSimulation(root, devSha).result);
+  } catch (error) {
+    // WHAT: Preserve the standalone CLI's stable admission error namespace.
+    // WHY: Doctor and mutation must classify the shared simulation decision identically.
+    if (error instanceof ProtectedMergeError) {
+      const exitCode = error.code === 'protected_merge_simulation_failed' ? 3 : 2;
+      throw new MergeDevError(error.code.replace('protected_merge_', 'merge_dev_'), error.message, exitCode);
+    }
+    throw error;
   }
 }
 
 function inspectMergeSimulation(root: string, devSha: string): { conflicts: string[]; result: GitResult } {
   const result = git(root, ['merge-tree', '--write-tree', 'HEAD', devSha], [0, 1]);
   return {
-    conflicts: `${result.stdout}\n${result.stderr}`
-      .split('\n')
-      .filter((line) => line.startsWith('CONFLICT')),
+    conflicts: protectedMergeConflicts(result),
     result,
   };
 }
@@ -303,9 +308,7 @@ export function inspectMergeDev(repositoryRoot: string, bump: ReleaseBump = 'fix
     [0, 1],
   ).status === 0;
   const simulation = inspectMergeSimulation(root, devSha);
-  const unexpectedConflicts = simulation.conflicts.filter(
-    (line) => line !== 'CONFLICT (submodule): Merge conflict in .decision-os',
-  );
+  const unexpectedConflicts = unownedProtectedMergeConflicts(simulation.result);
   const blockers: MergeDevDoctorReport['blockers'] = [];
 
   // WHAT: Report an invalid parent branch without changing checkout state.
@@ -443,35 +446,19 @@ function commitGitlink(root: string): boolean {
   return changed;
 }
 
-function mergeDev(root: string, devSha: string, protectedGitlink: string): string {
-  let mergeStarted = false;
+async function mergeDev(root: string, devSha: string, protectedGitlink: string): Promise<ProtectedMergeReceipt> {
   try {
-    mergeStarted = true;
-    const result = git(root, ['merge', '--no-commit', '--no-ff', devSha], [0, 1]);
-    git(root, ['restore', '--source=HEAD', '--staged', '--worktree', '--', '.decision-os']);
-    const conflicts = gitText(root, ['diff', '--name-only', '--diff-filter=U']);
-    // WHAT: Abort when the real merge exposes any non-gitlink conflict missed by simulation.
-    // WHY: Ref movement and Git behavior must fail closed rather than produce an inferred source resolution.
-    if (result.status !== 0 && conflicts) {
-      throw new MergeDevError('merge_dev_runtime_conflict', `Merge contains unresolved paths: ${conflicts.split('\n').join(', ')}.`);
-    }
-    const stagedGitlink = gitText(root, ['rev-parse', ':.decision-os']);
-    // WHAT: Compare the staged merge gitlink to the post-snapshot main pointer.
-    // WHY: Dev worktree visibility settings do not alter the committed gitlink merge input.
-    if (stagedGitlink !== protectedGitlink) {
-      throw new MergeDevError('merge_dev_gitlink_changed', 'The staged merge did not preserve the main Decision OS gitlink.', 3);
-    }
-    git(root, [
-      'commit',
-      '-m', 'Merge dev into main',
-      '-m', 'WHAT: Merge the admitted dev parent-repository revision into main.\nWHY: Promote dev source while preserving main-owned Decision OS state.',
-    ]);
-    mergeStarted = false;
-    return gitText(root, ['rev-parse', 'HEAD']);
+    return await mergeDevPreservingMainGitlink({
+      devSha,
+      protectedGitlink,
+      execute: async (args, acceptedStatuses = [0]) => git(root, args, acceptedStatuses),
+    });
   } catch (error) {
-    // WHAT: Abort only a merge that this invocation started and did not commit.
-    // WHY: A rejected promotion must not leave the parent index in a conflicted merge state.
-    if (mergeStarted) git(root, ['merge', '--abort'], [0, 1, 128]);
+    // WHAT: Preserve the standalone CLI's stable error namespace for shared merge failures.
+    // WHY: Existing automation classifies merge-dev recovery from these durable codes.
+    if (error instanceof ProtectedMergeError) {
+      throw new MergeDevError(error.code.replace('protected_merge_', 'merge_dev_'), error.message, 3);
+    }
     throw error;
   }
 }
@@ -515,20 +502,10 @@ export async function mergeDevIntoMain(repositoryRoot: string, bump: ReleaseBump
     if (currentDevSha !== devSha) {
       throw new MergeDevError('merge_dev_ref_changed', `dev changed from ${devSha} to ${currentDevSha}.`, 3);
     }
-    const priorMainSha = gitText(root, ['rev-parse', 'HEAD']);
-    const mainSha = mergeDev(root, devSha, protectedGitlink);
-    const parents = gitText(root, ['show', '-s', '--format=%P', mainSha]).split(' ');
-    // WHAT: Require the fixed no-fast-forward merge parent order.
-    // WHY: Completion must prove ancestry rather than trust the commit subject.
-    if (parents.length !== 2 || parents[0] !== priorMainSha || parents[1] !== devSha) {
-      throw new MergeDevError('merge_dev_parent_proof_failed', `Unexpected merge parents: ${parents.join(' ')}.`, 3);
-    }
-    const decisionOsGitlink = gitText(root, ['rev-parse', 'HEAD:.decision-os']);
-    // WHAT: Reject a final merge tree that does not retain the protected main gitlink.
-    // WHY: The success receipt must prove the committed tree, not only the pre-commit index.
-    if (decisionOsGitlink !== protectedGitlink) {
-      throw new MergeDevError('merge_dev_final_gitlink_changed', `Final Decision OS gitlink changed from ${protectedGitlink} to ${decisionOsGitlink}.`, 3);
-    }
+    const merged = await mergeDev(root, devSha, protectedGitlink);
+    const mainSha = merged.mainSha;
+    const parents = merged.mergeParents;
+    const decisionOsGitlink = merged.protectedGitlink;
     const parentStatus = statusRecords(root, 'none');
     const childStatus = statusRecords(childRoot, 'all');
     // WHAT: Reject a completed promotion that leaves parent or child repository changes behind.

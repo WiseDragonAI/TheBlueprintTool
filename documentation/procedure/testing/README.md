@@ -10,6 +10,8 @@
 3. Do not wrap the admitted command in a shell command.
 4. Use `node bin/decision-os-workload-status.mjs` only as a read-only workload diagnostic.
 5. When the lease is occupied, the wrapper reports the active holder's PID, working directory, and admitted command once before waiting.
+6. In an isolated worktree, the wrapper provisions missing `frontend/node_modules` and `backend/node_modules` links from `.worktrees/dev` before admission.
+7. Keep `.worktrees/dev` dependencies installed. The wrapper rejects a changed package lock, a missing shared `tsx` loader, and an existing dependency link that targets another checkout.
 
 ---
 

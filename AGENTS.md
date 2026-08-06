@@ -353,8 +353,14 @@ Ctrl+D  Resize selected cards to their content and selected zones to contained c
   3. Every changed path and hunk belongs to the current iteration.
   4. The resulting behavior matches the operator's stated intent and the operator-validated specifications.
   5. Unrelated changes and protected staged hunks are excluded.
-- **Failed gate:** If any integration gate fails, keep the feature branch and worktree intact, report the exact blocker, and do not merge.
-- **Mandatory successful-merge cleanup:** Immediately after a successful feature merge, remove the iteration worktree, delete the merged feature branch, and delete all iteration-temporary documentation and artifacts. Commit intended permanent documentation before the merge. Verify that no completed iteration worktree or feature branch remains before reporting completion.
+  6. After the local merge, the fixed dev integration check accepts the exact reviewed feature SHA and proves that the new `.decision-os` gitlink descends from the first-parent gitlink, is fetchable from the configured child source, and is installed exactly in the persistent `dev` child checkout:
+
+     ```bash
+     cd /home/jbb/dev/EditorBP/decision-os/.worktrees/dev
+     node bin/decision-os-dev-integration-check.mjs --feature <reviewed-feature-sha> --json
+     ```
+- **Failed gate:** If a pre-merge gate fails, keep the feature branch and worktree intact, report the exact blocker, and do not merge. If the post-merge dev integration check fails, keep the local merge plus feature branch and worktree intact, report and repair the exact child publication, ancestry, or checkout blocker, rerun the check, and do not push or clean up.
+- **Mandatory successful-merge cleanup:** Push the exact checked merge SHA to `dev` only after the dev integration check succeeds. Then immediately remove the iteration worktree, delete the merged feature branch, and delete all iteration-temporary documentation and artifacts. Commit intended permanent documentation before the merge. Verify that no completed iteration worktree or feature branch remains before reporting completion.
 - **Dev Decision OS visibility:** In the `dev` linked worktree, set `submodule.".decision-os".ignore = all` through worktree-local Git configuration. Do not commit this setting to `.gitmodules`; it suppresses mutable child-state noise only in `dev` and preserves submodule-drift visibility in `main`.
 - **Explicit operator exceptions:** The operator may explicitly direct the current iteration to run directly on `dev`, directly on `main`, or in a dedicated worktree based on `main`. The exception applies only to that stated iteration and must never be inferred from the current checkout, a clean primary checkout, urgency, or a prior exception.
 - **Main protection:** Without an explicit operator exception, an agent must not implement on `main`, create an iteration worktree from `main`, merge an iteration into `main`, or use the primary checkout as an uncommitted handoff location.
@@ -430,7 +436,7 @@ node bin/decision-os-verify.mjs -- <command> [args...]
 - Failure: rerun smallest failing scope.
 - Full-suite test-only repair: when a completed full suite reports failures and making those failures pass requires changes only to test files, rerun every previously failing test in the smallest relevant scope. After all previously failing tests pass and no source file changed, do not rerun the full suite.
 - Passing check: do not repeat after docs-only edits.
-- Worktree dependency lifetime: keep an iteration worktree's installed dependencies or temporary `node_modules` link available until every planned test and typecheck has finished. Before removing that dependency access, verify that no later command still requires package-local binaries such as `tsc`; a `command not found` result is an environment failure and requires rerunning only the affected check after dependency access is restored.
+- Worktree dependency admission: `bin/decision-os-verify.mjs` automatically links missing frontend and backend dependencies from `.worktrees/dev` before every admitted check. Keep the `dev` dependency installation available through verification. When an iteration changes a package lock, install that package inside the iteration worktree; the wrapper preserves real worktree-owned dependency directories and rejects stale shared dependency access.
 - On mobile, test and typecheck commands must use no more than `3`-way parallelism.
 
 ## Patch Context Hygiene
@@ -449,7 +455,6 @@ node bin/decision-os-verify.mjs -- <command> [args...]
 Run these commands from the iteration worktree root, where `bin/decision-os-verify.mjs` and `backend/package.json` are both present:
 
 ```bash
-npm --prefix backend ci --ignore-scripts
 node bin/decision-os-verify.mjs -- env --chdir=backend TSX_TSCONFIG_PATH="$PWD/backend/tsconfig.json" node --test --test-concurrency=1 --import tsx "test/**/*.test.ts"
 node bin/decision-os-verify.mjs -- npm --prefix backend run typecheck
 node bin/decision-os-verify.mjs -- env --chdir=backend TSX_TSCONFIG_PATH="$PWD/backend/tsconfig.json" node --test --test-concurrency=1 --import tsx test/<focused-test-file>.test.ts
@@ -460,19 +465,19 @@ node bin/decision-os-verify.mjs -- env --chdir=backend TSX_TSCONFIG_PATH="$PWD/b
 - Run the admitted Node process with `env --chdir=backend`. Backend tests resolve repository CLI tools through `../bin` from the package cwd.
 - Expand `TSX_TSCONFIG_PATH` from the worktree-root `$PWD` before `env` changes cwd. Server fixtures launch child processes from temporary workspaces, and an inherited relative tsconfig path then resolves outside the repository.
 - Keep `--test-concurrency=1` before the test path so the admitted command makes its resource boundary explicit and auditable.
+- Run `npm --prefix backend ci --ignore-scripts` only when the iteration changes `backend/package-lock.json`; the verifier otherwise provisions the canonical `dev` dependencies.
 
 ### Frontend Commands From An Iteration Worktree
 
 Run these commands from the iteration worktree root, where `bin/decision-os-verify.mjs` and `frontend/package.json` are both present:
 
 ```bash
-npm --prefix frontend ci --ignore-scripts
 node bin/decision-os-verify.mjs -- npm --prefix frontend test -- --test-concurrency=1
 node bin/decision-os-verify.mjs -- npm --prefix frontend run typecheck
 node bin/decision-os-verify.mjs -- env --chdir=frontend TSX_TSCONFIG_PATH=tsconfig.json node --test --test-concurrency=1 --import tsx test/<focused-test-file>.test.ts
 ```
 
-- Run the package install once in each fresh isolated worktree before verification; dependencies installed in another worktree are not visible to Node module resolution.
+- Run `npm --prefix frontend ci --ignore-scripts` only when the iteration changes `frontend/package-lock.json`; the verifier otherwise provisions the canonical `dev` dependencies.
 - Use the package-owned test command so `TSX_TSCONFIG_PATH=tsconfig.json` resolves relative to `frontend/` and frontend path aliases remain valid.
 - Keep the complete frontend suite at `--test-concurrency=1`; its integration files mutate shared browser globals and higher concurrency creates cross-file interference while increasing workstation load.
 - Do not invoke the complete frontend suite as direct `node --test` from the worktree root. That changes the expected package cwd and can leave failed test children holding the verification lease.

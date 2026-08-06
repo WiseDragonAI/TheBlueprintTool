@@ -3,6 +3,7 @@
  * WHY: Capacity exhaustion is transient and must not turn a durable headless session into a failed run.
  */
 import { existsSync, readFileSync } from 'node:fs';
+import { codexSessionIdFromEvent } from './codex-session-id.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -35,10 +36,7 @@ export function readCodexSessionId(stdoutFile: string): string {
     if (!line.trim()) continue;
     try {
       const event = JSON.parse(line) as AnyRecord;
-      const payload = event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
-        ? event.payload as AnyRecord
-        : {};
-      const captured = String(event.thread_id ?? event.session_id ?? payload.session_id ?? '').trim();
+      const captured = codexSessionIdFromEvent(event);
       if (captured) sessionId = captured;
     } catch {
       // Later valid JSONL events can still identify the durable session.

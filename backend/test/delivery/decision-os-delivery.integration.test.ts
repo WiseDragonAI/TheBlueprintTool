@@ -143,7 +143,6 @@ const admissionEvidence = () => ({
 
 type FaultMode = 'fail-before' | 'crash-after' | 'timeout-before' | 'timeout-after' | 'lost-after';
 type MutationOperation =
-  | 'promote-main'
   | 'prepare-node:phone'
   | 'prepare-node:workstation'
   | 'upload-relay'
@@ -173,7 +172,7 @@ function admittedRun(deliveryId: string): DeliveryRun {
     deliveryId,
     admittedSha,
     priorMainSha: priorSha,
-    mainSha: null,
+    mainSha,
     phase: 'admission',
     status: 'running',
     createdAt: observedAt,
@@ -249,7 +248,6 @@ function fakeDeliveryEffects(fault: {
   const receipts = new Map<string, DeliveryNodeReceipt>();
   const active = new Map([['phone', priorSha], ['workstation', priorSha]]);
   const processes = new Map([['phone', 'phone-process-prior'], ['workstation', 'workstation-process-prior']]);
-  let promoted = false;
   let uploaded = false;
   let relayActive = false;
   let relayRollbackReceipt: DeliveryMutationReceipt | null = null;
@@ -280,14 +278,9 @@ function fakeDeliveryEffects(fault: {
   const authority = (run: DeliveryRun): DeliveryAuthoritySnapshot => ({
     observedAt: '2026-07-28T00:00:02.000Z',
     originDevSha: admittedSha,
-    originMainSha: promoted ? mainSha : priorSha,
+    originMainSha: mainSha,
+    mainReleaseExact: true,
     topology,
-    gitPromotion: promoted ? mutation({
-      mutation: 'promote-main',
-      targetSha: admittedSha,
-      predecessor: priorSha,
-      resultIdentity: mainSha,
-    }) : null,
     relay: {
       activeVersionId: relayActive ? uploadedRelayVersion : priorRelayVersion,
       releaseSha: relayActive ? mainSha : priorSha,
@@ -321,20 +314,6 @@ function fakeDeliveryEffects(fault: {
     coordinatorNodeId: 'workstation',
     async preflightGit() { throw new Error('preflight must not repeat after admission'); },
     async collectAdmission() { throw new Error('admission must not repeat'); },
-    async promoteMain({ signal }) {
-      return await mutate('promote-main', signal, () => {
-        promoted = true;
-        return {
-          mainSha,
-          receipt: mutation({
-            mutation: 'promote-main',
-            targetSha: admittedSha,
-            predecessor: priorSha,
-            resultIdentity: mainSha,
-          }),
-        };
-      });
-    },
     async dispatchNode({ nodeId, command, signal }) {
       const operation = `${command.action}-node:${nodeId}` as MutationOperation;
       return await mutate(operation, signal, () => {
@@ -417,7 +396,6 @@ function fakeDeliveryEffects(fault: {
       return authority(run);
     },
     async verifyFinal({ run }) {
-      assert.equal(promoted, true);
       assert.equal(relayActive, true);
       assert.equal([...active.values()].every((sha) => sha === run.mainSha), true);
     },
@@ -449,7 +427,6 @@ function fakeRepositoryLock(): RepositoryMutationLock {
 }
 
 const mutationOperations: MutationOperation[] = [
-  'promote-main',
   'prepare-node:phone',
   'prepare-node:workstation',
   'upload-relay',
@@ -500,7 +477,7 @@ test('resumes every fail, crash, timeout, and lost-response boundary without dup
   }
 });
 
-test('reads Cloudflare credentials and current deployment before the first main mutation', async () => {
+test('reads the current relay deployment before the first runtime mutation', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-delivery-preflight-order-'));
   try {
     const runStore = createDeliveryRunStore({ catalogRoot: root });
@@ -513,7 +490,7 @@ test('reads Cloudflare credentials and current deployment before the first main 
       now: () => new Date(observedAt),
       deadlineMs: 500,
     });
-    assert.equal(fake.calls.indexOf('read-relay-predecessor') < fake.calls.indexOf('promote-main'), true);
+    assert.equal(fake.calls.indexOf('read-relay-predecessor') < fake.calls.indexOf('prepare-node:phone'), true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -592,11 +569,12 @@ test('controller compensates a pointer-mutated node whose restart verification f
         return {
           priorMainSha: priorSha,
           originDevSha: admittedSha,
+          mainSha,
           receipt: mutation({
-            mutation: 'preflight-git',
+            mutation: 'admit-main-release',
             targetSha: admittedSha,
             predecessor: priorSha,
-            resultIdentity: admittedSha,
+            resultIdentity: mainSha,
           }),
         };
       },
@@ -698,6 +676,7 @@ test('controller compensates a pointer-mutated node whose restart verification f
       }),
     });
     assert.equal(result.status, 'rolled-back-runtime', JSON.stringify(result.failure));
+    assert.equal(result.phaseReceipts.some((receipt) => receipt.phase === 'main-promotion'), false);
     assert.equal(fake.calls.includes('rollback-node:phone'), true);
     assert.equal(result.activationOrder.includes('phone'), true);
     assert.equal(releases, 1);

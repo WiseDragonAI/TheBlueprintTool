@@ -14,6 +14,7 @@ import type { TaskExecutionPresentationEvent } from '../../../../../shared/schem
 import { taskExecutionPresentationEvents } from '../helper/task-execution-presentation-events.js';
 import { persistCardSkillRunEvents } from './persist-card-skill-run-events.js';
 import { reportCodexBackgroundFailure } from '../helper/codex-runtime-run-store.js';
+import { codexSessionIdFromEvent } from '../helper/codex-session-id.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -32,6 +33,7 @@ export function createCardSkillRunEventIngestor(input: {
   runtime?: AnyRecord;
   onTerminalEvent?: (event: NormalizedRunEvent) => void;
   onTurnStarted?: (event: NormalizedRunEvent, observedAt: string) => void;
+  onProviderSessionStarted?: (providerSessionId: string) => void;
   onPresentationEvents?: (input: {
     projectId: string;
     executionId: string;
@@ -112,6 +114,10 @@ export function createCardSkillRunEventIngestor(input: {
       // WHY: Scalars and arrays have no lifecycle event contract to persist.
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
       let event = normalizeCardSkillRunEvent({ line, event: parsed as AnyRecord });
+      const providerSessionId = event.type === 'thread.started' ? codexSessionIdFromEvent(parsed as AnyRecord) : '';
+      // WHAT: Publish the provider identity exactly when Codex starts its thread.
+      // WHY: Decision OS execution identity exists before the provider session is created.
+      if (providerSessionId) input.onProviderSessionStarted?.(providerSessionId);
       // WHAT: Ignore legacy synthetic user-prompt lines during live ingestion.
       // WHY: Process input must not be copied into presentation state or subsequent lifecycle events.
       if (event.type === 'decision_os.user_prompt') return;

@@ -142,6 +142,61 @@ export function parseThreadMarkdown(markdown: string): AnyRecord[] {
   return notes;
 }
 
+export function validateExternalThreadMarkdown(markdown: string): { ok: true } | { ok: false; error: string } {
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+  const noteIds = new Set<string>();
+  let fence: { marker: '`' | '~'; length: number } | null = null;
+  let foundNote = false;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    const marker = codeFenceMarker(line);
+    // WHAT: Treat headings inside a fenced body as note content.
+    // WHY: Example Markdown must not create accidental thread identities during validation.
+    if (fence) {
+      // WHAT: Leave the fenced region only for a compatible closing marker.
+      // WHY: Shorter and different-marker runs remain literal body content.
+      if (marker && marker.marker === fence.marker && marker.length >= fence.length) fence = null;
+      continue;
+    }
+    // WHAT: Enter a fenced region only after a canonical note has started.
+    // WHY: Content before the first note is not part of the thread document contract.
+    if (marker && foundNote) {
+      fence = marker;
+      continue;
+    }
+    const heading = line.match(/^#\s+(OPERATOR|AGENT)\s*$/i);
+    // WHAT: Ignore ordinary body lines after the first canonical note.
+    // WHY: Thread bodies may contain arbitrary Markdown outside note-heading boundaries.
+    if (!heading && foundNote) continue;
+    // WHAT: Allow an entirely empty thread while rejecting unowned preamble bytes.
+    // WHY: Removing every note is a valid manual edit, but hidden leading content would be lost on canonical rewrite.
+    if (!heading) {
+      // WHAT: Reject the first non-whitespace line that is not a canonical role heading.
+      // WHY: Hydration would silently discard that content before the next note mutation.
+      if (line.trim()) return { ok: false, error: `thread_content_preamble:${index + 1}` };
+      continue;
+    }
+    foundNote = true;
+    const metadata = parseMetadata(lines[index + 1] ?? '');
+    // WHAT: Require parseable canonical metadata immediately after every role heading.
+    // WHY: Generated positional identities change when notes are manually inserted or deleted.
+    if (!metadata) return { ok: false, error: `thread_note_metadata_invalid:${index + 2}` };
+    const id = typeof metadata.id === 'string' ? metadata.id.trim() : '';
+    // WHAT: Require one stable identity for every manually authored note block.
+    // WHY: Empty identities cannot own later update, delete, retry, or replication operations.
+    if (!id) return { ok: false, error: `thread_note_id_missing:${index + 2}` };
+    // WHAT: Reject duplicate note identities in the complete replacement document.
+    // WHY: Identity-scoped mutations cannot deterministically select between duplicate blocks.
+    if (noteIds.has(id)) return { ok: false, error: `thread_note_id_duplicate:${id}` };
+    noteIds.add(id);
+    index += 1;
+  }
+  // WHAT: Reject an unclosed fenced region after scanning the complete file.
+  // WHY: A later appended note heading would otherwise remain hidden inside unstable body parsing.
+  if (fence) return { ok: false, error: 'thread_content_fence_unclosed' };
+  return { ok: true };
+}
+
 export function formatThreadMarkdown(notes: AnyRecord[]): string {
   return `${notes.map((note) => {
     const metadata = metadataFor(note);

@@ -168,12 +168,13 @@ function lineCount(workspaceRoot, path) {
   }
 }
 
-function renderInventoryMap(workspaceRoot, inventory, kind, domain, maximumFiles) {
+function renderInventoryMap(workspaceRoot, inventory, kind, baseDirectory, maximumFiles, maximumDepth) {
   const root = { directories: new Map(), files: [] };
   const selected = inventory.filter((item) =>
-    item.kind === kind && (!domain || item.path === domain || item.path.startsWith(`${domain}/`)));
+    item.kind === kind && (!baseDirectory || item.path.startsWith(`${baseDirectory}/`)));
   for (const item of selected) {
-    const segments = item.path.split('/');
+    const relativePath = baseDirectory ? item.path.slice(baseDirectory.length + 1) : item.path;
+    const segments = relativePath.split('/');
     const fileName = segments.pop();
     let node = root;
     for (const segment of segments) {
@@ -189,20 +190,26 @@ function renderInventoryMap(workspaceRoot, inventory, kind, domain, maximumFiles
       name: fileName,
     });
   }
-  const renderNode = (node, depth) => {
+  const renderNode = (node, indentation, currentDepth) => {
+    // WHAT: Omit entries below the requested directory level.
+    // WHY: A directory shown at the limit must not reveal its children.
+    if (currentDepth >= maximumDepth) return [];
     const files = [...node.files]
       .sort((left, right) => right.lines - left.lines || compareText(left.name, right.name))
       .slice(0, maximumFiles)
-      .map((file) => `${' '.repeat(depth)}${displaySegment(file.name)}`);
+      .map((file) => `${' '.repeat(indentation)}${displaySegment(file.name)}`);
     const directories = [...node.directories.entries()]
       .sort(([left], [right]) => compareText(left, right))
       .flatMap(([name, child]) => [
-        `${' '.repeat(depth)}${displaySegment(name)}/`,
-        ...renderNode(child, depth + 1),
+        `${' '.repeat(indentation)}${displaySegment(name)}/`,
+        ...renderNode(child, indentation + 1, currentDepth + 1),
       ]);
     return [...files, ...directories];
   };
-  const lines = renderNode(root, 1);
+  const lines = renderNode(root, 1, 0);
+  // WHAT: Render the map root for a zero-depth query with matching files.
+  // WHY: Depth zero intentionally exposes no entries, not an empty repository.
+  if (lines.length === 0 && selected.length > 0 && maximumDepth === 0) return '.';
   return lines.length === 0 ? '.\n (no matching files)' : ['.', ...lines].join('\n');
 }
 
@@ -210,15 +217,37 @@ export function resolveFileMapKind(value) {
   return kindAliases.get(value) ?? '';
 }
 
-export function buildQueryFileMap(workspaceRoot, kindValue, domain = '') {
-  const kind = resolveFileMapKind(kindValue);
-  if (!kind) throw new Error('usage: tools/map.mjs <c|t|d> [domain]');
-  const inventory = createFileMapInventory(workspaceRoot);
-  const domains = fileMapDomains(inventory);
-  if (domain && !domains.some((entry) => entry.name === domain)) {
-    throw new Error(`unknown domain: ${domain}`);
+function parseFileMapDepth(depthValue) {
+  // WHAT: Preserve the existing unlimited query when no depth was provided.
+  // WHY: Existing one-argument map invocations must retain their complete output.
+  if (depthValue === undefined) return Number.POSITIVE_INFINITY;
+  // WHAT: Reject non-integer depth values before rendering the map.
+  // WHY: A depth limit has one deterministic, bounded interpretation.
+  if (!/^(?:0|[1-9][0-9]*)$/.test(depthValue)) {
+    throw new Error('depth must be a non-negative integer');
   }
-  return renderInventoryMap(workspaceRoot, inventory, kind, domain, Number.POSITIVE_INFINITY);
+  return Number(depthValue);
+}
+
+export function buildQueryFileMap(workspaceRoot, kindValue, baseDirectory = '', depthValue) {
+  const kind = resolveFileMapKind(kindValue);
+  // WHAT: Reject an unknown map kind before inspecting repository paths.
+  // WHY: The CLI contract accepts only code, test, and documentation maps.
+  if (!kind) throw new Error('usage: tools/map.mjs <c|t|d> [base-directory] [depth]');
+  const inventory = createFileMapInventory(workspaceRoot);
+  // WHAT: Require a supplied base directory to contain at least one meaningful repository path.
+  // WHY: A typo must not be mistaken for an empty result.
+  if (baseDirectory && !inventory.some((item) => item.path.startsWith(`${baseDirectory}/`))) {
+    throw new Error(`unknown base directory: ${baseDirectory}`);
+  }
+  return renderInventoryMap(
+    workspaceRoot,
+    inventory,
+    kind,
+    baseDirectory,
+    Number.POSITIVE_INFINITY,
+    parseFileMapDepth(depthValue),
+  );
 }
 
 export function buildInjectedFileMap(workspaceRoot) {
@@ -228,6 +257,13 @@ export function buildInjectedFileMap(workspaceRoot) {
     'DOMAINS',
     ...(domains.length === 0 ? [' (none)'] : domains.map(({ name, codes }) => ` ${displaySegment(name)} ${codes}`)),
     'CODE',
-    renderInventoryMap(workspaceRoot, inventory, 'code', '', injectedFilesPerDirectory),
+    renderInventoryMap(
+      workspaceRoot,
+      inventory,
+      'code',
+      '',
+      injectedFilesPerDirectory,
+      Number.POSITIVE_INFINITY,
+    ),
   ].join('\n');
 }

@@ -1,13 +1,86 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { formatVerificationWait, verificationCommand, verificationOwner } from '../../bin/decision-os-verify.mjs';
+import {
+  formatVerificationWait,
+  provisionWorktreeDependencies,
+  verificationCommand,
+  verificationOwner,
+} from '../../bin/decision-os-verify.mjs';
 
 const wrapper = fileURLToPath(new URL('../../bin/decision-os-verify.mjs', import.meta.url));
+const packageLoaders = new Map([
+  ['frontend', 'tsx/dist/esm/index.mjs'],
+  ['backend', 'tsx/dist/loader.mjs'],
+]);
+
+function dependencyFixture() {
+  const directory = mkdtempSync(join(tmpdir(), 'decision-os-verification-dependencies-'));
+  const repoRoot = join(directory, 'feature');
+  const sharedDevRoot = join(directory, 'dev');
+  for (const packageName of ['frontend', 'backend']) {
+    const loader = packageLoaders.get(packageName);
+    assert.ok(loader);
+    mkdirSync(join(repoRoot, packageName), { recursive: true });
+    mkdirSync(join(sharedDevRoot, packageName, 'node_modules', loader, '..'), { recursive: true });
+    writeFileSync(join(repoRoot, packageName, 'package-lock.json'), `${packageName}-lock\n`);
+    writeFileSync(join(sharedDevRoot, packageName, 'package-lock.json'), `${packageName}-lock\n`);
+    writeFileSync(join(sharedDevRoot, packageName, 'node_modules', loader), 'export {};\n');
+  }
+  return { directory, repoRoot, sharedDevRoot };
+}
+
+test('verification provisioning links both package dependency trees from dev', () => {
+  const fixture = dependencyFixture();
+  try {
+    assert.deepEqual(provisionWorktreeDependencies(fixture.repoRoot, fixture.sharedDevRoot), [
+      join(fixture.repoRoot, 'frontend', 'node_modules'),
+      join(fixture.repoRoot, 'backend', 'node_modules'),
+    ]);
+    assert.equal(readlinkSync(join(fixture.repoRoot, 'frontend', 'node_modules')), join(fixture.sharedDevRoot, 'frontend', 'node_modules'));
+    assert.equal(readlinkSync(join(fixture.repoRoot, 'backend', 'node_modules')), join(fixture.sharedDevRoot, 'backend', 'node_modules'));
+    assert.deepEqual(provisionWorktreeDependencies(fixture.repoRoot, fixture.sharedDevRoot), []);
+  } finally {
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test('verification provisioning preserves worktree-owned dependencies', () => {
+  const fixture = dependencyFixture();
+  try {
+    mkdirSync(join(fixture.repoRoot, 'frontend', 'node_modules'));
+    writeFileSync(join(fixture.repoRoot, 'frontend', 'package-lock.json'), 'feature-owned-lock\n');
+    provisionWorktreeDependencies(fixture.repoRoot, fixture.sharedDevRoot);
+    assert.equal(readlinkSync(join(fixture.repoRoot, 'backend', 'node_modules')), join(fixture.sharedDevRoot, 'backend', 'node_modules'));
+  } finally {
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test('verification provisioning rejects stale locks and unrelated links', () => {
+  const fixture = dependencyFixture();
+  try {
+    writeFileSync(join(fixture.repoRoot, 'frontend', 'package-lock.json'), 'changed-lock\n');
+    assert.throws(
+      () => provisionWorktreeDependencies(fixture.repoRoot, fixture.sharedDevRoot),
+      /frontend\/package-lock\.json differs from dev/,
+    );
+    writeFileSync(join(fixture.repoRoot, 'frontend', 'package-lock.json'), 'frontend-lock\n');
+    const unrelated = join(fixture.directory, 'unrelated-node-modules');
+    mkdirSync(unrelated);
+    symlinkSync(unrelated, join(fixture.repoRoot, 'frontend', 'node_modules'), 'dir');
+    assert.throws(
+      () => provisionWorktreeDependencies(fixture.repoRoot, fixture.sharedDevRoot),
+      /does not point to/,
+    );
+  } finally {
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
 
 function run(lockFile, delay) {
   const startedAt = Date.now();

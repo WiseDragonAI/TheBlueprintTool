@@ -25,6 +25,7 @@ export type LedgerMarkdownInline = {
 export type LedgerMarkdownBlock =
   | { kind: 'heading'; level: number; children: LedgerMarkdownInline[] }
   | { kind: 'paragraph'; children: LedgerMarkdownInline[] }
+  | { kind: 'blockquote'; blocks: LedgerMarkdownBlock[] }
   | { kind: 'images'; images: Extract<LedgerMarkdownInline, { kind: 'image' }>[] }
   | { kind: 'htmlEmbeds'; embeds: { title: string; src: string }[] }
   | { kind: 'gitDiff'; title: string; repository: string; target: string }
@@ -114,6 +115,25 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       images = null;
       htmlEmbeds = null;
       blocks.push({ kind: 'hr' });
+      continue;
+    }
+    const blockquote = rawLine.match(/^\s*>\s?(.*)$/);
+    // WHAT: Collect one contiguous sequence of quote-prefixed Markdown lines into a blockquote.
+    // WHY: Quote contents need one disclosure boundary while retaining the canonical nested block parser.
+    if (blockquote) {
+      const quoteLines: string[] = [];
+      for (; index < lines.length; index += 1) {
+        const quoteLine = lines[index].match(/^\s*>\s?(.*)$/);
+        // WHAT: End the quote at the first line without a quote marker.
+        // WHY: Following ordinary Markdown must render outside the disclosure boundary.
+        if (!quoteLine) break;
+        quoteLines.push(quoteLine[1] ?? '');
+      }
+      index -= 1;
+      list = null;
+      images = null;
+      htmlEmbeds = null;
+      blocks.push({ kind: 'blockquote', blocks: parseLedgerCardMarkdown(quoteLines.join('\n')) });
       continue;
     }
     const heading = line.match(/^(#{1,6})\s+(.*)$/);

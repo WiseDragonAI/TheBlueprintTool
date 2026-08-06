@@ -26,6 +26,7 @@ import { applyScopedMasterTaskProgress } from '../../ledger/effect/apply-scoped-
 import { queueSkill } from '../../codex/effect/queue-skill.js';
 import { readCardMarkdown } from '../../ledger/helper/read-card-markdown.js';
 import { queryPipelinePrompts } from '../../prompt/helper/query-pipeline-prompts.js';
+import { queryCodexStatus } from '../../codex/effect/query-codex-status.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -43,6 +44,12 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'projects') {
     const result = await queryProjects();
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'codex-status') {
+    const result = await queryCodexStatus({ ...(command.codexStatusOperation ?? { elapsed: false, context: false, limits: false }), json: command.json });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

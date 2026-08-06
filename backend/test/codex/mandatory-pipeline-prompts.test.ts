@@ -61,6 +61,14 @@ test('installs, registers, commits, and then preserves every mandatory server pr
       /ledger-cli prompt query --name <prompt-name> \[--name <prompt-name>\]\.\.\./,
     );
     assert.match(
+      readFileSync(join(decisionOsRoot, 'pipeline-prompts', 'CLI_TOOLS.md'), 'utf8'),
+      /tools\/map\.mjs c \[base-directory\] \[depth\]/,
+    );
+    assert.doesNotMatch(
+      readFileSync(join(decisionOsRoot, 'pipeline-prompts', 'CLI_TOOLS.md'), 'utf8'),
+      /Queue exactly one skill after the current gate execution/,
+    );
+    assert.match(
       readFileSync(join(decisionOsRoot, 'pipeline-prompts', 'CODEX_RUN.md'), 'utf8'),
       /\{\{SYSTEM_PROMPT\}\}/,
     );

@@ -4,7 +4,11 @@
  */
 import { readFileSync, statSync, watch, type FSWatcher } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { watchCardContentFiles, type CardContentChange } from './watch-card-content-files.js';
+import {
+  watchCardContentFiles,
+  type CardContentChange,
+  type ContentFileFlushResult,
+} from './watch-card-content-files.js';
 
 export type ProjectFileChange = {
   kind: 'state' | 'ledger' | 'ledgers-canvas';
@@ -52,6 +56,7 @@ export function watchProjectFiles(input: {
   onContentChange: (event: CardContentChange) => unknown;
   onProjectChange: (event: ProjectFileChange) => unknown;
   onError?: (error: unknown, context: { operation: string; file: string }) => void;
+  reconcileContentOnStart?: (event: CardContentChange) => boolean;
   taskProjection?: () => Record<string, unknown> | null;
   auditIntervalMs?: number;
 }) {
@@ -83,7 +88,9 @@ export function watchProjectFiles(input: {
     decisionOsRoot: input.decisionOsRoot,
     onChange: input.onContentChange,
     onError: input.onError,
+    reconcileOnStart: input.reconcileContentOnStart,
     taskProjection: input.taskProjection,
+    auditIntervalMs: input.auditIntervalMs,
   });
   const pending = new Map<string, { timer: NodeJS.Timeout; deliver: () => void }>();
   const ignoredWrites = new Set<string>();
@@ -188,6 +195,7 @@ export function watchProjectFiles(input: {
   };
 
   return {
+    ready: contentWatcher.ready,
     async close(timeoutMs = 1_000): Promise<void> {
       if (closed) return flush(timeoutMs);
       closed = true;
@@ -196,6 +204,9 @@ export function watchProjectFiles(input: {
       await Promise.all([flushProjectChanges(timeoutMs), contentWatcher.close(timeoutMs)]);
     },
     flush,
+    flushContentFile(file: string, timeoutMs = 1_000): Promise<ContentFileFlushResult> {
+      return contentWatcher.flushFile(file, timeoutMs);
+    },
     refreshOwnership(): void {
       ledgers = ledgerFiles(input.decisionOsRoot);
       contentWatcher.refreshOwnership();

@@ -238,6 +238,9 @@ function buildShell(): ModalShell | null {
 
   const body = document.createElement('section');
   body.className = 'skill-library-editor-body';
+  const statePanel = document.createElement('aside');
+  statePanel.className = 'skill-editor-state-panel';
+  statePanel.setAttribute('aria-label', 'Skill state and controls');
   const metadata = document.createElement('section');
   const controls = document.createElement('section');
   controls.className = 'skill-editor-owner-controls';
@@ -251,7 +254,8 @@ function buildShell(): ModalShell | null {
   historyPane.className = 'skill-history-pane';
   historyPane.setAttribute('aria-label', 'Git revision history');
   contentPane.append(timelineNavigation, editorHost, historyPane);
-  body.append(metadata, controls, contentPane);
+  statePanel.append(metadata, controls);
+  body.append(statePanel, contentPane);
 
   const footer = document.createElement('footer');
   footer.className = 'codex-modal-actions';

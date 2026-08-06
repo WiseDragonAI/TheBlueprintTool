@@ -136,10 +136,17 @@ export function createProjectControllerRuntime(input: {
   runtime.readTaskLedgerProjection = (): AnyRecord => (
     input.stateForProject(requiredProject()).projection().ledger
   );
+  const awaitTaskContentReady = async (): Promise<void> => {
+    const ready = await Promise.resolve(runtime.taskContentReady ?? true);
+    // WHAT: Reject task writes when startup content reconciliation exhausted its bounded publication attempts.
+    // WHY: Admitting against a stale head would overwrite the preserved external Markdown edit.
+    if (ready !== true) throw new Error('task_content_reconciliation_failed');
+  };
   runtime.materializeTaskResources = async (
     keys: string[],
     validate?: (key: string, body: string) => void | Promise<void>,
   ): Promise<void> => {
+    await awaitTaskContentReady();
     const project = requiredProject(true);
     await materializeTaskResources({
       projectId: input.projectId,
@@ -152,6 +159,7 @@ export function createProjectControllerRuntime(input: {
     });
   };
   runtime.persistTaskLedgerMutation = async (mutation: LedgerMutation): Promise<{ ledger: AnyRecord }> => {
+    await awaitTaskContentReady();
     const project = requiredProject(true);
     const state = input.stateForProject(project);
     const ledgerPath = resolve(
@@ -184,9 +192,21 @@ export function createProjectControllerRuntime(input: {
     try {
       committed = await execute();
     } catch (error) {
+      // WHAT: Flush one exact observed external edit before retrying a local content mismatch.
+      // WHY: The filesystem event can still be inside its bounded debounce when the task command reaches materialization.
+      if (error instanceof TaskContentMaterializationError && error.code === 'task_content_local_mismatch') {
+        const flushTaskContentFile = runtime.flushTaskContentFile;
+        const file = resolve(project.decisionOsRoot, error.key.replace(/^\/?\.decision-os\//, ''));
+        const flushed = typeof flushTaskContentFile === 'function'
+          ? await flushTaskContentFile(file)
+          : { observed: false, settled: false };
+        // WHAT: Retry the complete command once after a successful exact flush or a possible just-settled observation.
+        // WHY: Publication can leave the pending map between mismatch detection and flush lookup; a stale head still rejects again.
+        if ((flushed.observed === true && flushed.settled === true) || flushed.observed === false) committed = await execute();
+        else throw error;
       // WHAT: Reconcile a conflicted thread only when the preserved local document proves it is a lossless superset of every retained candidate.
       // WHY: Common cross-node append races must recover automatically without choosing through same-note divergence.
-      if (error instanceof TaskContentMaterializationError && error.code === 'task_content_conflict') {
+      } else if (error instanceof TaskContentMaterializationError && error.code === 'task_content_conflict') {
         const reconciled = await state.reconcileSupersetThreadContentConflict(error.key);
         // WHAT: Retry the complete serialized command once after a causal superset reconciliation.
         // WHY: The original attempt made no mutation, while the replacement head now observes every prior candidate.
