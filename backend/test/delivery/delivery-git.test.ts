@@ -287,3 +287,26 @@ test('candidate Git verification rejects unpushed and dirty dev candidates witho
   assert.equal(verified.candidateWorktree, root);
   assert.equal(verified.originDevSha, releaseSha);
 });
+
+test('tag-resolved candidate does not require sibling merge parents to be ancestors', async (context) => {
+  const { root, identity } = fixture();
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const operations: string[] = [];
+  const runner: DeliveryGitRunner = async (input) => {
+    const operation = String(input.context?.operation ?? '');
+    operations.push(operation);
+    if (operation === 'candidate_read_origin_dev') return result(input, releaseSha);
+    if (operation === 'candidate_read_origin_main') return result(input, mainSha);
+    if (operation === 'candidate_list_worktrees') return result(input, `worktree ${root}\nHEAD ${releaseSha}\nbranch refs/heads/dev\n`);
+    return result(input);
+  };
+  const verified = await verifyDeliveryCandidateGit({
+    repositoryRoot: root,
+    releaseSha,
+    priorMainSha,
+    settings: { projectSyncGitSshIdentityFile: identity },
+    runner,
+  });
+  assert.equal(verified.priorMainSha, priorMainSha);
+  assert.equal(operations.includes('candidate_verify_main_ancestry'), false);
+});
