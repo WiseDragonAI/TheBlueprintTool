@@ -39,6 +39,42 @@ export class DeliveryGitError extends Error {
   }
 }
 
+export async function resolveDeliveryReleaseTag(input: {
+  repositoryRoot: string;
+  releaseTag: string;
+  settings: unknown;
+  runner?: DeliveryGitRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}): Promise<{ releaseTag: string; releaseSha: string; mainSha: string; priorMainSha: string }> {
+  const repositoryRoot = resolve(input.repositoryRoot);
+  // WHAT: Reject every tag name outside the canonical production namespace.
+  // WHY: Only paired tags minted by dev-to-main promotion may authorize deployment.
+  if (!/^rel-(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(input.releaseTag)) {
+    throw new DeliveryGitError('delivery_release_tag_invalid', 'Release tag must use the canonical rel-X.Y.Z form.');
+  }
+  const runner = input.runner ?? runBoundedProcess;
+  const env = gitEnvironment(input.settings, input.environment);
+  await git({ root: repositoryRoot, args: ['fetch', '--prune', '--tags', 'origin', 'main', 'dev'], runner, env, signal: input.signal, operation: 'release_tag_fetch' });
+  const mainSha = sha(await git({ root: repositoryRoot, args: ['rev-parse', `refs/tags/${input.releaseTag}^{commit}`], runner, env, signal: input.signal, operation: 'release_tag_main' }), 'release_tag_main_sha');
+  const devTag = `devrel-${input.releaseTag.slice('rel-'.length)}`;
+  const releaseSha = sha(await git({ root: repositoryRoot, args: ['rev-parse', `refs/tags/${devTag}^{commit}`], runner, env, signal: input.signal, operation: 'release_tag_dev' }), 'release_tag_dev_sha');
+  const originMainSha = sha(await git({ root: repositoryRoot, args: ['rev-parse', 'refs/remotes/origin/main'], runner, env, signal: input.signal, operation: 'release_tag_origin_main' }), 'origin_main_sha');
+  const originDevSha = sha(await git({ root: repositoryRoot, args: ['rev-parse', 'refs/remotes/origin/dev'], runner, env, signal: input.signal, operation: 'release_tag_origin_dev' }), 'origin_dev_sha');
+  // WHAT: Bind the tag pair to the currently published main and dev heads.
+  // WHY: A stale or moved release label must not select a different deployment graph.
+  if (mainSha !== originMainSha || releaseSha !== originDevSha) {
+    throw new DeliveryGitError('delivery_release_tag_ref_changed', 'The release tag pair does not identify the fetched origin/main and origin/dev heads.');
+  }
+  const parents = (await git({ root: repositoryRoot, args: ['show', '-s', '--format=%P', mainSha], runner, env, signal: input.signal, operation: 'release_tag_merge_parents' })).split(/\s+/).filter(Boolean);
+  // WHAT: Require the tagged main commit to be the canonical merge of the paired dev tag.
+  // WHY: Tags identify a release only when they preserve the merge tool's exact graph contract.
+  if (parents.length !== 2 || parents[1] !== releaseSha) {
+    throw new DeliveryGitError('delivery_release_tag_merge_invalid', 'The tagged main commit is not the canonical merge of the paired dev tag.');
+  }
+  return { releaseTag: input.releaseTag, releaseSha, mainSha, priorMainSha: sha(parents[0] ?? '', 'prior_main_sha') };
+}
+
 function sha(value: string, field: string): string {
   if (!/^[a-f0-9]{40}$/.test(value)) throw new DeliveryGitError(`delivery_${field}_invalid`, `${field} must be a lowercase 40-character Git SHA.`);
   return value;
@@ -216,6 +252,7 @@ function assertLease(repositoryRoot: string, lock: RepositoryMutationLock): void
 export async function verifyDeliveryCandidateGit(input: {
   repositoryRoot: string;
   releaseSha: string;
+  priorMainSha?: string;
   settings: unknown;
   runner?: DeliveryGitRunner;
   environment?: NodeJS.ProcessEnv;
@@ -228,7 +265,8 @@ export async function verifyDeliveryCandidateGit(input: {
   const env = gitEnvironment(input.settings, input.environment);
   await git({ root: repositoryRoot, args: ['fetch', '--prune', 'origin', 'main', 'dev'], runner, env, signal: input.signal, operation: 'candidate_fetch' });
   const originDevSha = sha(await git({ root: repositoryRoot, args: ['rev-parse', 'refs/remotes/origin/dev'], runner, env, signal: input.signal, operation: 'candidate_read_origin_dev' }), 'origin_dev_sha');
-  const priorMainSha = sha(await git({ root: repositoryRoot, args: ['rev-parse', 'refs/remotes/origin/main'], runner, env, signal: input.signal, operation: 'candidate_read_origin_main' }), 'origin_main_sha');
+  const originMainSha = sha(await git({ root: repositoryRoot, args: ['rev-parse', 'refs/remotes/origin/main'], runner, env, signal: input.signal, operation: 'candidate_read_origin_main' }), 'origin_main_sha');
+  const priorMainSha = input.priorMainSha ? sha(input.priorMainSha, 'prior_main_sha') : originMainSha;
   if (originDevSha !== releaseSha) {
     throw new DeliveryGitError('delivery_release_ref_changed', 'The requested candidate is not the fetched origin/dev SHA.');
   }

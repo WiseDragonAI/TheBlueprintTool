@@ -86,11 +86,11 @@
 
    ```bash
    node bin/decision-os-delivery.mjs candidate \
-     --release-sha <40-character-origin-dev-sha> \
+     --release-tag rel-X.Y.Z \
      --json
    ```
 
-3. `candidate` accepts no topology, credential, evidence path, marker path, pointer path, server, and environment flag. It verifies the fetched exact SHA, clean dev worktree, `origin/main` ancestry, fixed health surfaces, authenticated node status, and proof input from the settings-owned catalog root.
+3. `candidate` resolves the paired `rel-X.Y.Z` and `devrel-X.Y.Z` tags, requires them to identify the fetched `origin/main` and `origin/dev` heads, and verifies their exact canonical merge graph. It accepts no SHA, topology, credential, evidence path, marker path, pointer path, server, and environment flag.
 4. The command creates or validates the ignored source-owned `.decision-os-release.json` marker and `deliveryCandidateCurrentPointer` only after the candidate is clean and pushed. A dirty development checkout has `releaseSha: ""`, `deliveryProtocol: 0`, and `activeReleasePointer: "unbootstrapped"`; it is not admitted release evidence.
 5. `writeDeliveryCandidateEvidence()` is the sole persistence owner for the ignored `<catalog-root>/.decision-os/delivery/candidate-evidence.json` bundle. The `candidate` command calls it atomically without acquiring a delivery lease, creating a run, and creating a journal.
 3. Candidate evidence has this top-level shape:
@@ -107,14 +107,14 @@
 
 4. `relayConfiguration` contains `observedAt`, SHA-256 `configurationHash`, `wranglerVersion: "4.111.0"`, `productionWorkerName`, `devWorkerName`, `productionDurableObjectNamespace`, and `devDurableObjectNamespace`.
 5. `proofs` contains exactly one fresh `passed` receipt for each name: `authoring`, `editor`, `direct-path`, `prompt-execution`, and `federation`. Every receipt contains the exact `releaseSha`, `observedAt`, and `receiptId`.
-6. `nodeEvidence` records the current project-owning nodes observed during candidate proof. It does not freeze the production target set. Each record contains:
+6. `nodeEvidence` records the settings-owned `deliveryNodeId` coordinator observed during candidate proof. Unrelated federation nodes do not participate in production admission. The record contains:
    1. `nodeId`, `observedAt`, and exact `projectIds`
    2. `release` with ready health, predecessor `releaseSha`, `processStartedAt`, `deliveryProtocol: 1`, `activeReleasePointer`, and zero `activeIncidentCount`
    3. `federationPhase: "connected"`
    4. Zero `activeExecutionCount`, `pendingExecutionCount`, `pendingProcessQueueDepth`, `pausedScopeCount`, and `fatalIncidentCount`. `pausedScopeCount` includes only paused server-fatal, `delivery:*`, and `delivery-dependency:*` incidents; unrelated contained incidents remain diagnostic and do not block delivery.
    5. Zero `stateRuntimeDirtyCount`, `statePendingDeliveryCount`, `contentQueueDepth`, and `unavailableContentResourceCount`
    6. `convergedProjectIds` exactly equal to the node's owned `projectIds`
-7. `promote` independently reads live production topology, freezes that target set, and collects a fresh authenticated `status` response from each frozen project-owning node. Candidate node evidence remains T53 proof evidence; it does not substitute for live admission authority.
+7. `promote` independently reads live production topology, selects only the settings-owned `deliveryNodeId`, and collects its fresh authenticated `status` response. A missing or offline coordinator rejects admission; unrelated online and offline federation nodes are ignored.
 8. Candidate, topology, health, relay, node, and proof timestamps must be within the admission freshness window. The default maximum age is five minutes.
 9. Before `promote`, publish the exact merge and release tags created by `decision-os-merge-dev`. `promote` re-fetches `origin/main` and `origin/dev`, proves the requested SHA equals `origin/dev`, proves `origin/main` has exactly the prior main and requested dev parents in canonical order, proves the protected `.decision-os` gitlink is unchanged, proves the release worktree is clean, rejects active Git operations, and binds the result to the candidate evidence SHA.
 
@@ -144,12 +144,12 @@
 
    ```bash
    node bin/decision-os-delivery.mjs promote \
-     --release-sha <40-character-origin-dev-sha> \
+     --release-tag rel-X.Y.Z \
      --server http://127.0.0.1:50150 \
      --json
    ```
 
-2. `--json` is required. `--server` accepts only `http://127.0.0.1:50150`.
+2. `--json` is required. `--server` accepts only `http://127.0.0.1:50150`. `--release-tag` is the sole release selector; direct SHA input is rejected.
 3. The CLI acquires the delivery lease and shared repository mutation lock, creates the journal, performs read-only Git preflight, and writes the admission receipt before production mutation.
 4. Forward execution order is fixed:
    1. Verify Cloudflare credential presence and the ignored credential-file boundary, then list and record the current production relay deployment plus exact predecessor version.

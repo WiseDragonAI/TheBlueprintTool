@@ -49,7 +49,7 @@
 
    ```bash
    node bin/decision-os-delivery.mjs candidate \
-     --release-sha <exact-origin-dev-sha> \
+     --release-tag rel-X.Y.Z \
      --json
    ```
 
@@ -72,7 +72,7 @@
    curl -sS http://127.0.0.1:50151/api/health
 
    node bin/decision-os-delivery.mjs candidate \
-     --release-sha <exact-origin-dev-sha> \
+     --release-tag rel-X.Y.Z \
      --json
    ```
 
@@ -218,7 +218,7 @@
 
    ```bash
    node bin/decision-os-delivery.mjs candidate \
-     --release-sha <exact-origin-dev-sha> \
+     --release-tag rel-X.Y.Z \
      --json
    ```
 
@@ -229,7 +229,7 @@
    3. Fresh passed receipts for `authoring`, `editor`, `direct-path`, `prompt-execution`, and `federation`
 3. The writer does not import the run owner, lease owner, and journal owner. Candidate preparation therefore creates no delivery run and cannot authorize production mutation by itself.
 4. Invalid top-level shape, protocol, SHA, relay identity, node identity, duplicate node identity, node timestamp, missing proof, duplicate proof, non-passed proof, and proof timestamp fail as `delivery_candidate_evidence_invalid`. A document above the delivery size bound fails as `delivery_candidate_evidence_too_large`. Both failures precede replacement of the prior bundle.
-5. The explicit fixed `promote --release-sha` invocation is the operator's admission action.
+5. The explicit fixed `promote --release-tag` invocation is the operator's admission action.
 
 ---
 
@@ -242,7 +242,7 @@
 
    ```bash
    node bin/decision-os-delivery.mjs promote \
-     --release-sha <40-character-origin-dev-sha> \
+     --release-tag rel-X.Y.Z \
      --server http://127.0.0.1:50150 \
      --json
    ```

@@ -136,8 +136,24 @@ function fingerprint(nodes: DeliveryTopologyNode[]): string {
 export function freezeDeliveryTopology(input: {
   capturedAt: string;
   nodes: DeliveryTopologyNodeInput[];
+  targetNodeId?: string;
 }): FrozenDeliveryTopology {
-  const nodes = normalizedNodes(input.nodes);
+  let selected = input.nodes;
+  // WHAT: Scope production delivery topology to the explicitly configured coordinator node.
+  // WHY: Nodes outside the production deployment target must not participate in release admission.
+  if (input.targetNodeId !== undefined) {
+    selected = input.nodes.filter((node) => node.nodeId === input.targetNodeId);
+    // WHAT: Reject admission when the configured production coordinator is absent.
+    // WHY: Ignoring unrelated nodes must never permit a deployment with no actual target.
+    if (selected.length !== 1) {
+      throw new DeliveryTopologyError(
+        'delivery_target_node_missing',
+        `Configured delivery node ${input.targetNodeId} is absent from the relay topology.`,
+        { nodeId: input.targetNodeId },
+      );
+    }
+  }
+  const nodes = normalizedNodes(selected);
   const offlineOwner = nodes.find((node) => node.projects.length > 0 && !node.online);
   if (offlineOwner) {
     throw new DeliveryTopologyError(

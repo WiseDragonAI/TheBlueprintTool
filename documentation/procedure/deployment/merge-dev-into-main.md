@@ -27,7 +27,7 @@
 
 4. **WHAT:** The standalone command is the sole owner of the protected `dev` to `main` merge transaction.
 
-   **WHY:** `decision-os-delivery promote` consumes the published merge as immutable release input and performs no merge, commit, tag, and push operation.
+   **WHY:** `decision-os-delivery promote --release-tag rel-X.Y.Z` resolves the paired `rel-X.Y.Z` and `devrel-X.Y.Z` publication as immutable release input and performs no merge, commit, tag, and push operation.
 
 5. **WHAT:** Treat `READY` plus doctor exit `0` as admission, `NO-GO` plus doctor exit `2` as blocked, merge exit `2` as rejected repository state, and merge exit `3` as an execution failure.
 

@@ -8,6 +8,7 @@ import {
   DeliveryGitError,
   observeDeliveryGitAuthority,
   preflightDeliveryGit,
+  resolveDeliveryReleaseTag,
   verifyDeliveryCandidateGit,
   type DeliveryGitRunner,
 } from '../../src/business/delivery/helper/delivery-git.js';
@@ -18,6 +19,48 @@ const releaseSha = 'a'.repeat(40);
 const priorMainSha = 'b'.repeat(40);
 const mainSha = 'c'.repeat(40);
 const protectedGitlink = 'd'.repeat(40);
+
+test('canonical release tag pair resolves the exact published merge graph', async (context) => {
+  const { root, identity } = fixture();
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const runner: DeliveryGitRunner = async (input) => {
+    const output: Record<string, string> = {
+      release_tag_main: mainSha,
+      release_tag_dev: releaseSha,
+      release_tag_origin_main: mainSha,
+      release_tag_origin_dev: releaseSha,
+      release_tag_merge_parents: `${priorMainSha} ${releaseSha}`,
+    };
+    return result(input, output[String(input.context?.operation ?? '')] ?? '');
+  };
+  const resolved = await resolveDeliveryReleaseTag({
+    repositoryRoot: root,
+    releaseTag: 'rel-0.3.1',
+    settings: { projectSyncGitSshIdentityFile: identity },
+    runner,
+  });
+  assert.deepEqual(resolved, { releaseTag: 'rel-0.3.1', releaseSha, mainSha, priorMainSha });
+});
+
+test('release tag pair rejects a tag that does not identify the published heads', async (context) => {
+  const { root, identity } = fixture();
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const runner: DeliveryGitRunner = async (input) => {
+    const output: Record<string, string> = {
+      release_tag_main: 'e'.repeat(40),
+      release_tag_dev: releaseSha,
+      release_tag_origin_main: mainSha,
+      release_tag_origin_dev: releaseSha,
+    };
+    return result(input, output[String(input.context?.operation ?? '')] ?? '');
+  };
+  await assert.rejects(resolveDeliveryReleaseTag({
+    repositoryRoot: root,
+    releaseTag: 'rel-0.3.1',
+    settings: { projectSyncGitSshIdentityFile: identity },
+    runner,
+  }), (error: unknown) => error instanceof DeliveryGitError && error.code === 'delivery_release_tag_ref_changed');
+});
 
 function result(input: RunBoundedProcessInput, stdout = '', ok = true): BoundedProcessResult {
   return {
