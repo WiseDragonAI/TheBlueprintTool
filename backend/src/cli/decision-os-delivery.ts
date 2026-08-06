@@ -18,18 +18,18 @@ type AnyRecord = Record<string, unknown>;
 
 export type DeliveryCliCommand =
   | { command: 'bootstrap-node'; json: true }
-  | { command: 'candidate'; releaseSha: string; json: true }
-  | { command: 'promote'; releaseSha: string; json: true }
+  | { command: 'candidate'; releaseTag: string; json: true }
+  | { command: 'promote'; releaseTag: string; json: true }
   | { command: 'status' | 'resume' | 'rollback'; deliveryId: string; json: true };
 
 export type DeliveryCliRuntime = {
-  candidate?(releaseSha: string): Promise<{
+  candidate?(releaseTag: string): Promise<{
     releaseSha: string;
     evidenceFile: string;
     marker: string;
     currentPointer: string;
   }>;
-  promote(releaseSha: string): Promise<DeliveryRun>;
+  promote(releaseTag: string): Promise<DeliveryRun>;
   status(deliveryId: string): Promise<DeliveryRun>;
   resume(deliveryId: string): Promise<DeliveryRun>;
   rollback(deliveryId: string): Promise<DeliveryRun>;
@@ -78,10 +78,12 @@ function deliveryId(value: unknown): string {
   return result;
 }
 
-function releaseSha(value: unknown): string {
+function releaseTag(value: unknown): string {
   const result = String(value ?? '');
-  if (!/^[a-f0-9]{40}$/.test(result)) {
-    throw new DeliveryCliError('delivery_release_sha_invalid', '--release-sha must be a lowercase 40-character SHA.', 2);
+  // WHAT: Accept only canonical production release tags.
+  // WHY: Deployment authority is the immutable rel/devrel pair created by the dev-to-main promotion tool.
+  if (!/^rel-(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(result)) {
+    throw new DeliveryCliError('delivery_release_tag_invalid', '--release-tag must use the canonical rel-X.Y.Z form.', 2);
   }
   return result;
 }
@@ -89,16 +91,22 @@ function releaseSha(value: unknown): string {
 export function parseDecisionOsDeliveryArguments(argv: readonly string[]): DeliveryCliCommand {
   const command = String(argv[0] ?? '');
   const values = optionMap(argv);
+  // WHAT: Parse candidate with one canonical release tag selector.
+  // WHY: Candidate evidence must bind to the same published tag pair used by production promotion.
   if (command === 'candidate') {
-    exactOptions(values, ['--release-sha', '--json']);
-    return { command, releaseSha: releaseSha(values.get('--release-sha')), json: true };
+    exactOptions(values, ['--release-tag', '--json']);
+    return { command, releaseTag: releaseTag(values.get('--release-tag')), json: true };
   }
+  // WHAT: Parse production promotion with one canonical release tag and fixed local server.
+  // WHY: Operators must not inject a raw commit identity or alternate production endpoint.
   if (command === 'promote') {
-    exactOptions(values, ['--release-sha', '--server', '--json']);
+    exactOptions(values, ['--release-tag', '--server', '--json']);
+    // WHAT: Reject every production server except the fixed local coordinator.
+    // WHY: Remote endpoint selection would bypass settings-owned deployment authority.
     if (values.get('--server') !== fixedProductionServer) {
       throw new DeliveryCliError('delivery_server_invalid', `--server must equal ${fixedProductionServer}.`, 2);
     }
-    return { command, releaseSha: releaseSha(values.get('--release-sha')), json: true };
+    return { command, releaseTag: releaseTag(values.get('--release-tag')), json: true };
   }
   if (command === 'status' || command === 'resume' || command === 'rollback') {
     exactOptions(values, ['--delivery-id', '--json']);
@@ -201,10 +209,11 @@ export async function runDecisionOsDeliveryCli(input: {
   }
   if (parsed.command === 'candidate') {
     if (!input.runtime.candidate) throw new DeliveryCliError('delivery_candidate_runtime_unavailable', 'Candidate runtime is unavailable.', 3);
-    const candidate = await input.runtime.candidate(parsed.releaseSha);
+    const candidate = await input.runtime.candidate(parsed.releaseTag);
     write(`${JSON.stringify({
       ok: true,
       command: parsed.command,
+      releaseTag: parsed.releaseTag,
       releaseSha: candidate.releaseSha,
       evidenceWritten: true,
       releaseIdentityValidated: true,
@@ -212,7 +221,7 @@ export async function runDecisionOsDeliveryCli(input: {
     return 0;
   }
   const run = parsed.command === 'promote'
-    ? await input.runtime.promote(parsed.releaseSha)
+    ? await input.runtime.promote(parsed.releaseTag)
     : parsed.command === 'status'
       ? await input.runtime.status(parsed.deliveryId)
       : parsed.command === 'resume'

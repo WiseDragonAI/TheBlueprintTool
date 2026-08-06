@@ -244,7 +244,7 @@
    ```bash
    cd /data/data/com.termux/files/home/decision-os/.worktrees/dev
    node bin/decision-os-delivery.mjs candidate \
-     --release-sha "$(git rev-parse HEAD)" \
+     --release-tag rel-X.Y.Z \
      --json
    ```
 
