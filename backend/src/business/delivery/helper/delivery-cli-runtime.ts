@@ -32,6 +32,7 @@ import {
   assertDeliveryCredentialFileIgnored,
   observeDeliveryGitAuthority,
   preflightDeliveryGit,
+  resolveDeliveryReleaseTag,
   verifyDeliveryCandidateGit,
   type DeliveryGitRunner,
 } from './delivery-git.js';
@@ -380,6 +381,7 @@ export async function createDefaultDeliveryCliRuntime(input: {
       const topology = freezeDeliveryTopology({
         capturedAt: String(topologyValue.observedAt ?? ''),
         nodes: (topologyValue.nodes as DeliveryTopologyNodeInput[]) ?? [],
+        targetNodeId: coordinatorNodeId,
       });
       const nodeEvidence = await Promise.all(topology.activeNodes.map(async (node) => {
         if (!run.priorMainSha) throw codedError('delivery_preflight_evidence_missing', 'The predecessor SHA is unavailable.');
@@ -548,6 +550,7 @@ export async function createDefaultDeliveryCliRuntime(input: {
       const topology = freezeDeliveryTopology({
         capturedAt: String(topologyValue.observedAt ?? ''),
         nodes: (topologyValue.nodes as DeliveryTopologyNodeInput[]) ?? [],
+        targetNodeId: coordinatorNodeId,
       });
       const nodes: DeliveryNodeAuthority[] = [];
       for (const node of run.nodes) {
@@ -629,13 +632,26 @@ export async function createDefaultDeliveryCliRuntime(input: {
   input.observeEffects?.(effects);
 
   return {
-    candidate: async (releaseSha) => {
+    candidate: async (releaseTag) => {
+      const tagged = await withDeliveryDeadline({
+        operation: 'candidate-release-tag-resolution',
+        deadlineMs: 60_000,
+        execute: async (signal) => await resolveDeliveryReleaseTag({
+          repositoryRoot,
+          releaseTag,
+          settings,
+          runner: input.gitRunner,
+          signal,
+        }),
+      });
+      const releaseSha = tagged.releaseSha;
       const verified = await withDeliveryDeadline({
         operation: 'candidate-git-verification',
         deadlineMs: 60_000,
         execute: async (signal) => await verifyDeliveryCandidateGit({
           repositoryRoot,
           releaseSha,
+          priorMainSha: tagged.priorMainSha,
           settings,
           runner: input.gitRunner,
           signal,
@@ -664,6 +680,7 @@ export async function createDefaultDeliveryCliRuntime(input: {
           const topology = freezeDeliveryTopology({
             capturedAt: String(topologyValue.observedAt ?? ''),
             nodes: (topologyValue.nodes as DeliveryTopologyNodeInput[]) ?? [],
+            targetNodeId: coordinatorNodeId,
           });
           const nodeEvidence = await Promise.all(topology.activeNodes.map(async (node) => {
             const receipt = await dispatchNode(node.nodeId, {
@@ -722,13 +739,26 @@ export async function createDefaultDeliveryCliRuntime(input: {
         currentPointer: identity.currentPointer,
       };
     },
-    promote: async (releaseSha) => await promoteDecisionOsDelivery({
-      catalogRoot,
-      repositoryRoot,
-      releaseSha,
-      effects,
-      runStore,
-    }),
+    promote: async (releaseTag) => {
+      const tagged = await withDeliveryDeadline({
+        operation: 'promote-release-tag-resolution',
+        deadlineMs: 60_000,
+        execute: async (signal) => await resolveDeliveryReleaseTag({
+          repositoryRoot,
+          releaseTag,
+          settings,
+          runner: input.gitRunner,
+          signal,
+        }),
+      });
+      return await promoteDecisionOsDelivery({
+        catalogRoot,
+        repositoryRoot,
+        releaseSha: tagged.releaseSha,
+        effects,
+        runStore,
+      });
+    },
     status: async (deliveryId) => runStore.require(deliveryId),
     resume: async (deliveryId) => await resumeDecisionOsDelivery({
       catalogRoot,

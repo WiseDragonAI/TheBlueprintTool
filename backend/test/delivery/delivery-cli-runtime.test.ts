@@ -45,7 +45,7 @@ const topologyInput = [
     projects: [{ projectId: 'decision-os', originFingerprint: '2'.repeat(64) }],
   },
 ];
-const topology = freezeDeliveryTopology({ capturedAt: observedAt, nodes: topologyInput });
+const topology = freezeDeliveryTopology({ capturedAt: observedAt, nodes: topologyInput, targetNodeId: 'workstation' });
 
 function processResult(input: RunBoundedProcessInput, stdout = ''): BoundedProcessResult {
   return {
@@ -266,6 +266,8 @@ test('default runtime collects fresh authenticated admission and live reconcilia
     if (input.context?.operation === 'candidate_list_worktrees') {
       return processResult(input, `worktree ${repositoryRoot}\nHEAD ${admittedSha}\nbranch refs/heads/dev\n`);
     }
+    if (input.context?.operation === 'release_tag_main') return processResult(input, mainSha);
+    if (input.context?.operation === 'release_tag_dev') return processResult(input, admittedSha);
     if (args.includes('refs/remotes/origin/dev')) return processResult(input, admittedSha);
     if (args.includes('refs/remotes/origin/main')) return processResult(input, liveGit ? mainSha : priorSha);
     if (args.includes('--format=%P')) return processResult(input, `${priorSha} ${admittedSha}`);
@@ -309,11 +311,11 @@ test('default runtime collects fresh authenticated admission and live reconcilia
     observeEffects: (value) => { effects = value; },
   });
   assert.ok(effects);
-  const candidate = await runtime.candidate!(admittedSha);
+  liveGit = true;
+  const candidate = await runtime.candidate!('rel-0.3.1');
   assert.equal(candidate.releaseSha, admittedSha);
   assert.equal(existsSync(join(root, '.decision-os', 'delivery', 'runs')), false);
   assert.equal(existsSync(join(root, '.decision-os', 'delivery', 'lock')), false);
-  liveGit = true;
   const admittedRun = {
     protocol: 1,
     deliveryId: 'delivery-runtime',
@@ -354,7 +356,7 @@ test('default runtime collects fresh authenticated admission and live reconcilia
   assert.equal(gitCalls.some((args) => args.includes('check-ignore')), true);
   const admission = await effects!.collectAdmission({ run: admittedRun, signal: new AbortController().signal });
   assert.equal(admission.nodeEvidence.every((entry) => entry.activeExecutionCount === 0), true);
-  assert.equal(httpCalls.filter((entry) => entry.method === 'POST').length, 4);
+  assert.equal(httpCalls.filter((entry) => entry.method === 'POST').length, 2);
   assert.equal(httpCalls.filter((entry) => entry.method === 'POST').every((entry) => entry.authorization === `Bearer ${token}`), true);
 
   const liveRun: DeliveryRun = {
@@ -363,7 +365,7 @@ test('default runtime collects fresh authenticated admission and live reconcilia
     topology: {
       capturedAt: topology.capturedAt,
       fingerprint: topology.fingerprint,
-      admittedNodeIds: ['phone', 'workstation'],
+      admittedNodeIds: ['workstation'],
       zeroProjectNodeIds: [],
     },
     relay: {

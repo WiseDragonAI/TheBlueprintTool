@@ -194,18 +194,18 @@ test('CLI dispatches promote, resume, and rollback only to injected runtime cont
     },
   });
   const runtime = {
-    candidate: async (sha: string) => {
-      calls.push(`candidate:${sha}`);
-      return { releaseSha: sha, evidenceFile: '[REDACTED_PATH]', marker: '[REDACTED_PATH]', currentPointer: '[REDACTED_PATH]' };
+    candidate: async (tag: string) => {
+      calls.push(`candidate:${tag}`);
+      return { releaseSha: admittedSha, evidenceFile: '[REDACTED_PATH]', marker: '[REDACTED_PATH]', currentPointer: '[REDACTED_PATH]' };
     },
-    promote: async (sha: string) => { calls.push(`promote:${sha}`); return run('admission-rejected'); },
+    promote: async (tag: string) => { calls.push(`promote:${tag}`); return run('admission-rejected'); },
     status: async (deliveryId: string) => { calls.push(`status:${deliveryId}`); return run('paused'); },
     resume: async (deliveryId: string) => { calls.push(`resume:${deliveryId}`); return run('partial'); },
     rollback: async (deliveryId: string) => { calls.push(`rollback:${deliveryId}`); return run('rolled-back-runtime'); },
   };
   for (const [argv, exitCode] of [
-    [['candidate', '--release-sha', admittedSha, '--json'], 0],
-    [['promote', '--release-sha', admittedSha, '--server', 'http://127.0.0.1:50150', '--json'], 2],
+    [['candidate', '--release-tag', 'rel-0.3.1', '--json'], 0],
+    [['promote', '--release-tag', 'rel-0.3.1', '--server', 'http://127.0.0.1:50150', '--json'], 2],
     [['resume', '--delivery-id', 'delivery-cli-runtime', '--json'], 3],
     [['rollback', '--delivery-id', 'delivery-cli-runtime', '--json'], 3],
   ] as const) {
@@ -214,8 +214,8 @@ test('CLI dispatches promote, resume, and rollback only to injected runtime cont
     assert.equal(output.length, 1);
   }
   assert.deepEqual(calls, [
-    `candidate:${admittedSha}`,
-    `promote:${admittedSha}`,
+    'candidate:rel-0.3.1',
+    'promote:rel-0.3.1',
     'resume:delivery-cli-runtime',
     'rollback:delivery-cli-runtime',
   ]);

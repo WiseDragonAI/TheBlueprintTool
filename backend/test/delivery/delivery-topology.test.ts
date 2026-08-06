@@ -68,6 +68,27 @@ test('offline active owners and missing origin identity reject before topology f
   }), (error: unknown) => error instanceof DeliveryTopologyError && error.code === 'delivery_project_origin_missing');
 });
 
+test('targeted production topology ignores unrelated offline project owners', () => {
+  const frozen = freezeDeliveryTopology({
+    capturedAt,
+    targetNodeId: 'workstation',
+    nodes: [
+      { nodeId: 'workstation', nodeLabel: 'Workstation', online: true, projects: [{ projectId: 'decision-os', originFingerprint: originA }] },
+      { nodeId: 'phone', nodeLabel: 'Phone', online: false, projects: [{ projectId: 'mobile', originFingerprint: originB }] },
+    ],
+  });
+  assert.deepEqual(frozen.activeNodes.map((node) => node.nodeId), ['workstation']);
+  assert.deepEqual(frozen.zeroProjectNodes, []);
+});
+
+test('targeted production topology requires its configured coordinator', () => {
+  assert.throws(() => freezeDeliveryTopology({
+    capturedAt,
+    targetNodeId: 'workstation',
+    nodes: [{ nodeId: 'phone', nodeLabel: 'Phone', online: true, projects: [] }],
+  }), (error: unknown) => error instanceof DeliveryTopologyError && error.code === 'delivery_target_node_missing');
+});
+
 test('project, owner, and origin drift all reject with delivery_topology_changed', () => {
   const frozen = topology();
   for (const observed of [
