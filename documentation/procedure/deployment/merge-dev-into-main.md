@@ -25,15 +25,19 @@
 
    **WHY:** The receipt identifies the admitted `dev` SHA, committed child SHA, optional child and gitlink commits, final merge SHA, exact merge parents, preserved Decision OS gitlink, four release tag targets, and final parent and child status.
 
-4. **WHAT:** Treat `READY` plus doctor exit `0` as admission, `NO-GO` plus doctor exit `2` as blocked, merge exit `2` as rejected repository state, and merge exit `3` as an execution failure.
+4. **WHAT:** The standalone command and `decision-os-delivery promote` execute the same protected merge transaction.
+
+   **WHY:** The exact `.decision-os` conflict admission, gitlink restoration, source-conflict rejection, parent proof, and final-gitlink proof must not drift between local and production promotion.
+
+5. **WHAT:** Treat `READY` plus doctor exit `0` as admission, `NO-GO` plus doctor exit `2` as blocked, merge exit `2` as rejected repository state, and merge exit `3` as an execution failure.
 
    **WHY:** The mutually exclusive result prevents automation from inferring admission from an ambiguous boolean or another occurrence of the word `ready`; rejection remains non-destructive.
 
-5. **WHAT:** Select exactly one bump token: `maj`, `min`, or `fix`.
+6. **WHAT:** Select exactly one bump token: `maj`, `min`, or `fix`.
 
    **WHY:** The command never accepts a manual version. It increments the latest canonical parent `rel-X.Y.Z` tag: `maj` resets minor and fix, `min` resets fix, and `fix` increments only fix.
 
-6. **WHAT:** Push parent and child tags separately only when explicitly authorized.
+7. **WHAT:** Push parent and child tags separately only when explicitly authorized.
 
    ```bash
    git push origin rel-<version> devrel-<version>
@@ -42,7 +46,7 @@
 
    **WHY:** The promotion command creates local rollback references but never pushes, deploys, restarts a server, updates a remote submodule, or activates a release.
 
-7. **WHAT:** Read the `logFile` path from the success or rejection JSON.
+8. **WHAT:** Read the `logFile` path from the success or rejection JSON.
 
    **WHY:** Every admitted, rejected, failed, and completed invocation writes a durable local JSONL receipt.
 

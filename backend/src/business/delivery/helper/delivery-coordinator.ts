@@ -9,6 +9,7 @@ import {
   parseDeliveryNodeReceipt,
   parseDeliveryRun,
   type DeliveryExitCode,
+  type DeliveryEvidenceEntry,
   type DeliveryNodeCommand,
   type DeliveryNodeReceipt,
   type DeliveryPhase,
@@ -34,6 +35,7 @@ export type DeliveryMutationReceipt = {
   predecessor: string;
   resultIdentity: string;
   observedAt: string;
+  evidence?: DeliveryEvidenceEntry[];
 };
 
 export type DeliveryNodeAuthority = {
@@ -543,6 +545,7 @@ export function mutationReceiptEvidence(receipt: DeliveryMutationReceipt): Deliv
     { key: 'predecessor', value: receipt.predecessor },
     { key: 'resultIdentity', value: receipt.resultIdentity },
     { key: 'observedAt', value: receipt.observedAt },
+    ...(receipt.evidence ?? []),
   ];
 }
 

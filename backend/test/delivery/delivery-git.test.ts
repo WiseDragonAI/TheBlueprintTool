@@ -6,16 +6,19 @@ import { join, resolve } from 'node:path';
 import type { RepositoryMutationLock } from '../../src/business/content-authoring/helper/repository-mutation-lock.js';
 import {
   DeliveryGitError,
+  observeDeliveryGitAuthority,
   preflightDeliveryGit,
   promoteDeliveryMain,
   verifyDeliveryCandidateGit,
   type DeliveryGitRunner,
 } from '../../src/business/delivery/helper/delivery-git.js';
 import type { BoundedProcessResult, RunBoundedProcessInput } from '../../src/business/process/helper/run-bounded-process.js';
+import { mutationReceiptEvidence } from '../../src/business/delivery/helper/delivery-coordinator.js';
 
 const releaseSha = 'a'.repeat(40);
 const priorMainSha = 'b'.repeat(40);
 const mainSha = 'c'.repeat(40);
+const protectedGitlink = 'd'.repeat(40);
 
 function result(input: RunBoundedProcessInput, stdout = '', ok = true): BoundedProcessResult {
   return {
@@ -97,9 +100,16 @@ test('delivery main promotion verifies in an isolated worktree, re-fetches, then
     const operation = String(input.context?.operation ?? '');
     const args = [...(input.args ?? [])];
     calls.push({ operation, args });
-    if (operation === 'read_merge_sha') return result(input, mainSha);
-    if (operation === 'reread_origin_main') return result(input, priorMainSha);
-    return result(input);
+    const output: Record<string, string> = {
+      read_protected_gitlink: protectedGitlink,
+      read_prior_main_sha: priorMainSha,
+      read_staged_gitlink: protectedGitlink,
+      read_merge_sha: mainSha,
+      read_merge_parents: `${priorMainSha} ${releaseSha}`,
+      read_final_gitlink: protectedGitlink,
+      reread_origin_main: priorMainSha,
+    };
+    return result(input, output[operation] ?? '');
   };
   let verified = '';
   const promoted = await promoteDeliveryMain({
@@ -113,14 +123,141 @@ test('delivery main promotion verifies in an isolated worktree, re-fetches, then
     },
   });
   assert.equal(promoted.mainSha, mainSha);
+  assert.equal(promoted.protectedGitlink, protectedGitlink);
+  assert.deepEqual(promoted.mergeParents, [priorMainSha, releaseSha]);
   assert.equal(verified, mainSha);
   const merge = calls.find((call) => call.operation === 'merge_release')!;
   assert.ok(merge.args.includes('--no-ff'));
-  assert.ok(merge.args.some((argument) => argument.startsWith('WHAT:')));
-  assert.ok(merge.args.some((argument) => argument.startsWith('WHY:')));
+  const commit = calls.find((call) => call.operation === 'commit_protected_merge')!;
+  assert.ok(commit.args.some((argument) => argument.includes('WHAT:')));
+  assert.ok(commit.args.some((argument) => argument.includes('WHY:')));
+  const restore = calls.find((call) => call.operation === 'restore_protected_gitlink')!;
+  assert.ok(restore.args.includes('.decision-os'));
   const push = calls.find((call) => call.operation === 'push_main')!;
   assert.ok(push.args.includes(`${mainSha}:refs/heads/main`));
   assert.ok(!push.args.includes('--force'));
+});
+
+test('delivery main promotion owns the Decision OS gitlink conflict and preserves main', async (context) => {
+  const { root, identity, lock } = fixture();
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const integrationRoot = resolve(root, 'integration');
+  mkdirSync(integrationRoot);
+  const calls: string[] = [];
+  const runner: DeliveryGitRunner = async (input) => {
+    const operation = String(input.context?.operation ?? '');
+    calls.push(operation);
+    const output: Record<string, { stdout: string; ok?: boolean }> = {
+      read_protected_gitlink: { stdout: protectedGitlink },
+      simulate_protected_merge: { stdout: 'CONFLICT (submodule): Merge conflict in .decision-os', ok: false },
+      read_prior_main_sha: { stdout: priorMainSha },
+      merge_release: { stdout: 'CONFLICT (submodule): Merge conflict in .decision-os', ok: false },
+      read_staged_gitlink: { stdout: protectedGitlink },
+      read_merge_sha: { stdout: mainSha },
+      read_merge_parents: { stdout: `${priorMainSha} ${releaseSha}` },
+      read_final_gitlink: { stdout: protectedGitlink },
+      reread_origin_main: { stdout: priorMainSha },
+    };
+    const selected = output[operation];
+    return result(input, selected?.stdout ?? '', selected?.ok ?? true);
+  };
+  const promoted = await promoteDeliveryMain({
+    preflight: { repositoryRoot: root, releaseSha, priorMainSha, originDevSha: releaseSha, releaseWorktrees: [] },
+    repositoryLock: lock,
+    settings: { projectSyncGitSshIdentityFile: identity },
+    runner,
+    integrationRoot,
+    async verifyCandidate() {},
+  });
+  assert.equal(promoted.protectedGitlink, protectedGitlink);
+  assert.ok(calls.includes('restore_protected_gitlink'));
+  assert.ok(!calls.includes('abort_protected_merge'));
+});
+
+test('delivery main promotion rejects a source conflict before starting the merge', async (context) => {
+  const { root, identity, lock } = fixture();
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const integrationRoot = resolve(root, 'integration');
+  mkdirSync(integrationRoot);
+  const calls: string[] = [];
+  const runner: DeliveryGitRunner = async (input) => {
+    const operation = String(input.context?.operation ?? '');
+    calls.push(operation);
+    const output: Record<string, { stdout: string; ok?: boolean }> = {
+      read_protected_gitlink: { stdout: protectedGitlink },
+      simulate_protected_merge: { stdout: 'CONFLICT (content): Merge conflict in backend/source.ts', ok: false },
+    };
+    const selected = output[operation];
+    return result(input, selected?.stdout ?? '', selected?.ok ?? true);
+  };
+  await assert.rejects(
+    promoteDeliveryMain({
+      preflight: { repositoryRoot: root, releaseSha, priorMainSha, originDevSha: releaseSha, releaseWorktrees: [] },
+      repositoryLock: lock,
+      settings: { projectSyncGitSshIdentityFile: identity },
+      runner,
+      integrationRoot,
+      async verifyCandidate() {},
+    }),
+    (error: unknown) => error instanceof DeliveryGitError && error.code === 'delivery_git_protected_merge_source_conflict',
+  );
+  assert.ok(!calls.includes('merge_release'));
+});
+
+test('delivery authority recovery requires exact parents and the preserved main gitlink', async (context) => {
+  const { root, identity } = fixture();
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const runner = (finalGitlink: string): DeliveryGitRunner => async (input) => {
+    const operation = String(input.context?.operation ?? '');
+    const output: Record<string, string> = {
+      observe_origin_dev: releaseSha,
+      observe_origin_main: mainSha,
+      observe_merge_parents: `${priorMainSha} ${releaseSha}`,
+      observe_prior_gitlink: protectedGitlink,
+      observe_final_gitlink: finalGitlink,
+    };
+    return result(input, output[operation] ?? '');
+  };
+  const exact = await observeDeliveryGitAuthority({
+    repositoryRoot: root,
+    admittedSha: releaseSha,
+    priorMainSha,
+    expectedMainSha: mainSha,
+    settings: { projectSyncGitSshIdentityFile: identity },
+    runner: runner(protectedGitlink),
+  });
+  assert.equal(exact.exactMerge, true);
+  assert.equal(exact.protectedGitlink, protectedGitlink);
+  const changed = await observeDeliveryGitAuthority({
+    repositoryRoot: root,
+    admittedSha: releaseSha,
+    priorMainSha,
+    expectedMainSha: mainSha,
+    settings: { projectSyncGitSshIdentityFile: identity },
+    runner: runner('e'.repeat(40)),
+  });
+  assert.equal(changed.exactMerge, false);
+});
+
+test('delivery mutation evidence retains protected merge identity in the durable phase receipt', () => {
+  const evidence = mutationReceiptEvidence({
+    receiptId: 'external-protected-merge',
+    mutation: 'promote-main',
+    targetSha: releaseSha,
+    predecessor: priorMainSha,
+    resultIdentity: mainSha,
+    observedAt: '2026-08-06T00:00:00.000Z',
+    evidence: [
+      { key: 'protectedGitlink', value: protectedGitlink },
+      { key: 'mergeFirstParent', value: priorMainSha },
+      { key: 'mergeSecondParent', value: releaseSha },
+    ],
+  });
+  assert.deepEqual(evidence.slice(-3), [
+    { key: 'protectedGitlink', value: protectedGitlink },
+    { key: 'mergeFirstParent', value: priorMainSha },
+    { key: 'mergeSecondParent', value: releaseSha },
+  ]);
 });
 
 test('delivery Git rejects a changed origin/dev before promotion mutation', async (context) => {
