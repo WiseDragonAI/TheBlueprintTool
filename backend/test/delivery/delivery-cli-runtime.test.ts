@@ -258,6 +258,7 @@ test('default runtime collects fresh authenticated admission and live reconcilia
     return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   const gitCalls: string[][] = [];
+  const protectedGitlink = 'c'.repeat(40);
   let liveGit = false;
   const gitRunner = async (input: RunBoundedProcessInput) => {
     const args = input.args ?? [];
@@ -268,6 +269,9 @@ test('default runtime collects fresh authenticated admission and live reconcilia
     if (args.includes('refs/remotes/origin/dev')) return processResult(input, admittedSha);
     if (args.includes('refs/remotes/origin/main')) return processResult(input, liveGit ? mainSha : priorSha);
     if (args.includes('--format=%P')) return processResult(input, `${priorSha} ${admittedSha}`);
+    // WHAT: Return the same protected gitlink for the prior and promoted main commits.
+    // WHY: Live reconciliation now proves that the delivery merge preserved main's Decision OS state.
+    if (args.some((argument) => argument.endsWith(':.decision-os'))) return processResult(input, protectedGitlink);
     return processResult(input);
   };
   const relayCalls: string[][] = [];

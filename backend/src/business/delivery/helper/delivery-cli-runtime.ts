@@ -57,6 +57,7 @@ import {
 } from './delivery-coordinator.js';
 import {
   parseDeliveryNodeReceipt,
+  type DeliveryEvidenceEntry,
   type DeliveryNodeCommand,
   type DeliveryNodeReceipt,
   type DeliveryRun,
@@ -168,6 +169,7 @@ function mutationReceipt(input: {
   predecessor: string;
   resultIdentity: string;
   observedAt?: string;
+  evidence?: DeliveryEvidenceEntry[];
 }): DeliveryMutationReceipt {
   const observedAt = input.observedAt ?? new Date().toISOString();
   return {
@@ -177,6 +179,9 @@ function mutationReceipt(input: {
     predecessor: input.predecessor,
     resultIdentity: input.resultIdentity,
     observedAt,
+    // WHAT: Attach scoped evidence only when the owning mutation supplied it.
+    // WHY: Existing relay and node receipt shapes remain byte-stable.
+    ...(input.evidence ? { evidence: input.evidence } : {}),
   };
 }
 
@@ -436,6 +441,11 @@ export async function createDefaultDeliveryCliRuntime(input: {
           targetSha: run.admittedSha,
           predecessor: preflight.priorMainSha,
           resultIdentity: promotion.mainSha,
+          evidence: [
+            { key: 'protectedGitlink', value: promotion.protectedGitlink },
+            { key: 'mergeFirstParent', value: promotion.mergeParents[0] },
+            { key: 'mergeSecondParent', value: promotion.mergeParents[1] },
+          ],
         }),
       };
     },
@@ -586,12 +596,17 @@ export async function createDefaultDeliveryCliRuntime(input: {
       const activeReleaseSha = String((relayHealth as AnyRecord).releaseSha ?? '');
       const gitPromotion = run.mainSha && gitAuthority.exactMerge && gitAuthority.originMainSha === run.mainSha
         ? mutationReceipt({
-            mutation: 'promote-main',
-            targetSha: run.admittedSha,
-            predecessor: run.priorMainSha,
-            resultIdentity: run.mainSha,
-            observedAt: gitAuthority.observedAt,
-          })
+          mutation: 'promote-main',
+          targetSha: run.admittedSha,
+          predecessor: run.priorMainSha,
+          resultIdentity: run.mainSha,
+          observedAt: gitAuthority.observedAt,
+          evidence: [
+            { key: 'protectedGitlink', value: gitAuthority.protectedGitlink },
+            { key: 'mergeFirstParent', value: run.priorMainSha },
+            { key: 'mergeSecondParent', value: run.admittedSha },
+          ],
+        })
         : null;
       const upload = targetVersion && run.mainSha
         ? mutationReceipt({
