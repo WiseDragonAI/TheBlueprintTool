@@ -2,7 +2,7 @@
 
 1. `bin/decision-os-delivery.mjs`, published as `decision-os-delivery`, is the only end-to-end production release authority.
 2. The CLI owns six fixed commands: `bootstrap-node`, `candidate`, `promote`, `status`, `resume`, and `rollback`.
-3. `promote` admits one exact pushed `origin/dev` SHA and its already-published canonical `origin/main` merge, deploys one production relay version, activates every frozen project-owning node, restarts each node through its adopted supervisor, and proves release identity plus federation convergence.
+3. `promote` admits one canonical published release-tag pair, deploys one production relay version, activates the configured coordinator node, restarts it through its adopted supervisor, and proves release identity plus federation convergence.
 4. Do not use the primary checkout as a release directory. Delivery creates immutable release worktrees and leaves primary checkouts, unrelated working-tree bytes, and staged operator hunks untouched.
 5. A production mutation is forbidden until the run journal contains the successful `admit-exact-release` receipt for the requested SHA.
 
@@ -57,11 +57,11 @@
    node /absolute/decision-os/bin/decision-os-delivery.mjs bootstrap-node --json
    ```
 
-3. The workstation adapter prepares `releases/<initialCommit>`, atomically initializes `current`, registers MultiTerm with `--cmd <release-root>/current/bin/decision-os-server.mjs`, preserves port `50150`, requires automatic restart, and writes protocol-1 settings with mode `0600`.
+3. The workstation adapter prepares `releases/<initialCommit>`, atomically initializes `current`, registers MultiTerm with `--cmd "env PORT=50150 <release-root>/current/bin/decision-os-server.mjs"`, preserves port `50150`, requires automatic restart, and writes protocol-1 settings with mode `0600`.
 4. Bootstrap uses `--no-launch`. It adopts the supervisor definition without starting, stopping, and restarting the live server inside the bootstrap command.
 5. The implemented adapter accepts node ID `workstation` and supervisor profile `multiterm-workstation-v1`.
 6. A non-workstation node requires a validated node-owned supervisor adapter. The current CLI returns `unsupported_supervisor_profile` for the phone; do not infer its service manager, stop command, start command, catalog root, and automatic-restart behavior.
-7. Production promotion remains blocked until the operator supplies the phone supervisor record and the node-owned adapter is implemented and fixture-verified.
+7. Production promotion requires only the configured workstation coordinator. Phone and other federation-node supervisor records are outside production delivery admission.
 
 ---
 

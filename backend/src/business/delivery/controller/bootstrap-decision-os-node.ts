@@ -154,7 +154,7 @@ export async function bootstrapDecisionOsNode(input: {
     args: [
       'register',
       '--cwd', profile.catalogRoot,
-      '--cmd', `${store.currentPointer}/bin/decision-os-server.mjs`,
+      '--cmd', `env PORT=50150 ${store.currentPointer}/bin/decision-os-server.mjs`,
       '--port', '50150',
       '--url', profile.url,
       '--name', profile.name,
