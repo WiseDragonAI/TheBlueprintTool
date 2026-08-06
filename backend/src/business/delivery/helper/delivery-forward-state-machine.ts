@@ -200,9 +200,12 @@ export async function advanceDecisionOsDelivery(
       run,
       phase: 'preflight',
       operation,
-      commitSha: run.admittedSha,
+      commitSha: preflight.mainSha,
       evidence: mutationReceiptEvidence(preflight.receipt),
-      mutate: (next) => { next.priorMainSha = preflight.priorMainSha; },
+      mutate: (next) => {
+        next.priorMainSha = preflight.priorMainSha;
+        next.mainSha = preflight.mainSha;
+      },
     });
   }
 
@@ -255,25 +258,6 @@ export async function advanceDecisionOsDelivery(
         { key: 'priorVersionId', value: current.versionId },
       ],
       mutate: (next) => { next.relay.priorDeploymentId = current.deploymentId; },
-    });
-  }
-
-  if (!run.mainSha) {
-    const operation = 'promote-main';
-    run = begin({ context, run, phase: 'main-promotion', operation, commitSha: run.admittedSha });
-    const promoted = await execute(context, operation, async (signal) => await context.effects.promoteMain({
-      run,
-      repositoryLock: context.repositoryLock,
-      signal,
-    }));
-    run = complete({
-      context,
-      run,
-      phase: 'main-promotion',
-      operation,
-      commitSha: promoted.mainSha,
-      evidence: mutationReceiptEvidence(promoted.receipt),
-      mutate: (next) => { next.mainSha = promoted.mainSha; },
     });
   }
 

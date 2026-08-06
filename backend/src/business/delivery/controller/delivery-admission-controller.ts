@@ -277,9 +277,10 @@ function assertNoProductionMutation(run: DeliveryRun): void {
     receipt.status === 'succeeded'
     && ['main-promotion', 'node-preparation', 'relay-upload', 'relay-activation', 'node-activation'].includes(receipt.phase)
   ));
+  // WHAT: Reject runtime mutation while allowing the read-only admitted main SHA from Git preflight.
+  // WHY: Observing the merge is admission evidence; node and relay changes remain forbidden before admission.
   if (
-    run.mainSha !== null
-    || run.relay.priorDeploymentId
+    run.relay.priorDeploymentId
     || run.relay.uploadedVersionId
     || run.relay.activeVersionId
     || run.activationOrder.length > 0

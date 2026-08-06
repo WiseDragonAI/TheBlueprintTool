@@ -25,9 +25,9 @@
 
    **WHY:** The receipt identifies the admitted `dev` SHA, committed child SHA, optional child and gitlink commits, final merge SHA, exact merge parents, preserved Decision OS gitlink, four release tag targets, and final parent and child status.
 
-4. **WHAT:** The standalone command and `decision-os-delivery promote` execute the same protected merge transaction.
+4. **WHAT:** The standalone command is the sole owner of the protected `dev` to `main` merge transaction.
 
-   **WHY:** The exact `.decision-os` conflict admission, gitlink restoration, source-conflict rejection, parent proof, and final-gitlink proof must not drift between local and production promotion.
+   **WHY:** `decision-os-delivery promote` consumes the published merge as immutable release input and performs no merge, commit, tag, and push operation.
 
 5. **WHAT:** Treat `READY` plus doctor exit `0` as admission, `NO-GO` plus doctor exit `2` as blocked, merge exit `2` as rejected repository state, and merge exit `3` as an execution failure.
 
@@ -37,14 +37,14 @@
 
    **WHY:** The command never accepts a manual version. It increments the latest canonical parent `rel-X.Y.Z` tag: `maj` resets minor and fix, `min` resets fix, and `fix` increments only fix.
 
-7. **WHAT:** Push parent and child tags separately only when explicitly authorized.
+7. **WHAT:** Publish the exact receipt `mainSha`, parent tags, and child tags only when explicitly authorized.
 
    ```bash
-   git push origin rel-<version> devrel-<version>
+   git push origin <mainSha>:refs/heads/main rel-<version> devrel-<version>
    git -C .decision-os push local-submodule rel-<version> devrel-<version>
    ```
 
-   **WHY:** The promotion command creates local rollback references but never pushes, deploys, restarts a server, updates a remote submodule, or activates a release.
+   **WHY:** Production delivery admits only an already-published canonical main merge. The merge command itself never pushes, deploys, restarts a server, updates a remote submodule, and activates a release.
 
 8. **WHAT:** Read the `logFile` path from the success or rejection JSON.
 

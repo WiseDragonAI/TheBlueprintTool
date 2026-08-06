@@ -159,7 +159,7 @@ export async function promoteDecisionOsDelivery(input: {
       if (rolledBack.status === 'rolled-back-runtime') lease.release();
       return rolledBack;
     }
-    const admissionRejected = !run.mainSha && (failurePhase === 'created' || failurePhase === 'preflight' || failurePhase === 'admission');
+    const admissionRejected = failurePhase === 'created' || failurePhase === 'preflight' || failurePhase === 'admission';
     run = runStore.write(parseDeliveryRun({
       ...run,
       status: admissionRejected ? 'admission-rejected' : 'paused',

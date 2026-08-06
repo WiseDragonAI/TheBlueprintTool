@@ -1,14 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import type { RepositoryMutationLock } from '../../src/business/content-authoring/helper/repository-mutation-lock.js';
 import {
   DeliveryGitError,
   observeDeliveryGitAuthority,
   preflightDeliveryGit,
-  promoteDeliveryMain,
   verifyDeliveryCandidateGit,
   type DeliveryGitRunner,
 } from '../../src/business/delivery/helper/delivery-git.js';
@@ -62,7 +61,7 @@ function fixture() {
   return { root, identity, lock };
 }
 
-test('delivery Git preflight uses fetched refs and rejects no reviewed boundary', async (context) => {
+test('delivery Git preflight admits an exact published protected main merge without mutation', async (context) => {
   const { root, identity, lock } = fixture();
   context.after(() => rmSync(root, { recursive: true, force: true }));
   const calls: string[][] = [];
@@ -71,7 +70,13 @@ test('delivery Git preflight uses fetched refs and rejects no reviewed boundary'
     calls.push(args);
     const operation = String(input.context?.operation ?? '');
     if (operation === 'read_origin_dev') return result(input, releaseSha);
-    if (operation === 'read_origin_main') return result(input, priorMainSha);
+    if (operation === 'read_origin_main') return result(input, mainSha);
+    // WHAT: Model the exact main merge produced by the standalone merge command.
+    // WHY: Delivery preflight must consume this evidence without constructing another merge.
+    if (operation === 'read_main_merge_parents') return result(input, `${priorMainSha} ${releaseSha}`);
+    // WHAT: Model one unchanged protected gitlink across the merge.
+    // WHY: The deploy-only admission must reject any main-owned child-state replacement.
+    if (operation === 'read_main_gitlink' || operation === 'read_prior_main_gitlink') return result(input, protectedGitlink);
     if (operation === 'list_worktrees') return result(input, `worktree ${root}\nHEAD ${releaseSha}\nbranch refs/heads/dev\n`);
     if (operation === 'detect_active_operation') return result(input, '', false);
     return result(input);
@@ -86,122 +91,48 @@ test('delivery Git preflight uses fetched refs and rejects no reviewed boundary'
   });
   assert.equal(preflight.priorMainSha, priorMainSha);
   assert.equal(preflight.originDevSha, releaseSha);
+  assert.equal(preflight.mainSha, mainSha);
+  assert.equal(preflight.protectedGitlink, protectedGitlink);
   assert.ok(calls.some((args) => args.includes('fetch') && args.includes('main') && args.includes('dev')));
-  assert.ok(calls.every((args) => !args.includes('--force')));
+  assert.ok(calls.every((args) => !args.includes('merge') && !args.includes('commit') && !args.includes('push')));
 });
 
-test('delivery main promotion verifies in an isolated worktree, re-fetches, then pushes exact SHA', async (context) => {
+test('delivery Git preflight rejects a main commit not produced from the requested dev release', async (context) => {
   const { root, identity, lock } = fixture();
   context.after(() => rmSync(root, { recursive: true, force: true }));
-  const integrationRoot = resolve(root, 'integration');
-  mkdirSync(integrationRoot);
-  const calls: Array<{ operation: string; args: string[] }> = [];
-  const runner: DeliveryGitRunner = async (input) => {
-    const operation = String(input.context?.operation ?? '');
-    const args = [...(input.args ?? [])];
-    calls.push({ operation, args });
-    const output: Record<string, string> = {
-      read_protected_gitlink: protectedGitlink,
-      read_prior_main_sha: priorMainSha,
-      read_staged_gitlink: protectedGitlink,
-      read_merge_sha: mainSha,
-      read_merge_parents: `${priorMainSha} ${releaseSha}`,
-      read_final_gitlink: protectedGitlink,
-      reread_origin_main: priorMainSha,
-    };
-    return result(input, output[operation] ?? '');
+  const output: Record<string, string> = {
+    read_origin_dev: releaseSha,
+    read_origin_main: mainSha,
+    read_main_merge_parents: `${priorMainSha} ${'e'.repeat(40)}`,
   };
-  let verified = '';
-  const promoted = await promoteDeliveryMain({
-    preflight: { repositoryRoot: root, releaseSha, priorMainSha, originDevSha: releaseSha, releaseWorktrees: [] },
+  const runner: DeliveryGitRunner = async (input) => result(input, output[String(input.context?.operation ?? '')] ?? '');
+  await assert.rejects(preflightDeliveryGit({
+    repositoryRoot: root,
+    releaseSha,
     repositoryLock: lock,
     settings: { projectSyncGitSshIdentityFile: identity },
     runner,
-    integrationRoot,
-    async verifyCandidate({ mainSha: candidate }) {
-      verified = candidate;
-    },
-  });
-  assert.equal(promoted.mainSha, mainSha);
-  assert.equal(promoted.protectedGitlink, protectedGitlink);
-  assert.deepEqual(promoted.mergeParents, [priorMainSha, releaseSha]);
-  assert.equal(verified, mainSha);
-  const merge = calls.find((call) => call.operation === 'merge_release')!;
-  assert.ok(merge.args.includes('--no-ff'));
-  const commit = calls.find((call) => call.operation === 'commit_protected_merge')!;
-  assert.ok(commit.args.some((argument) => argument.includes('WHAT:')));
-  assert.ok(commit.args.some((argument) => argument.includes('WHY:')));
-  const restore = calls.find((call) => call.operation === 'restore_protected_gitlink')!;
-  assert.ok(restore.args.includes('.decision-os'));
-  const push = calls.find((call) => call.operation === 'push_main')!;
-  assert.ok(push.args.includes(`${mainSha}:refs/heads/main`));
-  assert.ok(!push.args.includes('--force'));
+  }), (error: unknown) => error instanceof DeliveryGitError && error.code === 'delivery_main_merge_invalid');
 });
 
-test('delivery main promotion owns the Decision OS gitlink conflict and preserves main', async (context) => {
+test('delivery Git preflight rejects a published merge that changes the protected gitlink', async (context) => {
   const { root, identity, lock } = fixture();
   context.after(() => rmSync(root, { recursive: true, force: true }));
-  const integrationRoot = resolve(root, 'integration');
-  mkdirSync(integrationRoot);
-  const calls: string[] = [];
-  const runner: DeliveryGitRunner = async (input) => {
-    const operation = String(input.context?.operation ?? '');
-    calls.push(operation);
-    const output: Record<string, { stdout: string; ok?: boolean }> = {
-      read_protected_gitlink: { stdout: protectedGitlink },
-      simulate_protected_merge: { stdout: 'CONFLICT (submodule): Merge conflict in .decision-os', ok: false },
-      read_prior_main_sha: { stdout: priorMainSha },
-      merge_release: { stdout: 'CONFLICT (submodule): Merge conflict in .decision-os', ok: false },
-      read_staged_gitlink: { stdout: protectedGitlink },
-      read_merge_sha: { stdout: mainSha },
-      read_merge_parents: { stdout: `${priorMainSha} ${releaseSha}` },
-      read_final_gitlink: { stdout: protectedGitlink },
-      reread_origin_main: { stdout: priorMainSha },
-    };
-    const selected = output[operation];
-    return result(input, selected?.stdout ?? '', selected?.ok ?? true);
+  const output: Record<string, string> = {
+    read_origin_dev: releaseSha,
+    read_origin_main: mainSha,
+    read_main_merge_parents: `${priorMainSha} ${releaseSha}`,
+    read_main_gitlink: 'e'.repeat(40),
+    read_prior_main_gitlink: protectedGitlink,
   };
-  const promoted = await promoteDeliveryMain({
-    preflight: { repositoryRoot: root, releaseSha, priorMainSha, originDevSha: releaseSha, releaseWorktrees: [] },
+  const runner: DeliveryGitRunner = async (input) => result(input, output[String(input.context?.operation ?? '')] ?? '');
+  await assert.rejects(preflightDeliveryGit({
+    repositoryRoot: root,
+    releaseSha,
     repositoryLock: lock,
     settings: { projectSyncGitSshIdentityFile: identity },
     runner,
-    integrationRoot,
-    async verifyCandidate() {},
-  });
-  assert.equal(promoted.protectedGitlink, protectedGitlink);
-  assert.ok(calls.includes('restore_protected_gitlink'));
-  assert.ok(!calls.includes('abort_protected_merge'));
-});
-
-test('delivery main promotion rejects a source conflict before starting the merge', async (context) => {
-  const { root, identity, lock } = fixture();
-  context.after(() => rmSync(root, { recursive: true, force: true }));
-  const integrationRoot = resolve(root, 'integration');
-  mkdirSync(integrationRoot);
-  const calls: string[] = [];
-  const runner: DeliveryGitRunner = async (input) => {
-    const operation = String(input.context?.operation ?? '');
-    calls.push(operation);
-    const output: Record<string, { stdout: string; ok?: boolean }> = {
-      read_protected_gitlink: { stdout: protectedGitlink },
-      simulate_protected_merge: { stdout: 'CONFLICT (content): Merge conflict in backend/source.ts', ok: false },
-    };
-    const selected = output[operation];
-    return result(input, selected?.stdout ?? '', selected?.ok ?? true);
-  };
-  await assert.rejects(
-    promoteDeliveryMain({
-      preflight: { repositoryRoot: root, releaseSha, priorMainSha, originDevSha: releaseSha, releaseWorktrees: [] },
-      repositoryLock: lock,
-      settings: { projectSyncGitSshIdentityFile: identity },
-      runner,
-      integrationRoot,
-      async verifyCandidate() {},
-    }),
-    (error: unknown) => error instanceof DeliveryGitError && error.code === 'delivery_git_protected_merge_source_conflict',
-  );
-  assert.ok(!calls.includes('merge_release'));
+  }), (error: unknown) => error instanceof DeliveryGitError && error.code === 'delivery_main_gitlink_changed');
 });
 
 test('delivery authority recovery requires exact parents and the preserved main gitlink', async (context) => {
@@ -239,10 +170,10 @@ test('delivery authority recovery requires exact parents and the preserved main 
   assert.equal(changed.exactMerge, false);
 });
 
-test('delivery mutation evidence retains protected merge identity in the durable phase receipt', () => {
+test('delivery admission evidence retains protected merge identity in the durable phase receipt', () => {
   const evidence = mutationReceiptEvidence({
     receiptId: 'external-protected-merge',
-    mutation: 'promote-main',
+    mutation: 'admit-main-release',
     targetSha: releaseSha,
     predecessor: priorMainSha,
     resultIdentity: mainSha,

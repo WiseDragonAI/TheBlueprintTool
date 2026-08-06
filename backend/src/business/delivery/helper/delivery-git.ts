@@ -1,9 +1,8 @@
 /**
- * WHAT: Owns reviewed delivery Git preflight and isolated main promotion.
- * WHY: Production Git mutation must be exact-SHA, lease-bound, bounded, and leave operator checkouts untouched.
+ * WHAT: Verifies candidate Git state and admits one already-published protected main merge for delivery.
+ * WHY: Production delivery must observe Git authority without creating, committing, or pushing repository state.
  */
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import type { RepositoryMutationLock } from '../../content-authoring/helper/repository-mutation-lock.js';
 import {
@@ -13,12 +12,6 @@ import {
 } from '../../process/helper/run-bounded-process.js';
 import { projectSyncGitSshCommand } from '../../project-sync/helper/project-sync-git-ssh-command.js';
 import { redactDeliveryText } from './delivery-redactor.js';
-import {
-  mergeDevPreservingMainGitlink,
-  ProtectedMergeError,
-  type ProtectedMergeCommandResult,
-  type ProtectedMergeExecutor,
-} from './protected-dev-main-merge.js';
 
 export type DeliveryGitRunner = (input: RunBoundedProcessInput) => Promise<BoundedProcessResult>;
 
@@ -27,16 +20,15 @@ export type DeliveryGitPreflight = {
   releaseSha: string;
   priorMainSha: string;
   originDevSha: string;
+  mainSha: string;
+  protectedGitlink: string;
   releaseWorktrees: Array<{ path: string; branch: string; headSha: string }>;
 };
 
-export type DeliveryGitPromotion = DeliveryGitPreflight & {
-  mainSha: string;
-  mergeParents: [string, string];
-  protectedGitlink: string;
-};
-
-export type DeliveryCandidateGitVerification = Omit<DeliveryGitPreflight, 'releaseWorktrees'> & {
+export type DeliveryCandidateGitVerification = Pick<
+  DeliveryGitPreflight,
+  'repositoryRoot' | 'releaseSha' | 'priorMainSha' | 'originDevSha'
+> & {
   candidateWorktree: string;
 };
 
@@ -82,39 +74,6 @@ async function git(input: {
     throw new DeliveryGitError(`delivery_git_${input.operation}_failed`, `Git ${input.operation} failed: ${detail}.`);
   }
   return result.ok ? result.stdout.trim() : '';
-}
-
-function deliveryProtectedMergeExecutor(input: {
-  root: string;
-  runner: DeliveryGitRunner;
-  env: NodeJS.ProcessEnv;
-  signal?: AbortSignal;
-}): ProtectedMergeExecutor {
-  return async (args, acceptedStatuses = [0], operation = 'protected_merge'): Promise<ProtectedMergeCommandResult> => {
-    // WHAT: Install the fixed delivery commit identity only for the shared merge commit.
-    // WHY: Immutable integration worktrees must not depend on an operator's global Git identity.
-    const commandArgs = operation === 'commit_protected_merge'
-      ? ['-c', 'user.name=Decision OS Delivery', '-c', 'user.email=decision-os-delivery@local', ...args]
-      : [...args];
-    const result = await input.runner({
-      command: 'git',
-      args: ['-C', input.root, ...commandArgs],
-      cwd: input.root,
-      env: input.env,
-      deadlineMs: 60_000,
-      signal: input.signal,
-      maximumOutputBytes: 1024 * 1024,
-      context: { component: 'delivery-git', operation },
-    });
-    const status = result.exitCode ?? 3;
-    // WHAT: Reject process failures and every Git status outside the transaction's explicit boundary.
-    // WHY: The protected merge may admit only its classified merge-conflict status.
-    if (result.spawnError || result.termination || !acceptedStatuses.includes(status)) {
-      const detail = redactDeliveryText(result.stderr.trim() || result.stdout.trim() || result.spawnError || result.termination || `exit ${status}`);
-      throw new DeliveryGitError(`delivery_git_${operation}_failed`, `Git ${operation} failed: ${detail}.`);
-    }
-    return { status, stdout: result.stdout, stderr: result.stderr };
-  };
 }
 
 export async function observeDeliveryGitAuthority(input: {
@@ -339,18 +298,45 @@ export async function preflightDeliveryGit(input: {
 
   await git({ root: repositoryRoot, args: ['fetch', '--prune', 'origin', 'main', 'dev'], runner, env, signal: input.signal, operation: 'fetch' });
   const originDevSha = sha(await git({ root: repositoryRoot, args: ['rev-parse', 'refs/remotes/origin/dev'], runner, env, signal: input.signal, operation: 'read_origin_dev' }), 'origin_dev_sha');
-  const priorMainSha = sha(await git({ root: repositoryRoot, args: ['rev-parse', 'refs/remotes/origin/main'], runner, env, signal: input.signal, operation: 'read_origin_main' }), 'origin_main_sha');
+  const mainSha = sha(await git({ root: repositoryRoot, args: ['rev-parse', 'refs/remotes/origin/main'], runner, env, signal: input.signal, operation: 'read_origin_main' }), 'origin_main_sha');
   if (originDevSha !== releaseSha) {
     throw new DeliveryGitError('delivery_release_ref_changed', 'The requested release SHA is not the fetched origin/dev SHA.');
   }
-  await git({
+  const mergeParents = (await git({
     root: repositoryRoot,
-    args: ['merge-base', '--is-ancestor', priorMainSha, releaseSha],
+    args: ['show', '-s', '--format=%P', mainSha],
     runner,
     env,
     signal: input.signal,
-    operation: 'verify_main_ancestry',
-  });
+    operation: 'read_main_merge_parents',
+  })).split(/\s+/).filter(Boolean);
+  // WHAT: Admit only the fixed two-parent main merge whose second parent is the exact candidate dev SHA.
+  // WHY: The merge tool is the sole dev-to-main authority; delivery may only consume its published result.
+  if (mergeParents.length !== 2 || mergeParents[1] !== releaseSha) {
+    throw new DeliveryGitError('delivery_main_merge_invalid', 'origin/main is not the canonical merge for the requested origin/dev release.');
+  }
+  const priorMainSha = sha(mergeParents[0] ?? '', 'prior_main_sha');
+  const protectedGitlink = sha(await git({
+    root: repositoryRoot,
+    args: ['rev-parse', `${mainSha}:.decision-os`],
+    runner,
+    env,
+    signal: input.signal,
+    operation: 'read_main_gitlink',
+  }), 'main_gitlink');
+  const priorGitlink = sha(await git({
+    root: repositoryRoot,
+    args: ['rev-parse', `${priorMainSha}:.decision-os`],
+    runner,
+    env,
+    signal: input.signal,
+    operation: 'read_prior_main_gitlink',
+  }), 'prior_main_gitlink');
+  // WHAT: Reject a published main merge that changed the protected Decision OS gitlink.
+  // WHY: Delivery must prove the fixed merge tool preserved main-owned child state before deployment.
+  if (protectedGitlink !== priorGitlink) {
+    throw new DeliveryGitError('delivery_main_gitlink_changed', 'origin/main does not preserve the predecessor Decision OS gitlink.');
+  }
   const worktrees = parseWorktrees(await git({
     root: repositoryRoot,
     args: ['worktree', 'list', '--porcelain'],
@@ -397,98 +383,5 @@ export async function preflightDeliveryGit(input: {
     });
     if (path && pathExists(path)) throw new DeliveryGitError('delivery_git_operation_in_progress', `Git operation state ${operationPath} is active.`);
   }
-  return { repositoryRoot, releaseSha, priorMainSha, originDevSha, releaseWorktrees };
-}
-
-export async function promoteDeliveryMain(input: {
-  preflight: DeliveryGitPreflight;
-  repositoryLock: RepositoryMutationLock;
-  settings: unknown;
-  runner?: DeliveryGitRunner;
-  environment?: NodeJS.ProcessEnv;
-  signal?: AbortSignal;
-  verifyCandidate: (input: { worktree: string; mainSha: string; signal?: AbortSignal }) => Promise<void>;
-  integrationRoot?: string;
-}): Promise<DeliveryGitPromotion> {
-  assertLease(input.preflight.repositoryRoot, input.repositoryLock);
-  const runner = input.runner ?? runBoundedProcess;
-  const env = gitEnvironment(input.settings, input.environment);
-  const parent = input.integrationRoot ? resolve(input.integrationRoot) : tmpdir();
-  const worktree = mkdtempSync(resolve(parent, 'decision-os-delivery-main-'));
-  let installed = false;
-  try {
-    await git({
-      root: input.preflight.repositoryRoot,
-      args: ['worktree', 'add', '--detach', worktree, input.preflight.priorMainSha],
-      runner,
-      env,
-      signal: input.signal,
-      operation: 'create_integration_worktree',
-    });
-    installed = true;
-    const protectedGitlink = sha(await git({
-      root: worktree,
-      args: ['rev-parse', 'HEAD:.decision-os'],
-      runner,
-      env,
-      signal: input.signal,
-      operation: 'read_protected_gitlink',
-    }), 'protected_gitlink');
-    let merged;
-    try {
-      merged = await mergeDevPreservingMainGitlink({
-        devSha: input.preflight.releaseSha,
-        protectedGitlink,
-        execute: deliveryProtectedMergeExecutor({ root: worktree, runner, env, signal: input.signal }),
-      });
-    } catch (error) {
-      // WHAT: Translate shared merge decisions into the delivery Git error namespace.
-      // WHY: Delivery journals and recovery classify failures by stable delivery-owned codes.
-      if (error instanceof ProtectedMergeError) {
-        throw new DeliveryGitError(`delivery_git_${error.code}`, error.message);
-      }
-      throw error;
-    }
-    const mainSha = sha(merged.mainSha, 'main_sha');
-    await input.verifyCandidate({ worktree, mainSha, signal: input.signal });
-    await git({ root: input.preflight.repositoryRoot, args: ['fetch', 'origin', 'main'], runner, env, signal: input.signal, operation: 'refetch_main' });
-    const observedMain = sha(await git({
-      root: input.preflight.repositoryRoot,
-      args: ['rev-parse', 'refs/remotes/origin/main'],
-      runner,
-      env,
-      signal: input.signal,
-      operation: 'reread_origin_main',
-    }), 'origin_main_sha');
-    if (observedMain !== input.preflight.priorMainSha) {
-      throw new DeliveryGitError('delivery_main_ref_changed', 'origin/main changed after candidate verification.');
-    }
-    await git({
-      root: worktree,
-      args: ['push', 'origin', `${mainSha}:refs/heads/main`],
-      runner,
-      env,
-      signal: input.signal,
-      operation: 'push_main',
-    });
-    return {
-      ...input.preflight,
-      mainSha,
-      mergeParents: merged.mergeParents,
-      protectedGitlink: merged.protectedGitlink,
-    };
-  } finally {
-    if (installed) {
-      await git({
-        root: input.preflight.repositoryRoot,
-        args: ['worktree', 'remove', '--force', worktree],
-        runner,
-        env,
-        signal: input.signal,
-        operation: 'remove_integration_worktree',
-        allowFailure: true,
-      });
-    }
-    if (existsSync(worktree)) rmSync(worktree, { recursive: true, force: true });
-  }
+  return { repositoryRoot, releaseSha, priorMainSha, originDevSha, mainSha, protectedGitlink, releaseWorktrees };
 }
