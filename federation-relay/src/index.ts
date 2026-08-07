@@ -528,8 +528,15 @@ export class FederationRelayV4 extends DurableObject<Env> {
       this.send(destination, frame);
       if (frame.type === 'response-end' || frame.type === 'response-error') this.streams.delete(frame.requestId);
     } catch (error) {
-      const code = error instanceof Error ? error.message : 'invalid_frame';
-      socket.send(JSON.stringify({ version: 1, type: 'response-error', requestId: frame?.requestId, code, message: code } satisfies RelayFrame));
+      const code = (error instanceof Error ? error.message : 'invalid_frame').slice(0, 160);
+      const payload = frame?.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+      const deliveryId = String(payload.deliveryId ?? '').slice(0, 160);
+      try {
+        console.error(JSON.stringify({ event: 'federation-relay-frame-rejected', nodeId: sender.slice(0, 160), frameType: String(frame?.type ?? '').slice(0, 80), projectId: String(frame?.projectId ?? '').slice(0, 160), deliveryId, code }));
+      } catch {
+        // Diagnostics must not escape the contained frame rejection.
+      }
+      socket.send(JSON.stringify({ version: 1, type: 'response-error', requestId: frame?.requestId, projectId: frame?.projectId, code, message: code, payload: { deliveryId } } satisfies RelayFrame));
     }
   }
 
