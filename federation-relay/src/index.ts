@@ -56,7 +56,7 @@ type Env = {
   RELAY_WORKER_NAME: string;
 };
 
-type SocketIdentity = { nodeId: string };
+type SocketIdentity = { nodeId: string; sessionId: string };
 type Stream = { requester: string; owner: string; requestCredit: number; responseCredit: number };
 type RelayRoute =
   | { kind: 'connect'; federationId: string; nodeId: string }
@@ -291,13 +291,14 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const peerRoot = String(payload.root ?? '');
     const peerManifestDigest = assertFederationRepairManifest(peerRoot, remote);
     const generation = await this.ctx.storage.get<number>(this.stateGenerationKey(projectId)) ?? 0;
+    const sessionId = (socket.deserializeAttachment() as SocketIdentity).sessionId;
     const repairKey = federationRepairRecordKey(sender, projectId);
     const admitted = await this.ctx.storage.transaction(async (transaction) => {
       const existing = await transaction.get<FederationRepairRecord>(repairKey);
-      // WHAT: Reuse only a repair record written by the response-complete contract.
-      // WHY: This suppresses repeated scans while allowing one retry for legacy premature claims.
-      if (currentFederationRepairRecord(existing, generation)) return false;
-      await transaction.put(repairKey, createFederationRepairRecord({ nodeId: sender, projectId, generation, peerRoot, peerManifestDigest }));
+      // WHAT: Reuse only a repair record written for this live socket session.
+      // WHY: Duplicate summaries stay bounded while a replacement connection can recover a response lost during disconnect.
+      if (currentFederationRepairRecord(existing, generation, sessionId)) return false;
+      await transaction.put(repairKey, createFederationRepairRecord({ nodeId: sender, sessionId, projectId, generation, peerRoot, peerManifestDigest }));
       return true;
     });
     // WHAT: End duplicate summary handling before the first bucket storage read.
@@ -345,16 +346,17 @@ export class FederationRelayV4 extends DurableObject<Env> {
     this.assertProjectParticipation(sender, projectId);
     const buckets = canonicalFederationRepairBuckets(Array.isArray(payload.buckets) ? payload.buckets : []);
     const generation = await this.ctx.storage.get<number>(this.stateGenerationKey(projectId)) ?? 0;
+    const sessionId = (socket.deserializeAttachment() as SocketIdentity).sessionId;
     const repairKey = federationRepairRecordKey(sender, projectId);
     const admitted = await this.ctx.storage.transaction(async (transaction) => {
       const retained = await transaction.get<FederationRepairRecord>(repairKey);
-      const existing = currentFederationRepairRecord(retained, generation)
+      const existing = currentFederationRepairRecord(retained, generation, sessionId)
         ? retained
-        : createFederationRepairRecord({ nodeId: sender, projectId, generation });
+        : createFederationRepairRecord({ nodeId: sender, sessionId, projectId, generation });
       return claimFederationRepairBuckets(existing, buckets).admitted;
     });
-    // WHAT: Suppress a request whose buckets were already served in this durable generation.
-    // WHY: Reconnect and repeated frames must perform zero new entity reads.
+    // WHAT: Suppress a request whose buckets were already served in this socket session and durable generation.
+    // WHY: Repeated frames stay bounded while a replacement connection remains eligible for one recovery response.
     if (admitted.length === 0) return;
     const entities: RelayEntity[] = [];
     for (const bucket of admitted) {
@@ -365,9 +367,9 @@ export class FederationRelayV4 extends DurableObject<Env> {
     await this.sendStateSummary(socket, projectId);
     await this.ctx.storage.transaction(async (transaction) => {
       const retained = await transaction.get<FederationRepairRecord>(repairKey);
-      const existing = currentFederationRepairRecord(retained, generation)
+      const existing = currentFederationRepairRecord(retained, generation, sessionId)
         ? retained
-        : createFederationRepairRecord({ nodeId: sender, projectId, generation });
+        : createFederationRepairRecord({ nodeId: sender, sessionId, projectId, generation });
       // WHAT: Claim only buckets whose entity response and terminal summary completed.
       // WHY: A failed read, encoding, send, or summary must remain retryable after reconnect.
       await transaction.put(repairKey, claimFederationRepairBuckets(existing, admitted).record);
@@ -412,7 +414,7 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const server = pair[1];
     const previous = this.socket(connect[1]);
     previous?.close(4001, 'replaced');
-    server.serializeAttachment({ nodeId: connect[1] } satisfies SocketIdentity);
+    server.serializeAttachment({ nodeId: connect[1], sessionId: crypto.randomUUID() } satisfies SocketIdentity);
     this.ctx.acceptWebSocket(server);
     await this.publishCatalog();
     return new Response(null, { status: 101, webSocket: client });

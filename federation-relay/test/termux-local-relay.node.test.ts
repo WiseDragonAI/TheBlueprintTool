@@ -152,7 +152,7 @@ test('Termux relay exposes dev health, provisions one node, and publishes its ca
   await once(child, 'exit');
 });
 
-test('Termux relay persists served-bucket suppression across reconnect and restart', async (context) => {
+test('Termux relay retries one served bucket after reconnect and suppresses duplicates inside each session', async (context) => {
   const port = await freePort();
   const directory = mkdtempSync(resolve(tmpdir(), 'decision-os-termux-flood-proof-'));
   const stateFile = resolve(directory, 'relay.json');
@@ -237,14 +237,19 @@ test('Termux relay persists served-bucket suppression across reconnect and resta
   await replacementSummary;
   const repeated = observeMatchingFrames(replacement, 250);
   replacement.send(JSON.stringify(request));
-  assert.equal((await repeated).filter((frame) => ['state-entity-batch', 'state-bucket-summary'].includes(String(frame.type))).length, 0);
+  const repeatedFrames = await repeated;
+  assert.equal(repeatedFrames.filter((frame) => frame.type === 'state-entity-batch').length, 1);
+  assert.equal(repeatedFrames.filter((frame) => frame.type === 'state-bucket-summary').length, 1);
+  const duplicate = observeMatchingFrames(replacement, 250);
+  replacement.send(JSON.stringify(request));
+  assert.equal((await duplicate).filter((frame) => ['state-entity-batch', 'state-bucket-summary'].includes(String(frame.type))).length, 0);
   replacement.close(1000, 'test_complete');
   await once(replacement, 'close');
   child.kill('SIGTERM');
   await once(child, 'exit');
 });
 
-test('a permanently divergent real node becomes quiescent and stays suppressed after reconnect', { timeout: 15_000 }, async (context) => {
+test('a permanently divergent real node becomes quiescent inside one connection', { timeout: 15_000 }, async (context) => {
   const implementationRoot = resolve(String(process.env.DECISION_OS_CANARY_IMPLEMENTATION_ROOT ?? '..'));
   const expectFlood = process.env.DECISION_OS_CANARY_EXPECT_FLOOD === '1';
   const selectedConnector = await import(pathToFileURL(resolve(implementationRoot, 'backend/src/business/federation/helper/federation-node-connector.ts')).href) as any;
@@ -357,8 +362,6 @@ test('a permanently divergent real node becomes quiescent and stays suppressed a
   }
   assert.equal(missingRequests, 1);
   assert.equal(droppedSentinels, 1);
-  connector.stop();
-  connector.start();
   await new Promise((resolvePromise) => setTimeout(resolvePromise, 500));
   assert.equal(missingRequests, 1);
   assert.equal(droppedSentinels, 1);
