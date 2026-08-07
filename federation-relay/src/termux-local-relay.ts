@@ -29,6 +29,7 @@ import {
   canonicalFederationRepairBuckets,
   claimFederationRepairBuckets,
   createFederationRepairRecord,
+  currentFederationRepairRecord,
   federationRepairRecordKey,
   type FederationRepairRecord,
 } from '../../shared/federation-repair-guard.js';
@@ -276,9 +277,9 @@ function reconcileStateSummary(sender: Client, frame: RelayFrame): void {
   const stored = federation(sender.federationId);
   const generation = stored.stateGenerations![projectId] ?? 0;
   const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
-  // WHAT: Suppress every later summary from this node in the same durable root generation.
-  // WHY: A divergent peer must not repeat full in-memory scans after reconnect.
-  if (stored.stateRepairRecords![repairKey]?.generation === generation) return;
+  // WHAT: Reuse only a repair record written by the response-complete contract.
+  // WHY: This suppresses repeated scans while allowing one retry for legacy premature claims.
+  if (currentFederationRepairRecord(stored.stateRepairRecords![repairKey], generation)) return;
   stored.stateRepairRecords![repairKey] = createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation, peerRoot, peerManifestDigest });
   persistState();
   const local = stateBuckets(sender.federationId, projectId);
@@ -380,17 +381,19 @@ function handleFrame(sender: Client, text: string): void {
         const generation = stored.stateGenerations![projectId] ?? 0;
         const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
         const retained = stored.stateRepairRecords![repairKey];
-        const existing = retained?.generation === generation
+        const existing = currentFederationRepairRecord(retained, generation)
           ? retained
           : createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation });
         const claimed = claimFederationRepairBuckets(existing, buckets);
-        stored.stateRepairRecords![repairKey] = claimed.record;
-        persistState();
         // WHAT: End a fully repeated request before entity selection and summary generation.
         // WHY: Durable served-bucket ownership must survive reconnects.
         if (claimed.admitted.length === 0) return;
         sendStateEntities(sender, projectId, new Set(claimed.admitted));
         sendStateSummary(sender, projectId);
+        // WHAT: Claim only buckets whose entity response and terminal summary completed.
+        // WHY: A failed selection, encoding, send, or summary must remain retryable after reconnect.
+        stored.stateRepairRecords![repairKey] = claimed.record;
+        persistState();
       } else if (frame.type === 'state-execution-observation') {
         const projectId = String(frame.projectId ?? '');
         for (const target of activeClients(sender.federationId)) {
