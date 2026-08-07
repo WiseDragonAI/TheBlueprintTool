@@ -22,6 +22,7 @@ import {
 } from '../controller/delivery-topology-controller.js';
 import {
   admitDecisionOsDelivery,
+  fixedDeliveryAdmissionEndpoints,
   type DeliveryAdmissionProof,
   type DeliveryNodeAdmissionEvidence,
   type DeliveryRelayConfigurationEvidence,
@@ -80,7 +81,6 @@ type CandidateBundle = {
 };
 
 const productionServer = 'http://127.0.0.1:50150';
-const canaryHealthEndpoint = 'http://127.0.0.1:50151/api/health';
 const devRelayHealthEndpoint = 'http://127.0.0.1:50152/health';
 
 function codedError(code: string, message: string): Error & { code: string } {
@@ -161,6 +161,21 @@ async function readJson(
     throw codedError(String(body.error ?? 'delivery_http_failed'), `Delivery authority ${endpoint} returned HTTP ${response.status}.`);
   }
   return body;
+}
+
+async function readDeliveryReleaseHealth(
+  endpoint: string,
+  signal: AbortSignal,
+  fetchImplementation: typeof fetch,
+): Promise<AnyRecord> {
+  const admissionState = await readJson(endpoint, signal, {}, fetchImplementation);
+  const release = admissionState.release;
+  // WHAT: Accept only the delivery-scoped release projection from the admission-state route.
+  // WHY: Global health includes unrelated contained incidents that are intentionally outside production delivery authority.
+  if (!release || typeof release !== 'object' || Array.isArray(release)) {
+    throw codedError('delivery_admission_evidence_missing', `Delivery authority ${endpoint} omitted release health.`);
+  }
+  return release as AnyRecord;
 }
 
 function mutationReceipt(input: {
@@ -374,8 +389,8 @@ export async function createDefaultDeliveryCliRuntime(input: {
       bundle = bundle ?? candidateBundle(catalogRoot, run.admittedSha);
       const [topologyValue, productionHealth, canaryHealth, devRelayHealth] = await Promise.all([
         readJson(`${productionServer}/api/federation/nodes`, signal, {}, fetchImplementation),
-        readJson(`${productionServer}/api/health`, signal, {}, fetchImplementation),
-        readJson(canaryHealthEndpoint, signal, {}, fetchImplementation),
+        readDeliveryReleaseHealth(fixedDeliveryAdmissionEndpoints.productionHealth, signal, fetchImplementation),
+        readDeliveryReleaseHealth(fixedDeliveryAdmissionEndpoints.canaryHealth, signal, fetchImplementation),
         readJson(devRelayHealthEndpoint, signal, {}, fetchImplementation),
       ]);
       const topology = freezeDeliveryTopology({
@@ -673,8 +688,8 @@ export async function createDefaultDeliveryCliRuntime(input: {
         execute: async (signal) => {
           const [topologyValue, productionHealth, canaryHealth, devRelayHealth] = await Promise.all([
             readJson(`${productionServer}/api/federation/nodes`, signal, {}, fetchImplementation),
-            readJson(`${productionServer}/api/health`, signal, {}, fetchImplementation),
-            readJson(canaryHealthEndpoint, signal, {}, fetchImplementation),
+            readDeliveryReleaseHealth(fixedDeliveryAdmissionEndpoints.productionHealth, signal, fetchImplementation),
+            readDeliveryReleaseHealth(fixedDeliveryAdmissionEndpoints.canaryHealth, signal, fetchImplementation),
             readJson(devRelayHealthEndpoint, signal, {}, fetchImplementation),
           ]);
           const topology = freezeDeliveryTopology({
