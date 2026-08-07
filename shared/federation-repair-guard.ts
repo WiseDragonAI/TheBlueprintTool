@@ -7,8 +7,9 @@ import { hashTaskCurrentRoot } from './task-current-state-core.js';
 export type FederationRepairBucket = { bucket: string; count: number; checksum: string };
 export type FederationRepairRecord = {
   version: 1;
-  responseVersion: 2;
+  responseVersion: 3;
   nodeId: string;
+  sessionId: string;
   projectId: string;
   generation: number;
   peerRoot: string;
@@ -51,6 +52,7 @@ export function federationRepairRecordKey(nodeId: string, projectId: string): st
 
 export function createFederationRepairRecord(input: {
   nodeId: string;
+  sessionId: string;
   projectId: string;
   generation: number;
   peerRoot?: string;
@@ -58,8 +60,9 @@ export function createFederationRepairRecord(input: {
 }): FederationRepairRecord {
   return {
     version: 1,
-    responseVersion: 2,
+    responseVersion: 3,
     nodeId: input.nodeId,
+    sessionId: input.sessionId,
     projectId: input.projectId,
     generation: input.generation,
     peerRoot: input.peerRoot ?? '',
@@ -71,8 +74,9 @@ export function createFederationRepairRecord(input: {
 export function currentFederationRepairRecord(
   record: FederationRepairRecord | null | undefined,
   generation: number,
+  sessionId: string,
 ): record is FederationRepairRecord {
-  return record?.version === 1 && record.responseVersion === 2 && record.generation === generation;
+  return record?.version === 1 && record.responseVersion === 3 && record.generation === generation && record.sessionId === sessionId;
 }
 
 export function claimFederationRepairBuckets(

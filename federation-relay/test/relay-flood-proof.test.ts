@@ -139,7 +139,7 @@ describe('federation relay flood proof', () => {
     observer.close(1000, 'test_complete');
   });
 
-  it('serves one bucket once across duplicate requests and reconnect', async () => {
+  it('serves one bucket once per connection and suppresses duplicate requests inside each session', async () => {
     const federationId = `bucket-flood-${crypto.randomUUID()}`;
     const [writerCredential, readerCredential] = await Promise.all([
       createNode(federationId, 'writer'),
@@ -173,7 +173,12 @@ describe('federation relay flood proof', () => {
     await replacementSummary;
     const repeatedFrames = observeFrames(replacement, 250);
     replacement.send(JSON.stringify(request));
-    expect((await repeatedFrames).filter((frame) => ['state-entity-batch', 'state-bucket-summary'].includes(frame.type))).toHaveLength(0);
+    const replacementResponse = await repeatedFrames;
+    expect(replacementResponse.filter((frame) => frame.type === 'state-entity-batch')).toHaveLength(1);
+    expect(replacementResponse.filter((frame) => frame.type === 'state-bucket-summary')).toHaveLength(1);
+    const duplicateFrames = observeFrames(replacement, 250);
+    replacement.send(JSON.stringify(request));
+    expect((await duplicateFrames).filter((frame) => ['state-entity-batch', 'state-bucket-summary'].includes(frame.type))).toHaveLength(0);
 
     const expectedChecksum = hashTaskCurrentBucket([[key, value]]);
     expect(expectedChecksum).toMatch(/^[a-f0-9]{64}$/);
