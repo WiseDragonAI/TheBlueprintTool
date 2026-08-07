@@ -89,6 +89,26 @@ export function createFederationTaskStateReplicator(input: {
     return sent;
   };
 
+  const publishRelayBatch = (projectId: string, entities: TaskCurrentEntity[]): boolean => {
+    const frame = boundedFrames(projectId, entities)[0];
+    // WHAT: Treat an empty relay selection as already published.
+    // WHY: The caller may reach this boundary after the queued map settles between reconciliation steps.
+    if (!frame) return true;
+    const published = input.publish('relay', { type: 'state-entity-batch', projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: frame.deliveryId, entries: frame.entries } });
+    // WHAT: Retain the complete queued selection when the current bounded frame did not enter the relay socket.
+    // WHY: A transport rejection must remain retryable without reconstructing state from an incomplete delivery record.
+    if (!published) return false;
+    pendingDeliveries.set(frame.deliveryId, { projectId, hashes: new Map(frame.entries.map((entry) => [entry.key, entry.stateHash])) });
+    const queued = queuedRelayEntities.get(projectId);
+    // WHAT: Remove every entity owned by the single frame that entered the relay socket.
+    // WHY: Later frames must remain queued until the relay acknowledges this transaction.
+    for (const entry of frame.entries) queued?.delete(entry.key);
+    // WHAT: Remove the project queue after its final bounded frame enters the socket.
+    // WHY: The exact acknowledgement remains authoritative through pendingDeliveries while an empty queue must allow the terminal summary.
+    if (queued?.size === 0) queuedRelayEntities.delete(projectId);
+    return true;
+  };
+
   const advertise = (peerId: string, projectId: string, store: TaskCurrentStateStore): void => {
     input.publish(peerId, { type: 'state-bucket-summary', projectId, payload: { stateVersion: taskCurrentStateVersion, root: store.rootHash(), buckets: store.bucketManifest() } });
   };
@@ -115,11 +135,7 @@ export function createFederationTaskStateReplicator(input: {
       advertise('relay', projectId, store);
       return;
     }
-    const entities = [...queued.values()];
-    const sent = publishEntities('relay', projectId, entities);
-    // WHAT: Remove a queued group only after every bounded frame entered the relay socket.
-    // WHY: A partial publication must remain retryable after its acknowledged subset settles.
-    if (sent) queuedRelayEntities.delete(projectId);
+    const sent = publishRelayBatch(projectId, [...queued.values()]);
     // WHAT: Advertise the durable local root when no frame entered the relay socket.
     // WHY: The relay must discover and request the retained queue after a dropped live publication.
     if (!sent && !hasPendingRelayDelivery(projectId)) advertise('relay', projectId, store);
