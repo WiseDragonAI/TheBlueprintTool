@@ -8,6 +8,7 @@ import {
   canonicalFederationRepairBuckets,
   claimFederationRepairBuckets,
   createFederationRepairRecord,
+  currentFederationRepairRecord,
   federationRepairRecordKey,
 } from '../../shared/federation-repair-guard';
 import { hashTaskCurrentBucket, hashTaskCurrentRoot } from '../../shared/task-current-state-core';
@@ -30,5 +31,13 @@ describe('federation repair guard', () => {
     expect(duplicate.record.servedBuckets).toEqual(['00', 'ff']);
     expect(federationRepairRecordKey('node-a', 'project-a')).toBe('state:v4:repair:project-a:node-a');
     expect(() => canonicalFederationRepairBuckets(['gg'])).toThrow('invalid_state_missing_request');
+  });
+
+  it('invalidates repair claims created before response-complete accounting', () => {
+    const current = createFederationRepairRecord({ nodeId: 'node-a', projectId: 'project-a', generation: 7 });
+    const legacy = { ...current, responseVersion: undefined };
+    expect(currentFederationRepairRecord(current, 7)).toBe(true);
+    expect(currentFederationRepairRecord(legacy as unknown as typeof current, 7)).toBe(false);
+    expect(currentFederationRepairRecord(current, 8)).toBe(false);
   });
 });
