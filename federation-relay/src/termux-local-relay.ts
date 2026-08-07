@@ -66,6 +66,7 @@ type StoredRelayState = {
 type Client = {
   federationId: string;
   nodeId: string;
+  sessionId: string;
   socket: WebSocket;
 };
 
@@ -277,10 +278,10 @@ function reconcileStateSummary(sender: Client, frame: RelayFrame): void {
   const stored = federation(sender.federationId);
   const generation = stored.stateGenerations![projectId] ?? 0;
   const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
-  // WHAT: Reuse only a repair record written by the response-complete contract.
-  // WHY: This suppresses repeated scans while allowing one retry for legacy premature claims.
-  if (currentFederationRepairRecord(stored.stateRepairRecords![repairKey], generation)) return;
-  stored.stateRepairRecords![repairKey] = createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation, peerRoot, peerManifestDigest });
+  // WHAT: Reuse only a repair record written for this live socket session.
+  // WHY: Duplicate summaries stay bounded while a replacement connection can recover a response lost during disconnect.
+  if (currentFederationRepairRecord(stored.stateRepairRecords![repairKey], generation, sender.sessionId)) return;
+  stored.stateRepairRecords![repairKey] = createFederationRepairRecord({ nodeId: sender.nodeId, sessionId: sender.sessionId, projectId, generation, peerRoot, peerManifestDigest });
   persistState();
   const local = stateBuckets(sender.federationId, projectId);
   const missing = mismatchedBuckets(local, remote);
@@ -381,12 +382,12 @@ function handleFrame(sender: Client, text: string): void {
         const generation = stored.stateGenerations![projectId] ?? 0;
         const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
         const retained = stored.stateRepairRecords![repairKey];
-        const existing = currentFederationRepairRecord(retained, generation)
+        const existing = currentFederationRepairRecord(retained, generation, sender.sessionId)
           ? retained
-          : createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation });
+          : createFederationRepairRecord({ nodeId: sender.nodeId, sessionId: sender.sessionId, projectId, generation });
         const claimed = claimFederationRepairBuckets(existing, buckets);
-        // WHAT: End a fully repeated request before entity selection and summary generation.
-        // WHY: Durable served-bucket ownership must survive reconnects.
+        // WHAT: End a request already served inside this socket session before entity selection and summary generation.
+        // WHY: Duplicate frames stay bounded while a replacement connection can retry a response lost during disconnect.
         if (claimed.admitted.length === 0) return;
         sendStateEntities(sender, projectId, new Set(claimed.admitted));
         sendStateSummary(sender, projectId);
@@ -519,7 +520,7 @@ server.on('upgrade', (request, socket, head) => {
     const expected = federation(connect[1]).credentials[connect[2]];
     if (!expected || !sameSecret(digest(bearer(request)), expected)) throw new Error('federation_authentication');
     webSockets.handleUpgrade(request, socket, head, (webSocket) => {
-      const connected = { federationId: connect[1], nodeId: connect[2], socket: webSocket };
+      const connected = { federationId: connect[1], nodeId: connect[2], sessionId: randomBytes(16).toString('hex'), socket: webSocket };
       webSockets.emit('connection', webSocket, request, connected);
     });
   } catch {
