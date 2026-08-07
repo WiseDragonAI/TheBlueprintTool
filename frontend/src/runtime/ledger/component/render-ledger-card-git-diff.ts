@@ -70,7 +70,7 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
 
   async function stage(operation: 'stage' | 'unstage', hunk: ReviewHunk): Promise<void> {
     if (!response) return;
-    status.textContent = operation === 'stage' ? 'Staging selected hunk…' : 'Unstaging selected hunk…';
+    status.textContent = operation === 'stage' ? 'Staging selected review change…' : 'Unstaging selected review change…';
     const request = await fetch(projectScopedRequestPath('/api/git-review/stage', String(state.projectId ?? '')), {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ repository: block.repository, target: block.target, expectedPatchHash: response.patchHash, patch: hunk.patch, operation })
@@ -86,7 +86,7 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
     renderer?.cleanUp();
     renderer = null;
     content.replaceChildren();
-    if (!response?.files.length) { status.textContent = 'No changes for this review target.'; root.dataset.state = 'empty'; return; }
+    if (!response?.files.length) { status.textContent = 'This review target has no working-tree changes.'; root.dataset.state = 'empty'; return; }
     const file = response.files[Math.min(fileIndex, response.files.length - 1)];
     const hunks = file.hunks.length ? file.hunks : [{ id: 'file', header: 'File change', patch: file.patch }];
     const hunk = hunks[Math.min(hunkIndex, hunks.length - 1)];
@@ -113,7 +113,7 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
     try {
       const pierre = await loadPierre();
       const parsed = pierre.parsePatchFiles(hunk.patch, response.patchHash, true)[0]?.files[0];
-      if (!parsed) throw new Error('No renderable diff was returned.');
+      if (!parsed) throw new Error('The selected hunk did not produce a renderable diff.');
       const instance = new pierre.FileDiff({ themeType: 'dark', diffStyle: 'unified', overflow: 'wrap', enableLineSelection: true, disableFileHeader: true });
       instance.render({ fileDiff: parsed, fileContainer: viewport });
       renderer = instance;
@@ -138,7 +138,7 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
   }
 
   async function load(): Promise<void> {
-    root.dataset.state = 'loading'; status.textContent = 'Loading Git changes…'; content.replaceChildren();
+    root.dataset.state = 'loading'; status.textContent = 'Loading repository changes…'; content.replaceChildren();
     const request = await fetch(endpoint(), { cache: 'no-store' });
     response = await request.json() as ReviewResponse;
     if (!request.ok || !response.ok) { root.dataset.state = 'error'; status.textContent = response.error || 'Git review could not be loaded.'; return; }
