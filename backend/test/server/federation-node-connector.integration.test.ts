@@ -752,11 +752,14 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const betaProjectId = catalogB.projects.find((project) => project.name === 'beta')!.id;
     const nodeCatalog = await fetch(`${baseA}/api/federation/nodes`).then((response) => response.json()) as {
       ok: boolean;
-      nodes: Array<{ nodeId: string; local: boolean; projects: Array<{ projectId: string }> }>;
+      nodes: Array<{ nodeId: string; local: boolean; projects: Array<{ projectId: string; originFingerprint: string }> }>;
     };
     assert.equal(nodeCatalog.ok, true);
     assert.ok(nodeCatalog.nodes.some((node) => node.nodeId === 'node-a' && node.local));
     assert.ok(nodeCatalog.nodes.some((node) => node.nodeId === 'node-b' && !node.local && node.projects.some((project) => project.projectId === betaProjectId)));
+    const nodeCatalogB = await fetch(`${baseB}/api/federation/nodes`).then((response) => response.json()) as typeof nodeCatalog;
+    const localBeta = nodeCatalogB.nodes.find((node) => node.nodeId === 'node-b' && node.local);
+    assert.match(localBeta?.projects[0]?.originFingerprint ?? '', /^[a-f0-9]{64}$/);
     const projectSyncSnapshot = readRepositorySyncStatus(betaRoot);
     const createdAt = '2026-07-23T07:00:00.000Z';
     const pipelineRunId = 'federated-project-sync-proof';

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { canonicalGitOrigin, isNetworkGitOrigin, originFingerprint, readRepositorySyncStatus } from '../../../src/business/project-sync/helper/repository-sync-status.js';
+import { availableRepositoryOriginFingerprint, canonicalGitOrigin, isNetworkGitOrigin, originFingerprint, readRepositorySyncStatus } from '../../../src/business/project-sync/helper/repository-sync-status.js';
 
 function git(root: string, ...args: string[]): string {
   return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
@@ -30,9 +30,20 @@ test('reads the complete fixed Git snapshot without leaking worktree paths', () 
     assert.equal(status.worktrees.length, 1);
     assert.deepEqual(status.worktrees[0], { branch: status.branch, headSha: status.headSha, porcelain: '', clean: true });
     assert.equal(status.originFingerprint, originFingerprint(status.originUrl));
+    assert.equal(availableRepositoryOriginFingerprint(checkout), status.originFingerprint);
     assert.equal(JSON.stringify(status).includes(checkout), false);
   } finally {
     rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('returns no available origin fingerprint for a node-local repository', () => {
+  const checkout = mkdtempSync(join(tmpdir(), 'decision-os-local-project-'));
+  try {
+    execFileSync('git', ['init', checkout]);
+    assert.equal(availableRepositoryOriginFingerprint(checkout), '');
+  } finally {
+    rmSync(checkout, { recursive: true, force: true });
   }
 });
 

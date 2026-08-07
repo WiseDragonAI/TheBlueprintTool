@@ -70,6 +70,14 @@ export function readRepositoryOriginIdentity(projectRoot: string): { originFinge
   return { originFingerprint: originFingerprint(rawOriginUrl), originUrl: credentialFreeCloneOrigin(rawOriginUrl) };
 }
 
+export function availableRepositoryOriginFingerprint(projectRoot: string): string {
+  try {
+    return readRepositoryOriginIdentity(projectRoot).originFingerprint;
+  } catch {
+    return '';
+  }
+}
+
 export function isNetworkGitOrigin(value: string): boolean {
   if (/^[^@\s]+@[^:/\s]+:.+/.test(value)) return true;
   try { return ['https:', 'http:', 'ssh:', 'git:'].includes(new URL(value).protocol); }

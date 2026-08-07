@@ -9,7 +9,7 @@ import { mkdir, open, rename, rm, type FileHandle } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import WebSocket from 'ws';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
-import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
+import { availableRepositoryOriginFingerprint } from '../../project-sync/helper/repository-sync-status.js';
 import { taskCurrentBaselineEpoch, taskCurrentStateVersion, taskStateProtocol } from '../../task-state/helper/task-current-state-types.js';
 import type { TaskExecutionObservation } from '../../../../../shared/schemas/task-execution-types.js';
 import type { TaskExecutionPresentationUpdate } from '../../../../../shared/schemas/task-execution-presentation-types.js';
@@ -418,11 +418,14 @@ export function createFederationNodeConnector(input: {
 
   const manifest = (): ProjectManifest[] => input.localProjects()
     .filter((project) => project.available)
-    .map(({ id, name, description, color, ledgers, root }) => {
-      let fingerprint = '';
-      try { fingerprint = readRepositoryOriginIdentity(root).originFingerprint; } catch { /* Non-Git projects remain visible but cannot synchronize. */ }
-      return { id, name, description, color, ledgers, originFingerprint: fingerprint };
-    });
+    .map(({ id, name, description, color, ledgers, root }) => ({
+      id,
+      name,
+      description,
+      color,
+      ledgers,
+      originFingerprint: availableRepositoryOriginFingerprint(root),
+    }));
 
   const settleInternal = (stream: RequesterStream, status: number, headers: Record<string, string>, body: Buffer): void => {
     stream.resolve?.({ status, headers, body });

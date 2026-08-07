@@ -24,6 +24,7 @@ import { createServerFoundationRuntime } from '../runtime/server-foundation-runt
 import { createServerProjectRuntime } from '../runtime/server-project-runtime.js';
 import { createGlobalRequestHandler } from '../http/create-global-request-handler.js';
 import { createProjectRequestHandler } from '../http/create-project-request-handler.js';
+import { availableRepositoryOriginFingerprint } from '../../project-sync/helper/repository-sync-status.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -157,12 +158,10 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
   } = projectRuntime;
   const activeProjectSyncController = projectSyncRuntime.controller;
   const deliveryProjectIds = (): string[] => {
-    const localNodeId = federation.localOwner().ownerNodeId;
-    return federation.topologyNodes()
-      .filter((node) => node.nodeId === localNodeId)
-      .flatMap((node) => node.projects)
-      .filter((project) => /^[a-f0-9]{64}$/.test(project.originFingerprint))
-      .map((project) => project.projectId)
+    return projectCatalog()
+      .filter((project) => project.available)
+      .filter((project) => /^[a-f0-9]{64}$/.test(availableRepositoryOriginFingerprint(project.root)))
+      .map((project) => project.id)
       .sort();
   };
   const deliveryAdmissionInput = () => ({
