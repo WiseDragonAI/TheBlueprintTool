@@ -1,0 +1,5 @@
+100644 70288cebcc9ee95dc4bf4282f5d58d9ca3b919d8 1	.decision-os/cards/tasks/card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md
+100644 02ff1136f3d43dfa67881149dac2c3c9da27ce28 3	.decision-os/cards/tasks/card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md
+100644 003758f682044bf0414d3266405169b02ad30682 1	.decision-os/threads/tasks/thread-card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md
+100644 f237371839379bdeb9f7aa11ddd3c34d2c038a7c 3	.decision-os/threads/tasks/thread-card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md
+160000 d6add5ccdd2ef9e3d6cf20214ce0614fe5711af4 2	.decision-os~HEAD

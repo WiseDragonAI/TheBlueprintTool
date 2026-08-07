@@ -1,0 +1,2450 @@
+WORKTREE /home/jbb/dev/EditorBP/decision-os
+41b50c7bb19a4b2c9e67dfea9749b445480ffffe
+main
+ M .decision-os
+CHILD
+9d85a36bb7f472db54fb617b29a8bcc34b452407
+main
+ M cards/tasks/card-runtime-incident-review.md
+END
+WORKTREE /home/jbb/.decision-os-production/releases/0a14fa39fbaaf0f29a7792b400bbdcd3bd8e96f9
+0a14fa39fbaaf0f29a7792b400bbdcd3bd8e96f9
+END
+WORKTREE /home/jbb/.decision-os-production/releases/3729f0b037f6a8b0a30862f8f58d774ad53321ad
+3729f0b037f6a8b0a30862f8f58d774ad53321ad
+END
+WORKTREE /home/jbb/.decision-os-production/releases/51ef81c7d946f885705cbfd19d76474d646bd040
+51ef81c7d946f885705cbfd19d76474d646bd040
+END
+WORKTREE /home/jbb/.decision-os-production/releases/5a9e3656ee92960746a1176195c0b77fa6611a44
+5a9e3656ee92960746a1176195c0b77fa6611a44
+END
+WORKTREE /home/jbb/.decision-os-production/releases/5e322a9a277bd0c139efd1ac6f9373c75c1349c4
+5e322a9a277bd0c139efd1ac6f9373c75c1349c4
+END
+WORKTREE /home/jbb/.decision-os-production/releases/736b03478f6674099f43db55ad0e6823bbca4bfd
+736b03478f6674099f43db55ad0e6823bbca4bfd
+END
+WORKTREE /home/jbb/.decision-os-production/releases/76d0f60ffae8fefbdb745b2af08d79fc89925eff
+76d0f60ffae8fefbdb745b2af08d79fc89925eff
+END
+WORKTREE /home/jbb/.decision-os-production/releases/78e05a79d6084bb8793760fdd39ad1ce965af787
+78e05a79d6084bb8793760fdd39ad1ce965af787
+END
+WORKTREE /home/jbb/.decision-os-production/releases/8ea2f73e514d355fc71fb486760a49e49ee0b0d0
+8ea2f73e514d355fc71fb486760a49e49ee0b0d0
+END
+WORKTREE /home/jbb/.decision-os-production/releases/ea599cb70acde5eec352115f211fc38f8d6ac514
+ea599cb70acde5eec352115f211fc38f8d6ac514
+END
+WORKTREE /home/jbb/.decision-os-production/releases/f155d9545516afeb247afd2287658d647d07986d
+f155d9545516afeb247afd2287658d647d07986d
+END
+WORKTREE /home/jbb/.decision-os-production/releases/fd06dcf83cb8a4b952eb69c8bdfbfbb5462084c7
+fd06dcf83cb8a4b952eb69c8bdfbfbb5462084c7
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/button-ownership-1784743425249
+68122629fd786498334de35bb44a2eeac97030e2
+codex/button-ownership-1784743425249
+ M backend/test/codex/start-card-skill-process-controller.test.ts
+ M frontend/index.html
+ M frontend/src/app/responsive/application.js
+ M frontend/src/app/responsive/codex.js
+ M frontend/src/app/responsive/control-room.js
+ M frontend/src/app/responsive/navigation-ownership.js
+ M frontend/src/app/responsive/thread.js
+ M frontend/src/runtime/canvas/effect/render-canvas-control-overlay.ts
+ M frontend/src/runtime/canvas/effect/render-ledgers-indicator.ts
+ M frontend/src/runtime/input/controller/handle-action-click.ts
+ M frontend/src/runtime/input/controller/handle-keyboard.ts
+ M frontend/src/runtime/input/effect/bind-inputs.ts
+ M frontend/test-responsive/mobile-codex.test.mjs
+ M frontend/test-responsive/mobile-control-room.test.mjs
+ M frontend/test-responsive/mobile-thread.test.mjs
+ M frontend/test/runtime/keyboard-card-resize-shortcut.integration.test.ts
+ M frontend/test/runtime/quick-voice-task-comment.integration.test.ts
+ M tests/browser/application/done-view.spec.ts
+ M tests/browser/application/the-application-is-one-responsive-frontend.spec.ts
+ M tests/browser/codex/reusable-step-pipelines.spec.ts
+ M tests/browser/control-room/the-column-scroll-position-survives-refresh-and-navigation.spec.ts
+?? backend/node_modules
+?? frontend/node_modules
+?? frontend/src/runtime/input/command-descriptor.ts
+?? frontend/src/runtime/input/command-ownership.ts
+?? node_modules
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/canonical-markdown-editor-20260731
+dfe1fc99cffb06e8235c27499fae81c1699758db
+feature/canonical-markdown-editor-20260731
+ M .decision-os/.gitignore
+ M .decision-os/cards/tasks/card-runtime-incident-review.md
+ M .decision-os/threads/tasks/thread-card-runtime-incident-review.md
+ M Search/.decision-os/.gitignore
+CHILD
+2507d0c5ccc2220a1003e93ca422bd8a20ef6489
+main
+ M cards/tasks/card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md
+ M cards/tasks/card-runtime-incident-review.md
+ M threads/tasks/thread-card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/dev
+550b64fad438026121f05b2c0318d5ef4845d7c4
+dev
+CHILD
+91012e32eb9d554a298cf3c1d4a9abe3207fafdc
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/epoch4-no-loss-20260726
+83e08d0ab52f629d1ae79cc4be35be5d6a23d9d2
+feature/epoch4-no-loss-20260726
+ M backend/src/business/codex/controller/continue-card-skill-run-controller.ts
+ M backend/src/business/codex/controller/start-codex-pipeline-run-controller.ts
+ M backend/src/business/codex/effect/persist-card-skill-run-events.ts
+ M backend/src/business/codex/helper/cancel-task-execution.ts
+ M backend/src/business/codex/helper/codex-pipeline-runner.ts
+ M backend/src/business/codex/helper/codex-process-scheduler.ts
+ M backend/src/business/codex/helper/project-task-execution-state.ts
+ M backend/src/business/codex/helper/recover-task-executions.ts
+ M backend/src/business/codex/helper/task-execution-router.ts
+ M backend/src/business/codex/helper/task-execution-runtime.ts
+ M backend/src/business/federation/helper/federation-content-manifest.ts
+ M backend/src/business/federation/helper/materialize-task-mutation-inputs.ts
+ M backend/src/business/ledger/effect/write-canonical-decision-os-state.ts
+ M backend/src/business/ledger/helper/apply-ledger-mutation.ts
+ M backend/src/business/ledger/helper/card-content-file.ts
+ M backend/src/business/ledger/helper/ensure-ledgers-canvas-document.ts
+ M backend/src/business/ledger/helper/normalize-decision-os-state.ts
+ M backend/src/business/ledger/helper/read-canonical-decision-os-state.ts
+ M backend/src/business/ledger/helper/thread-content-file.ts
+ M backend/src/business/refresh/helper/resolve-card-content-change.ts
+ M backend/src/business/refresh/helper/watch-card-content-files.ts
+ M backend/src/business/refresh/helper/watch-project-files.ts
+ M backend/src/business/server/helper/create-http-server.ts
+ M backend/src/business/server/helper/create-runtime-incident-review-scheduler.ts
+ M backend/src/business/server/helper/ensure-projects-canvas-document.ts
+ M backend/src/business/server/helper/read-decision-os-settings.ts
+ M backend/src/business/server/helper/save-codex-process-settings.ts
+ M backend/src/business/server/helper/save-federation-settings.ts
+ M backend/src/business/server/helper/synchronize-runtime-incident-review-task.ts
+ M backend/src/business/task-state/helper/materialize-task-current-entity.ts
+ M backend/src/business/task-state/helper/prepare-epoch4-execution-migration.ts
+ M backend/src/business/task-state/helper/project-task-state.ts
+ M backend/src/business/task-state/helper/task-current-state-store.ts
+ M backend/src/business/task-state/helper/task-current-state-types.ts
+ M backend/src/business/task-state/helper/task-execution-repository.ts
+ M backend/src/business/task-state/helper/task-local-publication-state.ts
+ M backend/src/business/task-state/helper/task-mutation-command.ts
+ M backend/src/business/transcription/controller/start-voice-upload-orchestration-controller.ts
+ M backend/src/business/transcription/effect/persist-uploaded-voice-audio.ts
+ M backend/test/transcription/voice-lifecycle-status.test.ts
+ M backend/test/unit/codex/helper/project-task-execution-state.test.ts
+ M backend/test/unit/codex/task-execution-router.test.ts
+ M backend/test/unit/federation/federation-content-lane.test.ts
+ M backend/test/unit/server/helper/create-runtime-incident-review-scheduler.test.ts
+ M backend/test/unit/server/helper/synchronize-runtime-incident-review-task.test.ts
+ M backend/test/unit/task-state/task-current-state-core-v4.test.ts
+ M backend/test/unit/task-state/task-current-state-migration.test.ts
+ M backend/test/unit/task-state/task-current-state-store.test.ts
+ M backend/test/unit/task-state/task-execution-repository.test.ts
+ M frontend/src/app/responsive/application.js
+ M frontend/src/app/responsive/thread-ledger-reconciliation.js
+ M frontend/src/app/responsive/thread.js
+ M frontend/src/runtime/codex/controller/process-thread-codex-controller.ts
+ M frontend/src/runtime/codex/effect/bind-thread-codex-run-log.ts
+ M frontend/src/runtime/codex/effect/request-task-execution-state.ts
+ M frontend/src/runtime/ledger/effect/reconcile-active-ledger-state.ts
+ M frontend/src/runtime/ledger/effect/send-active-ledger-mutation.ts
+ M frontend/src/runtime/ledger/helper/merge-local-thread-notes.ts
+ M frontend/src/runtime/refresh/helper/task-projection-acceptance.ts
+ M frontend/src/runtime/thread/controller/create-note-controller.ts
+ M frontend/src/runtime/thread/controller/delete-note-controller.ts
+ M frontend/src/runtime/thread/controller/paste-thread-image-controller.ts
+ M frontend/src/runtime/thread/controller/upload-thread-file-controller.ts
+ M frontend/src/runtime/thread/effect/append-optimistic-thread-note.ts
+ M frontend/src/runtime/thread/effect/load-active-thread-slice.ts
+ M frontend/src/runtime/thread/effect/patch-optimistic-thread-note.ts
+ M frontend/src/runtime/thread/effect/render-thread-panel.ts
+ M frontend/src/runtime/thread/effect/submit-thread-draft.ts
+ M frontend/src/runtime/voice/effect/append-voice-note.ts
+ M frontend/src/runtime/voice/effect/persist-pending-voice-upload.ts
+ M frontend/src/runtime/voice/effect/reconcile-voice-transcription.ts
+ M frontend/src/runtime/voice/effect/request-transcription.ts
+ M frontend/src/runtime/voice/effect/restore-pending-voice-uploads.ts
+ M frontend/src/runtime/voice/effect/submit-pending-voice-upload.ts
+ M frontend/src/runtime/voice/effect/update-voice-note.ts
+ M frontend/src/runtime/voice/effect/upload-voice-audio.ts
+ M frontend/src/runtime/voice/helper/voice-transcription-lifecycle.ts
+ M shared/schemas/task-execution-presentation-types.ts
+?? backend/node_modules
+?? backend/src/business/task-state/helper/task-current-state-inventory.ts
+?? frontend/node_modules
+?? frontend/src/app/responsive/task-clock-admission.js
+?? frontend/src/runtime/refresh/helper/pending-task-mutation-receipts.ts
+?? frontend/src/runtime/thread/effect/persist-pending-thread-asset.ts
+?? frontend/src/runtime/thread/effect/restore-pending-thread-assets.ts
+?? frontend/src/runtime/thread/effect/submit-pending-thread-asset.ts
+?? node_modules
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/federation-delivery-ack-deadline-20260807
+f5be4dfabf089a0559b94799791f0686ce632ecd
+fix/federation-delivery-ack-deadline-20260807
+ M backend/src/business/federation/helper/federation-task-state-replicator.ts
+ M backend/test/unit/federation/federation-task-state-replicator.test.ts
+?? backend/node_modules
+?? frontend/node_modules
+CHILD
+91012e32eb9d554a298cf3c1d4a9abe3207fafdc
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/federation-flood-proof-20260802
+7a4839ad18519069f12d7026d7097bd16670c704
+analysis/federation-flood-proof-20260802
+?? documentation/working-documents/federation-flood-proof-and-patch-contract-2026-08-02.md
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/federation-zero-error-zero-flood-20260807
+dcc7f74f65bab1f4c12e9eef4c72f1f3996e9828
+fix/federation-zero-error-zero-flood-20260807
+?? backend/node_modules
+?? federation-relay/node_modules
+?? frontend/node_modules
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/git-diff-widget-test
+029b411932e5cc1409a3b66d6a45f40e4908890e
+demo/git-diff-widget-test
+ M frontend/src/runtime/ledger/component/render-ledger-card-git-diff.ts
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/hidden-master-subtasks-20260804
+c0bc3ae4f84950f1e5ce8313560bb6fa55f22cab
+feature/hidden-master-subtasks-20260804
+CHILD
+91012e32eb9d554a298cf3c1d4a9abe3207fafdc
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/pipeline-capacity-continuation-20260804
+8240945149190a553e891d06730d87edbc0ba1a3
+feature/pipeline-capacity-continuation-20260804
+ M backend/src/business/codex/helper/cancel-task-execution.ts
+ M backend/src/business/codex/helper/codex-pipeline-runner.ts
+ M backend/src/business/codex/helper/codex-runtime-run-store.ts
+ M backend/test/codex/start-codex-pipeline-run-controller.test.ts
+?? backend/node_modules
+?? frontend/node_modules
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/release-tagged-promotion-20260801
+2d2a7e7894ef83e848e40e3effb722ee0ab8bfea
+feature/release-tagged-promotion-20260801
+ M backend/src/cli/decision-os-merge-dev.ts
+?? backend/node_modules
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/review-skill-authoring-20260730
+dcacb5e4a93faff705d672095f03c265b7d0f7f4
+review/skill-authoring-postmortem-20260730
+ M documentation/README.md
+ M documentation/documentation/architecture/README.md
+ M documentation/documentation/architecture/codex-content-authoring.md
+ M documentation/postmortem/README.md
+ M documentation/procedure/deployment/canary-skill-authoring-dev-environment.md
+ M documentation/procedure/deployment/production-delivery-protocol.md
+ M documentation/procedure/implementation/README.md
+?? documentation/postmortem/canary-skill-authoring-and-delivery-integration-2026-07-30.md
+?? documentation/procedure/implementation/iteration-closeout.md
+?? documentation/working-documents/canary-skill-authoring-main-review-2026-07-30.md
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/runtime-recovery-intent-telemetry-20260801
+06af26061b4bad7ea92e48f3826297fea7b07798
+feature/runtime-recovery-intent-telemetry-20260801
+ M .decision-os
+CHILD
+7cb542121ec5fff0a13f0265f5a1ef8616d74b91
+main
+ D .gitignore
+ D backups/card-content-file-20260529-173834/data.json
+ D backups/card-content-file-20260529-173834/manifest.json
+ D backups/card-content-file-20260529-173834/specs.json
+ D backups/card-height-20260531-052217/specs.json
+ D backups/card-height-20260531-052218/data.json
+ D backups/thread-content-file-20260530-054218/data.json
+ D backups/thread-content-file-20260530-054218/data.threads.json
+ D backups/thread-content-file-20260530-054218/specs.json
+ D backups/thread-content-file-20260530-054218/specs.threads.json
+ D bugs.json
+ D cards/bugs/card-0b1aed1f-c9f5-4154-ab9a-a26058426b5c.md
+ D cards/bugs/card-4132d930-9286-432e-9c6d-5d542fc1c69b.md
+ D cards/bugs/card-ccdea23e-430e-4ce1-8929-bb8b90ab2a25.md
+ D cards/bugs/card-codex-skill-1783611210436-8e41c0b2.md
+ D cards/bugs/card-codex-skill-1783611516537-418c85ec.md
+ D cards/bugs/card-codex-skill-1783611906212-ccbb6031.md
+ D cards/bugs/card-codex-skill-1783614296635-41b41034.md
+ D cards/bugs/card-codex-skill-1783658144311-18cf0e37.md
+ D cards/bugs/card-codex-skill-1783665476180-55d33e92.md
+ D cards/bugs/card-codex-skill-1783666797142-a67ce4bc.md
+ D cards/bugs/card-codex-skill-1783667199097-bea8062f.md
+ D cards/bugs/card-codex-skill-1783667213600-4470fb4b.md
+ D cards/bugs/card-codex-skill-1783673777495-c20b76d4.md
+ D cards/bugs/card-codex-skill-1783674933055-f8a3b891.md
+ D cards/bugs/card-codex-skill-1783676933025-5580e569.md
+ D cards/bugs/card-codex-skill-1783677359105-116e92d2.md
+ D cards/bugs/card-codex-skill-1783677758658-54919b14.md
+ D cards/bugs/card-codex-skill-1783680838228-1c5bee79.md
+ D cards/bugs/card-codex-skill-1783685254132-f607f3c8.md
+ D cards/bugs/card-codex-skill-1783685641626-2a71a1ce.md
+ D cards/bugs/card-codex-skill-1783687219283-a4455341.md
+ D cards/bugs/card-codex-skill-1783701052834-97c8b248.md
+ D cards/bugs/card-df1e558e-6f14-43bc-9d09-1a98e37d9ef0.md
+ D cards/bugs/card-fd0e6f45-3620-4621-9d96-d9d1636db48d.md
+ D cards/data/01173a06.md
+ D cards/data/025274e9.md
+ D cards/data/0a91751a.md
+ D cards/data/0c063c90.md
+ D cards/data/18acdd10.md
+ D cards/data/254e72c1.md
+ D cards/data/2d242706.md
+ D cards/data/31283996.md
+ D cards/data/3c96cf27.md
+ D cards/data/3cc57f9d.md
+ D cards/data/449dbbbe.md
+ D cards/data/4ae0a8e0.md
+ D cards/data/518e238d.md
+ D cards/data/52dd08fc.md
+ D cards/data/5ec1172d.md
+ D cards/data/66a4f377.md
+ D cards/data/6c40f015.md
+ D cards/data/7bb532f1.md
+ D cards/data/7c83ee82.md
+ D cards/data/7d7b4077.md
+ D cards/data/7ef6c99b.md
+ D cards/data/8457546e.md
+ D cards/data/85b432dd.md
+ D cards/data/8e969212.md
+ D cards/data/8f053726.md
+ D cards/data/9cd40009.md
+ D cards/data/9fe8052e.md
+ D cards/data/a49821b6.md
+ D cards/data/a70c969c.md
+ D cards/data/a7f943b3.md
+ D cards/data/a9949f3a.md
+ D cards/data/b0a8c6db.md
+ D cards/data/c148aeb0.md
+ D cards/data/d86e5fbb.md
+ D cards/data/d8ef7d8b.md
+ D cards/data/d91df27a.md
+ D cards/data/e24fe89f.md
+ D cards/data/e8d484fe.md
+ D cards/data/eb61ae1f.md
+ D cards/data/ffd440e4.md
+ D cards/next-features/card-2f1072ec-facb-4b0c-a6dd-2a13e4e256aa.md
+ D cards/next-features/card-dd8da08b-aac0-4402-b9b7-39f16d73769e.md
+ D cards/performances/perf-acceptance-gates.md
+ D cards/performances/perf-commit-raster.md
+ D cards/performances/perf-drag-call-chain.md
+ D cards/performances/perf-drag-summary.md
+ D cards/performances/perf-measurement-matrix.md
+ D cards/performances/perf-relationship-boundary.md
+ D cards/performances/perf-structural-direction.md
+ D cards/performances/perf-trace-suite.md
+ D cards/performances/perf-zone-label-overlay.md
+ D cards/skills/card-1ed7edae-2bff-4f0e-a922-1bb57a0b6e93.md
+ D cards/skills/card-30d002e7-b3c9-460b-94e7-1824470ed4c9.md
+ D cards/skills/card-44811f32-2b0b-4fa8-89bf-394730ba4fe6.md
+ D cards/skills/card-4b63370d-41b1-44e7-be0a-3f3980744bee.md
+ D cards/skills/card-5f44b483-86f4-4144-a497-b5e88bea52b8.md
+ D cards/skills/card-71f7c07c-4f27-4026-b2af-239b8e2c1005.md
+ D cards/skills/card-93221cb2-549d-4549-aacc-4831a1f78441.md
+ D cards/skills/card-98070d2c-e147-47b4-b2dd-616a38aaa28d.md
+ D cards/skills/card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39.md
+ D cards/skills/card-b1ccfc6f-dbda-409c-949d-b6f5a1caf4c9.md
+ D cards/skills/card-bc15e93f-febb-4ca2-be92-9927f628c5ed.md
+ D cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md
+ D cards/skills/card-ca4f17e2-75b4-4487-a48e-6ef87f08367d.md
+ D cards/skills/card-codex-skill-1783448349580-e919e6f8.md
+ D cards/skills/card-codex-skill-1783485668635-1989a1e2.md
+ D cards/skills/card-codex-skill-1783695871406-24cf389e.md
+ D cards/skills/card-skill-code-quality-report.md
+ D cards/skills/card-skill-exec-summary-skill-md-7e9ea6c6f4.md
+ D cards/skills/card-skill-executor-implement.md
+ D cards/skills/card-skill-executor-spec.md
+ D cards/skills/card-skill-feature-analyzer.md
+ D cards/skills/card-skill-feature-planner.md
+ D cards/skills/card-skill-implementation-orchestrator.md
+ D cards/skills/card-skill-implementation-worker.md
+ D cards/skills/card-skill-quality-improvement-orchestrator.md
+ D cards/skills/card-skill-quality-improvement-worker.md
+ D cards/skills/card-skill-root-cause-analysis.md
+ D cards/skills/card-skill-task-dependency.md
+ D cards/skills/card-skill-task-group-completeness.md
+ D cards/skills/card-skill-task-list.md
+ D cards/skills/card-skill-test-failure-attribution.md
+ D cards/skills/card-skill-ticket-solver.md
+ D cards/specs/040cef84.md
+ D cards/specs/0421d906.md
+ D cards/specs/0954dc5c.md
+ D cards/specs/0d4c8b2f.md
+ D cards/specs/0dc5be37.md
+ D cards/specs/0f361538.md
+ D cards/specs/0f6a3e91.md
+ D cards/specs/10000001.md
+ D cards/specs/10000002.md
+ D cards/specs/10f4a4c7.md
+ D cards/specs/12749dcd.md
+ D cards/specs/17ecbce8.md
+ D cards/specs/1a8d5f7b.md
+ D cards/specs/1b28c191.md
+ D cards/specs/1d444573.md
+ D cards/specs/1d6f456a.md
+ D cards/specs/1e9b7c4f.md
+ D cards/specs/20000001.md
+ D cards/specs/20000002.md
+ D cards/specs/20000003.md
+ D cards/specs/20000004.md
+ D cards/specs/20000005.md
+ D cards/specs/20000006.md
+ D cards/specs/20000007.md
+ D cards/specs/20000008.md
+ D cards/specs/20000009.md
+ D cards/specs/2000000a.md
+ D cards/specs/2000000b.md
+ D cards/specs/2000000c.md
+ D cards/specs/2000000d.md
+ D cards/specs/2000000e.md
+ D cards/specs/2000000f.md
+ D cards/specs/20000010.md
+ D cards/specs/20000011.md
+ D cards/specs/20000012.md
+ D cards/specs/20000013.md
+ D cards/specs/20000014.md
+ D cards/specs/20000015.md
+ D cards/specs/20000016.md
+ D cards/specs/20000017.md
+ D cards/specs/20000018.md
+ D cards/specs/205fdb23.md
+ D cards/specs/21b2b050.md
+ D cards/specs/2476bfa1.md
+ D cards/specs/2a9d6f41.md
+ D cards/specs/2aa4f070.md
+ D cards/specs/2b67c924.md
+ D cards/specs/2e4c6d2b.md
+ D cards/specs/2e7c9a1d.md
+ D cards/specs/2f6b94e1.md
+ D cards/specs/2f9a6c8d.md
+ D cards/specs/30000001.md
+ D cards/specs/30000002.md
+ D cards/specs/30000003.md
+ D cards/specs/30000004.md
+ D cards/specs/30000005.md
+ D cards/specs/30000006.md
+ D cards/specs/30000007.md
+ D cards/specs/30000008.md
+ D cards/specs/30000009.md
+ D cards/specs/3159faad.md
+ D cards/specs/33c20993.md
+ D cards/specs/3a12567f.md
+ D cards/specs/3aec8ea9.md
+ D cards/specs/3c1d8f6b.md
+ D cards/specs/3d074416.md
+ D cards/specs/3f0c9e77.md
+ D cards/specs/3f9c2a11.md
+ D cards/specs/3f9dda8e.md
+ D cards/specs/3fd7a96a.md
+ D cards/specs/40000002.md
+ D cards/specs/40000005.md
+ D cards/specs/40000006.md
+ D cards/specs/40000007.md
+ D cards/specs/40000012.md
+ D cards/specs/47237c02.md
+ D cards/specs/4801e6c7.md
+ D cards/specs/4b7c1d9e.md
+ D cards/specs/4dfbf38c.md
+ D cards/specs/4e8d16b7.md
+ D cards/specs/4f7a2c9d.md
+ D cards/specs/4f7c2a91.md
+ D cards/specs/50000002.md
+ D cards/specs/50000006.md
+ D cards/specs/5000000b.md
+ D cards/specs/5000000c.md
+ D cards/specs/50000013.md
+ D cards/specs/50000014.md
+ D cards/specs/50000015.md
+ D cards/specs/50000016.md
+ D cards/specs/5027f419.md
+ D cards/specs/51395472.md
+ D cards/specs/51a6af83.md
+ D cards/specs/521476a5.md
+ D cards/specs/53d49146.md
+ D cards/specs/53dc0295.md
+ D cards/specs/5ac8d0f1.md
+ D cards/specs/5b918cd3.md
+ D cards/specs/5c4e5c22.md
+ D cards/specs/5d8f2a1b.md
+ D cards/specs/5d9f2a80.md
+ D cards/specs/5e6a9b23.md
+ D cards/specs/5f3a9d2e.md
+ D cards/specs/5f8c7152.md
+ D cards/specs/60000001.md
+ D cards/specs/60000002.md
+ D cards/specs/60000003.md
+ D cards/specs/60000004.md
+ D cards/specs/60000005.md
+ D cards/specs/60000006.md
+ D cards/specs/60000009.md
+ D cards/specs/6000000a.md
+ D cards/specs/6000000b.md
+ D cards/specs/6000000c.md
+ D cards/specs/6000000d.md
+ D cards/specs/6000000e.md
+ D cards/specs/6000000f.md
+ D cards/specs/60000010.md
+ D cards/specs/61261091.md
+ D cards/specs/612afeda.md
+ D cards/specs/61bea65c.md
+ D cards/specs/6583c446.md
+ D cards/specs/65bf9ae6.md
+ D cards/specs/667ae9a9.md
+ D cards/specs/676c6a7a.md
+ D cards/specs/678cf79e.md
+ D cards/specs/67e83237.md
+ D cards/specs/689842e0.md
+ D cards/specs/69109a76.md
+ D cards/specs/6a1f0d8c.md
+ D cards/specs/6a2d9f0e.md
+ D cards/specs/6b4a0ed8.md
+ D cards/specs/6c2d8e0a.md
+ D cards/specs/6cc37b58.md
+ D cards/specs/6d3e8a4b.md
+ D cards/specs/6d853968.md
+ D cards/specs/6e18b4d2.md
+ D cards/specs/6f01b700.md
+ D cards/specs/70000001.md
+ D cards/specs/70000002.md
+ D cards/specs/70000003.md
+ D cards/specs/70000004.md
+ D cards/specs/70000005.md
+ D cards/specs/70000006.md
+ D cards/specs/70000007.md
+ D cards/specs/708a7bfc.md
+ D cards/specs/72af9d0b.md
+ D cards/specs/74567497.md
+ D cards/specs/747b461e.md
+ D cards/specs/74c3e1b8.md
+ D cards/specs/796827d0.md
+ D cards/specs/7984a4f3.md
+ D cards/specs/7abd939e.md
+ D cards/specs/7b0f2e6c.md
+ D cards/specs/7b2e4c90.md
+ D cards/specs/7c2a91f0.md
+ D cards/specs/7d2c8b91.md
+ D cards/specs/7e4b0a2c.md
+ D cards/specs/7ec16380.md
+ D cards/specs/7fb12b4c.md
+ D cards/specs/81557a54.md
+ D cards/specs/828e6225.md
+ D cards/specs/84cf2a6b.md
+ D cards/specs/85c81d67.md
+ D cards/specs/86e67c0e.md
+ D cards/specs/88d069d5.md
+ D cards/specs/8a05ef46.md
+ D cards/specs/8b1ff788.md
+ D cards/specs/8b6e4d2a.md
+ D cards/specs/8c4e2b71.md
+ D cards/specs/8f43d21c.md
+ D cards/specs/90d84349.md
+ D cards/specs/91b7e4c2.md
+ D cards/specs/91f0c6a2.md
+ D cards/specs/929342ae.md
+ D cards/specs/93f778a8.md
+ D cards/specs/99fab004.md
+ D cards/specs/9a7d3c5e.md
+ D cards/specs/9bd42e71.md
+ D cards/specs/9c31f0a4.md
+ D cards/specs/9c44b0a1.md
+ D cards/specs/9d1b7c36.md
+ D cards/specs/9d5e0b7a.md
+ D cards/specs/9e2b4c7a.md
+ D cards/specs/9f04b1c2.md
+ D cards/specs/9f9279ff.md
+ D cards/specs/9f96ad8c.md
+ D cards/specs/a25db692.md
+ D cards/specs/a2f9c013.md
+ D cards/specs/a4d9e2b6.md
+ D cards/specs/a4f8d2c9.md
+ D cards/specs/a598989d.md
+ D cards/specs/a6c2f0d4.md
+ D cards/specs/a6f3c8d1.md
+ D cards/specs/a6f4c2e1.md
+ D cards/specs/a7d3e5f1.md
+ D cards/specs/a7d5c3e2.md
+ D cards/specs/a83e8c85.md
+ D cards/specs/a8b01160.md
+ D cards/specs/a946fbe0.md
+ D cards/specs/a9ef20a7.md
+ D cards/specs/aa42ff94.md
+ D cards/specs/aba21270.md
+ D cards/specs/abad6dcb.md
+ D cards/specs/ac07dc1b.md
+ D cards/specs/ac137fe2.md
+ D cards/specs/b0f3a2d1.md
+ D cards/specs/b0f6a1c3.md
+ D cards/specs/b200b57e.md
+ D cards/specs/b2e7c5d9.md
+ D cards/specs/b3d8a5e1.md
+ D cards/specs/b5a783cd.md
+ D cards/specs/b7c2e91f.md
+ D cards/specs/b7e4dfd1.md
+ D cards/specs/b8d4f0a2.md
+ D cards/specs/ba1544b0.md
+ D cards/specs/bd0651aa.md
+ D cards/specs/be4ec9c2.md
+ D cards/specs/be53a317.md
+ D cards/specs/bf394c62.md
+ D cards/specs/c0c42d20.md
+ D cards/specs/c1f7a9e3.md
+ D cards/specs/c271a0df.md
+ D cards/specs/c32e3e5c.md
+ D cards/specs/c3a8d4f1.md
+ D cards/specs/c41d5c52.md
+ D cards/specs/c4e8b2f9.md
+ D cards/specs/c4e8b91a.md
+ D cards/specs/c5329a69.md
+ D cards/specs/c5a84d77.md
+ D cards/specs/c6b4a8e2.md
+ D cards/specs/c6e3b7d1.md
+ D cards/specs/c6f91a24.md
+ D cards/specs/c73a0e4d.md
+ D cards/specs/c8a4f6d2.md
+ D cards/specs/c8f02619.md
+ D cards/specs/c90ad7e1.md
+ D cards/specs/card-06258606-7583-460b-a85e-aeac5bf4e07d.md
+ D cards/specs/card-09e3fbd4-2aaf-4db2-9451-addf56f2cb04.md
+ D cards/specs/card-0ef307af-a90a-43c3-899e-5030c934eb5c.md
+ D cards/specs/card-110db3ca-2b23-4f34-a642-8fe2b5e18218.md
+ D cards/specs/card-17ea87bb-6ae5-45f8-9a68-99a167335833.md
+ D cards/specs/card-1934481d-05f6-4ae7-bba8-134ecb18e4f1.md
+ D cards/specs/card-195de894-0c99-4194-b3ea-725d7c422efa.md
+ D cards/specs/card-216524c4-cf41-4b50-a8aa-a696b71dc0f6.md
+ D cards/specs/card-23374ac0-4d7a-46f6-9802-4b8ad13ca244.md
+ D cards/specs/card-2b9db94a-105e-4e6c-9e6c-f11c09a5be3c.md
+ D cards/specs/card-2f7b0843-7638-48fc-a979-76c2903fdc5d.md
+ D cards/specs/card-2fcc5879-1550-408a-ba5f-c339fdcddb1f.md
+ D cards/specs/card-34a82abf-5884-46eb-a4ab-dc2266908612.md
+ D cards/specs/card-47ab100c-cba2-405d-99dd-38c15a1de3a2.md
+ D cards/specs/card-531f36de-d6cd-44e1-8cba-cf5473e47714.md
+ D cards/specs/card-532218e6-3067-45bb-bbee-ff2ceefd7329.md
+ D cards/specs/card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792.md
+ D cards/specs/card-5c766ac0-4c89-427a-9afc-f09644b50487.md
+ D cards/specs/card-603acaa4-34c6-4a59-aaba-1a681c650311.md
+ D cards/specs/card-6ee5a5f5-05b8-4765-81a8-fb8b1e0f1755.md
+ D cards/specs/card-7bbb39e1-d361-4b5e-87b7-19378f3d8032.md
+ D cards/specs/card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380.md
+ D cards/specs/card-7eedf841-9ab2-486e-9b61-aa58a227519d.md
+ D cards/specs/card-818b0b80-a682-4271-addf-c0bcfd753845.md
+ D cards/specs/card-90cc6f80-5a89-4120-96eb-e49bc9c0e35f.md
+ D cards/specs/card-97922c74-81c2-4421-9c0d-d02e0e70191e.md
+ D cards/specs/card-9d60d4cf-c142-4caf-85fd-83809fff0c70.md
+ D cards/specs/card-9fc28277-b3e7-4080-ada3-b9a797b78328.md
+ D cards/specs/card-ae7bb1da-08b9-4f79-83e0-b0586afada7b.md
+ D cards/specs/card-aecd1b82-f27c-47a1-bb6b-cfd076a225aa.md
+ D cards/specs/card-b20963e7-ff0b-4d93-ad27-265dc0a8261d.md
+ D cards/specs/card-b2f058a0-36c0-4872-a874-f31fa08b25e3.md
+ D cards/specs/card-b8b10c18-6a04-4252-9ccb-b411e3377dfa.md
+ D cards/specs/card-b8ba6c17-52d9-4a21-b784-97b8aa24ccde.md
+ D cards/specs/card-bb2740c5-4401-4418-8b6d-b086e3bdb7eb.md
+ D cards/specs/card-bb8a0fb0-099f-4026-aff9-f68871957b98.md
+ D cards/specs/card-bd3686cf-2483-4db1-9344-9c1f520780bf.md
+ D cards/specs/card-bd579ee0-04fe-4602-ad4b-1b86665c0158.md
+ D cards/specs/card-c2294c71-cb87-49d6-8886-002cd0f6b036.md
+ D cards/specs/card-c420372c-9629-40b9-a639-1c69cb93becb.md
+ D cards/specs/card-c736df57-8a67-4424-bcdd-4e79234cd7e1.md
+ D cards/specs/card-ce7dc73b-0f96-4b5a-aef3-61db52edf9b9.md
+ D cards/specs/card-codex-skill-1784205397104-79897826.md
+ D cards/specs/card-codex-skill-1784205406944-60080cc0.md
+ D cards/specs/card-codex-skill-1784216447040-eff225f5.md
+ D cards/specs/card-d1cc39f5-a86a-4f8d-a2d4-81f06a51c29e.md
+ D cards/specs/card-d4c5defa-94c2-4145-8475-291f805b3828.md
+ D cards/specs/card-d63311fe-b12d-46de-88e2-a9684f5f1649.md
+ D cards/specs/card-dca44716-618e-458a-9071-fad1f9cd96f6.md
+ D cards/specs/card-df2d835e-50bf-4504-aa30-566ac67619dd.md
+ D cards/specs/card-e5295bdf-1bf1-48c0-8ebc-c534f644e296.md
+ D cards/specs/card-e6342d95-fc27-4b8b-acce-a9f9edee328e.md
+ D cards/specs/card-e8450727-cadb-426c-9094-d432f316c8ab.md
+ D cards/specs/card-ecc57811-4f45-4315-bb3d-d3a951c61f3b.md
+ D cards/specs/card-f6904e45-8e15-4691-9619-b17165567797.md
+ D cards/specs/card-f84dc7c6-9a25-46bc-875c-4e60e28cf29c.md
+ D cards/specs/card-f85e6b6e-c4c2-4acb-8d88-c9a70fa66a4a.md
+ D cards/specs/card-ffad0356-4a05-4554-8d9c-9cfe351ec8ff.md
+ D cards/specs/card-new.md
+ D cards/specs/cc7ed3b4.md
+ D cards/specs/ccb07726.md
+ D cards/specs/cd58fd49.md
+ D cards/specs/ce0c5d80.md
+ D cards/specs/cef65c97.md
+ D cards/specs/cfed85d3.md
+ D cards/specs/d0936729.md
+ D cards/specs/d0b7e3a9.md
+ D cards/specs/d2fbfa28.md
+ D cards/specs/d38927c1.md
+ D cards/specs/d4b8e02a.md
+ D cards/specs/d4b9a6c1.md
+ D cards/specs/d4f90f42.md
+ D cards/specs/d5c8ece7.md
+ D cards/specs/d8d1f4a2.md
+ D cards/specs/d8e7c3a4.md
+ D cards/specs/d9c4a1f8.md
+ D cards/specs/d9d57c2c.md
+ D cards/specs/de19f4a6.md
+ D cards/specs/dff19657.md
+ D cards/specs/e0b4d11a.md
+ D cards/specs/e0f4c8a7.md
+ D cards/specs/e1a9b6c2.md
+ D cards/specs/e3a71d5c.md
+ D cards/specs/e4c1b8f5.md
+ D cards/specs/e4ed5372.md
+ D cards/specs/e4f1a9b6.md
+ D cards/specs/e6a91d34.md
+ D cards/specs/e6c2a41f.md
+ D cards/specs/e8b4d2a6.md
+ D cards/specs/e9469688.md
+ D cards/specs/eaced0c9.md
+ D cards/specs/efaafd16.md
+ D cards/specs/f0c2d8a9.md
+ D cards/specs/f18da923.md
+ D cards/specs/f1c7a9d4.md
+ D cards/specs/f2a91c7d.md
+ D cards/specs/f2d6c8b1.md
+ D cards/specs/f4b6d2a8.md
+ D cards/specs/f4c2d8e9.md
+ D cards/specs/f6a2d7c4.md
+ D cards/specs/f72a6d31.md
+ D cards/specs/f8d2c4a7.md
+ D cards/specs/f93e1bb7.md
+ D cards/tasks-system/assets/context-report-summary/context-report-summary.css
+ D cards/tasks-system/assets/context-report-summary/context-report-summary.html
+ D cards/tasks-system/assets/goal-linked-specs-summary/summary.html
+ D cards/tasks-system/assets/operator-context-report/operator-context-report-data.json
+ D cards/tasks-system/assets/po-goal-analysis-format/report-ux.css
+ D cards/tasks-system/assets/po-goal-analysis-format/report-ux.html
+ D cards/tasks-system/card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md
+ D cards/tasks-system/card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md
+ D cards/tasks-system/card-2395850a-c528-4689-a138-73a30b684602.md
+ D cards/tasks-system/card-2e4a6931-bd3d-4397-bf71-8ba21daa7e80.md
+ D cards/tasks-system/card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md
+ D cards/tasks-system/card-5483453a-172e-44cb-9f25-3d9ad69c36cf.md
+ D cards/tasks-system/card-83a2bf48-f8b7-4d7a-b566-b6133b1520c8.md
+ D cards/tasks-system/card-905302cd-3cfa-41d7-8e0d-a3ffd55a5429.md
+ D cards/tasks-system/card-98417809-edb7-47c2-9d9d-9f076174c4dc.md
+ D cards/tasks-system/card-9b19200f-2740-4f33-8455-63bac0870c12.md
+ D cards/tasks-system/card-a8819999-071a-4f3a-a4e1-2033bcfb08f8.md
+ D cards/tasks-system/card-agent-autonomy-work-queue.md
+ D cards/tasks-system/card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md
+ D cards/tasks-system/card-cede101c-36c8-462e-9167-a27daad2173e.md
+ D cards/tasks-system/card-codex-pipeline-1783693845820-12a529f3-step-1.md
+ D cards/tasks-system/card-codex-pipeline-1783693845820-12a529f3-step-2.md
+ D cards/tasks-system/card-codex-pipeline-1783693845820-12a529f3-step-3.md
+ D cards/tasks-system/card-codex-skill-1783424755346-8a15d975.md
+ D cards/tasks-system/card-codex-skill-1783425190809-6fb50105.md
+ D cards/tasks-system/card-codex-skill-1783425215516-e1916f75.md
+ D cards/tasks-system/card-codex-skill-1783427295206-134c02c5.md
+ D cards/tasks-system/card-codex-skill-1783429520950-bad8c87c.md
+ D cards/tasks-system/card-codex-skill-1783443352880-df6faf0b.md
+ D cards/tasks-system/card-codex-skill-1783443647691-91eae060.md
+ D cards/tasks-system/card-codex-skill-1783443977270-47f9133f.md
+ D cards/tasks-system/card-codex-skill-1783495869207-759e2295.md
+ D cards/tasks-system/card-codex-skill-1783496502245-a5e66232.md
+ D cards/tasks-system/card-codex-skill-1783502837104-b19e9e59.md
+ D cards/tasks-system/card-codex-skill-1783530524112-61491e77.md
+ D cards/tasks-system/card-codex-skill-1783577864069-8ee729ab.md
+ D cards/tasks-system/card-codex-skill-1783577881108-c8db844f.md
+ D cards/tasks-system/card-codex-skill-1783588674300-560cc5db.md
+ D cards/tasks-system/card-codex-skill-1783590897494-9dd2d021.md
+ D cards/tasks-system/card-codex-skill-1783591708289-5fd90c7c.md
+ D cards/tasks-system/card-codex-skill-1783595913386-e48acfb6.md
+ D cards/tasks-system/card-codex-skill-1783611545211-2a80d2ff.md
+ D cards/tasks-system/card-codex-skill-1783677425436-5b265c7f.md
+ D cards/tasks-system/card-e2cfbc8b-5c26-4fd1-a68d-0f2bd10cb885.md
+ D cards/tasks-system/card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md
+ D cards/tasks-system/card-f5152ba8-15bd-4be5-88c5-7890fdde8e3e.md
+ D cards/tasks-system/card-human-context-synthesis-skill.md
+ D cards/tasks-system/card-operator-context-markdown.md
+ D cards/tasks-system/card-summary-cli-maintenance.md
+ D cards/tasks-system/card-summary-data-model.md
+ D cards/tasks-system/card-tasks-core-problem-statement.md
+ D cards/tasks-system/card-tasks-legacy-factory-pipeline-baseline.md
+ D cards/tasks-system/card-tasks-unified-control-surface-requirements.md
+ D cards/tasks-system/card-watchnotes-lean-unanswered-model.md
+ D cards/tasks-system/card-watchnotes-ledger-selection.md
+ D cards/tasks-system/card-watchnotes-runbook-checklist.md
+ D cards/tasks-system/card-watchnotes-unanswered-context.md
+ D cards/tasks/10e09767.md
+ D cards/tasks/31ef718a.md
+ D cards/tasks/5835377e.md
+ D cards/tasks/94ab097a.md
+ D cards/tasks/9f2c8a91.md
+ D cards/tasks/bb69a6f4.md
+ D cards/tasks/card-00d5e664-8cdd-44c4-bca4-d505a7b5a920.md
+ D cards/tasks/card-016ae17d-4342-44f2-981d-04de1a1e2dfc.md
+ D cards/tasks/card-01b85beb-ac62-4fdc-970c-b207a5cd8e43.md
+ D cards/tasks/card-01e62ff9-9d5e-4ccf-81c1-b4e3c69ea1d5.md
+ D cards/tasks/card-01f32864-1bd0-4316-bdcd-63c893f6b80a.md
+ D cards/tasks/card-03d21994-61ef-4bc4-bc8a-f67c6ac2ced6.md
+ D cards/tasks/card-050214a3-ed47-4020-bbf7-e8f440d5683a.md
+ D cards/tasks/card-05ff44af-b72b-461f-8d32-ec46affba0c7.md
+ D cards/tasks/card-06b1bc39-1a74-4a09-9199-8e05ca21013b.md
+ D cards/tasks/card-06d3d95c-5654-499d-9c50-a75f5c5a7b06.md
+ D cards/tasks/card-06fa34b2-e93b-4569-bafa-26edf458b47c.md
+ D cards/tasks/card-07132fde-ffd4-4db4-a2b7-97587637438f.md
+ D cards/tasks/card-076575b2-ebf4-4414-b00a-283b2ced7e91.md
+ D cards/tasks/card-076a54a6-3c07-41c0-affa-cbf573ebf813.md
+ D cards/tasks/card-082d4629-cd99-4f0c-820a-91f7ac0373b6.md
+ D cards/tasks/card-08a6cbb9-873b-4474-ac61-48e42096a4cb.md
+ D cards/tasks/card-08bc2a09-b6b9-4e16-8c7f-c34cecfa6384.md
+ D cards/tasks/card-08e28a3e-c791-4453-97da-b9943a0a3892.md
+ D cards/tasks/card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7.md
+ D cards/tasks/card-092d26be-9654-4bc0-8173-d79d34f3a3f0.md
+ D cards/tasks/card-0951c0d8-8635-4239-9275-dd325ffc73f2.md
+ D cards/tasks/card-09f6d786-575a-410b-aa4d-a0c91584ec10.md
+ D cards/tasks/card-0a299b9f-e930-46ac-a047-af77c1a3a471.md
+ D cards/tasks/card-0a7cab50-07d8-49f9-b63b-c458e6ffa3fa.md
+ D cards/tasks/card-0a834510-6cb9-4e07-940f-4ac502c6c7c9.md
+ D cards/tasks/card-0aa03e6b-4845-45be-9848-a1538546e3f8.md
+ D cards/tasks/card-0cf226d4-e34c-46a6-9608-dc4f3561420a.md
+ D cards/tasks/card-0dbe52fc-a455-4ef5-8b03-af0a250ff78c.md
+ D cards/tasks/card-0ec6c015-dd49-4f44-820d-c120b1a358a6.md
+ D cards/tasks/card-0edbfb94-6a4c-45c0-b44e-0459789866b6.md
+ D cards/tasks/card-0fecda0d-a333-4116-99c5-9f7a604f22d2.md
+ D cards/tasks/card-0ff36e57-96c3-489c-b003-80d60449265e.md
+ D cards/tasks/card-0ff4897b-5720-43f5-80ea-f4ca85aa6bae.md
+ D cards/tasks/card-0ffd5161-0daf-4bec-8103-5b42cef59c89.md
+ D cards/tasks/card-1072934a-df07-48b8-8809-eb66bdc97dc3.md
+ D cards/tasks/card-110db3ca-2b23-4f34-a642-8fe2b5e18218.md
+ D cards/tasks/card-112e238f-2b5f-4a6a-bf7f-4c0e510c0dbc.md
+ D cards/tasks/card-1171f0fc-dbb3-486a-892b-460384f361f3.md
+ D cards/tasks/card-1179504b-c201-410f-a1b9-7e0f6010dc65.md
+ D cards/tasks/card-11aeabbd-6654-4fdd-973f-15293b92295c.md
+ D cards/tasks/card-11d3bac9-8c27-461a-8afd-e5cf5e0be0e5.md
+ D cards/tasks/card-121e8a43-3476-49a4-a4ec-f5133d6eb0ee.md
+ D cards/tasks/card-128761b3-fc73-4529-95a4-63fb6cb2aded.md
+ D cards/tasks/card-12bbd526-e1be-4ac9-a0ee-016349226ebb.md
+ D cards/tasks/card-12e63948-ba9b-45ba-b56f-ac6774d0fc27.md
+ D cards/tasks/card-137b16fa-01ca-4ee0-830d-7e302181ee24.md
+ D cards/tasks/card-13c2c80e-a22f-4845-bf40-446383692ad5.md
+ D cards/tasks/card-13c30821-a46f-444a-ada1-812d09bc8b52.md
+ D cards/tasks/card-13e08430-4ca8-4365-be21-285f81e906b4.md
+ D cards/tasks/card-141e25dd-34ee-47cf-ad6f-9e112bde599b.md
+ D cards/tasks/card-144497b4-0428-40a2-ad9a-ec5a1234f386.md
+ D cards/tasks/card-145a2512-f4e4-4485-869d-93ba15529b64.md
+ D cards/tasks/card-16785306-87fd-473c-94f4-b7b066e0d524.md
+ D cards/tasks/card-17ea87bb-6ae5-45f8-9a68-99a167335833.md
+ D cards/tasks/card-18496a6d-ffac-47d7-a92d-ac3c58592662.md
+ D cards/tasks/card-1904363a-d446-4dfa-a638-e65a30cde12c.md
+ D cards/tasks/card-19a46b90-5284-42a9-83a2-5c3077977f54.md
+ D cards/tasks/card-1a6d9d08-688c-4d25-a5c9-43ab73770cb7.md
+ D cards/tasks/card-1aa8eca7-d3e9-4e2d-91f9-bb2ffa7793fd.md
+ D cards/tasks/card-1adba778-1e57-4160-858e-e9ebfec1999a.md
+ D cards/tasks/card-1b671e37-0181-4ecd-a77e-6bbc96d50291.md
+ D cards/tasks/card-1b96076a-227d-47a5-9393-6db0553adcdf.md
+ D cards/tasks/card-1bb2454a-f4bc-450e-8f24-2d1736f3de41.md
+ D cards/tasks/card-1bc22bdf-1008-421a-aeba-0e783bf4206f.md
+ D cards/tasks/card-1bc5f2d1-86da-4a5f-8fcd-f987a4539941.md
+ D cards/tasks/card-1c05a286-8809-47ff-9492-b9ccb1862829.md
+ D cards/tasks/card-1c211390-04a2-4b1c-ac40-9b9f27289840.md
+ D cards/tasks/card-1c6d14be-8def-40ac-8b87-9ef480a9fbc2.md
+ D cards/tasks/card-1cab7a96-3ce0-4366-9154-14276c012003.md
+ D cards/tasks/card-1d37d63b-b56d-420e-8aed-971bb0a8c161.md
+ D cards/tasks/card-1d402e0e-4906-4b81-b6b4-25d68220347f.md
+ D cards/tasks/card-1d81f004-dee6-41b2-b45e-c75517faeebe.md
+ D cards/tasks/card-1d94a0d1-c8d6-4250-806d-3c4dab49c11e.md
+ D cards/tasks/card-1dabf621-d24e-4eb4-9d9b-911a324afec6.md
+ D cards/tasks/card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca.md
+ D cards/tasks/card-1f040727-e088-4e14-803a-3b60c4667f8f.md
+ D cards/tasks/card-1f27690a-f15e-4ad3-9a6d-a94d68689720.md
+ D cards/tasks/card-1f464e62-dbe8-4551-82f2-cda15a780e5e.md
+ D cards/tasks/card-1f620984-dd6d-420d-96d8-30604b5c974a.md
+ D cards/tasks/card-1fccd73d-767a-4c5d-b4f7-13ceacf45f78.md
+ D cards/tasks/card-206ff448-582e-4f28-9d22-02e8c44b814c.md
+ D cards/tasks/card-21104e8d-ab8b-41dd-ac47-a8f475b128e3.md
+ D cards/tasks/card-212d0733-7309-4eb4-b7cb-08547659e809.md
+ D cards/tasks/card-2164c008-359f-40ac-8abf-505ee5b5fe38.md
+ D cards/tasks/card-216524c4-cf41-4b50-a8aa-a696b71dc0f6.md
+ D cards/tasks/card-216df8e7-2b14-4abf-946a-2bef86b90db4.md
+ D cards/tasks/card-21a20cc1-c49e-484e-ac19-013b1149c9ce.md
+ D cards/tasks/card-221e7944-3762-4c1d-866c-f50e2256b00a.md
+ D cards/tasks/card-225b5d6e-7e7f-4919-a2f7-92ef66179c78.md
+ D cards/tasks/card-22702dcf-cfdb-4d0a-b06f-735efdce91a8.md
+ D cards/tasks/card-22c4332a-e937-45b9-b05c-51b49615ace7.md
+ D cards/tasks/card-23028df4-5d41-4926-b7dd-16ee1fd08acb.md
+ D cards/tasks/card-2305d65b-f536-449c-b536-6d34e922479f.md
+ D cards/tasks/card-2311cdff-c9b9-4247-9bbe-94b61e1b1b52.md
+ D cards/tasks/card-23127cae-657e-4500-a884-c6cd019e667b.md
+ D cards/tasks/card-232dc127-2c65-4632-af7c-97003f595ce4.md
+ D cards/tasks/card-24108c2d-e4e6-44c2-89ce-3d37f9f58788.md
+ D cards/tasks/card-2432b12c-a764-49ea-a232-fbdbb0627183.md
+ D cards/tasks/card-244f3416-9e9d-4a01-b9b2-8393a0a8ceeb.md
+ D cards/tasks/card-256251f8-2ccb-42bf-a9da-4d430863b4f9.md
+ D cards/tasks/card-2569332f-f2ca-463c-b674-621de507b4bd.md
+ D cards/tasks/card-25c345d0-1866-4dbf-8472-1321ff779863.md
+ D cards/tasks/card-261fea93-a186-4de6-ad7e-c27abd37b1a5.md
+ D cards/tasks/card-2647396a-3617-49aa-920c-c196a8a3d620.md
+ D cards/tasks/card-26793ca1-c8cd-49b1-a32c-070bf46b420c.md
+ D cards/tasks/card-274c4253-0677-42f5-b160-3a413737ad94.md
+ D cards/tasks/card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f.md
+ D cards/tasks/card-27ec1923-e426-423e-af78-459051fc4ee2.md
+ D cards/tasks/card-28aa5bd3-ea4e-413d-b0b9-fb32c4fc0a54.md
+ D cards/tasks/card-28d1eff9-3fcb-4c25-a968-563fb2131ef4.md
+ D cards/tasks/card-2a069135-b1eb-45b0-ac88-dae7e3ef8ce8.md
+ D cards/tasks/card-2af485ca-a29f-4041-b908-513bf641e226.md
+ D cards/tasks/card-2b1076dc-9bdc-45e9-a3b3-33a0e1b0ec41.md
+ D cards/tasks/card-2b56d319-88f0-4e54-8182-f48e96fc7558.md
+ D cards/tasks/card-2b8e7eb3-e798-45e0-8c30-22eb2c3f8b14.md
+ D cards/tasks/card-2bb850eb-80d0-46a1-9622-fec4f61d8079.md
+ D cards/tasks/card-2c50feb6-8dfc-4548-b15e-5a5e64ac6cea.md
+ D cards/tasks/card-2c5430d1-17e4-4bbe-bc0b-c86a113fc7db.md
+ D cards/tasks/card-2d481620-d203-42f8-8f5d-cce7b43fd42b.md
+ D cards/tasks/card-2e7ef059-8902-4234-9e1b-03080fad351b.md
+ D cards/tasks/card-2ecf1b4b-5bd3-43ef-8027-68c609ff6b24.md
+ D cards/tasks/card-2ee06925-a240-447d-9c00-324a29064e38.md
+ D cards/tasks/card-2f2a3154-cc09-4c23-8375-9a7d876d414d.md
+ D cards/tasks/card-2f561c37-bdcd-4931-be7d-d3456880ae20.md
+ D cards/tasks/card-2f7b0843-7638-48fc-a979-76c2903fdc5d.md
+ D cards/tasks/card-3144fd86.md
+ D cards/tasks/card-3154d9b9-8bba-47fc-bab9-6c7f1e4aef63.md
+ D cards/tasks/card-31a98e6a-221e-4240-a0d4-84b483231ce3.md
+ D cards/tasks/card-31bc7dad-92a6-4249-a47b-ede138094a9e.md
+ D cards/tasks/card-31f3451a-4a55-4086-af92-b51861496d27.md
+ D cards/tasks/card-322796d6-5c38-437f-9b03-d8c46f538f42.md
+ D cards/tasks/card-32fadd89-2f89-449e-ad2b-462743b272ef.md
+ D cards/tasks/card-33342b59-aa84-4a59-a7f1-af439ac994a1.md
+ D cards/tasks/card-33feff8b-08e4-4de3-bff5-6b327052854c.md
+ D cards/tasks/card-34288c99-cf14-4d5f-8840-83bc957c9a36.md
+ D cards/tasks/card-355e8705-4d48-4765-82bb-74615db3013e.md
+ D cards/tasks/card-35921417-6f99-427a-b178-c3b81098eefb.md
+ D cards/tasks/card-3595f568-b6c1-4e1c-a2f5-27a1c36d0651.md
+ D cards/tasks/card-3611dbf5-510f-4c1a-bead-fdb87d6f7430.md
+ D cards/tasks/card-36a28cf8-80c9-4e88-a538-8b098ea93619.md
+ D cards/tasks/card-36a4cd91-534f-46c3-b569-9ef8e6d81f41.md
+ D cards/tasks/card-36b2d7a0-d8e5-43d0-9abb-60b765562240.md
+ D cards/tasks/card-36d7a19d-0e56-4601-9a4d-c16a27adf4fb.md
+ D cards/tasks/card-378d4480-07b6-44ba-b0c4-a842cc01ac5a.md
+ D cards/tasks/card-392d7276-b024-4e03-a5bd-f9492e593c76.md
+ D cards/tasks/card-3942184b-68c6-4bda-a2d7-6459ec61c128.md
+ D cards/tasks/card-396f2f01-cd63-4769-888f-4b9ce1ae4430.md
+ D cards/tasks/card-3a15b322-da2d-4306-a2cb-de6ac4c0dc73.md
+ D cards/tasks/card-3a584ed3-2795-469a-ace4-ca9f6c67dc5b.md
+ D cards/tasks/card-3aa92eb0-0322-49a5-8762-58f26e63f700.md
+ D cards/tasks/card-3aba2818-6b47-438d-9785-97793893d573.md
+ D cards/tasks/card-3acc101d-cfc4-4976-ae45-dbc584be6d1e.md
+ D cards/tasks/card-3add8dea-07f1-4882-84e0-5c45b7967583.md
+ D cards/tasks/card-3b113cfd-30be-4599-93c4-ac9c5691eab8.md
+ D cards/tasks/card-3b38c7ca-b678-4a05-a0a3-cee54434fdb4.md
+ D cards/tasks/card-3b3b8753-ae5e-4d37-aa07-988462284b21.md
+ D cards/tasks/card-3b620e1e-2657-4f26-92b0-6dd1145348ad.md
+ D cards/tasks/card-3b88d83a-f848-4b9a-867b-2c8cada2a8f8.md
+ D cards/tasks/card-3bbb3556-70cb-430a-a3e3-947be50947a2.md
+ D cards/tasks/card-3bc99603-7a5d-469a-b9a2-68321f85c0e1.md
+ D cards/tasks/card-3c33dc20-067a-476f-b774-4c4e68b80bf9.md
+ D cards/tasks/card-3c79ae06-ef5f-4f63-a08a-2bb7acf3c24c.md
+ D cards/tasks/card-3c921548-1f55-4331-be45-823b4e5aa3ab.md
+ D cards/tasks/card-3ce4451c-256e-4380-8d61-aab4d4294e74.md
+ D cards/tasks/card-3cebbb97-0bf0-4a09-a0e6-f4a527b22503.md
+ D cards/tasks/card-3d56069c-2645-4b50-ba72-ef596d321ab6.md
+ D cards/tasks/card-3d98483e-9bf0-4cf2-be65-6d341546c463.md
+ D cards/tasks/card-3dbdf66a-cff2-49a4-aff5-1a2c4e3db1d6.md
+ D cards/tasks/card-3dfae988-93c3-46a0-92e4-f42ae7354365.md
+ D cards/tasks/card-3e39e2a1-fe3a-41d7-99a9-8caceac70b57.md
+ D cards/tasks/card-3f25ab45-8232-49f6-81a7-d41eb9cee6b2.md
+ D cards/tasks/card-3f3f5d05.md
+ D cards/tasks/card-3f5c2113-be56-4398-bb03-a07d2562791a.md
+ D cards/tasks/card-3f77f86a-c2da-4bbd-aa31-829607683fc7.md
+ D cards/tasks/card-3f818661-ce9d-4390-b820-44f0140b32aa.md
+ D cards/tasks/card-3f99b18f-b96e-4af2-b3c9-9b891e0f2b5f.md
+ D cards/tasks/card-402c90c7-b229-4932-930d-34068f9996eb.md
+ D cards/tasks/card-411fa6e2-b8b3-40c6-843b-0e2e959888b9.md
+ D cards/tasks/card-41276105-1a6c-41e1-b015-611370b12bfe.md
+ D cards/tasks/card-4195a850-3b81-478e-af62-2b2b76008e2e.md
+ D cards/tasks/card-42177913-0d28-4c43-ba94-adb3a569f3a3.md
+ D cards/tasks/card-426d69c8-8c1b-482d-94dc-7653cabdd7ed.md
+ D cards/tasks/card-42c162ab-6cde-4cf9-b68d-ed081ed65867.md
+ D cards/tasks/card-4325aafc-318b-4d17-b2c8-523f12c543e0.md
+ D cards/tasks/card-44641099-1d6b-4a21-857a-ed37225c9585.md
+ D cards/tasks/card-457d2516-2819-4772-87fa-ecc67fcd5ee5.md
+ D cards/tasks/card-458b6921-84c8-4147-84f7-4b1fde090a18.md
+ D cards/tasks/card-45a573c9-275b-4062-a63c-4febdc90d286.md
+ D cards/tasks/card-45f6eaf3-1fc3-460d-8b67-8bdaffa7e59f.md
+ D cards/tasks/card-4677af11-301c-4e60-a072-e34fb3a4daf3.md
+ D cards/tasks/card-46dfc2e7-3833-42ba-8b13-1a75f99776e2.md
+ D cards/tasks/card-46ecd71e-7c74-4b48-90a7-805b9200a8b7.md
+ D cards/tasks/card-46f748f8-1822-414f-a04b-c7265f3b8aba.md
+ D cards/tasks/card-4750c24c-64ac-4a34-9603-6d320ce38ecb.md
+ D cards/tasks/card-47955f12-4ed3-41dd-aada-7cac51f3e899.md
+ D cards/tasks/card-486637ef-a8a5-4950-9bbf-5c93f39c5617.md
+ D cards/tasks/card-48756429-623a-46a1-921d-36418f10fa57.md
+ D cards/tasks/card-48aa03ac-700f-4d66-ae7b-66b7ab11ba48.md
+ D cards/tasks/card-493d0d86-1a0a-4b02-b8e4-b36f7c7051dd.md
+ D cards/tasks/card-49b988cb-892b-47ff-8910-83e2def455af.md
+ D cards/tasks/card-49cf1765-4987-44a9-a64d-d15d4b504c07.md
+ D cards/tasks/card-4b122c83-c7db-45fa-b1c1-968db03b3b70.md
+ D cards/tasks/card-4b151f18-7e22-4c4d-8b30-0109437bf7ae.md
+ D cards/tasks/card-4b25514a-b85e-4ef0-913e-236d3f504cb5.md
+ D cards/tasks/card-4be77613-f7da-453a-8fac-e9ac715193fd.md
+ D cards/tasks/card-4c2173e6-f1a7-4a10-a28f-544bc244a982.md
+ D cards/tasks/card-4c37f170-35b2-49cd-9b54-b4c5cb1faa1c.md
+ D cards/tasks/card-4c93e946-7d7b-4e74-8e88-15dc3553b1f8.md
+ D cards/tasks/card-4c97e81f-25f2-4150-b8e1-bacc928cead7.md
+ D cards/tasks/card-4ccde97f-5964-42b9-b6b4-976fd2735cbd.md
+ D cards/tasks/card-4d540bf7-6947-4c51-84e8-b5af3266d38d.md
+ D cards/tasks/card-4eda0cdc-33a7-4242-b3f9-2f32e3ea415c.md
+ D cards/tasks/card-4f386e8a-6930-4197-80e7-b6d74b1c442f.md
+ D cards/tasks/card-4f6f4e6d-d8b5-4cd6-8b20-c0379166b89c.md
+ D cards/tasks/card-4f784225-f8dc-41b4-87fd-d04dff36f716.md
+ D cards/tasks/card-505c5d9a-335e-442f-aac2-360e622b7061.md
+ D cards/tasks/card-50cbfca8-47c3-460e-acad-bd4bd3c7062c.md
+ D cards/tasks/card-51612a1a-d9e5-4bb9-9beb-ed466dbf0628.md
+ D cards/tasks/card-51a3062a-4f74-47f2-beff-a956ae67d0a9.md
+ D cards/tasks/card-51e380ac-28ca-41ff-9f96-c6cdd809b6fe.md
+ D cards/tasks/card-52581263-0881-49af-8450-81cf862c464b.md
+ D cards/tasks/card-53cd8c11-de67-4757-939c-c551a64231eb.md
+ D cards/tasks/card-53faf998-2066-4a03-b4f6-d529fcb89ad6.md
+ D cards/tasks/card-547199d5-ab2f-4786-af0c-2e1b2f2d689c.md
+ D cards/tasks/card-55fd1779-4267-4c63-914f-24ccb44ead8f.md
+ D cards/tasks/card-56357996-0a7b-4c6d-b699-84c29c2a7d9d.md
+ D cards/tasks/card-56a9c8e0-1bc0-4452-b094-b4c6c85bc1aa.md
+ D cards/tasks/card-57550726-16aa-44c4-bfb5-c84aedb349e0.md
+ D cards/tasks/card-5786fe0c-1f16-46c1-84fa-0a22dda15491.md
+ D cards/tasks/card-59582c6a-6820-429f-9f0e-bef55d49e2bd.md
+ D cards/tasks/card-598126ec-e70b-4897-a776-7b2365b2f130.md
+ D cards/tasks/card-5a0965cf-526f-47fc-845e-c9ecd09d22bc.md
+ D cards/tasks/card-5ade8aa2-fa9a-41f4-9bea-9d8f6966df17.md
+ D cards/tasks/card-5b99d38a-67de-45a7-9d26-bea9e490d5d1.md
+ D cards/tasks/card-5be45008-6c68-4759-968e-6cd20804416a.md
+ D cards/tasks/card-5bf73521-071b-437b-a68b-e89a8988d880.md
+ D cards/tasks/card-5c766ac0-4c89-427a-9afc-f09644b50487.md
+ D cards/tasks/card-5c8fa767-d997-41a8-9ae5-ea57af228f59.md
+ D cards/tasks/card-5cd21c88-608e-484c-bd01-461745681248.md
+ D cards/tasks/card-5ceeedcd-3f65-482e-8901-31ce664a7d9d.md
+ D cards/tasks/card-5d13ddeb-dca7-4ded-8799-cd03ccca45c0.md
+ D cards/tasks/card-5db6b9e9-ea21-4081-9ce4-bab6056b5462.md
+ D cards/tasks/card-5e212225-e092-4b5b-807a-d6515cbefc18.md
+ D cards/tasks/card-5e333070-67e3-4f23-825f-e304a105b5a2.md
+ D cards/tasks/card-5e339462-a3db-43d9-acda-f7c3708e51ef.md
+ D cards/tasks/card-5e6778e9-7f3a-4cc3-ad99-8d2ddd1eb032.md
+ D cards/tasks/card-5ebfd7ed-0197-420d-b524-cbed39993737.md
+ D cards/tasks/card-5f176c7d-ec18-4e02-a79e-e6d6aee7f1a2.md
+ D cards/tasks/card-5f17e2d6-9eb3-4e65-ab9a-c121dc040132.md
+ D cards/tasks/card-5fc31910-c874-4bfa-a8c3-06d93db6d1b0.md
+ D cards/tasks/card-5fd31ed7-3f1e-47d7-9c48-d555ddc8aa87.md
+ D cards/tasks/card-603acaa4-34c6-4a59-aaba-1a681c650311.md
+ D cards/tasks/card-61107074-995d-4289-bc4c-0494ec2019e0.md
+ D cards/tasks/card-6124005d-0d8a-4191-b6e4-84bfc94b72c8.md
+ D cards/tasks/card-616131fd-8901-418b-9497-4f48e6c9f432.md
+ D cards/tasks/card-6201b159-7e11-4f72-b93d-eede7b61a79b.md
+ D cards/tasks/card-621f52ce-00ce-4de6-8075-c7c1b91cd14e.md
+ D cards/tasks/card-62fdfda8-6b8a-40fe-a99f-44c96bfdfa9b.md
+ D cards/tasks/card-6375a063-6f1a-4a04-90fb-9233db9edcf9.md
+ D cards/tasks/card-644e5cfe-6a29-46e1-9caa-d36b0e4f862e.md
+ D cards/tasks/card-64625af6-8535-4c03-891b-d2e0b1291cc1.md
+ D cards/tasks/card-6462cba3-ce0b-48c1-9311-186246643671.md
+ D cards/tasks/card-64a9c5b1-3061-462b-bda0-275d69947712.md
+ D cards/tasks/card-64e412a0-ebb8-45fd-977b-417317d4afcd.md
+ D cards/tasks/card-657565c3-49f4-484c-a9ba-a373408a6550.md
+ D cards/tasks/card-657e657f-73c9-4ef0-87c8-f352fc96f471.md
+ D cards/tasks/card-65f2dd16-8872-4855-aecf-6e03c1bd3fa1.md
+ D cards/tasks/card-663db0c4-33c3-4e83-bb26-8622faffa82e.md
+ D cards/tasks/card-66a84904-5a44-4c0e-9eab-5aa391f4223f.md
+ D cards/tasks/card-66c34e97-5431-4f27-8b88-21df25354761.md
+ D cards/tasks/card-6783f43f-25f0-4d1e-9e50-31fb62c1cb08.md
+ D cards/tasks/card-67d34ab1-8af9-4af5-bc91-285132c07d01.md
+ D cards/tasks/card-67f41d8b-0da9-4b8b-9ab1-dc22b8f9362e.md
+ D cards/tasks/card-697f0d76-8e4e-4269-a20e-536d16157dff.md
+ D cards/tasks/card-69b6d837-8e11-473e-bb8d-9ee3ee10338b.md
+ D cards/tasks/card-69de45f3-2e2f-4ca8-a47b-434543d70b7d.md
+ D cards/tasks/card-6afb0ac2-5a96-47c4-a190-b5a209fa9c33.md
+ D cards/tasks/card-6b8c2cbd-d743-4e15-af5e-708b1428eaf0.md
+ D cards/tasks/card-6c2e85eb-bac8-4500-80e4-f43c1bfa8b0f.md
+ D cards/tasks/card-6ce8b11a-e641-4ac9-b124-76c3a23035b4.md
+ D cards/tasks/card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e.md
+ D cards/tasks/card-6d47492e-7d27-4219-ae71-45df641b104c.md
+ D cards/tasks/card-6d480f9c-d0f3-4d2a-a4a8-d4a6b91903b9.md
+ D cards/tasks/card-6d74e9f6-7eb9-4b68-964a-5e51d3162bbb.md
+ D cards/tasks/card-6dbc3431-80a2-4fa0-9d57-aafc7d679fd6.md
+ D cards/tasks/card-6dd26d4e-fb94-4afb-b9ca-a79ed4f00995.md
+ D cards/tasks/card-6e24adc4-416f-40e0-9d86-9f780a0cb4ff.md
+ D cards/tasks/card-6e715737-b6f8-4b77-9665-10e7337f36e6.md
+ D cards/tasks/card-6ed3bbac-a773-4737-b9d3-47a4aec7ab68.md
+ D cards/tasks/card-6efae974-597c-4deb-a97b-89017f85df80.md
+ D cards/tasks/card-6f837463-48c3-48c1-a05d-820d33f4542f.md
+ D cards/tasks/card-6fcb6924-196b-4394-b3ae-80bdaf9efca1.md
+ D cards/tasks/card-70107aab-0643-4069-8dae-5e07025970d8.md
+ D cards/tasks/card-7017298f-34df-4c85-a516-1d83bad98fd2.md
+ D cards/tasks/card-7074d33a-39da-42a1-b470-673cbe221def.md
+ D cards/tasks/card-71cf2fc2-b189-4a91-9d31-d7e747e1094d.md
+ D cards/tasks/card-71f469cc-e5c6-4885-a784-e93beb960eb9.md
+ D cards/tasks/card-7320bbfc-299a-4d35-8fc6-e926eaf43eb3.md
+ D cards/tasks/card-7366c69d-9569-4698-8189-58b3f40c24fa.md
+ D cards/tasks/card-7493b007-899b-49cf-9a5b-c07fb6b35c70.md
+ D cards/tasks/card-74e6882a-94e0-44b4-bb0a-3f8f0d53f8c9.md
+ D cards/tasks/card-75f0b9c8-4e06-41a4-88ab-406a5e529d67.md
+ D cards/tasks/card-7626afca-5188-455b-a4d8-9171277a69dd.md
+ D cards/tasks/card-7664c9d7-8ca4-48f3-8d7f-a86d2817ab21.md
+ D cards/tasks/card-77d8a721-02ab-42e2-ad89-1c89be4059d2.md
+ D cards/tasks/card-77edea64-f747-430a-983c-50f32c84d6ca.md
+ D cards/tasks/card-7830aed2-b586-4adc-9108-1820dc0f2ed4.md
+ D cards/tasks/card-783b281c-02e0-4b9a-ac90-84b6357e4c1d.md
+ D cards/tasks/card-7877c056-66a9-47f1-ba2d-8b00cb83c43e.md
+ D cards/tasks/card-79607fb0-148f-44d6-99ec-8483e3a42fa3.md
+ D cards/tasks/card-79c30daa-a24a-4152-ac72-770befba03d7.md
+ D cards/tasks/card-79db29f7-eab1-47ad-af66-907790a36514.md
+ D cards/tasks/card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63.md
+ D cards/tasks/card-7a7a995b-c3c4-4aad-acca-0adebc09f6ab.md
+ D cards/tasks/card-7a87a7c6-c404-43df-bcbc-b5414b127e8a.md
+ D cards/tasks/card-7ad9d723-2e29-4006-9018-1cb24b20eb7c.md
+ D cards/tasks/card-7ae8cc5b-5f16-4d10-9638-22f098c701fa.md
+ D cards/tasks/card-7af0bea9-eebb-42f1-942a-8e030c386cf3.md
+ D cards/tasks/card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad.md
+ D cards/tasks/card-7bb44e76-6f8e-4ff7-9ad8-c4e5fae8ecfa.md
+ D cards/tasks/card-7d2090c9-0a50-4e6d-a164-2dee515e4a55.md
+ D cards/tasks/card-7d22c622-303a-46b6-8690-3f7ab17cbf91.md
+ D cards/tasks/card-7d2a39b9-0b9d-4ae9-9855-4afec5a98878.md
+ D cards/tasks/card-7d32e4e4-ab01-4f31-ad69-d5a7bd36f572.md
+ D cards/tasks/card-7d72a88e-8a01-47a7-bdb2-95c5a7dae6a8.md
+ D cards/tasks/card-7dad8c3e-9bdd-4ee4-89c4-1799151ca22d.md
+ D cards/tasks/card-7e6e0630-d3c2-4d78-b70f-a58c247d5a43.md
+ D cards/tasks/card-7eb1f9dc-7004-4536-bca3-d5f3259a01ad.md
+ D cards/tasks/card-7f0e9798-af4e-4061-8485-f4dceadf884d.md
+ D cards/tasks/card-7fd950e7-a403-43c6-9fcd-67bc626d603e.md
+ D cards/tasks/card-801c5f3b-cc3e-44ad-9933-01b3fe5aa192.md
+ D cards/tasks/card-8178ae9e-a5f8-4cfd-bf0d-6da13ed604c5.md
+ D cards/tasks/card-823e398f-8f79-4610-9ed6-bd5754578bdb.md
+ D cards/tasks/card-82f0b14a-a296-4184-903b-fd14c0111c36.md
+ D cards/tasks/card-8355a474-a340-43da-84d4-aa21158c3454.md
+ D cards/tasks/card-837f62a4-a3f1-47f9-8025-d903a2d28400.md
+ D cards/tasks/card-83bae0f2-695b-43ea-a934-19942240dda7.md
+ D cards/tasks/card-83c3872d-d27a-46af-81f0-64e0cc1b56a2.md
+ D cards/tasks/card-83d4acc7-229d-411c-b486-91dc16813172.md
+ D cards/tasks/card-83d8dcae-2e34-4ebd-923d-16607c699cf4.md
+ D cards/tasks/card-84049f97-d6fa-4825-bac4-bc64f629efe9.md
+ D cards/tasks/card-840ff2e0-739b-4721-8f3a-af9d543aabbe.md
+ D cards/tasks/card-846e5c2b-a5a7-495a-8e73-d97cda971282.md
+ D cards/tasks/card-8495234b-7d56-4f34-9af6-d5ce22656d21.md
+ D cards/tasks/card-84c164a3-14d5-4690-900c-966f0d177d5c.md
+ D cards/tasks/card-85e19584-9173-4380-85e2-34c02e41e31f.md
+ D cards/tasks/card-86a7e0e1-9013-439e-b997-b34b15eac1da.md
+ D cards/tasks/card-874ff586-dd73-414e-842d-54fbf459aa77.md
+ D cards/tasks/card-8788fe2e-89d2-4eda-ac2c-a0ff61269ff3.md
+ D cards/tasks/card-87ef17bc-778c-47b9-bfd6-dd70fbfa9142.md
+ D cards/tasks/card-880c2143-c573-46e9-a204-0d79766bc5bf.md
+ D cards/tasks/card-88aba7ad-1994-421d-bc23-4546ad086879.md
+ D cards/tasks/card-893310ed-56bd-46fe-8445-0dae7e33ab23.md
+ D cards/tasks/card-894b267d-59df-428c-a757-3b711951d73e.md
+ D cards/tasks/card-89546a8b-0056-4957-892e-e82acaf94cbf.md
+ D cards/tasks/card-8955490a-97bf-470e-903b-7759d20917d0.md
+ D cards/tasks/card-8a86025e-7d4f-416f-bb29-17619048e058.md
+ D cards/tasks/card-8ac5b051.md
+ D cards/tasks/card-8b0d8113-c0a8-4ce6-a10a-d1637cb037e4.md
+ D cards/tasks/card-8b1412c6-9cfb-4501-a39b-3b0b8ee4bdc5.md
+ D cards/tasks/card-8b2dbe18-5af2-40c5-9e24-02139265b92d.md
+ D cards/tasks/card-8b9dee68-8979-4112-b59d-6781713a9677.md
+ D cards/tasks/card-8c1eeb3b-7257-4355-988e-89b05918d9b1.md
+ D cards/tasks/card-8cfca5f1-6f0a-403e-a0ec-722ebdca5aeb.md
+ D cards/tasks/card-8d04f508-7d34-4636-b2dd-8cf8d791a51f.md
+ D cards/tasks/card-8ea9f87e-ee36-496b-be48-7cd9a651e231.md
+ D cards/tasks/card-8f007a7d-a429-4675-9165-a754b49e0ecc.md
+ D cards/tasks/card-8f0152a8-1c98-4cc8-8453-9b651db7ac3f.md
+ D cards/tasks/card-8f1ebd41-0661-4bac-ba08-8a98789fe2ce.md
+ D cards/tasks/card-8f2f9dec-2e51-4a9a-b238-6161d8282e06.md
+ D cards/tasks/card-8f511980-e8af-4f99-a3d9-3842eca71a3b.md
+ D cards/tasks/card-8fd7eb7d-94a3-4c06-8258-25cfe1b50f22.md
+ D cards/tasks/card-913d0dee-b09a-4039-89a6-428605add3c3.md
+ D cards/tasks/card-916311a6-1b95-4d2d-9d8a-bea889ec8822.md
+ D cards/tasks/card-9225d91f-6439-4051-9dcd-a384603f22af.md
+ D cards/tasks/card-924e2263-f833-41e2-895a-86b91ebbd47d.md
+ D cards/tasks/card-9266700d-d73d-4a99-94ec-2d036226a9d8.md
+ D cards/tasks/card-926cfdaa-ece3-4a40-80cb-87a77a39c8ab.md
+ D cards/tasks/card-92702a8b-fd8a-4c2b-af5c-8226e65c7524.md
+ D cards/tasks/card-928c7b3c-c00e-456a-9894-4e9fcb5abb4e.md
+ D cards/tasks/card-92a7dd40-d2a7-4eac-9bd2-cab117b34b3e.md
+ D cards/tasks/card-92af6fa5-5c2c-4003-8dee-9c2269872a21.md
+ D cards/tasks/card-92ec6b40-9bea-4c63-8273-d7987c151f7b.md
+ D cards/tasks/card-931d17c3-2831-49d3-9068-bb3b75d0a731.md
+ D cards/tasks/card-93a99f92-5584-43f5-a933-2208303997ad.md
+ D cards/tasks/card-93d1c5d0-a995-4961-81e7-73ebcb4cc2a0.md
+ D cards/tasks/card-94735e60-269f-471e-8fc1-4da9c590c9c3.md
+ D cards/tasks/card-947a3cd5-b8c4-4266-818a-eb24d0f8707b.md
+ D cards/tasks/card-94a30f4e-9473-4489-9165-7919db6010e4.md
+ D cards/tasks/card-953d29e7-9528-4c66-accd-61fb6c881fea.md
+ D cards/tasks/card-95452f09-08e2-4251-b07b-d097f124feed.md
+ D cards/tasks/card-95b5fee7-a087-4270-ac90-4df9dc8097e8.md
+ D cards/tasks/card-95e1ae46-68e1-4b46-9b76-3814c8b587df.md
+ D cards/tasks/card-95f1745d-e1d7-477a-963e-a39df72048df.md
+ D cards/tasks/card-965466a1-09d4-4ab2-ad3c-322e6a37c8a5.md
+ D cards/tasks/card-96c89483-4652-45d4-942f-c1df28322cfa.md
+ D cards/tasks/card-96eb779a-4139-40ec-988f-7dddddf2de0a.md
+ D cards/tasks/card-97528f55-23ff-472e-baa4-d976f73f0a23.md
+ D cards/tasks/card-97762994-0ef1-4d00-851a-2b0190ba8fa1.md
+ D cards/tasks/card-977b8f4b-3917-4c62-9d15-f6b43ed906ff.md
+ D cards/tasks/card-9788570b-a768-4abd-b18c-efa900169dd6.md
+ D cards/tasks/card-97b098f2-63ea-4f03-af18-e96cb175f8d6.md
+ D cards/tasks/card-98d93ccb-bf37-4188-b084-75a694d6340f.md
+ D cards/tasks/card-9989182c-6776-4a62-ac3a-85dc9f2b102e.md
+ D cards/tasks/card-99934175-ecb7-44f2-9d5d-bf053e46a84f.md
+ D cards/tasks/card-99c9f243-3a36-4920-a48d-90615aacfac4.md
+ D cards/tasks/card-9a3b90f1-5f5e-4aae-a1f7-0cc25f7fbc3d.md
+ D cards/tasks/card-9a5044ee-da92-47ab-889d-83b65e6e6941.md
+ D cards/tasks/card-9a6d6fd1-f1b2-4430-a3e9-31f8917bba94.md
+ D cards/tasks/card-9a7255f2-c390-4798-88cc-89e8579a9c7a.md
+ D cards/tasks/card-9ab81782-75c6-428d-add8-a22a37ce5fda.md
+ D cards/tasks/card-9af33bd5-5f11-4a55-bce5-1997517bd6f6.md
+ D cards/tasks/card-9b39f073-519f-4a44-afd3-bdce1507ada7.md
+ D cards/tasks/card-9bcf1d75-1772-4837-8886-1f21f57e5e49.md
+ D cards/tasks/card-9c1edba6-2b08-4d17-a510-4b50cdfc85ed.md
+ D cards/tasks/card-9c3ebf9f-3942-4b88-8d83-ceb6bc8b6c04.md
+ D cards/tasks/card-9c74f4da-db2a-4988-adc8-bc3166b0b0d1.md
+ D cards/tasks/card-9cc50475-421b-4af0-9a83-bcecb1874a63.md
+ D cards/tasks/card-9cebc924-d3c5-4eff-b37c-60736f27f86a.md
+ D cards/tasks/card-9e1dc6dc-7903-4d4a-9370-ab7d89681407.md
+ D cards/tasks/card-9ed2f4d1-1f30-4d68-b81c-3ec94629d9be.md
+ D cards/tasks/card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a.md
+ D cards/tasks/card-9f1030e2-0df0-4461-ae93-5968a2f4a5e1.md
+ D cards/tasks/card-9f93844a-47c7-4892-9208-638fef4a5ed2.md
+ D cards/tasks/card-9fbece48-c474-468c-8862-d8907d95063d.md
+ D cards/tasks/card-a07e18a7-5d39-4dc0-8434-605d1ee4731f.md
+ D cards/tasks/card-a0f30885-3c71-43a3-88c1-9c1eb7bc059b.md
+ D cards/tasks/card-a1397b46-7583-4bac-b74c-cc758c3a7903.md
+ D cards/tasks/card-a1b03a54-4315-4e20-8566-8f4c2dc8dc56.md
+ D cards/tasks/card-a1c0de9b-4018-44e3-bebe-74d9c66b5960.md
+ D cards/tasks/card-a33d1fa7-6b86-4675-8fc4-efbd300edd55.md
+ D cards/tasks/card-a3db13c6-4429-43fe-8346-20768f1d9c53.md
+ D cards/tasks/card-a463854b-1bcc-47f8-aa72-c9efb75101bf.md
+ D cards/tasks/card-a4c81cea-0c42-4221-9891-fe57013a4149.md
+ D cards/tasks/card-a4cbb933-2fd2-4907-ae67-4ae603a69fe7.md
+ D cards/tasks/card-a4db686f.md
+ D cards/tasks/card-a5950529-82c0-4e6f-880b-0e95f0b81ffc.md
+ D cards/tasks/card-a59bd1a8-7001-4218-b2b2-e6cf88257b58.md
+ D cards/tasks/card-a66f17b1-3cb2-468a-8f15-88a1bc7e0f2d.md
+ D cards/tasks/card-a6b0d687-17a9-493c-a202-6c523af5e544.md
+ D cards/tasks/card-a71a1180-dbe0-4094-ac4f-d57f00ee7304.md
+ D cards/tasks/card-a74055c3-0912-4101-8a75-1237bef4a5c1.md
+ D cards/tasks/card-a742e70f-d9f7-40b9-8cc0-a82d032501c1.md
+ D cards/tasks/card-a782f56d-4099-4292-aff2-6b891cb143f4.md
+ D cards/tasks/card-a7aec888-a4a8-4333-a2e3-98d57cfcf9b8.md
+ D cards/tasks/card-a83775f8-09b0-4aeb-977e-010cc0962925.md
+ D cards/tasks/card-a87032a4-6f75-4dc1-8476-a49ec6dea1f1.md
+ D cards/tasks/card-a8b63a30-7a07-465c-9708-1bd02f349f17.md
+ D cards/tasks/card-a8c79f8b-fb3b-4f26-82ea-3e922074f380.md
+ D cards/tasks/card-a8ea673d-d88b-436b-9e40-78151572e814.md
+ D cards/tasks/card-aa3d0271-c9fa-424f-b903-731118f4e124.md
+ D cards/tasks/card-aa48cc9b-9319-494e-b343-f3026b76a05a.md
+ D cards/tasks/card-aaea5fc2-44ea-4f3a-b147-bf8624365870.md
+ D cards/tasks/card-ab38294e-ff82-4afb-b8c6-fe773f3a2560.md
+ D cards/tasks/card-ab4631a3-1274-4507-ae4d-fc8772e2322e.md
+ D cards/tasks/card-ac30b58e-2fd5-4300-b4e2-016b3c71c8ee.md
+ D cards/tasks/card-ac39aa2b-fd9a-4688-a897-ef66df98e2ed.md
+ D cards/tasks/card-ac65a134-11fe-4180-9c0f-a2eb597f053c.md
+ D cards/tasks/card-ac917c89-2671-4798-9d03-26a8f16d479d.md
+ D cards/tasks/card-acb0e0c3-b5fd-488f-beb2-09203cc61613.md
+ D cards/tasks/card-ad51d385.md
+ D cards/tasks/card-ad6652a3-f7b4-4727-9e98-89fa0ffe2c6c.md
+ D cards/tasks/card-adbcc9f0-9838-45ad-8e48-c127b8d3c26f.md
+ D cards/tasks/card-ade15b80-ea0e-4e73-b3ec-730e78dd4c26.md
+ D cards/tasks/card-aec89b5f-dc4e-4942-9b9e-d7136252c2fd.md
+ D cards/tasks/card-aec91b22-660d-4c7c-af9b-a4e6cbae5848.md
+ D cards/tasks/card-af70d9db-6c80-435f-9bb3-07293ed04e04.md
+ D cards/tasks/card-afda2132-e76f-43e7-b49c-39627114e098.md
+ D cards/tasks/card-b057538c-c885-4292-998b-c101e0ceb691.md
+ D cards/tasks/card-b1e2c116-453b-4b18-844c-a0f6f664d244.md
+ D cards/tasks/card-b2753e07-c720-4173-8094-adca2f644f33.md
+ D cards/tasks/card-b27ca8c8-475a-436d-bd81-281a0a2eef0e.md
+ D cards/tasks/card-b3da3129-6c17-4e78-8204-cccab003a4ab.md
+ D cards/tasks/card-b401cadd-efb8-44af-8373-1699d0bb1e75.md
+ D cards/tasks/card-b4a010e5-2ee0-4c3e-b686-6f1699f2186f.md
+ D cards/tasks/card-b5623e76-e319-4abe-bde1-08139a0b040f.md
+ D cards/tasks/card-b5a402ef-3072-4d56-826a-a5de34ca38ed.md
+ D cards/tasks/card-b61f227f-7b10-43bb-a7d2-502621d7896e.md
+ D cards/tasks/card-b66f13d3-e2d8-490b-ae8d-1da66a6c7d21.md
+ D cards/tasks/card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a.md
+ D cards/tasks/card-b6b5276d-ddee-4ca8-a3a7-19797515fda7.md
+ D cards/tasks/card-b75d1db1-67c1-45f4-8e99-d110a4095702.md
+ D cards/tasks/card-b7632ea1-bb9e-4e5b-87cc-172d0358e89c.md
+ D cards/tasks/card-b79d00e6-563a-4f7a-9b1f-13f868fbca41.md
+ D cards/tasks/card-b7d7cebe-50db-4f0c-be35-76ae02dfd7a0.md
+ D cards/tasks/card-b8022ebf-81d9-4881-9a86-c8011c389734.md
+ D cards/tasks/card-b85c6294-593d-4870-8c6e-ec559386df3c.md
+ D cards/tasks/card-b874b4c3-d5cc-41e7-aa62-e09f49c45fe0.md
+ D cards/tasks/card-b8f80843-13e8-4ef2-aa2c-95ab1931353e.md
+ D cards/tasks/card-b9502e23-8e37-4717-ad05-c96f290edb43.md
+ D cards/tasks/card-b9b81cea-3b5a-45b3-999b-ee0f08a3d6af.md
+ D cards/tasks/card-b9c6959d-561f-4a49-9d22-4d763d43e689.md
+ D cards/tasks/card-ba20da2c.md
+ D cards/tasks/card-ba26931c-2e8d-400d-a4d6-075160c92875.md
+ D cards/tasks/card-ba280bee.md
+ D cards/tasks/card-ba3bd390-cbfa-4be7-870b-443727a01def.md
+ D cards/tasks/card-ba46939e-6aeb-4a86-918e-1583297a9bdc.md
+ D cards/tasks/card-ba54e17e-2960-43b4-843f-4f0d94de1c26.md
+ D cards/tasks/card-ba588f14-bde7-4776-820d-c1c8b2308cb6.md
+ D cards/tasks/card-ba9396b3-739f-429b-8386-13db20913874.md
+ D cards/tasks/card-bb56697c-dd89-4022-a01f-bde6b3a6d992.md
+ D cards/tasks/card-bb7f79f6-ec54-466b-873a-6bc83ad77de3.md
+ D cards/tasks/card-bb8a0fb0-099f-4026-aff9-f68871957b98.md
+ D cards/tasks/card-bbba9c8c-a7b5-4316-9dad-697808154491.md
+ D cards/tasks/card-bc10fcbe-fa8b-41a7-8fd8-0206e440e159.md
+ D cards/tasks/card-bc640df9-2e33-4ed9-9dc6-cedf5fc4746b.md
+ D cards/tasks/card-bd584783-c1ae-4e9d-87c6-0fb45daec114.md
+ D cards/tasks/card-bd5b07d9-ba69-4a2d-b703-8124fdfdadbc.md
+ D cards/tasks/card-bd7a6e67-3fe4-4569-a0c5-a32efd347b9a.md
+ D cards/tasks/card-bdc38704-09a4-4e66-9bae-04dbe45e6cd0.md
+ D cards/tasks/card-bdea3eb8-4fe8-462b-988e-6be22662d98d.md
+ D cards/tasks/card-be059a6d-d025-48ba-9112-5aa45ad42966.md
+ D cards/tasks/card-be814a3e-3057-4350-829f-1ec503d7421c.md
+ D cards/tasks/card-beafb20e-b0cf-41aa-8874-0b43c046abbf.md
+ D cards/tasks/card-bebbeee1.md
+ D cards/tasks/card-bedd5f22-963b-4556-9fc4-d9f973a4b5f7.md
+ D cards/tasks/card-bfea5b1e-4806-44f8-a626-86f09240f44c.md
+ D cards/tasks/card-c078ecda-66ec-41a2-8af3-7fe5141d643a.md
+ D cards/tasks/card-c1e2d98f-beaf-4aec-a64a-7bf07e61013e.md
+ D cards/tasks/card-c2294c71-cb87-49d6-8886-002cd0f6b036.md
+ D cards/tasks/card-c26d4516-8021-4109-b86b-ec7197f59a6f.md
+ D cards/tasks/card-c29a8f7f-b0a9-437e-bf38-147407f0d563.md
+ D cards/tasks/card-c2df50a1-b82d-4b71-aa90-6d46512d7a61.md
+ D cards/tasks/card-c3123d02-6d2e-4cbb-8de3-7dc697ebb81e.md
+ D cards/tasks/card-c368017d-71e1-4886-b7db-ae8af3cc5183.md
+ D cards/tasks/card-c3a65879-7f81-45fc-9424-26aa781f2647.md
+ D cards/tasks/card-c458e6af-efa4-4d08-b388-c1c72316abf9.md
+ D cards/tasks/card-c49f2564-7fc4-4a17-b90c-fee24460b210.md
+ D cards/tasks/card-c4da3f2c-68bd-4c5b-b964-6e424be02962.md
+ D cards/tasks/card-c4fab217-0065-4221-8beb-b9b4e0212f44.md
+ D cards/tasks/card-c5660a5f-05cc-40c5-82bc-32ede53d7dca.md
+ D cards/tasks/card-c60f1900-bd54-43c1-afb4-193fc1ee2947.md
+ D cards/tasks/card-c6534091-d29a-49a4-936d-5fe57948b3ff.md
+ D cards/tasks/card-c68cc4fc-f7bf-4e12-a1fb-3c811f87e89c.md
+ D cards/tasks/card-c6f72f28-1b4f-457f-b710-4b485c4b5b35.md
+ D cards/tasks/card-c713e183-d369-48f7-b94e-b3ac430e2d5e.md
+ D cards/tasks/card-c7280f23-c0e5-4442-aac6-729d2963378f.md
+ D cards/tasks/card-c75c1246-9595-4633-ad19-b8942b4648af.md
+ D cards/tasks/card-c767c97c-a988-4ba1-a324-271ed87376e5.md
+ D cards/tasks/card-c7f83e5e-183a-4c8e-94cf-5cfee441407b.md
+ D cards/tasks/card-c8a81837-7259-476b-b35e-841e2286329b.md
+ D cards/tasks/card-c940a1b9-685c-4f61-a7ad-4110de9ba0d9.md
+ D cards/tasks/card-c9a30d5a-4f75-48a8-b5a8-650fb51e83d1.md
+ D cards/tasks/card-c9aae25e-129d-49b1-9e38-29e9362257d6.md
+ D cards/tasks/card-c9c354ca-59a7-4086-81d2-ef61e85104fb.md
+ D cards/tasks/card-c9d9213c-50bd-4aee-b4e0-42cc7910cf58.md
+ D cards/tasks/card-ca692962-43ef-4af0-984a-f56936cb17d5.md
+ D cards/tasks/card-ca6d023e-1ff0-40d4-bb77-2ab5c76662e9.md
+ D cards/tasks/card-ca7a9698-2d11-4b32-ab89-5663b1df4fb1.md
+ D cards/tasks/card-caa4c6bf-f76a-4ddc-a309-39d2ed11a08d.md
+ D cards/tasks/card-cb1e220a-03ee-47a3-8e4d-4ef4c6fa7057.md
+ D cards/tasks/card-cb58de98-001e-45ce-b5e2-fd8305dc7bf9.md
+ D cards/tasks/card-cb7a7319-7271-4ac9-8560-a1f8d2c0117b.md
+ D cards/tasks/card-cc553664-46d3-458c-8de2-12f7ba0d041c.md
+ D cards/tasks/card-cd909ba1-5429-4be6-9a10-ce234a9799c9.md
+ D cards/tasks/card-cdd63640-234e-4bcd-8979-110626d0ca35.md
+ D cards/tasks/card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md
+ D cards/tasks/card-cec2e012-e9df-4f8e-8aef-717105a0102f.md
+ D cards/tasks/card-cf110703-fad9-47a8-b2c4-5a03413e607e.md
+ D cards/tasks/card-cf200179-fb3b-4bd6-8914-6a701f60cb5f.md
+ D cards/tasks/card-cf23e4a8-d018-45fc-af6a-6302ebbd6468.md
+ D cards/tasks/card-cf40c6df-b05a-41bf-a09b-7e864a553eb1.md
+ D cards/tasks/card-codex-pipeline-1784363771290-a0ed834f-step-1.md
+ D cards/tasks/card-codex-pipeline-1784363802862-7a8e2625-step-1.md
+ D cards/tasks/card-codex-pipeline-1784394516973-6845bc44-step-1.md
+ D cards/tasks/card-codex-pipeline-1784394601014-c23f81ac-step-1.md
+ D cards/tasks/card-codex-pipeline-1784394619194-f274a565-step-1.md
+ D cards/tasks/card-codex-pipeline-1784439300006-4a288471-step-1.md
+ D cards/tasks/card-codex-pipeline-1784439334563-e18d7a5a-step-1.md
+ D cards/tasks/card-codex-pipeline-1784439413294-56258c03-step-1.md
+ D cards/tasks/card-codex-pipeline-1784441234171-b2755d12-step-1.md
+ D cards/tasks/card-codex-pipeline-1784441270126-f9ccf4eb-step-1.md
+ D cards/tasks/card-codex-pipeline-1784441306682-a4fc2621-step-1.md
+ D cards/tasks/card-codex-pipeline-1784445242759-514ae9fa-step-1.md
+ D cards/tasks/card-codex-pipeline-1784445257596-7ba11b11-step-1.md
+ D cards/tasks/card-codex-pipeline-1784471860336-10eea594-step-1.md
+ D cards/tasks/card-codex-pipeline-1784473705290-b8dd74cc-step-1.md
+ D cards/tasks/card-codex-pipeline-1784538682976-008961b5-step-1.md
+ D cards/tasks/card-codex-pipeline-1784552421560-ca73562d-step-1.md
+ D cards/tasks/card-codex-pipeline-1784552500251-b5fde4fe-step-1.md
+ D cards/tasks/card-codex-pipeline-1784571985655-e941c1fb-step-1.md
+ D cards/tasks/card-codex-pipeline-1784743425249-a1ae192c-step-1.md
+ D cards/tasks/card-codex-pipeline-1784743425249-a1ae192c-step-2.md
+ D cards/tasks/card-codex-pipeline-1784743425249-a1ae192c-step-3.md
+ D cards/tasks/card-codex-pipeline-1784743425249-a1ae192c-step-4.md
+ D cards/tasks/card-codex-pipeline-1785145244897-4b7173e5-step-1.md
+ D cards/tasks/card-codex-pipeline-1785176276127-ee41eec5-step-1.md
+ D cards/tasks/card-codex-pipeline-1785277993972-5b69c11a-step-1.md
+ D cards/tasks/card-codex-pipeline-1785280877160-9427852b-step-1.md
+ D cards/tasks/card-codex-pipeline-1785292850237-accc542c-step-1.md
+ D cards/tasks/card-codex-pipeline-1785295433681-ebdb3233-step-1.md
+ D cards/tasks/card-codex-pipeline-1785416703527-97facc76-step-1.md
+ D cards/tasks/card-codex-skill-1784018258381-36965334.md
+ D cards/tasks/card-codex-skill-1784022826105-454fe26f.md
+ D cards/tasks/card-codex-skill-1784025223185-fbfecff9.md
+ D cards/tasks/card-codex-skill-1784028440832-9e097f9b.md
+ D cards/tasks/card-codex-skill-1784030180133-084a9051.md
+ D cards/tasks/card-codex-skill-1784030813931-2012791e.md
+ D cards/tasks/card-codex-skill-1784031700776-454fe9e9.md
+ D cards/tasks/card-codex-skill-1784036508459-8926cc1f.md
+ D cards/tasks/card-codex-skill-1784037279472-474ce8cd.md
+ D cards/tasks/card-codex-skill-1784046263126-8dea61f9.md
+ D cards/tasks/card-codex-skill-1784047137979-57bc97d8.md
+ D cards/tasks/card-codex-skill-1784047681152-4f93da75.md
+ D cards/tasks/card-codex-skill-1784102291288-1aebdab5.md
+ D cards/tasks/card-codex-skill-1784102317950-aef624f7.md
+ D cards/tasks/card-codex-skill-1784102449328-4013af50.md
+ D cards/tasks/card-codex-skill-1784102461109-528217de.md
+ D cards/tasks/card-codex-skill-1784106020584-da48808a.md
+ D cards/tasks/card-codex-skill-1784106035742-137b1c2d.md
+ D cards/tasks/card-codex-skill-1784117802727-5aaa34ec.md
+ D cards/tasks/card-codex-skill-1784205397104-79897826.md
+ D cards/tasks/card-codex-skill-1784205406944-60080cc0.md
+ D cards/tasks/card-codex-skill-1784216447040-eff225f5.md
+ D cards/tasks/card-codex-skill-1784227716339-dbce2763.md
+ D cards/tasks/card-codex-skill-1784291353486-1830b14d.md
+ D cards/tasks/card-codex-skill-1784291362396-3764fdee.md
+ D cards/tasks/card-codex-skill-1784291445490-701870f7.md
+ D cards/tasks/card-codex-skill-1784291580738-c3691001.md
+ D cards/tasks/card-codex-skill-1784292470196-d643288e.md
+ D cards/tasks/card-codex-skill-1784292634000-81923844.md
+ D cards/tasks/card-codex-skill-1784292677187-5ba99ee1.md
+ D cards/tasks/card-codex-skill-1784292696820-04541d43.md
+ D cards/tasks/card-codex-skill-1784292705109-d7bfd3c9.md
+ D cards/tasks/card-codex-skill-1784292713036-4977c142.md
+ D cards/tasks/card-codex-skill-1784292899842-8cc2e034.md
+ D cards/tasks/card-codex-skill-1784301138950-27021ec1.md
+ D cards/tasks/card-codex-skill-1784354734438-c301a9ee.md
+ D cards/tasks/card-codex-skill-1784354791376-155acbea.md
+ D cards/tasks/card-codex-skill-1784354858281-4b509c6a.md
+ D cards/tasks/card-codex-skill-1784355765584-aa5dbc59.md
+ D cards/tasks/card-codex-skill-1784357650123-612dfaaf.md
+ D cards/tasks/card-codex-skill-1784358107101-fa9ea4aa.md
+ D cards/tasks/card-codex-skill-1785147241158-8149c38d.md
+ D cards/tasks/card-codex-skill-1785176285633-18abcc52.md
+ D cards/tasks/card-codex-skill-1785292936091-cf2a61ec-step-2.md
+ D cards/tasks/card-codex-skill-1785292936091-cf2a61ec.md
+ D cards/tasks/card-codex-skill-1785293068410-692d9ea9-step-2.md
+ D cards/tasks/card-codex-skill-1785293068410-692d9ea9.md
+ D cards/tasks/card-codex-skill-1785296055653-54f366fe-step-2.md
+ D cards/tasks/card-codex-skill-1785296055653-54f366fe.md
+ D cards/tasks/card-codex-skill-1785296171109-75f0fd48-step-2.md
+ D cards/tasks/card-codex-skill-1785296171109-75f0fd48.md
+ D cards/tasks/card-codex-skill-1785296267220-a01f8528-step-2.md
+ D cards/tasks/card-codex-skill-1785296267220-a01f8528.md
+ D cards/tasks/card-codex-skill-1785296385879-8e2503e3-step-2.md
+ D cards/tasks/card-codex-skill-1785296385879-8e2503e3.md
+ D cards/tasks/card-codex-skill-1785414681345-43f7406f-step-2.md
+ D cards/tasks/card-codex-skill-1785414681345-43f7406f.md
+ D cards/tasks/card-codex-skill-1785416949523-c96cdd1d-step-2.md
+ D cards/tasks/card-codex-skill-1785416949523-c96cdd1d.md
+ D cards/tasks/card-codex-skill-1785417406472-707150d4-step-2.md
+ D cards/tasks/card-codex-skill-1785417406472-707150d4.md
+ D cards/tasks/card-codex-skill-1785417821940-9d3f5f27-step-2.md
+ D cards/tasks/card-codex-skill-1785417821940-9d3f5f27.md
+ D cards/tasks/card-codex-skill-1785418331446-317e06b8-step-2.md
+ D cards/tasks/card-codex-skill-1785418331446-317e06b8.md
+ D cards/tasks/card-codex-skill-1785419329615-03bc7700-step-2.md
+ D cards/tasks/card-codex-skill-1785419329615-03bc7700.md
+ D cards/tasks/card-codex-skill-1785419833752-4ebbd8b0-step-2.md
+ D cards/tasks/card-codex-skill-1785419833752-4ebbd8b0.md
+ D cards/tasks/card-codex-skill-1785420231930-fdbc1ccf-step-2.md
+ D cards/tasks/card-codex-skill-1785420231930-fdbc1ccf.md
+ D cards/tasks/card-codex-skill-1785421053418-4ca9d08e-step-2.md
+ D cards/tasks/card-codex-skill-1785421053418-4ca9d08e.md
+ D cards/tasks/card-codex-skill-1785421869274-59052903-step-2.md
+ D cards/tasks/card-codex-skill-1785421869274-59052903.md
+ D cards/tasks/card-codex-skill-1785421886402-82614033-step-2.md
+ D cards/tasks/card-codex-skill-1785421886402-82614033.md
+ D cards/tasks/card-codex-skill-1785422206192-72c4bdf2-step-2.md
+ D cards/tasks/card-codex-skill-1785422206192-72c4bdf2.md
+ D cards/tasks/card-codex-skill-1785422557631-ffb87aa1-step-2.md
+ D cards/tasks/card-codex-skill-1785422557631-ffb87aa1.md
+ D cards/tasks/card-codex-skill-1785422848354-82dba141-step-2.md
+ D cards/tasks/card-codex-skill-1785422848354-82dba141.md
+ D cards/tasks/card-codex-skill-1785423082101-5d0a0042-step-2.md
+ D cards/tasks/card-codex-skill-1785423082101-5d0a0042.md
+ D cards/tasks/card-codex-skill-1785423373824-4a7a18aa-step-2.md
+ D cards/tasks/card-codex-skill-1785423373824-4a7a18aa.md
+ D cards/tasks/card-codex-skill-1785423442846-983a7cff-step-2.md
+ D cards/tasks/card-codex-skill-1785423442846-983a7cff.md
+ D cards/tasks/card-codex-skill-1785423910044-1fae6ae6-step-2.md
+ D cards/tasks/card-codex-skill-1785423910044-1fae6ae6.md
+ D cards/tasks/card-codex-skill-1785424246206-e5cd9cd4-step-2.md
+ D cards/tasks/card-codex-skill-1785424246206-e5cd9cd4.md
+ D cards/tasks/card-codex-skill-1785425956650-26f5a715-step-2.md
+ D cards/tasks/card-codex-skill-1785425956650-26f5a715.md
+ D cards/tasks/card-codex-skill-1785426175338-f8be355d-step-2.md
+ D cards/tasks/card-codex-skill-1785426175338-f8be355d.md
+ D cards/tasks/card-codex-skill-1785426829699-da924e67-step-2.md
+ D cards/tasks/card-codex-skill-1785426829699-da924e67.md
+ D cards/tasks/card-codex-skill-1785427916993-3ea9c9e3-step-2.md
+ D cards/tasks/card-codex-skill-1785427916993-3ea9c9e3.md
+ D cards/tasks/card-codex-skill-1785428184177-0f72ec76-step-2.md
+ D cards/tasks/card-codex-skill-1785428184177-0f72ec76.md
+ D cards/tasks/card-codex-skill-1785428429737-21a06f6b-step-2.md
+ D cards/tasks/card-codex-skill-1785428429737-21a06f6b.md
+ D cards/tasks/card-codex-skill-1785428537405-ef111b6e-step-2.md
+ D cards/tasks/card-codex-skill-1785428537405-ef111b6e.md
+ D cards/tasks/card-codex-skill-1785428818834-316263aa-step-2.md
+ D cards/tasks/card-codex-skill-1785428818834-316263aa.md
+ D cards/tasks/card-codex-skill-1785429271535-d81562a1-step-2.md
+ D cards/tasks/card-codex-skill-1785429271535-d81562a1.md
+ D cards/tasks/card-codex-skill-1785429670184-d37803a9-step-2.md
+ D cards/tasks/card-codex-skill-1785429670184-d37803a9.md
+ D cards/tasks/card-codex-skill-1785429863871-6e0d048b-step-2.md
+ D cards/tasks/card-codex-skill-1785429863871-6e0d048b.md
+ D cards/tasks/card-codex-skill-1785485375625-8624d589.md
+ D cards/tasks/card-codex-skill-1785485722819-7e41c72b-step-2.md
+ D cards/tasks/card-codex-skill-1785485722819-7e41c72b.md
+ D cards/tasks/card-codex-skill-1785486029822-8e2e6daf.md
+ D cards/tasks/card-codex-skill-1785486534069-46e4a212-step-2.md
+ D cards/tasks/card-codex-skill-1785486534069-46e4a212.md
+ D cards/tasks/card-codex-skill-1785488987483-5b0d84f1-step-2.md
+ D cards/tasks/card-codex-skill-1785488987483-5b0d84f1.md
+ D cards/tasks/card-context-metrics-20260721.md
+ D cards/tasks/card-d05f5373-497f-4e39-81f2-ba6f4822e6ca.md
+ D cards/tasks/card-d0c09fbf-2a13-46a0-a16b-209a13d37361.md
+ D cards/tasks/card-d0edb909-0b5a-4327-b9d0-fd68e3e04d90.md
+ D cards/tasks/card-d0f7d58f-309b-4844-ab6d-a51197596dbb.md
+ D cards/tasks/card-d169d6ee-f916-4ee9-a50e-b39d28c686b1.md
+ D cards/tasks/card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3.md
+ D cards/tasks/card-d1b287de-c324-4551-bd26-eb73735d5ad5.md
+ D cards/tasks/card-d2252509-5bb5-4114-94f0-dbdbde681209.md
+ D cards/tasks/card-d26b10d5-d05a-42f5-841d-ac3e681fc986.md
+ D cards/tasks/card-d34605ff-6464-4c1a-ba7f-88398b4f3e86.md
+ D cards/tasks/card-d387d03e-f829-445c-b144-abb7659bcd6e.md
+ D cards/tasks/card-d3f5fbfb-3f68-42aa-b4f5-7267ce6ad4cb.md
+ D cards/tasks/card-d4def20b-ce78-4b2b-8d07-309bcd462e0d.md
+ D cards/tasks/card-d4df7793-0cb8-4a6f-aee6-4a6c7366200c.md
+ D cards/tasks/card-d5d2d451-3ea2-4398-b60c-600f71d73a6b.md
+ D cards/tasks/card-d627c046-45d5-42a3-8d98-94de093fc305.md
+ D cards/tasks/card-d632070f-31ae-402e-8e79-b2bd97b32d00.md
+ D cards/tasks/card-d63e5f74-3ca0-4ded-9ad7-e9eaaa370ce7.md
+ D cards/tasks/card-d750d73c-be58-473b-bab4-318a37f34bfa.md
+ D cards/tasks/card-d75aa814-5d04-44ca-9941-681300a8e6b0.md
+ D cards/tasks/card-d75ac8a3-6811-45d3-a2de-c0fc9343e6b2.md
+ D cards/tasks/card-d76e46df-e71c-4503-84a2-48cd571a9e23.md
+ D cards/tasks/card-d796aabb-5a4a-4717-9493-564b83be230b.md
+ D cards/tasks/card-d7adddda-c781-4bdf-99c2-de7138f5a30f.md
+ D cards/tasks/card-d8183c47-345d-4116-94f3-f4e5d11a7ac4.md
+ D cards/tasks/card-d83f99a0-8cf3-45a6-a80b-c448cf97c789.md
+ D cards/tasks/card-d860d5ca-1c80-4138-90da-ba5f1dd7be99.md
+ D cards/tasks/card-d8ab41ca-ffc0-40bb-baeb-6093a48a37b8.md
+ D cards/tasks/card-d8f0e5b3-ca5b-47d7-b043-402535beb921.md
+ D cards/tasks/card-d945fecf-e8d4-453d-95cf-fb0ee089dda9.md
+ D cards/tasks/card-d9b41fe5-6d3f-446e-a482-5881f1d480f5.md
+ D cards/tasks/card-db22414c-4a95-4431-81e3-e917a75233f6.md
+ D cards/tasks/card-db720eb1-2353-496a-b87c-311d105ba83d.md
+ D cards/tasks/card-dbafd99c-bef5-45c1-befc-b6c28b1eebd0.md
+ D cards/tasks/card-dc17bf78-cd30-48b3-9167-e4cfcdbf970c.md
+ D cards/tasks/card-dc631595-1c61-4852-88d1-bf6ef845ea11.md
+ D cards/tasks/card-dcb06395-d2f4-4a1b-8738-8d14a9a5f01c.md
+ D cards/tasks/card-dd161067-6460-49ec-898b-ada6bb508853.md
+ D cards/tasks/card-dd250386-4557-4b33-b58a-8b6d837b45b5.md
+ D cards/tasks/card-dd46e795-69dc-4f6d-a962-eda9ca552c09.md
+ D cards/tasks/card-dd4b8845-12aa-4be5-847d-a927d6b5422c.md
+ D cards/tasks/card-dd596665-9fda-4421-9152-10e676970e17.md
+ D cards/tasks/card-dd7250a3-dee4-48b2-b095-b87a4b2049e5.md
+ D cards/tasks/card-dd9ee16f-25d4-4b02-84cd-5893297ca9f4.md
+ D cards/tasks/card-dda968e6-a7db-4856-8487-8aab1a0a98e1.md
+ D cards/tasks/card-ddfeb9bd-5150-4f0d-9ed7-0b858b2ec462.md
+ D cards/tasks/card-debc6a66-d45c-4c10-bfc5-bb85423a6c4d.md
+ D cards/tasks/card-ded9045b-20fa-49cf-8a59-a4492b1cfc3f.md
+ D cards/tasks/card-df7c7361-7c10-493c-b1ae-9e485c081b6b.md
+ D cards/tasks/card-df81a0b8-0252-41aa-82d5-cdff4156b078.md
+ D cards/tasks/card-dfa1eb1a-a139-4d85-b34e-aae811b5e1dd.md
+ D cards/tasks/card-dfdac151-ec67-4132-88f5-a71cf353baad.md
+ D cards/tasks/card-e0422017-7f79-4eac-9746-a6201d2015c7.md
+ D cards/tasks/card-e057abd8-ba6b-4a89-9f9d-2a73ec3b819f.md
+ D cards/tasks/card-e15e86ab-6b96-435f-8e7a-e1befa9c49d4.md
+ D cards/tasks/card-e2129688-c511-4ebf-bb5c-604fa7179940.md
+ D cards/tasks/card-e27094ed-b68d-4921-a8c2-8cf6833fe2d1.md
+ D cards/tasks/card-e2723f59-f242-47c8-86e3-b5c20a752f83.md
+ D cards/tasks/card-e28ccdf8-3e29-4571-b714-c728926e131e.md
+ D cards/tasks/card-e28f0b44-7ad8-40cf-82af-cb1d626282cd.md
+ D cards/tasks/card-e29306ff-9114-4e0c-b665-8a45a1d14acc.md
+ D cards/tasks/card-e2b65d2f-801d-4739-b4d2-befcada9ba1b.md
+ D cards/tasks/card-e32f9dd9-8e04-4bdc-9a7e-7aee0de7bfb9.md
+ D cards/tasks/card-e336240f-67a8-4576-b9fd-24532a05f7d3.md
+ D cards/tasks/card-e45b074e-48e3-4942-a026-675334f7685b.md
+ D cards/tasks/card-e466c1a5-890b-4902-93de-0fd418baa649.md
+ D cards/tasks/card-e494ba0f-e56c-4c18-940b-e4ec999aebb9.md
+ D cards/tasks/card-e5546e18-afd2-4ce0-b8ba-8098b437ee50.md
+ D cards/tasks/card-e595f3c6-0927-4635-b3bc-629118fdcc8f.md
+ D cards/tasks/card-e5e4a624-579c-424b-8b9e-993bc61b3146.md
+ D cards/tasks/card-e65d1eb5-7bd4-46b2-8c40-d1ee16c43df5.md
+ D cards/tasks/card-e6921dee-c3d5-4350-ab4e-ef8a4f7c0a80.md
+ D cards/tasks/card-e6cb7fc7-19c7-4a43-aac3-c1239289c97c.md
+ D cards/tasks/card-e72439e9-c33a-45ce-b723-f2859d9316fb.md
+ D cards/tasks/card-e73e4ec4-86b3-414a-b5db-d098ca54f644.md
+ D cards/tasks/card-e7930c5b-5f27-4e53-8b09-1d7fa669305d.md
+ D cards/tasks/card-e79a796b-1722-48dd-803f-26cc44b76704.md
+ D cards/tasks/card-e7a1760a-371d-48ac-80b3-96b4e7ce2102.md
+ D cards/tasks/card-e880a518-e774-437c-b944-61990bb598d5.md
+ D cards/tasks/card-e8bd89d8-3436-41de-9b3d-dbfa9914add9.md
+ D cards/tasks/card-e8c278f2-eafa-4a2f-99f2-97449ca533cd.md
+ D cards/tasks/card-e9143c38-c0e1-456d-8ae6-47015de3950d.md
+ D cards/tasks/card-e9169320-5637-41e6-8e3f-f01cdac68bb8.md
+ D cards/tasks/card-e9d9da66-381c-449d-81b5-2c1c9b31ad13.md
+ D cards/tasks/card-eab11f26-5e45-4bb6-99bb-e8be74918aee.md
+ D cards/tasks/card-eb22cf72-8eb3-4f28-9a15-9f46b5d70a8f.md
+ D cards/tasks/card-eb947f30-3631-47df-bf9b-1872ece19c61.md
+ D cards/tasks/card-ebc66b93-c86c-42fa-a980-7a8ead0bb56c.md
+ D cards/tasks/card-ebfc4839-e670-4a32-8a89-8423a7d756df.md
+ D cards/tasks/card-ec86dbdb-d616-4e71-839d-925aa9cb4ecd.md
+ D cards/tasks/card-ecc57811-4f45-4315-bb3d-d3a951c61f3b.md
+ D cards/tasks/card-eccf5518-f6a1-46ae-a483-459a55246210.md
+ D cards/tasks/card-ed7f189e-276e-44eb-98ea-d0cbdc44af5c.md
+ D cards/tasks/card-ee15cea8-cd78-48b5-8434-e50a24c4725c.md
+ D cards/tasks/card-ee38a29f-1cfb-42bd-a0f3-b56d50f3d2a8.md
+ D cards/tasks/card-ee38b25f-66d3-4d40-89be-b4c6da09a440.md
+ D cards/tasks/card-eee9c6c0-fe87-4410-8006-f9f46ac58c6b.md
+ D cards/tasks/card-ef5ab867-2316-46d5-96d9-2e190afb665e.md
+ D cards/tasks/card-efb1a647-d060-4c43-bf09-95a0cbeb31c3.md
+ D cards/tasks/card-effd60cc-04b0-494d-bd41-52227848e748.md
+ D cards/tasks/card-f0111a7a-3154-479f-a475-01e6e9dcaad4.md
+ D cards/tasks/card-f04421b9-5e04-4b5f-a0d0-0f54395a198b.md
+ D cards/tasks/card-f0873532-ed9b-4a2f-bb40-206ea044ba6a.md
+ D cards/tasks/card-f26ea819-f164-4092-9eed-d6dccb42b76c.md
+ D cards/tasks/card-f27be0f3-189b-4091-8f53-956226530cde.md
+ D cards/tasks/card-f28ac3de-6019-4001-8ba0-3b7da89c63e4.md
+ D cards/tasks/card-f331b2de-18ca-46f8-92e5-0ed8024eb364.md
+ D cards/tasks/card-f34e9721-1d53-4ca2-9d91-79de77ce892b.md
+ D cards/tasks/card-f4344ec8-534b-4360-8394-1b546f58f3a4.md
+ D cards/tasks/card-f4467c64-12c5-4f9f-929b-8de3c1aa0743.md
+ D cards/tasks/card-f499fa82-da9d-4635-ab4b-b6c9b4ecf97f.md
+ D cards/tasks/card-f49eceab-0e7e-4e6b-92c2-bb3989c749bc.md
+ D cards/tasks/card-f4c7acd7-9789-4faf-ac08-9594ec0743d1.md
+ D cards/tasks/card-f5475b37-55ba-4249-8bf9-1473fece9c28.md
+ D cards/tasks/card-f5837cc5-f8e2-4b86-ac71-b2273055b257.md
+ D cards/tasks/card-f5dc1855-9a9a-4e78-a766-cf439c20f5b1.md
+ D cards/tasks/card-f6378fe9-0460-4537-82e6-16de7162deff.md
+ D cards/tasks/card-f6904e45-8e15-4691-9619-b17165567797.md
+ D cards/tasks/card-f69417b9-3432-4f5e-9b4c-0d2ad0511e4f.md
+ D cards/tasks/card-f6986c23-f9a3-48f0-8987-86ce5b53970b.md
+ D cards/tasks/card-f6ee6c08-b3e3-4dd7-99ee-6ac4f70cb6cc.md
+ D cards/tasks/card-f70126f4-8f8f-4d97-a0f9-34301119ca26.md
+ D cards/tasks/card-f73bc047-e2b1-47ca-8fb4-f8713b3af471.md
+ D cards/tasks/card-f7b8f6aa-b20c-4daf-b270-c3ed9d1f33b4.md
+ D cards/tasks/card-f8d77653-3575-459d-ba85-3cc1343cdbbf.md
+ D cards/tasks/card-f91c1eef-e237-4591-9d25-d4719f4c0a17.md
+ D cards/tasks/card-f98dc24a-f48e-47d7-866b-effddd853e9c.md
+ D cards/tasks/card-f9c2e73a-8fe6-47f2-bbfb-de231b7c2adf.md
+ D cards/tasks/card-f9f280be-6b3d-4138-a60d-6a299ac40ef2.md
+ D cards/tasks/card-fa299e7b-0ebc-41ea-9ef2-17df867e6b3f.md
+ D cards/tasks/card-fa6a74ac-6441-4034-bc7e-98f3bc3e13b5.md
+ D cards/tasks/card-fab32649-2d73-4525-af38-aa3055ad47da.md
+ D cards/tasks/card-fab927b7-e446-4093-a860-6c32214d2e5e.md
+ D cards/tasks/card-faeb4dca-6582-47d3-b1f4-5389a089c719.md
+ D cards/tasks/card-fb7d3b85-589a-49b4-a27d-d8b42b749ffc.md
+ D cards/tasks/card-fc3e26e2-81d1-415d-adae-1d0896aa17fd.md
+ D cards/tasks/card-fd57d8d7-0828-4970-abed-c6425bcdaa27.md
+ D cards/tasks/card-fe040c66-b579-43b9-b1d3-1b832d02808b.md
+ D cards/tasks/card-fe388485-7e75-4392-9117-894936bdb998.md
+ D cards/tasks/card-fe53223c-7286-49f9-a225-2a877e93f6f6.md
+ D cards/tasks/card-ff8bd08a-5661-4258-8696-d7191d3e288a.md
+ D cards/tasks/card-fff8809f-bbac-409f-83f5-7eedaeb3bd3a.md
+ D cards/tasks/card-runtime-incident-review.md
+ D cards/tasks/card-voice-pipeline-note-1785414549806-cd98956c322e58-step-1.md
+ D cards/tasks/card-voice-pipeline-note-1785419134046-e7f3d74a910ba-step-1.md
+ D cards/tasks/card-voice-pipeline-note-1785420875585-f97aa768d9d358-step-1.md
+ D cards/tasks/card-voice-pipeline-note-1785421738542-e8973933bce808-step-1.md
+ D cards/tasks/card-voice-pipeline-note-1785422062828-ac7cce2c6aadd8-step-1.md
+ D cards/tasks/card-workstation-sidecar-recovery-20260720.md
+ D cards/tasks/card-workstation-task-backfill-1784547177.md
+ D cards/tasks/ee77191d.md
+ D cards/ux/card-abac2167-dab1-4bfc-ae6d-f04d076349cc.md
+ D cards/ux/card-c1cc1c4e-8d7f-4ae5-a17f-fbf58e2400a0.md
+ D cards/ux/card-codex-pipeline-1783687748321-1210d27d-step-1.md
+ D cards/ux/card-codex-pipeline-1783687748321-1210d27d-step-2.md
+ D cards/ux/card-codex-pipeline-1783687748321-1210d27d-step-3.md
+ D cards/ux/card-codex-pipeline-1783688836866-ad0fcd4b-step-1.md
+ D cards/ux/card-codex-pipeline-1783688836866-ad0fcd4b-step-2.md
+ D cards/ux/card-codex-pipeline-1783688836866-ad0fcd4b-step-3.md
+ D cards/ux/card-codex-skill-1783658255872-5630c522.md
+ D cards/ux/card-codex-skill-1783662223257-ea81e4db.md
+ D cards/ux/card-codex-skill-1783664134648-1984d4c2.md
+ D cards/ux/card-codex-skill-1783675746962-60884f4b.md
+ D cards/ux/card-codex-skill-1783680857476-9d53abd5.md
+ D cards/ux/card-codex-skill-1783687285595-69f83399.md
+ D codex-pipelines.json
+ D data.json
+ D design-notes-2.json
+ D design-notes.json
+ D ledgers-canvas.json
+ D new-ledger.json
+ D next-features.json
+ D performances.json
+ D pipeline-prompts/CLI_TOOLS.md
+ D pipeline-prompts/CODEX_RUN.md
+ D pipeline-prompts/GateTest.md
+ D pipeline-prompts/SKILL.md
+ D pipeline-prompts/SYSTEM_PROMPT.md
+ D pipeline-prompts/psychoqwak.md
+ D project.json
+ D projects-canvas.json
+ D projects.json
+ D skills.json
+ D specs.json
+ D state.json
+ D tasks-system.json
+ D threads/bugs/thread-card-0b1aed1f-c9f5-4154-ab9a-a26058426b5c.md
+ D threads/bugs/thread-card-4132d930-9286-432e-9c6d-5d542fc1c69b.md
+ D threads/bugs/thread-card-ccdea23e-430e-4ce1-8929-bb8b90ab2a25.md
+ D threads/bugs/thread-card-codex-skill-1783611210436-8e41c0b2.md
+ D threads/bugs/thread-card-codex-skill-1783611516537-418c85ec.md
+ D threads/bugs/thread-card-codex-skill-1783611906212-ccbb6031.md
+ D threads/bugs/thread-card-codex-skill-1783614296635-41b41034.md
+ D threads/bugs/thread-card-codex-skill-1783658144311-18cf0e37.md
+ D threads/bugs/thread-card-codex-skill-1783665476180-55d33e92.md
+ D threads/bugs/thread-card-codex-skill-1783666797142-a67ce4bc.md
+ D threads/bugs/thread-card-codex-skill-1783667199097-bea8062f.md
+ D threads/bugs/thread-card-codex-skill-1783667213600-4470fb4b.md
+ D threads/bugs/thread-card-codex-skill-1783673777495-c20b76d4.md
+ D threads/bugs/thread-card-codex-skill-1783674933055-f8a3b891.md
+ D threads/bugs/thread-card-codex-skill-1783676933025-5580e569.md
+ D threads/bugs/thread-card-codex-skill-1783677359105-116e92d2.md
+ D threads/bugs/thread-card-codex-skill-1783677758658-54919b14.md
+ D threads/bugs/thread-card-codex-skill-1783680838228-1c5bee79.md
+ D threads/bugs/thread-card-codex-skill-1783685254132-f607f3c8.md
+ D threads/bugs/thread-card-codex-skill-1783685641626-2a71a1ce.md
+ D threads/bugs/thread-card-codex-skill-1783687219283-a4455341.md
+ D threads/bugs/thread-card-codex-skill-1783701052834-97c8b248.md
+ D threads/bugs/thread-card-df1e558e-6f14-43bc-9d09-1a98e37d9ef0.md
+ D threads/bugs/thread-card-fd0e6f45-3620-4621-9d96-d9d1636db48d.md
+ D threads/next-features/thread-card-2f1072ec-facb-4b0c-a6dd-2a13e4e256aa.md
+ D threads/next-features/thread-card-dd8da08b-aac0-4402-b9b7-39f16d73769e.md
+ D threads/performances/thread-perf-commit-raster.md
+ D threads/performances/thread-perf-drag-call-chain.md
+ D threads/performances/thread-perf-measurement-matrix.md
+ D threads/performances/thread-perf-zone-label-overlay.md
+ D threads/skills/conversation-ledger.md
+ D threads/skills/thread-card-1ed7edae-2bff-4f0e-a922-1bb57a0b6e93.md
+ D threads/skills/thread-card-30d002e7-b3c9-460b-94e7-1824470ed4c9.md
+ D threads/skills/thread-card-44811f32-2b0b-4fa8-89bf-394730ba4fe6.md
+ D threads/skills/thread-card-4b63370d-41b1-44e7-be0a-3f3980744bee.md
+ D threads/skills/thread-card-5f44b483-86f4-4144-a497-b5e88bea52b8.md
+ D threads/skills/thread-card-71f7c07c-4f27-4026-b2af-239b8e2c1005.md
+ D threads/skills/thread-card-93221cb2-549d-4549-aacc-4831a1f78441.md
+ D threads/skills/thread-card-98070d2c-e147-47b4-b2dd-616a38aaa28d.md
+ D threads/skills/thread-card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39.md
+ D threads/skills/thread-card-b1ccfc6f-dbda-409c-949d-b6f5a1caf4c9.md
+ D threads/skills/thread-card-bc15e93f-febb-4ca2-be92-9927f628c5ed.md
+ D threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md
+ D threads/skills/thread-card-ca4f17e2-75b4-4487-a48e-6ef87f08367d.md
+ D threads/skills/thread-card-codex-skill-1783448349580-e919e6f8.md
+ D threads/skills/thread-card-codex-skill-1783485668635-1989a1e2.md
+ D threads/skills/thread-card-codex-skill-1783695871406-24cf389e.md
+ D threads/skills/thread-card-skill-code-quality-report.md
+ D threads/skills/thread-card-skill-exec-summary-skill-md-7e9ea6c6f4.md
+ D threads/skills/thread-card-skill-executor-implement.md
+ D threads/skills/thread-card-skill-executor-spec.md
+ D threads/skills/thread-card-skill-feature-analyzer.md
+ D threads/skills/thread-card-skill-feature-planner.md
+ D threads/skills/thread-card-skill-implementation-orchestrator.md
+ D threads/skills/thread-card-skill-implementation-worker.md
+ D threads/skills/thread-card-skill-quality-improvement-orchestrator.md
+ D threads/skills/thread-card-skill-quality-improvement-worker.md
+ D threads/skills/thread-card-skill-root-cause-analysis.md
+ D threads/skills/thread-card-skill-task-dependency.md
+ D threads/skills/thread-card-skill-task-group-completeness.md
+ D threads/skills/thread-card-skill-task-list.md
+ D threads/skills/thread-card-skill-test-failure-attribution.md
+ D threads/skills/thread-card-skill-ticket-solver.md
+ D threads/specs/thread-card-06258606-7583-460b-a85e-aeac5bf4e07d.md
+ D threads/specs/thread-card-09e3fbd4-2aaf-4db2-9451-addf56f2cb04.md
+ D threads/specs/thread-card-0ef307af-a90a-43c3-899e-5030c934eb5c.md
+ D threads/specs/thread-card-216524c4-cf41-4b50-a8aa-a696b71dc0f6.md
+ D threads/specs/thread-card-2b9db94a-105e-4e6c-9e6c-f11c09a5be3c.md
+ D threads/specs/thread-card-3d56069c-2645-4b50-ba72-ef596d321ab6.md
+ D threads/specs/thread-card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792.md
+ D threads/specs/thread-card-6ee5a5f5-05b8-4765-81a8-fb8b1e0f1755.md
+ D threads/specs/thread-card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380.md
+ D threads/specs/thread-card-818b0b80-a682-4271-addf-c0bcfd753845.md
+ D threads/specs/thread-card-90cc6f80-5a89-4120-96eb-e49bc9c0e35f.md
+ D threads/specs/thread-card-9fc28277-b3e7-4080-ada3-b9a797b78328.md
+ D threads/specs/thread-card-a.md
+ D threads/specs/thread-card-ae7bb1da-08b9-4f79-83e0-b0586afada7b.md
+ D threads/specs/thread-card-b2f058a0-36c0-4872-a874-f31fa08b25e3.md
+ D threads/specs/thread-card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a.md
+ D threads/specs/thread-card-b8b10c18-6a04-4252-9ccb-b411e3377dfa.md
+ D threads/specs/thread-card-bd579ee0-04fe-4602-ad4b-1b86665c0158.md
+ D threads/specs/thread-card-c420372c-9629-40b9-a639-1c69cb93becb.md
+ D threads/specs/thread-card-c6534091-d29a-49a4-936d-5fe57948b3ff.md
+ D threads/specs/thread-card-codex-skill-1784205397104-79897826.md
+ D threads/specs/thread-card-codex-skill-1784205406944-60080cc0.md
+ D threads/specs/thread-card-codex-skill-1784216447040-eff225f5.md
+ D threads/specs/thread-card-d1cc39f5-a86a-4f8d-a2d4-81f06a51c29e.md
+ D threads/specs/thread-card-d26b10d5-d05a-42f5-841d-ac3e681fc986.md
+ D threads/specs/thread-card-df2d835e-50bf-4504-aa30-566ac67619dd.md
+ D threads/specs/thread-card-e6342d95-fc27-4b8b-acce-a9f9edee328e.md
+ D threads/specs/thread-card-e8450727-cadb-426c-9094-d432f316c8ab.md
+ D threads/specs/thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b.md
+ D threads/specs/thread-card-f6904e45-8e15-4691-9619-b17165567797.md
+ D threads/specs/thread-card-new.md
+ D threads/tasks-system/thread-card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md
+ D threads/tasks-system/thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md
+ D threads/tasks-system/thread-card-2395850a-c528-4689-a138-73a30b684602.md
+ D threads/tasks-system/thread-card-2e4a6931-bd3d-4397-bf71-8ba21daa7e80.md
+ D threads/tasks-system/thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md
+ D threads/tasks-system/thread-card-5483453a-172e-44cb-9f25-3d9ad69c36cf.md
+ D threads/tasks-system/thread-card-83a2bf48-f8b7-4d7a-b566-b6133b1520c8.md
+ D threads/tasks-system/thread-card-905302cd-3cfa-41d7-8e0d-a3ffd55a5429.md
+ D threads/tasks-system/thread-card-98417809-edb7-47c2-9d9d-9f076174c4dc.md
+ D threads/tasks-system/thread-card-9b19200f-2740-4f33-8455-63bac0870c12.md
+ D threads/tasks-system/thread-card-a8819999-071a-4f3a-a4e1-2033bcfb08f8.md
+ D threads/tasks-system/thread-card-agent-autonomy-work-queue.md
+ D threads/tasks-system/thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md
+ D threads/tasks-system/thread-card-cede101c-36c8-462e-9167-a27daad2173e.md
+ D threads/tasks-system/thread-card-codex-pipeline-1783693845820-12a529f3-step-1.md
+ D threads/tasks-system/thread-card-codex-pipeline-1783693845820-12a529f3-step-2.md
+ D threads/tasks-system/thread-card-codex-pipeline-1783693845820-12a529f3-step-3.md
+ D threads/tasks-system/thread-card-codex-skill-1783424755346-8a15d975.md
+ D threads/tasks-system/thread-card-codex-skill-1783425190809-6fb50105.md
+ D threads/tasks-system/thread-card-codex-skill-1783425215516-e1916f75.md
+ D threads/tasks-system/thread-card-codex-skill-1783427295206-134c02c5.md
+ D threads/tasks-system/thread-card-codex-skill-1783429520950-bad8c87c.md
+ D threads/tasks-system/thread-card-codex-skill-1783443352880-df6faf0b.md
+ D threads/tasks-system/thread-card-codex-skill-1783443647691-91eae060.md
+ D threads/tasks-system/thread-card-codex-skill-1783443977270-47f9133f.md
+ D threads/tasks-system/thread-card-codex-skill-1783495869207-759e2295.md
+ D threads/tasks-system/thread-card-codex-skill-1783496502245-a5e66232.md
+ D threads/tasks-system/thread-card-codex-skill-1783502837104-b19e9e59.md
+ D threads/tasks-system/thread-card-codex-skill-1783530524112-61491e77.md
+ D threads/tasks-system/thread-card-codex-skill-1783577864069-8ee729ab.md
+ D threads/tasks-system/thread-card-codex-skill-1783577881108-c8db844f.md
+ D threads/tasks-system/thread-card-codex-skill-1783588674300-560cc5db.md
+ D threads/tasks-system/thread-card-codex-skill-1783590897494-9dd2d021.md
+ D threads/tasks-system/thread-card-codex-skill-1783591708289-5fd90c7c.md
+ D threads/tasks-system/thread-card-codex-skill-1783595913386-e48acfb6.md
+ D threads/tasks-system/thread-card-codex-skill-1783611545211-2a80d2ff.md
+ D threads/tasks-system/thread-card-codex-skill-1783677425436-5b265c7f.md
+ D threads/tasks-system/thread-card-e2cfbc8b-5c26-4fd1-a68d-0f2bd10cb885.md
+ D threads/tasks-system/thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md
+ D threads/tasks-system/thread-card-f5152ba8-15bd-4be5-88c5-7890fdde8e3e.md
+ D threads/tasks-system/thread-card-human-context-synthesis-skill.md
+ D threads/tasks-system/thread-card-operator-context-markdown.md
+ D threads/tasks-system/thread-card-summary-cli-maintenance.md
+ D threads/tasks-system/thread-card-summary-data-model.md
+ D threads/tasks-system/thread-card-tasks-core-problem-statement.md
+ D threads/tasks-system/thread-card-tasks-legacy-factory-pipeline-baseline.md
+ D threads/tasks-system/thread-card-watchnotes-lean-unanswered-model.md
+ D threads/tasks-system/thread-card-watchnotes-unanswered-context.md
+ D threads/tasks-system/thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66.md
+ D threads/tasks/thread-card-016ae17d-4342-44f2-981d-04de1a1e2dfc.md
+ D threads/tasks/thread-card-01b85beb-ac62-4fdc-970c-b207a5cd8e43.md
+ D threads/tasks/thread-card-01f32864-1bd0-4316-bdcd-63c893f6b80a.md
+ D threads/tasks/thread-card-07132fde-ffd4-4db4-a2b7-97587637438f.md
+ D threads/tasks/thread-card-08e28a3e-c791-4453-97da-b9943a0a3892.md
+ D threads/tasks/thread-card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7.md
+ D threads/tasks/thread-card-09f6d786-575a-410b-aa4d-a0c91584ec10.md
+ D threads/tasks/thread-card-0a299b9f-e930-46ac-a047-af77c1a3a471.md
+ D threads/tasks/thread-card-0cf226d4-e34c-46a6-9608-dc4f3561420a.md
+ D threads/tasks/thread-card-0edbfb94-6a4c-45c0-b44e-0459789866b6.md
+ D threads/tasks/thread-card-0fecda0d-a333-4116-99c5-9f7a604f22d2.md
+ D threads/tasks/thread-card-112e238f-2b5f-4a6a-bf7f-4c0e510c0dbc.md
+ D threads/tasks/thread-card-1171f0fc-dbb3-486a-892b-460384f361f3.md
+ D threads/tasks/thread-card-1179504b-c201-410f-a1b9-7e0f6010dc65.md
+ D threads/tasks/thread-card-11d3bac9-8c27-461a-8afd-e5cf5e0be0e5.md
+ D threads/tasks/thread-card-121e8a43-3476-49a4-a4ec-f5133d6eb0ee.md
+ D threads/tasks/thread-card-145a2512-f4e4-4485-869d-93ba15529b64.md
+ D threads/tasks/thread-card-1904363a-d446-4dfa-a638-e65a30cde12c.md
+ D threads/tasks/thread-card-1aa8eca7-d3e9-4e2d-91f9-bb2ffa7793fd.md
+ D threads/tasks/thread-card-1adba778-1e57-4160-858e-e9ebfec1999a.md
+ D threads/tasks/thread-card-1b96076a-227d-47a5-9393-6db0553adcdf.md
+ D threads/tasks/thread-card-1bb2454a-f4bc-450e-8f24-2d1736f3de41.md
+ D threads/tasks/thread-card-1bc5f2d1-86da-4a5f-8fcd-f987a4539941.md
+ D threads/tasks/thread-card-1c211390-04a2-4b1c-ac40-9b9f27289840.md
+ D threads/tasks/thread-card-1d402e0e-4906-4b81-b6b4-25d68220347f.md
+ D threads/tasks/thread-card-1d81f004-dee6-41b2-b45e-c75517faeebe.md
+ D threads/tasks/thread-card-1d94a0d1-c8d6-4250-806d-3c4dab49c11e.md
+ D threads/tasks/thread-card-1dabf621-d24e-4eb4-9d9b-911a324afec6.md
+ D threads/tasks/thread-card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca.md
+ D threads/tasks/thread-card-1f040727-e088-4e14-803a-3b60c4667f8f.md
+ D threads/tasks/thread-card-1f27690a-f15e-4ad3-9a6d-a94d68689720.md
+ D threads/tasks/thread-card-1f620984-dd6d-420d-96d8-30604b5c974a.md
+ D threads/tasks/thread-card-2164c008-359f-40ac-8abf-505ee5b5fe38.md
+ D threads/tasks/thread-card-216524c4-cf41-4b50-a8aa-a696b71dc0f6.md
+ D threads/tasks/thread-card-216df8e7-2b14-4abf-946a-2bef86b90db4.md
+ D threads/tasks/thread-card-232dc127-2c65-4632-af7c-97003f595ce4.md
+ D threads/tasks/thread-card-2432b12c-a764-49ea-a232-fbdbb0627183.md
+ D threads/tasks/thread-card-256251f8-2ccb-42bf-a9da-4d430863b4f9.md
+ D threads/tasks/thread-card-2569332f-f2ca-463c-b674-621de507b4bd.md
+ D threads/tasks/thread-card-261fea93-a186-4de6-ad7e-c27abd37b1a5.md
+ D threads/tasks/thread-card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f.md
+ D threads/tasks/thread-card-27ec1923-e426-423e-af78-459051fc4ee2.md
+ D threads/tasks/thread-card-28aa5bd3-ea4e-413d-b0b9-fb32c4fc0a54.md
+ D threads/tasks/thread-card-2a069135-b1eb-45b0-ac88-dae7e3ef8ce8.md
+ D threads/tasks/thread-card-2af485ca-a29f-4041-b908-513bf641e226.md
+ D threads/tasks/thread-card-2b8e7eb3-e798-45e0-8c30-22eb2c3f8b14.md
+ D threads/tasks/thread-card-2c5430d1-17e4-4bbe-bc0b-c86a113fc7db.md
+ D threads/tasks/thread-card-2ee06925-a240-447d-9c00-324a29064e38.md
+ D threads/tasks/thread-card-2f561c37-bdcd-4931-be7d-d3456880ae20.md
+ D threads/tasks/thread-card-3154d9b9-8bba-47fc-bab9-6c7f1e4aef63.md
+ D threads/tasks/thread-card-31a98e6a-221e-4240-a0d4-84b483231ce3.md
+ D threads/tasks/thread-card-322796d6-5c38-437f-9b03-d8c46f538f42.md
+ D threads/tasks/thread-card-32fadd89-2f89-449e-ad2b-462743b272ef.md
+ D threads/tasks/thread-card-33342b59-aa84-4a59-a7f1-af439ac994a1.md
+ D threads/tasks/thread-card-34288c99-cf14-4d5f-8840-83bc957c9a36.md
+ D threads/tasks/thread-card-355e8705-4d48-4765-82bb-74615db3013e.md
+ D threads/tasks/thread-card-3595f568-b6c1-4e1c-a2f5-27a1c36d0651.md
+ D threads/tasks/thread-card-36b2d7a0-d8e5-43d0-9abb-60b765562240.md
+ D threads/tasks/thread-card-3aa92eb0-0322-49a5-8762-58f26e63f700.md
+ D threads/tasks/thread-card-3aba2818-6b47-438d-9785-97793893d573.md
+ D threads/tasks/thread-card-3acc101d-cfc4-4976-ae45-dbc584be6d1e.md
+ D threads/tasks/thread-card-3add8dea-07f1-4882-84e0-5c45b7967583.md
+ D threads/tasks/thread-card-3b38c7ca-b678-4a05-a0a3-cee54434fdb4.md
+ D threads/tasks/thread-card-3b620e1e-2657-4f26-92b0-6dd1145348ad.md
+ D threads/tasks/thread-card-3bbb3556-70cb-430a-a3e3-947be50947a2.md
+ D threads/tasks/thread-card-3bc99603-7a5d-469a-b9a2-68321f85c0e1.md
+ D threads/tasks/thread-card-3d56069c-2645-4b50-ba72-ef596d321ab6.md
+ D threads/tasks/thread-card-3d98483e-9bf0-4cf2-be65-6d341546c463.md
+ D threads/tasks/thread-card-3dbdf66a-cff2-49a4-aff5-1a2c4e3db1d6.md
+ D threads/tasks/thread-card-3f5c2113-be56-4398-bb03-a07d2562791a.md
+ D threads/tasks/thread-card-3f818661-ce9d-4390-b820-44f0140b32aa.md
+ D threads/tasks/thread-card-3f99b18f-b96e-4af2-b3c9-9b891e0f2b5f.md
+ D threads/tasks/thread-card-402c90c7-b229-4932-930d-34068f9996eb.md
+ D threads/tasks/thread-card-4195a850-3b81-478e-af62-2b2b76008e2e.md
+ D threads/tasks/thread-card-42177913-0d28-4c43-ba94-adb3a569f3a3.md
+ D threads/tasks/thread-card-426d69c8-8c1b-482d-94dc-7653cabdd7ed.md
+ D threads/tasks/thread-card-45a573c9-275b-4062-a63c-4febdc90d286.md
+ D threads/tasks/thread-card-47955f12-4ed3-41dd-aada-7cac51f3e899.md
+ D threads/tasks/thread-card-48756429-623a-46a1-921d-36418f10fa57.md
+ D threads/tasks/thread-card-48aa03ac-700f-4d66-ae7b-66b7ab11ba48.md
+ D threads/tasks/thread-card-493d0d86-1a0a-4b02-b8e4-b36f7c7051dd.md
+ D threads/tasks/thread-card-49b988cb-892b-47ff-8910-83e2def455af.md
+ D threads/tasks/thread-card-49cf1765-4987-44a9-a64d-d15d4b504c07.md
+ D threads/tasks/thread-card-4b25514a-b85e-4ef0-913e-236d3f504cb5.md
+ D threads/tasks/thread-card-4ccde97f-5964-42b9-b6b4-976fd2735cbd.md
+ D threads/tasks/thread-card-4eda0cdc-33a7-4242-b3f9-2f32e3ea415c.md
+ D threads/tasks/thread-card-4f6f4e6d-d8b5-4cd6-8b20-c0379166b89c.md
+ D threads/tasks/thread-card-505c5d9a-335e-442f-aac2-360e622b7061.md
+ D threads/tasks/thread-card-50cbfca8-47c3-460e-acad-bd4bd3c7062c.md
+ D threads/tasks/thread-card-51e380ac-28ca-41ff-9f96-c6cdd809b6fe.md
+ D threads/tasks/thread-card-53cd8c11-de67-4757-939c-c551a64231eb.md
+ D threads/tasks/thread-card-53faf998-2066-4a03-b4f6-d529fcb89ad6.md
+ D threads/tasks/thread-card-56357996-0a7b-4c6d-b699-84c29c2a7d9d.md
+ D threads/tasks/thread-card-5786fe0c-1f16-46c1-84fa-0a22dda15491.md
+ D threads/tasks/thread-card-598126ec-e70b-4897-a776-7b2365b2f130.md
+ D threads/tasks/thread-card-5ade8aa2-fa9a-41f4-9bea-9d8f6966df17.md
+ D threads/tasks/thread-card-5b99d38a-67de-45a7-9d26-bea9e490d5d1.md
+ D threads/tasks/thread-card-5c8fa767-d997-41a8-9ae5-ea57af228f59.md
+ D threads/tasks/thread-card-5e212225-e092-4b5b-807a-d6515cbefc18.md
+ D threads/tasks/thread-card-5e339462-a3db-43d9-acda-f7c3708e51ef.md
+ D threads/tasks/thread-card-5e6778e9-7f3a-4cc3-ad99-8d2ddd1eb032.md
+ D threads/tasks/thread-card-5ebfd7ed-0197-420d-b524-cbed39993737.md
+ D threads/tasks/thread-card-5f17e2d6-9eb3-4e65-ab9a-c121dc040132.md
+ D threads/tasks/thread-card-603acaa4-34c6-4a59-aaba-1a681c650311.md
+ D threads/tasks/thread-card-61107074-995d-4289-bc4c-0494ec2019e0.md
+ D threads/tasks/thread-card-62fdfda8-6b8a-40fe-a99f-44c96bfdfa9b.md
+ D threads/tasks/thread-card-6375a063-6f1a-4a04-90fb-9233db9edcf9.md
+ D threads/tasks/thread-card-6462cba3-ce0b-48c1-9311-186246643671.md
+ D threads/tasks/thread-card-64a9c5b1-3061-462b-bda0-275d69947712.md
+ D threads/tasks/thread-card-663db0c4-33c3-4e83-bb26-8622faffa82e.md
+ D threads/tasks/thread-card-66a84904-5a44-4c0e-9eab-5aa391f4223f.md
+ D threads/tasks/thread-card-66c34e97-5431-4f27-8b88-21df25354761.md
+ D threads/tasks/thread-card-6783f43f-25f0-4d1e-9e50-31fb62c1cb08.md
+ D threads/tasks/thread-card-69b6d837-8e11-473e-bb8d-9ee3ee10338b.md
+ D threads/tasks/thread-card-69de45f3-2e2f-4ca8-a47b-434543d70b7d.md
+ D threads/tasks/thread-card-6ce8b11a-e641-4ac9-b124-76c3a23035b4.md
+ D threads/tasks/thread-card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e.md
+ D threads/tasks/thread-card-6d47492e-7d27-4219-ae71-45df641b104c.md
+ D threads/tasks/thread-card-6d480f9c-d0f3-4d2a-a4a8-d4a6b91903b9.md
+ D threads/tasks/thread-card-6ed3bbac-a773-4737-b9d3-47a4aec7ab68.md
+ D threads/tasks/thread-card-6fcb6924-196b-4394-b3ae-80bdaf9efca1.md
+ D threads/tasks/thread-card-7074d33a-39da-42a1-b470-673cbe221def.md
+ D threads/tasks/thread-card-71f469cc-e5c6-4885-a784-e93beb960eb9.md
+ D threads/tasks/thread-card-7366c69d-9569-4698-8189-58b3f40c24fa.md
+ D threads/tasks/thread-card-7493b007-899b-49cf-9a5b-c07fb6b35c70.md
+ D threads/tasks/thread-card-75f0b9c8-4e06-41a4-88ab-406a5e529d67.md
+ D threads/tasks/thread-card-7664c9d7-8ca4-48f3-8d7f-a86d2817ab21.md
+ D threads/tasks/thread-card-77edea64-f747-430a-983c-50f32c84d6ca.md
+ D threads/tasks/thread-card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63.md
+ D threads/tasks/thread-card-7ae8cc5b-5f16-4d10-9638-22f098c701fa.md
+ D threads/tasks/thread-card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad.md
+ D threads/tasks/thread-card-7d2090c9-0a50-4e6d-a164-2dee515e4a55.md
+ D threads/tasks/thread-card-7f0e9798-af4e-4061-8485-f4dceadf884d.md
+ D threads/tasks/thread-card-7fd950e7-a403-43c6-9fcd-67bc626d603e.md
+ D threads/tasks/thread-card-823e398f-8f79-4610-9ed6-bd5754578bdb.md
+ D threads/tasks/thread-card-83bae0f2-695b-43ea-a934-19942240dda7.md
+ D threads/tasks/thread-card-83d4acc7-229d-411c-b486-91dc16813172.md
+ D threads/tasks/thread-card-84049f97-d6fa-4825-bac4-bc64f629efe9.md
+ D threads/tasks/thread-card-840ff2e0-739b-4721-8f3a-af9d543aabbe.md
+ D threads/tasks/thread-card-846e5c2b-a5a7-495a-8e73-d97cda971282.md
+ D threads/tasks/thread-card-8495234b-7d56-4f34-9af6-d5ce22656d21.md
+ D threads/tasks/thread-card-85e19584-9173-4380-85e2-34c02e41e31f.md
+ D threads/tasks/thread-card-8788fe2e-89d2-4eda-ac2c-a0ff61269ff3.md
+ D threads/tasks/thread-card-894b267d-59df-428c-a757-3b711951d73e.md
+ D threads/tasks/thread-card-89546a8b-0056-4957-892e-e82acaf94cbf.md
+ D threads/tasks/thread-card-8955490a-97bf-470e-903b-7759d20917d0.md
+ D threads/tasks/thread-card-8b1412c6-9cfb-4501-a39b-3b0b8ee4bdc5.md
+ D threads/tasks/thread-card-8b2dbe18-5af2-40c5-9e24-02139265b92d.md
+ D threads/tasks/thread-card-8b9dee68-8979-4112-b59d-6781713a9677.md
+ D threads/tasks/thread-card-8ea9f87e-ee36-496b-be48-7cd9a651e231.md
+ D threads/tasks/thread-card-8f007a7d-a429-4675-9165-a754b49e0ecc.md
+ D threads/tasks/thread-card-8f1ebd41-0661-4bac-ba08-8a98789fe2ce.md
+ D threads/tasks/thread-card-913d0dee-b09a-4039-89a6-428605add3c3.md
+ D threads/tasks/thread-card-916311a6-1b95-4d2d-9d8a-bea889ec8822.md
+ D threads/tasks/thread-card-924e2263-f833-41e2-895a-86b91ebbd47d.md
+ D threads/tasks/thread-card-9266700d-d73d-4a99-94ec-2d036226a9d8.md
+ D threads/tasks/thread-card-926cfdaa-ece3-4a40-80cb-87a77a39c8ab.md
+ D threads/tasks/thread-card-92702a8b-fd8a-4c2b-af5c-8226e65c7524.md
+ D threads/tasks/thread-card-928c7b3c-c00e-456a-9894-4e9fcb5abb4e.md
+ D threads/tasks/thread-card-92a7dd40-d2a7-4eac-9bd2-cab117b34b3e.md
+ D threads/tasks/thread-card-92af6fa5-5c2c-4003-8dee-9c2269872a21.md
+ D threads/tasks/thread-card-93a99f92-5584-43f5-a933-2208303997ad.md
+ D threads/tasks/thread-card-953d29e7-9528-4c66-accd-61fb6c881fea.md
+ D threads/tasks/thread-card-95b5fee7-a087-4270-ac90-4df9dc8097e8.md
+ D threads/tasks/thread-card-965466a1-09d4-4ab2-ad3c-322e6a37c8a5.md
+ D threads/tasks/thread-card-97528f55-23ff-472e-baa4-d976f73f0a23.md
+ D threads/tasks/thread-card-9788570b-a768-4abd-b18c-efa900169dd6.md
+ D threads/tasks/thread-card-99934175-ecb7-44f2-9d5d-bf053e46a84f.md
+ D threads/tasks/thread-card-9a5044ee-da92-47ab-889d-83b65e6e6941.md
+ D threads/tasks/thread-card-9af33bd5-5f11-4a55-bce5-1997517bd6f6.md
+ D threads/tasks/thread-card-9c1edba6-2b08-4d17-a510-4b50cdfc85ed.md
+ D threads/tasks/thread-card-9c3ebf9f-3942-4b88-8d83-ceb6bc8b6c04.md
+ D threads/tasks/thread-card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a.md
+ D threads/tasks/thread-card-a1397b46-7583-4bac-b74c-cc758c3a7903.md
+ D threads/tasks/thread-card-a4c81cea-0c42-4221-9891-fe57013a4149.md
+ D threads/tasks/thread-card-a5950529-82c0-4e6f-880b-0e95f0b81ffc.md
+ D threads/tasks/thread-card-a6b0d687-17a9-493c-a202-6c523af5e544.md
+ D threads/tasks/thread-card-a782f56d-4099-4292-aff2-6b891cb143f4.md
+ D threads/tasks/thread-card-a7aec888-a4a8-4333-a2e3-98d57cfcf9b8.md
+ D threads/tasks/thread-card-aa48cc9b-9319-494e-b343-f3026b76a05a.md
+ D threads/tasks/thread-card-ab38294e-ff82-4afb-b8c6-fe773f3a2560.md
+ D threads/tasks/thread-card-ac39aa2b-fd9a-4688-a897-ef66df98e2ed.md
+ D threads/tasks/thread-card-ac65a134-11fe-4180-9c0f-a2eb597f053c.md
+ D threads/tasks/thread-card-ac917c89-2671-4798-9d03-26a8f16d479d.md
+ D threads/tasks/thread-card-acb0e0c3-b5fd-488f-beb2-09203cc61613.md
+ D threads/tasks/thread-card-ad6652a3-f7b4-4727-9e98-89fa0ffe2c6c.md
+ D threads/tasks/thread-card-af70d9db-6c80-435f-9bb3-07293ed04e04.md
+ D threads/tasks/thread-card-afda2132-e76f-43e7-b49c-39627114e098.md
+ D threads/tasks/thread-card-b2753e07-c720-4173-8094-adca2f644f33.md
+ D threads/tasks/thread-card-b3da3129-6c17-4e78-8204-cccab003a4ab.md
+ D threads/tasks/thread-card-b401cadd-efb8-44af-8373-1699d0bb1e75.md
+ D threads/tasks/thread-card-b5623e76-e319-4abe-bde1-08139a0b040f.md
+ D threads/tasks/thread-card-b5a402ef-3072-4d56-826a-a5de34ca38ed.md
+ D threads/tasks/thread-card-b61f227f-7b10-43bb-a7d2-502621d7896e.md
+ D threads/tasks/thread-card-b66f13d3-e2d8-490b-ae8d-1da66a6c7d21.md
+ D threads/tasks/thread-card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a.md
+ D threads/tasks/thread-card-b7632ea1-bb9e-4e5b-87cc-172d0358e89c.md
+ D threads/tasks/thread-card-b7d7cebe-50db-4f0c-be35-76ae02dfd7a0.md
+ D threads/tasks/thread-card-b8022ebf-81d9-4881-9a86-c8011c389734.md
+ D threads/tasks/thread-card-b85c6294-593d-4870-8c6e-ec559386df3c.md
+ D threads/tasks/thread-card-b9502e23-8e37-4717-ad05-c96f290edb43.md
+ D threads/tasks/thread-card-b9b81cea-3b5a-45b3-999b-ee0f08a3d6af.md
+ D threads/tasks/thread-card-ba3bd390-cbfa-4be7-870b-443727a01def.md
+ D threads/tasks/thread-card-ba54e17e-2960-43b4-843f-4f0d94de1c26.md
+ D threads/tasks/thread-card-bb56697c-dd89-4022-a01f-bde6b3a6d992.md
+ D threads/tasks/thread-card-bb7f79f6-ec54-466b-873a-6bc83ad77de3.md
+ D threads/tasks/thread-card-bb8a0fb0-099f-4026-aff9-f68871957b98.md
+ D threads/tasks/thread-card-bc640df9-2e33-4ed9-9dc6-cedf5fc4746b.md
+ D threads/tasks/thread-card-bd584783-c1ae-4e9d-87c6-0fb45daec114.md
+ D threads/tasks/thread-card-bdea3eb8-4fe8-462b-988e-6be22662d98d.md
+ D threads/tasks/thread-card-be814a3e-3057-4350-829f-1ec503d7421c.md
+ D threads/tasks/thread-card-c078ecda-66ec-41a2-8af3-7fe5141d643a.md
+ D threads/tasks/thread-card-c2294c71-cb87-49d6-8886-002cd0f6b036.md
+ D threads/tasks/thread-card-c29a8f7f-b0a9-437e-bf38-147407f0d563.md
+ D threads/tasks/thread-card-c368017d-71e1-4886-b7db-ae8af3cc5183.md
+ D threads/tasks/thread-card-c458e6af-efa4-4d08-b388-c1c72316abf9.md
+ D threads/tasks/thread-card-c5660a5f-05cc-40c5-82bc-32ede53d7dca.md
+ D threads/tasks/thread-card-c6534091-d29a-49a4-936d-5fe57948b3ff.md
+ D threads/tasks/thread-card-c68cc4fc-f7bf-4e12-a1fb-3c811f87e89c.md
+ D threads/tasks/thread-card-c9a30d5a-4f75-48a8-b5a8-650fb51e83d1.md
+ D threads/tasks/thread-card-c9d9213c-50bd-4aee-b4e0-42cc7910cf58.md
+ D threads/tasks/thread-card-ca692962-43ef-4af0-984a-f56936cb17d5.md
+ D threads/tasks/thread-card-ca7a9698-2d11-4b32-ab89-5663b1df4fb1.md
+ D threads/tasks/thread-card-cb1e220a-03ee-47a3-8e4d-4ef4c6fa7057.md
+ D threads/tasks/thread-card-cdd63640-234e-4bcd-8979-110626d0ca35.md
+ D threads/tasks/thread-card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md
+ D threads/tasks/thread-card-cec2e012-e9df-4f8e-8aef-717105a0102f.md
+ D threads/tasks/thread-card-cf200179-fb3b-4bd6-8914-6a701f60cb5f.md
+ D threads/tasks/thread-card-codex-pipeline-1784363771290-a0ed834f-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784363802862-7a8e2625-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784394516973-6845bc44-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784394601014-c23f81ac-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784394619194-f274a565-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784439300006-4a288471-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784439334563-e18d7a5a-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784439413294-56258c03-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784441234171-b2755d12-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784441270126-f9ccf4eb-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784441306682-a4fc2621-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784445242759-514ae9fa-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784445257596-7ba11b11-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784471860336-10eea594-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784473705290-b8dd74cc-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784538682976-008961b5-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784552421560-ca73562d-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784552500251-b5fde4fe-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784571985655-e941c1fb-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784743425249-a1ae192c-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1784743425249-a1ae192c-step-2.md
+ D threads/tasks/thread-card-codex-pipeline-1784743425249-a1ae192c-step-3.md
+ D threads/tasks/thread-card-codex-pipeline-1784743425249-a1ae192c-step-4.md
+ D threads/tasks/thread-card-codex-pipeline-1785145244897-4b7173e5-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1785176276127-ee41eec5-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1785277993972-5b69c11a-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1785280877160-9427852b-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1785292850237-accc542c-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1785295433681-ebdb3233-step-1.md
+ D threads/tasks/thread-card-codex-pipeline-1785416703527-97facc76-step-1.md
+ D threads/tasks/thread-card-codex-skill-1784018258381-36965334.md
+ D threads/tasks/thread-card-codex-skill-1784022826105-454fe26f.md
+ D threads/tasks/thread-card-codex-skill-1784025223185-fbfecff9.md
+ D threads/tasks/thread-card-codex-skill-1784028440832-9e097f9b.md
+ D threads/tasks/thread-card-codex-skill-1784030180133-084a9051.md
+ D threads/tasks/thread-card-codex-skill-1784030813931-2012791e.md
+ D threads/tasks/thread-card-codex-skill-1784031700776-454fe9e9.md
+ D threads/tasks/thread-card-codex-skill-1784036508459-8926cc1f.md
+ D threads/tasks/thread-card-codex-skill-1784037279472-474ce8cd.md
+ D threads/tasks/thread-card-codex-skill-1784046263126-8dea61f9.md
+ D threads/tasks/thread-card-codex-skill-1784047137979-57bc97d8.md
+ D threads/tasks/thread-card-codex-skill-1784047681152-4f93da75.md
+ D threads/tasks/thread-card-codex-skill-1784102291288-1aebdab5.md
+ D threads/tasks/thread-card-codex-skill-1784102317950-aef624f7.md
+ D threads/tasks/thread-card-codex-skill-1784102449328-4013af50.md
+ D threads/tasks/thread-card-codex-skill-1784102461109-528217de.md
+ D threads/tasks/thread-card-codex-skill-1784106020584-da48808a.md
+ D threads/tasks/thread-card-codex-skill-1784106035742-137b1c2d.md
+ D threads/tasks/thread-card-codex-skill-1784117802727-5aaa34ec.md
+ D threads/tasks/thread-card-codex-skill-1784205397104-79897826.md
+ D threads/tasks/thread-card-codex-skill-1784205406944-60080cc0.md
+ D threads/tasks/thread-card-codex-skill-1784216447040-eff225f5.md
+ D threads/tasks/thread-card-codex-skill-1784227716339-dbce2763.md
+ D threads/tasks/thread-card-codex-skill-1784291353486-1830b14d.md
+ D threads/tasks/thread-card-codex-skill-1784291362396-3764fdee.md
+ D threads/tasks/thread-card-codex-skill-1784291445490-701870f7.md
+ D threads/tasks/thread-card-codex-skill-1784291580738-c3691001.md
+ D threads/tasks/thread-card-codex-skill-1784292470196-d643288e.md
+ D threads/tasks/thread-card-codex-skill-1784292634000-81923844.md
+ D threads/tasks/thread-card-codex-skill-1784292677187-5ba99ee1.md
+ D threads/tasks/thread-card-codex-skill-1784292696820-04541d43.md
+ D threads/tasks/thread-card-codex-skill-1784292705109-d7bfd3c9.md
+ D threads/tasks/thread-card-codex-skill-1784292713036-4977c142.md
+ D threads/tasks/thread-card-codex-skill-1784292899842-8cc2e034.md
+ D threads/tasks/thread-card-codex-skill-1784301138950-27021ec1.md
+ D threads/tasks/thread-card-codex-skill-1784354734438-c301a9ee.md
+ D threads/tasks/thread-card-codex-skill-1784354791376-155acbea.md
+ D threads/tasks/thread-card-codex-skill-1784354858281-4b509c6a.md
+ D threads/tasks/thread-card-codex-skill-1784355765584-aa5dbc59.md
+ D threads/tasks/thread-card-codex-skill-1784357650123-612dfaaf.md
+ D threads/tasks/thread-card-codex-skill-1784358107101-fa9ea4aa.md
+ D threads/tasks/thread-card-codex-skill-1785147241158-8149c38d.md
+ D threads/tasks/thread-card-codex-skill-1785176285633-18abcc52.md
+ D threads/tasks/thread-card-codex-skill-1785292936091-cf2a61ec-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785292936091-cf2a61ec.md
+ D threads/tasks/thread-card-codex-skill-1785293068410-692d9ea9-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785293068410-692d9ea9.md
+ D threads/tasks/thread-card-codex-skill-1785296055653-54f366fe-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785296055653-54f366fe.md
+ D threads/tasks/thread-card-codex-skill-1785296171109-75f0fd48-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785296171109-75f0fd48.md
+ D threads/tasks/thread-card-codex-skill-1785296267220-a01f8528-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785296267220-a01f8528.md
+ D threads/tasks/thread-card-codex-skill-1785296385879-8e2503e3-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785296385879-8e2503e3.md
+ D threads/tasks/thread-card-codex-skill-1785414681345-43f7406f-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785414681345-43f7406f.md
+ D threads/tasks/thread-card-codex-skill-1785416949523-c96cdd1d-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785416949523-c96cdd1d.md
+ D threads/tasks/thread-card-codex-skill-1785417406472-707150d4-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785417406472-707150d4.md
+ D threads/tasks/thread-card-codex-skill-1785417821940-9d3f5f27-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785417821940-9d3f5f27.md
+ D threads/tasks/thread-card-codex-skill-1785418331446-317e06b8-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785418331446-317e06b8.md
+ D threads/tasks/thread-card-codex-skill-1785419329615-03bc7700-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785419329615-03bc7700.md
+ D threads/tasks/thread-card-codex-skill-1785419833752-4ebbd8b0-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785419833752-4ebbd8b0.md
+ D threads/tasks/thread-card-codex-skill-1785420231930-fdbc1ccf-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785420231930-fdbc1ccf.md
+ D threads/tasks/thread-card-codex-skill-1785421053418-4ca9d08e-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785421053418-4ca9d08e.md
+ D threads/tasks/thread-card-codex-skill-1785421869274-59052903-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785421869274-59052903.md
+ D threads/tasks/thread-card-codex-skill-1785421886402-82614033-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785421886402-82614033.md
+ D threads/tasks/thread-card-codex-skill-1785422206192-72c4bdf2-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785422206192-72c4bdf2.md
+ D threads/tasks/thread-card-codex-skill-1785422557631-ffb87aa1-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785422557631-ffb87aa1.md
+ D threads/tasks/thread-card-codex-skill-1785422848354-82dba141-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785422848354-82dba141.md
+ D threads/tasks/thread-card-codex-skill-1785423082101-5d0a0042-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785423082101-5d0a0042.md
+ D threads/tasks/thread-card-codex-skill-1785423373824-4a7a18aa-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785423373824-4a7a18aa.md
+ D threads/tasks/thread-card-codex-skill-1785423442846-983a7cff-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785423442846-983a7cff.md
+ D threads/tasks/thread-card-codex-skill-1785423910044-1fae6ae6-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785423910044-1fae6ae6.md
+ D threads/tasks/thread-card-codex-skill-1785424246206-e5cd9cd4-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785424246206-e5cd9cd4.md
+ D threads/tasks/thread-card-codex-skill-1785425956650-26f5a715-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785425956650-26f5a715.md
+ D threads/tasks/thread-card-codex-skill-1785426175338-f8be355d-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785426175338-f8be355d.md
+ D threads/tasks/thread-card-codex-skill-1785426829699-da924e67-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785426829699-da924e67.md
+ D threads/tasks/thread-card-codex-skill-1785427916993-3ea9c9e3-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785427916993-3ea9c9e3.md
+ D threads/tasks/thread-card-codex-skill-1785428184177-0f72ec76-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785428184177-0f72ec76.md
+ D threads/tasks/thread-card-codex-skill-1785428429737-21a06f6b-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785428429737-21a06f6b.md
+ D threads/tasks/thread-card-codex-skill-1785428537405-ef111b6e-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785428537405-ef111b6e.md
+ D threads/tasks/thread-card-codex-skill-1785428818834-316263aa-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785428818834-316263aa.md
+ D threads/tasks/thread-card-codex-skill-1785429271535-d81562a1-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785429271535-d81562a1.md
+ D threads/tasks/thread-card-codex-skill-1785429670184-d37803a9-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785429670184-d37803a9.md
+ D threads/tasks/thread-card-codex-skill-1785429863871-6e0d048b-step-2.md
+ D threads/tasks/thread-card-codex-skill-1785429863871-6e0d048b.md
+ D threads/tasks/thread-card-context-metrics-20260721.md
+ D threads/tasks/thread-card-d05f5373-497f-4e39-81f2-ba6f4822e6ca.md
+ D threads/tasks/thread-card-d0c09fbf-2a13-46a0-a16b-209a13d37361.md
+ D threads/tasks/thread-card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3.md
+ D threads/tasks/thread-card-d26b10d5-d05a-42f5-841d-ac3e681fc986.md
+ D threads/tasks/thread-card-d4def20b-ce78-4b2b-8d07-309bcd462e0d.md
+ D threads/tasks/thread-card-d4df7793-0cb8-4a6f-aee6-4a6c7366200c.md
+ D threads/tasks/thread-card-d63e5f74-3ca0-4ded-9ad7-e9eaaa370ce7.md
+ D threads/tasks/thread-card-d796aabb-5a4a-4717-9493-564b83be230b.md
+ D threads/tasks/thread-card-d8183c47-345d-4116-94f3-f4e5d11a7ac4.md
+ D threads/tasks/thread-card-d860d5ca-1c80-4138-90da-ba5f1dd7be99.md
+ D threads/tasks/thread-card-db22414c-4a95-4431-81e3-e917a75233f6.md
+ D threads/tasks/thread-card-dbafd99c-bef5-45c1-befc-b6c28b1eebd0.md
+ D threads/tasks/thread-card-dc17bf78-cd30-48b3-9167-e4cfcdbf970c.md
+ D threads/tasks/thread-card-dc631595-1c61-4852-88d1-bf6ef845ea11.md
+ D threads/tasks/thread-card-dd250386-4557-4b33-b58a-8b6d837b45b5.md
+ D threads/tasks/thread-card-dd4b8845-12aa-4be5-847d-a927d6b5422c.md
+ D threads/tasks/thread-card-dda968e6-a7db-4856-8487-8aab1a0a98e1.md
+ D threads/tasks/thread-card-df81a0b8-0252-41aa-82d5-cdff4156b078.md
+ D threads/tasks/thread-card-dfdac151-ec67-4132-88f5-a71cf353baad.md
+ D threads/tasks/thread-card-e057abd8-ba6b-4a89-9f9d-2a73ec3b819f.md
+ D threads/tasks/thread-card-e28ccdf8-3e29-4571-b714-c728926e131e.md
+ D threads/tasks/thread-card-e28f0b44-7ad8-40cf-82af-cb1d626282cd.md
+ D threads/tasks/thread-card-e2b65d2f-801d-4739-b4d2-befcada9ba1b.md
+ D threads/tasks/thread-card-e32f9dd9-8e04-4bdc-9a7e-7aee0de7bfb9.md
+ D threads/tasks/thread-card-e45b074e-48e3-4942-a026-675334f7685b.md
+ D threads/tasks/thread-card-e494ba0f-e56c-4c18-940b-e4ec999aebb9.md
+ D threads/tasks/thread-card-e5546e18-afd2-4ce0-b8ba-8098b437ee50.md
+ D threads/tasks/thread-card-e6921dee-c3d5-4350-ab4e-ef8a4f7c0a80.md
+ D threads/tasks/thread-card-e79a796b-1722-48dd-803f-26cc44b76704.md
+ D threads/tasks/thread-card-e7a1760a-371d-48ac-80b3-96b4e7ce2102.md
+ D threads/tasks/thread-card-e8bd89d8-3436-41de-9b3d-dbfa9914add9.md
+ D threads/tasks/thread-card-e9169320-5637-41e6-8e3f-f01cdac68bb8.md
+ D threads/tasks/thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b.md
+ D threads/tasks/thread-card-ed7f189e-276e-44eb-98ea-d0cbdc44af5c.md
+ D threads/tasks/thread-card-ee15cea8-cd78-48b5-8434-e50a24c4725c.md
+ D threads/tasks/thread-card-ee38a29f-1cfb-42bd-a0f3-b56d50f3d2a8.md
+ D threads/tasks/thread-card-ee38b25f-66d3-4d40-89be-b4c6da09a440.md
+ D threads/tasks/thread-card-efb1a647-d060-4c43-bf09-95a0cbeb31c3.md
+ D threads/tasks/thread-card-f4344ec8-534b-4360-8394-1b546f58f3a4.md
+ D threads/tasks/thread-card-f6904e45-8e15-4691-9619-b17165567797.md
+ D threads/tasks/thread-card-f69417b9-3432-4f5e-9b4c-0d2ad0511e4f.md
+ D threads/tasks/thread-card-f6986c23-f9a3-48f0-8987-86ce5b53970b.md
+ D threads/tasks/thread-card-f70126f4-8f8f-4d97-a0f9-34301119ca26.md
+ D threads/tasks/thread-card-f9c2e73a-8fe6-47f2-bbfb-de231b7c2adf.md
+ D threads/tasks/thread-card-fa6a74ac-6441-4034-bc7e-98f3bc3e13b5.md
+ D threads/tasks/thread-card-fab927b7-e446-4093-a860-6c32214d2e5e.md
+ D threads/tasks/thread-card-fb7d3b85-589a-49b4-a27d-d8b42b749ffc.md
+ D threads/tasks/thread-card-fe388485-7e75-4392-9117-894936bdb998.md
+ D threads/tasks/thread-card-runtime-incident-review.md
+ D threads/tasks/thread-card-voice-pipeline-note-1785414549806-cd98956c322e58-step-1.md
+ D threads/tasks/thread-card-voice-pipeline-note-1785419134046-e7f3d74a910ba-step-1.md
+ D threads/tasks/thread-card-voice-pipeline-note-1785420875585-f97aa768d9d358-step-1.md
+ D threads/tasks/thread-card-voice-pipeline-note-1785421738542-e8973933bce808-step-1.md
+ D threads/tasks/thread-card-voice-pipeline-note-1785422062828-ac7cce2c6aadd8-step-1.md
+ D threads/tasks/thread-card-workstation-sidecar-recovery-20260720.md
+ D threads/tasks/thread-card-workstation-task-backfill-1784547177.md
+ D threads/ux/thread-card-abac2167-dab1-4bfc-ae6d-f04d076349cc.md
+ D threads/ux/thread-card-c1cc1c4e-8d7f-4ae5-a17f-fbf58e2400a0.md
+ D threads/ux/thread-card-codex-pipeline-1783687748321-1210d27d-step-1.md
+ D threads/ux/thread-card-codex-pipeline-1783687748321-1210d27d-step-2.md
+ D threads/ux/thread-card-codex-pipeline-1783687748321-1210d27d-step-3.md
+ D threads/ux/thread-card-codex-pipeline-1783688836866-ad0fcd4b-step-1.md
+ D threads/ux/thread-card-codex-pipeline-1783688836866-ad0fcd4b-step-2.md
+ D threads/ux/thread-card-codex-pipeline-1783688836866-ad0fcd4b-step-3.md
+ D threads/ux/thread-card-codex-skill-1783658255872-5630c522.md
+ D threads/ux/thread-card-codex-skill-1783662223257-ea81e4db.md
+ D threads/ux/thread-card-codex-skill-1783664134648-1984d4c2.md
+ D threads/ux/thread-card-codex-skill-1783675746962-60884f4b.md
+ D threads/ux/thread-card-codex-skill-1783680857476-9d53abd5.md
+ D threads/ux/thread-card-codex-skill-1783687285595-69f83399.md
+ D ui-mockups/goal-object-ux-mockups.css
+ D ui-mockups/goal-object-ux-mockups.html
+ D ui-mockups/goal-object-ux-style-01.css
+ D ui-mockups/goal-object-ux-style-02.css
+ D ui-mockups/goal-object-ux-style-03.css
+ D ui-mockups/goal-object-ux-style-04.css
+ D ui-mockups/goal-object-ux-style-05.css
+ D ui-mockups/mobile-diff-review/hunk-review.css
+ D ui-mockups/mobile-diff-review/hunk-review.html
+ D ui-mockups/mobile-diff-review/review-overview.css
+ D ui-mockups/mobile-diff-review/review-overview.html
+ D ui-mockups/mobile-diff-review/review-shell.css
+ D ui-mockups/mobile-diff-review/staged-hunk.css
+ D ui-mockups/mobile-diff-review/staged-hunk.html
+ D ui-mockups/mobile-diff-review/voice-review.css
+ D ui-mockups/mobile-diff-review/voice-review.html
+ D ui-mockups/po-report/po-report-view-1-decision-snapshot.html
+ D ui-mockups/po-report/po-report-view-2-context-map.html
+ D ui-mockups/po-report/po-report-view-3-risks-constraints.html
+ D ui-mockups/po-report/po-report-view-4-options.html
+ D ui-mockups/po-report/po-report-view-5-delivery-validation.html
+ D ui-mockups/po-report/po-report-views.css
+ D ui-mockups/reusable-step-pipelines/card-process-modal.css
+ D ui-mockups/reusable-step-pipelines/card-process-modal.html
+ D ui-mockups/reusable-step-pipelines/generated-step-cards.css
+ D ui-mockups/reusable-step-pipelines/generated-step-cards.html
+ D ui-mockups/reusable-step-pipelines/pipeline-base.css
+ D ui-mockups/reusable-step-pipelines/pipeline-builder.css
+ D ui-mockups/reusable-step-pipelines/pipeline-builder.html
+ D ui-mockups/reusable-step-pipelines/saved-step-library.css
+ D ui-mockups/reusable-step-pipelines/saved-step-library.html
+ D ui-mockups/reusable-step-pipelines/step-skill-execution-detail.css
+ D ui-mockups/reusable-step-pipelines/step-skill-execution-detail.html
+ D ux.json
+?? cache/control-room-v3.json
+?? runtime/bin/ledger-cli
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/annotation/zone-2ad72b28-6927-466a-8f9d-b6f9c01e115d.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/card/card-0745ce4a-dd01-4ba1-8c8b-fe8cfc616c35.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/ledger/tasks%3AthreadFiles%2Fthread-card-0745ce4a-dd01-4ba1-8c8b-fe8cfc616c35.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/resource/.decision-os%2Fcards%2Ftasks%2Fcard-0745ce4a-dd01-4ba1-8c8b-fe8cfc616c35.md.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/resource/.decision-os%2Fthreads%2Ftasks%2Fthread-card-0745ce4a-dd01-4ba1-8c8b-fe8cfc616c35.md.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/format.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/local/held/card-0745ce4a-dd01-4ba1-8c8b-fe8cfc616c35.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/01/01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/58/5883987dbd5a29ea3f5cad94dd461c994392b9cce084105d21c860a4caf86ead
+?? voice-uploads/voice-1785522972187-b13203c0-b3d0-4d7c-90cf-28f8d304c65a.webm
+?? voice-uploads/voice-1785523069985-e3fe5e40-02bd-491e-a516-3c28b4f427aa.webm
+?? voice-uploads/voice-1785524421582-6f905e7e-68bf-4c69-a792-7152947c0329.webm
+?? voice-uploads/voice-1785524973307-8b3f038d-2c20-4aef-953c-ce09348a5552.webm
+?? voice-uploads/voice-1785526081546-ec23ef3e-0857-4dc2-b133-c87d48baf193.webm
+?? voice-uploads/voice-1785526382271-f8be0fe7-119f-4bb2-b851-4d58a9f69f40.webm
+?? voice-uploads/voice-1785526682115-08ad565f-8944-46df-a81c-0c036c83612b.webm
+?? voice-uploads/voice-1785529626962-52038cfb-bd98-40ff-9505-4721ef587ce7.webm
+?? voice-uploads/voice-1785530179840-16301f1f-1875-4033-8f25-77cacbb08e85.webm
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/task-replication-node-20260721
+379acff0502a6c2983d635e761e4a2234b29fe32
+verify/task-replication-node-20260721
+?? backend/node_modules
+?? node_modules
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/unified-markdown-diff-system-20260731
+bb5d9d332c73941baaf7b5815f400b7d12cb3893
+D  .decision-os
+DU .decision-os/cards/tasks/card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md
+A  .decision-os/cards/tasks/card-codex-skill-1785490716749-55d3bc13.md
+DU .decision-os/threads/tasks/thread-card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md
+AU .decision-os~HEAD
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/voice-note-run-test-fix-1785421886402
+95efdc27c5c00e73ca13e929d46f52262946f11d
+codex/voice-note-run-test-fix-1785421886402
+ M backend/src/business/federation/helper/execute-node-message.ts
+ M backend/test/codex/codex-process-restart-recovery.test.ts
+ M backend/test/codex/launch-codex-execution-process.test.ts
+ M backend/test/codex/read-card-skill-run-controller.test.ts
+ M backend/test/codex/resume-codex-pipeline-runs.test.ts
+ M backend/test/codex/start-card-skill-process-controller.test.ts
+ M backend/test/codex/start-codex-pipeline-run-controller.test.ts
+ M backend/test/server/runtime-failsafe.integration.test.ts
+ M backend/test/unit/codex/helper/launch-codex-execution-process.test.ts
+ M backend/test/unit/refresh/helper/watch-project-files.test.ts
+ M documentation/documentation/architecture/codex-content-authoring.md
+ M tests/browser/codex/reusable-step-pipelines.spec.ts
+?? backend/node_modules
+?? frontend/node_modules
+?? node_modules
+CHILD
+09c80d820628e35008925c41b4202e84a28e94a0
+main
+ D .gitignore
+?? cache/control-room-v3.json
+?? cache/federation-project-catalog.json
+?? memories.sqlite3
+?? runtime/bin/ledger-cli
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/annotation/zone-90ff6fb8-b7c3-4668-aa89-00688c49d87e.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/annotation/zone-9fad8948-fc5e-46d8-9878-95fdf63bbe88.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/annotation/zone-runtime-incident-review.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/card/card-99aa1052-9064-4853-8378-349058defa56.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/card/card-f3ec044a-666d-4251-8b26-38ab74e3c765.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/card/card-runtime-incident-review.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/ledger/tasks%3AthreadFiles%2Fthread-card-99aa1052-9064-4853-8378-349058defa56.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/ledger/tasks%3AthreadFiles%2Fthread-card-f3ec044a-666d-4251-8b26-38ab74e3c765.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/ledger/tasks%3AthreadFiles%2Fthread-card-runtime-incident-review.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/resource/.decision-os%2Fcards%2Ftasks%2Fcard-99aa1052-9064-4853-8378-349058defa56.md.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/resource/.decision-os%2Fcards%2Ftasks%2Fcard-f3ec044a-666d-4251-8b26-38ab74e3c765.md.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/resource/.decision-os%2Fcards%2Ftasks%2Fcard-runtime-incident-review.md.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/resource/.decision-os%2Fthreads%2Ftasks%2Fthread-card-99aa1052-9064-4853-8378-349058defa56.md.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/resource/.decision-os%2Fthreads%2Ftasks%2Fthread-card-f3ec044a-666d-4251-8b26-38ab74e3c765.md.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/resource/.decision-os%2Fthreads%2Ftasks%2Fthread-card-runtime-incident-review.md.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/current/thread-note/thread-card-runtime-incident-review%2Fnote-agent-runtime-incident-review-created.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/format.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/local/held/card-99aa1052-9064-4853-8378-349058defa56.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/local/held/card-f3ec044a-666d-4251-8b26-38ab74e3c765.json
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/01/01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/0b/0bf6242b8f6077c8b242119ad7de14859a2a3d39f37e511a1cbdcd9c687013f3
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/0c/0ccc55da1bb8bf3e8096e8a89b6449dedefae10b6aad97a1050f4cbcb4d94840
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/14/14aa06e067a725dbcf59bad86d45386ab4997df1130787320c13bf7ee803cec3
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/2f/2f07b097fea587a662a32e1b6a0188ab16a0b6f1070b9f7fc41009b8d8b9ce8a
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/47/475747dd9646893bde23334777370a48ecfc2bf6e2a0cb2fe66d582af845344d
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/4c/4c79820356ec5a06a3ddbde1ebb4bb3f202539810f707a205e706051fde3effd
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/58/5883987dbd5a29ea3f5cad94dd461c994392b9cce084105d21c860a4caf86ead
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/61/61d5673f1dbc635d773d60255a069915703f1ce6f0f58f3bf60f6eeb84a0f50c
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/6b/6b44d63aaea42e31b144ac35305f816769d795a59462ecf40e0513c387f991f6
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/71/7110e56c29149bd5cf0ab30734d583938bc5188e16ef69ffcc2f9481ff1c4bf2
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/7d/7d035c5afba108430d9b258d13374d74d720d86881c598f92383534db6e4a2cb
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/7e/7e94749cf26afca5725d1a295794d7f178147db8f3ec76e21875f31edf8e6c1c
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/8a/8aaba49bea9e903837d1578999c08371162dd03dea22ac3ba8d75c882490b9e6
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/8a/8ae34d59231e152a61fe5c7c15e1b1dc8bd1234cae9e11c9a7464ea69be05d2e
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/8c/8c0c71cf7b26e8e779fe8edbc57a4f978b81ac2c52d5fc290b51aeca0af2e888
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/94/94f948dbe9086e9c4fa281b80e4090f61825753d0d3ce33dff6bde3778d3914e
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/b1/b1c15527d1488150b82feff8b2369f15fdcc4f545185303803feb0051b55eb51
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/c3/c34491df9d2db5364f688472273c7f0f7be5976216bb0f7129b8dc5bbabb4f9e
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/ce/ce9c58c51e7317058104bf749314b0b16b55bd32b71dd655a5ed55694ea3c43d
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/d1/d16c44728a7023ecba56fbbd718607704a70f77ec6110e5c9919e0e57c46bb02
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/d4/d469ef3f49bb48c4ac912d1d2e82f637f528ae488b5a73fb322bc7db22c267f3
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/e7/e769ee3f9b5b312a74a1869867305aecbbacf34a42ede0e09e3801cb56c17599
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/f1/f12060dc21e2d956780cafb226450ff217f6704f05ae91608e6bbadc85a5e3bf
+?? task-state/ZGV2L0VkaXRvckJQL2RlY2lzaW9uLW9z/objects/f3/f3d8d1c25fe237192d27cb0f50ce5c2b1c856a5c7cbf7a42d289b6c25826ad0f
+?? ui-mockups/mobile-diff-review/screenshots/hunk-review.png
+?? ui-mockups/mobile-diff-review/screenshots/review-overview.png
+?? ui-mockups/mobile-diff-review/screenshots/staged-hunk.png
+?? ui-mockups/mobile-diff-review/screenshots/voice-review.png
+?? voice-uploads/voice-1785422019905-73b83a15-84ae-4114-b674-e4f710208372.webm
+?? voice-uploads/voice-1785422207065-1471ed94-4b57-4e00-ab01-911d1a0738f2.webm
+?? voice-uploads/voice-1785423031196-1bb7f173-2ccc-42e0-a2bc-55d37ddd63df.webm
+?? voice-uploads/voice-1785423443423-70e709d3-beb9-4762-ba42-76d71927463f.webm
+?? voice-uploads/voice-1785426992911-4a59c448-c251-4247-918d-dd627d7abd29.webm
+?? voice-uploads/voice-1785427385029-e2b0361d-59df-4142-8637-85932a3cf041.webm
+?? voice-uploads/voice-1785429147302-d96dae12-cdcc-4582-aeb0-3a49351eb4ab.webm
+?? voice-uploads/voice-1785429213650-86e87448-2eb1-422c-b6ad-9f16f431390c.webm
+?? voice-uploads/voice-1785429290096-37225653-17d9-4fc5-a111-6b8f9629e691.webm
+END
+WORKTREE /home/jbb/dev/EditorBP/decision-os/.worktrees/voice-note-run-test-fix-1785423910044
+808a16a76f91802e8cab52b0816cc433d849dc45
+codex/voice-note-run-test-fix-1785423910044
+ M backend/src/business/federation/helper/execute-node-message.ts
+ M backend/test/codex/codex-process-restart-recovery.test.ts
+ M backend/test/codex/codex-skill-library-routes.test.ts
+ M backend/test/codex/launch-codex-execution-process.test.ts
+ M backend/test/codex/read-card-skill-run-controller.test.ts
+ M backend/test/codex/resume-codex-pipeline-runs.test.ts
+ M backend/test/codex/start-card-skill-process-controller.test.ts
+ M backend/test/codex/start-codex-pipeline-run-controller.test.ts
+ M backend/test/server/runtime-failsafe.integration.test.ts
+ M backend/test/unit/codex/helper/launch-codex-execution-process.test.ts
+ M backend/test/unit/refresh/helper/watch-project-files.test.ts
+?? .decision-os/.gitignore
+?? .decision-os/cards/tasks/card-eaa8bcdc-b540-4288-bc6c-e88bb50d4ebb.md
+?? .decision-os/cards/tasks/card-runtime-incident-review.md
+?? .decision-os/threads/tasks/thread-card-eaa8bcdc-b540-4288-bc6c-e88bb50d4ebb.md
+?? .decision-os/threads/tasks/thread-card-runtime-incident-review.md
+?? Search/.decision-os/.gitignore
+?? backend/node_modules
+?? frontend/node_modules
+?? node_modules
+CHILD
+3e5efc7a3138e3d1bfe8ebfe0884b8fe1f8440c2
+main
+?? cards/tasks/card-eaa8bcdc-b540-4288-bc6c-e88bb50d4ebb.md
+?? cards/tasks/card-runtime-incident-review.md
+?? threads/tasks/thread-card-eaa8bcdc-b540-4288-bc6c-e88bb50d4ebb.md
+?? threads/tasks/thread-card-runtime-incident-review.md
+END

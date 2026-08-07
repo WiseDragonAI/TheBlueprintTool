@@ -1,0 +1,59 @@
+CHILD /home/jbb/dev/EditorBP/decision-os/.decision-os
+Saved working directory and index state On main: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-oshild
+7d13ee4e751c1ba4ae97972c0b71a9bb68059b73
+CHILD /home/jbb/dev/EditorBP/decision-os/.worktrees/canonical-markdown-editor-20260731/.decision-os
+Saved working directory and index state On main: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/canonical-markdown-editor-20260731hild
+21dfb65d3dc953c0088321f73116b92a8ad026e1
+CHILD /home/jbb/dev/EditorBP/decision-os/.worktrees/runtime-recovery-intent-telemetry-20260801/.decision-os
+Saved working directory and index state On main: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/runtime-recovery-intent-telemetry-20260801hild
+5a2330ae6e75c9d761308407c7abaa3196cd4ccb
+CHILD /home/jbb/dev/EditorBP/decision-os/.worktrees/voice-note-run-test-fix-1785421886402/.decision-os
+Saved working directory and index state On main: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/voice-note-run-test-fix-1785421886402hild
+36c3d8283365c132b199a02aade0d41f2167cefc
+CHILD /home/jbb/dev/EditorBP/decision-os/.worktrees/voice-note-run-test-fix-1785423910044/.decision-os
+Saved working directory and index state On main: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/voice-note-run-test-fix-1785423910044hild
+03f4196e1475271d98a673f666879bc5cde761fb
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/button-ownership-1784743425249
+Saved working directory and index state On codex/button-ownership-1784743425249: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/button-ownership-1784743425249:parent
+5ac13bb064a40afc1ba557bba600c042b8bcc24d
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/canonical-markdown-editor-20260731
+Saved working directory and index state On feature/canonical-markdown-editor-20260731: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/canonical-markdown-editor-20260731:parent
+74205a3e1a0781adb1f45b46cb0667294ddc1484
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/epoch4-no-loss-20260726
+Saved working directory and index state On feature/epoch4-no-loss-20260726: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/epoch4-no-loss-20260726:parent
+458ec2e7587692c8bf4896b11c5975dcc2b205cc
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/federation-delivery-ack-deadline-20260807
+Saved working directory and index state On fix/federation-delivery-ack-deadline-20260807: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/federation-delivery-ack-deadline-20260807:parent
+64d16968b1dfe92bb81d48540db400bf990b2c2d
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/federation-flood-proof-20260802
+Saved working directory and index state On analysis/federation-flood-proof-20260802: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/federation-flood-proof-20260802:parent
+3720381491879bb4b382dbc5890e7c3131b01930
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/federation-zero-error-zero-flood-20260807
+Saved working directory and index state On fix/federation-zero-error-zero-flood-20260807: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/federation-zero-error-zero-flood-20260807:parent
+1b20fb0ff45ee242d124d7551a70e636cf43d8c7
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/git-diff-widget-test
+Saved working directory and index state On demo/git-diff-widget-test: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/git-diff-widget-test:parent
+aa4ed9d6326d72f3abe46fad5b723c6e798945b6
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/pipeline-capacity-continuation-20260804
+Saved working directory and index state On feature/pipeline-capacity-continuation-20260804: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/pipeline-capacity-continuation-20260804:parent
+1b4b2b46fb1f8f991ad4bcf1b1fd2b96804786a2
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/release-tagged-promotion-20260801
+Saved working directory and index state On feature/release-tagged-promotion-20260801: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/release-tagged-promotion-20260801:parent
+a7f065415be9cdc71b001eaad22f6ee29598c37f
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/review-skill-authoring-20260730
+Saved working directory and index state On review/skill-authoring-postmortem-20260730: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/review-skill-authoring-20260730:parent
+6868823c454c69c947cdc44973478fabe73c1d5b
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/task-replication-node-20260721
+Saved working directory and index state On verify/task-replication-node-20260721: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/task-replication-node-20260721:parent
+fd20d70dadb8ba8e24008fa4c1c1949837b570e2
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/unified-markdown-diff-system-20260731
+.decision-os/cards/tasks/card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md: needs merge
+.decision-os/threads/tasks/thread-card-ce629f8b-db81-4af6-9a7b-9fdf88615919.md: needs merge
+.decision-os~HEAD: needs merge
+fd20d70dadb8ba8e24008fa4c1c1949837b570e2
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/voice-note-run-test-fix-1785421886402
+Saved working directory and index state On codex/voice-note-run-test-fix-1785421886402: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/voice-note-run-test-fix-1785421886402:parent
+d5fa15079fc3f8d0bbf223f7a3ead06542e067db
+PARENT /home/jbb/dev/EditorBP/decision-os/.worktrees/voice-note-run-test-fix-1785423910044
+Saved working directory and index state On codex/voice-note-run-test-fix-1785423910044: preserve-before-0.3.0-reconstruction:/home/jbb/dev/EditorBP/decision-os/.worktrees/voice-note-run-test-fix-1785423910044:parent
+b520bf8456639d30aa3c10bf58d1c282c35ac075
