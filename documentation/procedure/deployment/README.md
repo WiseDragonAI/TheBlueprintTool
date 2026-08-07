@@ -14,5 +14,6 @@
 4. [Temporary Worktree Canary](./temporary-worktree-canary.md) launches one bounded, non-federated feature-worktree server on a dynamic port, verifies it, and removes it without MultiTerm registration.
 5. [Termux Phone Canary Environment](./canary-termux-phone-environment.md) adapts the same canary topology to Android with runit supervision, the native Node relay adapter, isolated durable state, phone-specific dependencies, logs, recovery, and cleanup.
 6. [Production Delivery Protocol](./production-delivery-protocol.md) owns protocol-1 node bootstrap, exact-SHA `candidate` preparation, reviewed `main` promotion, relay activation, rolling node restart, durable status, resume, runtime rollback, and incident evidence through the single delivery CLI.
-7. [Workspace Migration Runbook](./MIGRATE_RUNBOOK.md) migrates legacy root ledgers and card content into `.decision-os`.
-8. [Node-Local Task Current-State Epoch 3 Cutover](./TASK_STATE_V2_MIGRATION_RUNBOOK.md) performs the federation-wide repair cutover from v2 current state to Epoch 3.
+7. [Full Production Rollback](./full-production-rollback.md) owns operator-authorized historical ref restoration, complete post-target work preservation, production release and supervisor replacement, Cloudflare relay alignment, durable runtime recovery, and post-restart proof.
+8. [Workspace Migration Runbook](./MIGRATE_RUNBOOK.md) migrates legacy root ledgers and card content into `.decision-os`.
+9. [Node-Local Task Current-State Epoch 3 Cutover](./TASK_STATE_V2_MIGRATION_RUNBOOK.md) performs the federation-wide repair cutover from v2 current state to Epoch 3.

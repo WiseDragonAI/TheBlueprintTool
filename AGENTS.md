@@ -118,6 +118,12 @@
 - Use existing non-interactive credentials for authenticated operations.
 - When operator authentication is unavoidable, run the provider's no-browser flow, give the operator the URL, and wait for the operator to complete the browser interaction.
 
+## Production Rollback Procedure
+
+- **Mandatory trigger:** For any operator request involving rollback, restoration to a release tag, production ref rewind, production state restoration, or production server rollback, read and follow [`documentation/procedure/deployment/full-production-rollback.md`](documentation/procedure/deployment/full-production-rollback.md) before any mutation.
+- A rollback is not complete when only Git refs, the workstation process, and the release symlink were changed. The procedure must reach one verified release boundary across the parent repository, `.decision-os` child repository, preserved post-target work, production release worktree and pointer, MultiTerm supervisor, Cloudflare relay, durable runtime incidents and pause registries, federation connectivity, and post-restart health.
+- Do not restart a rolled-back production node while Cloudflare still serves a relay from the rejected release line. Align and verify the relay first, then start the node.
+
 ## decision-os Server Procedure
 
 ## Decision OS Submodule Boundary
