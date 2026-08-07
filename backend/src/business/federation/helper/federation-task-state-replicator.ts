@@ -241,6 +241,8 @@ export function createFederationTaskStateReplicator(input: {
       // WHAT: Serialize relay repair responses through the same per-project publication lane as live changes.
       // WHY: A repair response must not overlap a live batch group and expose another intermediate relay root.
       if (frame.from === 'relay') {
+        const dirty = dirtyFor(frame.projectId);
+        for (const entity of entities) dirty.set(taskCurrentEntityKey(entity), entity);
         enqueueRelayEntities(frame.projectId, entities);
         flushRelayProject(frame.projectId, store);
       } else {
