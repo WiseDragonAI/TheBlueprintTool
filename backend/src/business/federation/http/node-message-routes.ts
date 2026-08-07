@@ -4,6 +4,7 @@ import type { createFederationNodeConnector } from '../helper/federation-node-co
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
 import { readRequestBuffer } from '../../server/helper/read-request-buffer.js';
 import { decodeRouteSegment } from '../../server/http/route-segment.js';
+import { availableRepositoryOriginFingerprint } from '../../project-sync/helper/repository-sync-status.js';
 
 type AnyRecord = Record<string, unknown>;
 type Federation = ReturnType<typeof createFederationNodeConnector>;
@@ -59,7 +60,7 @@ export async function handleNodeMessageRoutes(
           projectId: project.id,
           name: project.name,
           available: project.available,
-          originFingerprint: project.originFingerprint,
+          originFingerprint: availableRepositoryOriginFingerprint(project.root),
         })),
       },
       ...federation.topologyNodes().map((node) => ({
