@@ -156,15 +156,22 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
     recoverRuntimeScope,
   } = projectRuntime;
   const activeProjectSyncController = projectSyncRuntime.controller;
+  const deliveryProjectIds = (): string[] => {
+    const localNodeId = federation.localOwner().ownerNodeId;
+    return federation.topologyNodes()
+      .filter((node) => node.nodeId === localNodeId)
+      .flatMap((node) => node.projects)
+      .filter((project) => /^[a-f0-9]{64}$/.test(project.originFingerprint))
+      .map((project) => project.projectId)
+      .sort();
+  };
   const deliveryAdmissionInput = () => ({
     contentStatus: () => federationContentStore.status(),
     executionStates: projectTaskStates.values(),
     federationPhase: federation.status().phase,
     incidentLedger,
     localNodeId: federation.localOwner().ownerNodeId,
-    projectIds: projectCatalog().filter((project) => project.available)
-      .map((project) => project.id)
-      .sort(),
+    projectIds: deliveryProjectIds(),
     replicationStatus: () => federationTaskStateReplicator?.diagnostics() ?? {
       convergence: [],
       runtimeDirty: [],
