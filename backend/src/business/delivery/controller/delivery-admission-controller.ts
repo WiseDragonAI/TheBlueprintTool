@@ -20,8 +20,8 @@ import {
 import { runDeliveryOperationBoundary } from '../helper/run-delivery-operation-boundary.js';
 
 export const fixedDeliveryAdmissionEndpoints = Object.freeze({
-  productionHealth: 'http://127.0.0.1:50150/api/health',
-  canaryHealth: 'http://127.0.0.1:50151/api/health',
+  productionHealth: 'http://127.0.0.1:50150/api/delivery/admission-state',
+  canaryHealth: 'http://127.0.0.1:50151/api/delivery/admission-state',
   devRelayHealth: 'http://127.0.0.1:50152/health',
 });
 

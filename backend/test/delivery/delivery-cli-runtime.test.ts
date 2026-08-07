@@ -235,16 +235,16 @@ test('default runtime collects fresh authenticated admission and live reconcilia
         baselineEpoch: taskCurrentBaselineEpoch,
         environment: relayHealthEnvironment,
       };
-    } else if (url.endsWith(':50150/api/health')) {
-      body = {
+    } else if (url.endsWith(':50150/api/delivery/admission-state')) {
+      body = { release: {
         ok: true, status: 'ready', observedAt, releaseSha: priorSha, processStartedAt: observedAt,
         deliveryProtocol: 1, activeReleasePointer: `current:${priorSha}`, activeIncidentCount: 0,
-      };
-    } else if (url.endsWith(':50151/api/health')) {
-      body = {
+      } };
+    } else if (url.endsWith(':50151/api/delivery/admission-state')) {
+      body = { release: {
         ok: true, status: 'ready', observedAt, releaseSha: admittedSha, processStartedAt: observedAt,
         deliveryProtocol: 1, activeReleasePointer: `current:${admittedSha}`, activeIncidentCount: 0,
-      };
+      } };
     } else {
       body = {
         ok: true, status: 'ready', service: 'decision-os-federation-relay', observedAt,
