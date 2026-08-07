@@ -47,7 +47,7 @@ test('freezes exact active owners and records offline zero-project identities se
   assert.match(frozen.fingerprint, /^[a-f0-9]{64}$/);
 });
 
-test('offline active owners and missing origin identity reject before topology freeze', () => {
+test('offline active owners reject and node-local projects stay outside delivery topology', () => {
   assert.throws(() => freezeDeliveryTopology({
     capturedAt,
     nodes: [{
@@ -57,15 +57,19 @@ test('offline active owners and missing origin identity reject before topology f
       projects: [{ projectId: 'mobile', originFingerprint: originB }],
     }],
   }), (error: unknown) => error instanceof DeliveryTopologyError && error.code === 'delivery_active_node_offline');
-  assert.throws(() => freezeDeliveryTopology({
+  const localOnly = freezeDeliveryTopology({
     capturedAt,
     nodes: [{
       nodeId: 'workstation',
       nodeLabel: 'Workstation',
       online: true,
-      projects: [{ projectId: 'decision-os', originFingerprint: '' }],
+      projects: [
+        { projectId: 'admin', originFingerprint: '' },
+        { projectId: 'decision-os', originFingerprint: originA },
+      ],
     }],
-  }), (error: unknown) => error instanceof DeliveryTopologyError && error.code === 'delivery_project_origin_missing');
+  });
+  assert.deepEqual(localOnly.activeNodes[0]?.projects, [{ projectId: 'decision-os', originFingerprint: originA }]);
 });
 
 test('targeted production topology ignores unrelated offline project owners', () => {

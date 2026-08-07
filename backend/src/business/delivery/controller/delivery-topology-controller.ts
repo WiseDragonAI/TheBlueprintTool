@@ -64,20 +64,16 @@ function normalizeProjects(nodeId: string, projectsInput: unknown): DeliveryTopo
   if (!Array.isArray(projectsInput)) {
     throw new DeliveryTopologyError('delivery_topology_evidence_missing', 'Relay topology projects are missing.', { nodeId });
   }
-  const projects = projectsInput.map((projectInput, index) => {
+  const projects = projectsInput.flatMap((projectInput, index) => {
     const project = projectInput && typeof projectInput === 'object'
       ? projectInput as Record<string, unknown>
       : {};
     const projectId = stableIdentity(project.projectId, `nodes.${nodeId}.projects[${index}].projectId`);
     const originFingerprint = String(project.originFingerprint ?? '').trim();
-    if (!/^[a-f0-9]{64}$/.test(originFingerprint)) {
-      throw new DeliveryTopologyError(
-        'delivery_project_origin_missing',
-        `Project ${projectId} on node ${nodeId} has no verified repository origin fingerprint.`,
-        { nodeId, projectId },
-      );
-    }
-    return { projectId, originFingerprint };
+    // WHAT: Exclude node-local projects that have no repository origin from delivery topology.
+    // WHY: Federation keeps them visible but cannot synchronize them, so they cannot be convergence requirements for a release.
+    if (!/^[a-f0-9]{64}$/.test(originFingerprint)) return [];
+    return [{ projectId, originFingerprint }];
   }).sort((left, right) => (
     left.projectId.localeCompare(right.projectId)
     || left.originFingerprint.localeCompare(right.originFingerprint)
