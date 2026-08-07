@@ -33,6 +33,15 @@ function waitForChange(changes: ProjectFileChange[], predicate: (change: Project
   });
 }
 
+async function awaitNonPersistentWatcher<T>(settlement: Promise<T>): Promise<T> {
+  const testOwner = setInterval(() => undefined, 1_000);
+  try {
+    return await settlement;
+  } finally {
+    clearInterval(testOwner);
+  }
+}
+
 test('watches state, registered ledgers, and ledgers canvas for one project', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-project-watch-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
@@ -181,7 +190,7 @@ test('close waits for an in-flight project publication to settle', async () => {
   });
 
   writeFileSync(ledgerFile, JSON.stringify({ cards: [{ id: 'changed' }] }));
-  await started;
+  await awaitNonPersistentWatcher(started);
   let closed = false;
   const closing = watcher.close().then(() => { closed = true; });
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -214,7 +223,7 @@ test('close has a finite deadline when a project publication does not settle', a
   });
 
   writeFileSync(ledgerFile, JSON.stringify({ cards: [{ id: 'changed' }] }));
-  await started;
+  await awaitNonPersistentWatcher(started);
   await watcher.close(25);
   assert.equal(errors.some((entry) => entry.operation === 'flush-project-changes'), true);
 });

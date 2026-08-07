@@ -270,7 +270,7 @@ test('thread-launched run reads return chronological diagnostics without changin
 
   process.chdir(workspace);
   const runtime: Record<string, unknown> = {};
-  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', repositorySettingsFile: join(workspace, '.decision-os', '.settings.json') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
@@ -413,7 +413,7 @@ test('card skill run route returns command output containing thread markdown as 
 
   process.chdir(workspace);
   const runtime: Record<string, unknown> = {};
-  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', repositorySettingsFile: join(workspace, '.decision-os', '.settings.json') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
@@ -494,7 +494,7 @@ test('card skill run route infers status from the latest continued JSONL segment
 
   process.chdir(workspace);
   const runtime: Record<string, unknown> = {};
-  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', repositorySettingsFile: join(workspace, '.decision-os', '.settings.json') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
@@ -753,7 +753,7 @@ test('card skill continue route excludes codex artifact notes from resumed promp
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
   const runtime: Record<string, unknown> = {};
-  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', repositorySettingsFile: join(workspace, '.decision-os', '.settings.json') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
@@ -834,7 +834,7 @@ test('card skill run route measures active resumed segment from the latest persi
       },
     },
   };
-  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', repositorySettingsFile: join(workspace, '.decision-os', '.settings.json') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
@@ -978,7 +978,7 @@ test('server startup interrupts a replicated running execution whose process reg
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
   const runtime: Record<string, unknown> = {};
-  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', repositorySettingsFile: join(workspace, '.decision-os', '.settings.json') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;

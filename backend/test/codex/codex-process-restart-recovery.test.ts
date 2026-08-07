@@ -33,6 +33,7 @@ function createProject(root: string, ledger: Record<string, unknown> | null, pro
   const decisionOsRoot = join(root, '.decision-os');
   mkdirSync(decisionOsRoot, { recursive: true });
   writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: projectId, name: projectId }));
+  writeFileSync(join(decisionOsRoot, '.settings.json'), JSON.stringify({ federationNodeId: 'local' }));
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
     ledgers: [
       ...(ledger ? [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }] : []),

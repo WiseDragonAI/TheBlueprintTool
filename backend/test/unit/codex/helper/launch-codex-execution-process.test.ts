@@ -16,6 +16,16 @@ function processExists(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
+async function awaitDetachedSettlement<T>(promise: Promise<T>): Promise<T> {
+  // The production launcher is intentionally unreferenced so a replacement server can exit.
+  const testOwner = setInterval(() => undefined, 1_000);
+  try {
+    return await promise;
+  } finally {
+    clearInterval(testOwner);
+  }
+}
+
 test('spawn metadata failure kills the new process group before returning the error', async () => {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-launch-failure-'));
   const stdoutFile = join(root, 'run.jsonl');
@@ -83,7 +93,7 @@ test('asynchronous settlement failures are reported without becoming unhandled r
       onSpawn() {},
       async onSettled() { throw new Error('injected asynchronous settlement failure'); },
     });
-    const observed = await failure;
+    const observed = await awaitDetachedSettlement(failure);
     assert.equal(observed.operation, 'settle-codex-process');
     assert.match(observed.error.message, /injected asynchronous settlement failure/);
   } finally {
@@ -120,10 +130,10 @@ test('execution deadline stops a non-terminating Codex process and reports the s
       onSpawn(child) { childPid = child.pid ?? 0; },
       onSettled() { resolveSettlement(); },
     });
-    const observed = await failure;
+    const observed = await awaitDetachedSettlement(failure);
     assert.equal(observed.operation, 'codex-execution-timeout');
     assert.match(observed.error.message, /exceeded 25ms/);
-    await settlement;
+    await awaitDetachedSettlement(settlement);
     assert.equal(processExists(childPid), false);
     let unrelatedPid = 0;
     let resolveUnrelatedSettlement!: () => void;
@@ -147,7 +157,7 @@ test('execution deadline stops a non-terminating Codex process and reports the s
       onSpawn(child) { unrelatedPid = child.pid ?? 0; },
       onSettled() { resolveUnrelatedSettlement(); },
     });
-    await unrelatedSettlement;
+    await awaitDetachedSettlement(unrelatedSettlement);
     assert.ok(unrelatedPid > 0);
     assert.equal(processExists(unrelatedPid), false);
   } finally {

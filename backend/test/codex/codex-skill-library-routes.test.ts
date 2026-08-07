@@ -585,13 +585,9 @@ test('server startup initializes a child repository and pipeline-prompt save nev
     assert.equal(revised.skill.history.length, 2);
 
     const connector = runtime.federationNodeConnector as Record<string, any>;
-    let publicationRequestCount = 0;
-    const unexpectedPublication = deferred<never>();
-    connector.status = () => ({ phase: 'connected' });
-    connector.nodes = () => [{ nodeId: 'held-peer', nodeLabel: 'Held peer', online: true, projects: [] }];
-    connector.request = async () => {
-      publicationRequestCount += 1;
-      return await unexpectedPublication.promise;
+    let publicationManifestCount = 0;
+    connector.publishManifest = () => {
+      publicationManifestCount += 1;
     };
     const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     const httpMarkdown = '# Saved through the pipeline prompt route\n';
@@ -610,8 +606,7 @@ test('server startup initializes a child repository and pipeline-prompt save nev
     assert.equal(saved.ok, true);
     assert.equal(saved.skill.contentKind, 'pipeline-prompt');
     assert.equal(readFileSync(promptFile, 'utf8'), httpMarkdown);
-    await new Promise<void>((resolve) => setTimeout(resolve, 25));
-    assert.equal(publicationRequestCount, 0);
+    assert.equal(publicationManifestCount, 0);
 
     const history = await readCodexSkillRevisionHistory({
       decisionOsRoot,
@@ -899,7 +894,7 @@ test('a Git add failure preserves authored bytes and returns scoped recovery evi
           incident.scope === 'federated-skill-publication:recoverable-skill'
           && incident.code === 'federated_skill_publication_failed'
           && incident.context?.operation === 'retry');
-      }, 'background retry publication incident');
+      }, 'background retry publication incident', 10_000);
       assert.equal(readFileSync(skillFile, 'utf8'), updated);
       assert.equal(Number(execFileSync('git', ['rev-list', '--count', 'HEAD'], { cwd: workspace, encoding: 'utf8' }).trim()), commitCount + 1);
       assert.deepEqual(

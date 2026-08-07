@@ -311,7 +311,15 @@ test('card skill process route creates a linked output card and launches codex',
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
   const runtime: Record<string, unknown> = {};
-  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  createHttpServer({
+    action_payload: {
+      port: 0,
+      host: '127.0.0.1',
+      // Keep this isolated workspace independent from launcher-owned node settings.
+      repositorySettingsFile: join(workspace, '.decision-os', '.settings.json'),
+    },
+    runtime_state: runtime,
+  });
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;

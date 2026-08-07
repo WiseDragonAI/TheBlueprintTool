@@ -9,6 +9,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { launchCodexExecutionProcess, type CodexProcessSettlement } from '@backend/business/codex/helper/launch-codex-execution-process.js';
 
+async function awaitDetachedSettlement<T>(promise: Promise<T>): Promise<T> {
+  // The production launcher is intentionally unreferenced so a replacement server can exit.
+  const testOwner = setInterval(() => undefined, 1_000);
+  try {
+    return await promise;
+  } finally {
+    clearInterval(testOwner);
+  }
+}
+
 test('launch binds Codex stdio directly to durable files', async (context) => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-direct-codex-stdio-'));
   context.after(() => rmSync(workspace, { recursive: true, force: true }));
@@ -47,7 +57,7 @@ test('launch binds Codex stdio directly to durable files', async (context) => {
     },
     onSettled: resolveSettlement,
   });
-  const settlement = await settlementPromise;
+  const settlement = await awaitDetachedSettlement(settlementPromise);
 
   assert.equal(settlement.kind, 'close');
   assert.equal(settlement.exitCode, 0);

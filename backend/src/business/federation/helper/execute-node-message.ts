@@ -181,9 +181,9 @@ export async function executeNodeMessage(input: {
         pendingFailure = error;
         signalCodexProcessTree({ child, signal: 'SIGTERM' });
         forceKillTimer = setTimeout(() => signalCodexProcessTree({ child, signal: 'SIGKILL' }), 2_000);
-        forceKillTimer.unref?.();
         forcedSettlementTimer = setTimeout(() => { void settle(error, null); }, 5_000);
-        forcedSettlementTimer.unref?.();
+        // WHAT: Keep cancellation escalation and forced settlement referenced.
+        // WHY: The detached child and its pending execution promise do not keep Node alive.
       };
       const onAbort = (): void => stop(new Error('Node message execution was cancelled.'));
       input.signal?.addEventListener('abort', onAbort, { once: true });
@@ -250,7 +250,8 @@ export async function executeNodeMessage(input: {
         }
       };
       const executionDeadline = setTimeout(() => stop(new Error(`Node message execution exceeded ${executionTimeout}ms.`)), executionTimeout);
-      executionDeadline.unref?.();
+      // WHAT: Keep direct node-message execution alive through its bounded terminal transition.
+      // WHY: Capacity must release even when detached child-process events never arrive.
       child.once('error', (error) => { void settle(error, null); });
       child.once('close', (code) => { void settle(null, code); });
     });

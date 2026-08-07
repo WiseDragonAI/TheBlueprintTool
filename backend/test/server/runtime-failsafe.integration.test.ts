@@ -12,7 +12,14 @@ import { runtimeIncidentReviewCardId, runtimeIncidentReviewProjectId } from '@ba
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import { createTaskExecutionLaunchRequest, type TaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
 
-test('normal health reports the active release identity', async () => {
+test('normal health reports the active release identity', async (context) => {
+  const previousDeliveryProtocol = process.env.DECISION_OS_DELIVERY_PROTOCOL;
+  // Exercise the protocol-1 fixture without inheriting the invoking pipeline's protocol.
+  process.env.DECISION_OS_DELIVERY_PROTOCOL = '1';
+  context.after(() => {
+    if (previousDeliveryProtocol === undefined) delete process.env.DECISION_OS_DELIVERY_PROTOCOL;
+    else process.env.DECISION_OS_DELIVERY_PROTOCOL = previousDeliveryProtocol;
+  });
   const home = mkdtempSync(join(tmpdir(), 'decision-os-release-health-'));
   const decisionOsRoot = join(home, '.decision-os');
   const releaseSha = 'a'.repeat(40);
