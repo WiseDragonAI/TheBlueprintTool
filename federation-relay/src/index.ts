@@ -26,6 +26,7 @@ import {
   canonicalFederationRepairBuckets,
   claimFederationRepairBuckets,
   createFederationRepairRecord,
+  currentFederationRepairRecord,
   federationRepairRecordKey,
   type FederationRepairRecord,
 } from '../../shared/federation-repair-guard';
@@ -293,9 +294,9 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const repairKey = federationRepairRecordKey(sender, projectId);
     const admitted = await this.ctx.storage.transaction(async (transaction) => {
       const existing = await transaction.get<FederationRepairRecord>(repairKey);
-      // WHAT: Suppress every later peer summary in the same relay-root generation.
-      // WHY: Varying peer manifests must not purchase repeated project scans.
-      if (existing?.generation === generation) return false;
+      // WHAT: Reuse only a repair record written by the response-complete contract.
+      // WHY: This suppresses repeated scans while allowing one retry for legacy premature claims.
+      if (currentFederationRepairRecord(existing, generation)) return false;
       await transaction.put(repairKey, createFederationRepairRecord({ nodeId: sender, projectId, generation, peerRoot, peerManifestDigest }));
       return true;
     });
@@ -347,12 +348,10 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const repairKey = federationRepairRecordKey(sender, projectId);
     const admitted = await this.ctx.storage.transaction(async (transaction) => {
       const retained = await transaction.get<FederationRepairRecord>(repairKey);
-      const existing = retained?.generation === generation
+      const existing = currentFederationRepairRecord(retained, generation)
         ? retained
         : createFederationRepairRecord({ nodeId: sender, projectId, generation });
-      const claimed = claimFederationRepairBuckets(existing, buckets);
-      await transaction.put(repairKey, claimed.record);
-      return claimed.admitted;
+      return claimFederationRepairBuckets(existing, buckets).admitted;
     });
     // WHAT: Suppress a request whose buckets were already served in this durable generation.
     // WHY: Reconnect and repeated frames must perform zero new entity reads.
@@ -364,6 +363,15 @@ export class FederationRelayV4 extends DurableObject<Env> {
     }
     this.sendStateEntities(socket, projectId, entities);
     await this.sendStateSummary(socket, projectId);
+    await this.ctx.storage.transaction(async (transaction) => {
+      const retained = await transaction.get<FederationRepairRecord>(repairKey);
+      const existing = currentFederationRepairRecord(retained, generation)
+        ? retained
+        : createFederationRepairRecord({ nodeId: sender, projectId, generation });
+      // WHAT: Claim only buckets whose entity response and terminal summary completed.
+      // WHY: A failed read, encoding, send, or summary must remain retryable after reconnect.
+      await transaction.put(repairKey, claimFederationRepairBuckets(existing, admitted).record);
+    });
   }
 
   private async publishCatalog(): Promise<void> {
