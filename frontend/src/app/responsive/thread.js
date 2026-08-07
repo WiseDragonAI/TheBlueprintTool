@@ -37,6 +37,12 @@ import { hydrateThreadViewportState, saveThreadPanelScrollPositions } from '/src
 import { readPersistedState } from '/src/runtime/persistence/helper/read-persisted-state.js';
 import { deleteNoteController } from '/src/runtime/thread/controller/delete-note-controller.js';
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
+import { taskClockFromResponse } from '/src/runtime/refresh/helper/task-causal-clock.js';
+import {
+  releaseSettledOptimisticNotes,
+  settlePendingTaskMutationReceipts,
+} from '/src/runtime/refresh/helper/pending-task-mutation-receipts.js';
+import { acceptResponsiveTaskClock } from './task-clock-admission.js';
 
 let currentCard = null;
 let currentProjectId = '';
@@ -327,6 +333,16 @@ async function refreshThreadLedger(optimisticRunId = '') {
   );
   if (!ownsRefresh()) return;
   if (!response.ok) return;
+  const taskClock = taskClockFromResponse(response);
+  if (!acceptResponsiveTaskClock({ projectId: owner.projectId, ledgerId: owner.ledgerId }, taskClock)) return;
+  if (taskClock) {
+    const settled = settlePendingTaskMutationReceipts({
+      projectId: owner.projectId,
+      ledgerId: owner.ledgerId,
+      taskClock,
+    });
+    releaseSettledOptimisticNotes(canvasState.activeLedger, settled);
+  }
   const slice = await response.json();
   if (!ownsRefresh()) return;
   const refreshed = await onLedgerRefresh(owner.ledgerId, owner.replicaNodeId);
@@ -336,6 +352,7 @@ async function refreshThreadLedger(optimisticRunId = '') {
     refreshedLedger: refreshed,
     slice,
     currentCard,
+    threadId: owner.threadId,
     optimisticRunId,
   });
   if (!reconciled.ledger) return;

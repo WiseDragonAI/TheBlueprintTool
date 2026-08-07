@@ -2,11 +2,12 @@
  * WHAT: Ensures the hidden ledgers canvas mirrors the canonical ledgers registry.
  * WHY: Existing workspaces need automatic migration from legacy tabs into linked ledger cards.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { writeCanonicalDecisionOsState } from '../effect/write-canonical-decision-os-state.js';
 import { readCanonicalDecisionOsState } from './read-canonical-decision-os-state.js';
 import type { DecisionOsLedgerEntry } from './normalize-decision-os-state.js';
+import { replaceTextFileAtomically } from './card-content-file.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -43,8 +44,17 @@ export function ensureLedgersCanvasDocument(input: { decisionOsRoot: string }): 
 } {
   const stateRead = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(input.decisionOsRoot, 'state.json'), writeBack: true } });
   const path = resolve(input.decisionOsRoot, 'ledgers-canvas.json');
-  const existing = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
-  const document = isRecord(existing) ? existing : {};
+  const existing = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) as unknown : {};
+  if (!isRecord(existing)) throw new Error('invalid_ledgers_canvas_root');
+  const document = existing;
+  for (const field of ['cards', 'annotations', 'relationships'] as const) {
+    if (Object.hasOwn(document, field) && (!Array.isArray(document[field]) || (document[field] as unknown[]).some((entry) => !isRecord(entry)))) {
+      throw new Error(`invalid_ledgers_canvas_${field}`);
+    }
+  }
+  for (const field of ['diagramSize', 'viewport', 'notes'] as const) {
+    if (Object.hasOwn(document, field) && !isRecord(document[field])) throw new Error(`invalid_ledgers_canvas_${field}`);
+  }
   document.modelName = 'ledgers-canvas';
   document.diagramSize = isRecord(document.diagramSize) ? document.diagramSize : { width: 5200, height: 2600 };
   document.viewport = isRecord(document.viewport) ? document.viewport : { x: 0, y: 0, scale: 0.42 };
@@ -87,8 +97,7 @@ export function ensureLedgersCanvasDocument(input: { decisionOsRoot: string }): 
   document.annotations = annotations;
   document.relationships = relationships;
   document.notes = notes;
-  mkdirSync(input.decisionOsRoot, { recursive: true });
-  writeFileSync(path, JSON.stringify(document, null, 2));
+  replaceTextFileAtomically(path, JSON.stringify(document, null, 2));
   if (stateChanged || JSON.stringify(ledgers) !== JSON.stringify(stateRead.ledgers)) {
     writeCanonicalDecisionOsState({ file: stateRead.file, ledgers });
   }

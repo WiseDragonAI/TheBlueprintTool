@@ -13,6 +13,7 @@ export function createRuntimeIncidentReviewScheduler(input: {
   intervalMs: number;
   targetProject: () => DecisionOsProject | null;
   taskState: (project: DecisionOsProject) => ProjectTaskState;
+  materializeResources: (project: DecisionOsProject, keys: string[]) => Promise<void>;
   assignedNodeId: () => string;
   paused: () => boolean;
   onChanged: (projectId: string) => void;
@@ -57,6 +58,7 @@ export function createRuntimeIncidentReviewScheduler(input: {
         updatedAt: snapshot.updatedAt,
         incidents,
         incidentLedgerFile: input.incidentLedger.file,
+        materializeResources: (keys) => input.materializeResources(project!, keys),
       });
       synchronizedDigest = digest;
       recordedBootstrapDigest = '';

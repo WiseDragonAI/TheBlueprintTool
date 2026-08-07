@@ -13,10 +13,18 @@ import {
 function workspaceFixture(): { root: string; runtime: Record<string, unknown> } {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-voice-lifecycle-'));
   mkdirSync(join(root, '.decision-os'), { recursive: true });
+  mkdirSync(join(root, '.decision-os', 'threads', 'specs'), { recursive: true });
   writeFileSync(join(root, '.decision-os', 'state.json'), JSON.stringify({
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
   }));
-  writeFileSync(join(root, '.decision-os', 'specs.json'), JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {} }));
+  writeFileSync(join(root, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '\n');
+  writeFileSync(join(root, '.decision-os', 'specs.json'), JSON.stringify({
+    cards: [],
+    annotations: [],
+    relationships: [],
+    notes: {},
+    threadFiles: { 'thread-card-a': '.decision-os/threads/specs/thread-card-a.md' },
+  }));
   return { root, runtime: { decisionOsRoot: join(root, '.decision-os') } };
 }
 
@@ -45,7 +53,7 @@ test('voice lifecycle persists ordered phases and exposes one targeted terminal 
     assert.deepEqual(Object.keys(status.note as Record<string, unknown>).sort(), [
       'acceptedAt', 'audioPersistedAt', 'completedAt', 'error', 'id', 'message', 'providerSettledAt',
       'providerStartedAt', 'revision', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'voiceFileRef',
-      'codexQueueCardId', 'codexQueueLaunchMode', 'codexQueuePipelineId', 'codexQueueRequestId'
+      'codexQueueCardId', 'codexQueueLaunchMode', 'codexQueuePipelineId', 'codexQueueRequestId', 'voiceAttemptId'
     ].sort());
     const note = status.note as Record<string, unknown>;
     assert.equal(note.status, 'transcribed');
@@ -55,6 +63,7 @@ test('voice lifecycle persists ordered phases and exposes one targeted terminal 
     assert.equal(note.codexQueueLaunchMode, '');
     assert.equal(note.codexQueueCardId, '');
     assert.equal(note.codexQueuePipelineId, '');
+    assert.match(String(note.voiceAttemptId), /^voice-attempt-/);
     const timestamps = ['uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt'].map((key) => Date.parse(String(note[key])));
     assert.equal(timestamps.every(Number.isFinite), true);
     assert.deepEqual([...timestamps].sort((a, b) => a - b), timestamps);
@@ -133,7 +142,16 @@ test('voice lifecycle rejects an older server phase write after terminal persist
       runtime: fixture.runtime,
       ledgerId: 'specs',
       threadId: 'thread-card-a',
-      note: { id: 'note-stale-write', body: 'Voice uploaded.', status: 'transcribing', revision: 2 },
+      note: {
+        id: 'note-stale-write',
+        body: 'Voice uploaded.',
+        voiceAttemptId: String((readVoiceTranscriptionStatusController({
+          action_payload: { ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-stale-write' },
+          runtime_state: fixture.runtime
+        }).note as Record<string, unknown>).voiceAttemptId),
+        status: 'transcribing',
+        revision: 2,
+      },
       reason: 'test-stale-write'
     });
     assert.equal(stale.ok, false);
@@ -145,6 +163,54 @@ test('voice lifecycle rejects an older server phase write after terminal persist
     assert.equal((status.note as Record<string, unknown>).status, 'transcribed');
     assert.equal((status.note as Record<string, unknown>).revision, 4);
     assert.equal((status.note as Record<string, unknown>).message, 'Durable terminal transcript.');
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('voice lifecycle rejects equal-revision conflicts and higher-revision backward phases', async () => {
+  const fixture = workspaceFixture();
+  try {
+    await startVoiceUploadOrchestrationController({
+      action_payload: {
+        ledgerId: 'specs',
+        threadId: 'thread-card-a',
+        noteId: 'note-causal-write',
+        audioBuffer: Buffer.from('voice'),
+        mimeType: 'audio/webm',
+        transcriptionText: 'Durable terminal transcript.',
+        awaitCompletion: true
+      },
+      runtime_state: fixture.runtime
+    });
+    const terminal = readVoiceTranscriptionStatusController({
+      action_payload: { ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-causal-write' },
+      runtime_state: fixture.runtime
+    }).note as Record<string, unknown>;
+    for (const revision of [Number(terminal.revision), Number(terminal.revision) + 1]) {
+      const rejected = await applyNotePatch({
+        runtime: fixture.runtime,
+        ledgerId: 'specs',
+        threadId: 'thread-card-a',
+        note: {
+          id: 'note-causal-write',
+          body: 'Voice uploaded.',
+          voiceFileRef: String(terminal.voiceFileRef),
+          voiceAttemptId: String(terminal.voiceAttemptId),
+          status: 'transcribing',
+          revision,
+        },
+        reason: 'test-backward-write'
+      });
+      assert.equal(rejected.ok, false);
+      assert.equal(rejected.statusCode, 409);
+    }
+    const retained = readVoiceTranscriptionStatusController({
+      action_payload: { ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-causal-write' },
+      runtime_state: fixture.runtime
+    }).note as Record<string, unknown>;
+    assert.equal(retained.status, 'transcribed');
+    assert.equal(retained.message, 'Durable terminal transcript.');
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }

@@ -311,6 +311,11 @@ export function createTaskExecutionRepository(input: {
     if (!Number.isFinite(Date.parse(changedAt))) throw new Error('invalid_task_execution_timestamp');
     if (Date.parse(changedAt) < Date.parse(current.lifecycle.phaseSince)) throw new Error(`task_execution_timestamp_regression:${executionId}`);
     const terminal = terminalPhases.has(transition.phase);
+    if (terminal
+      && ['starting', 'running', 'cancelling'].includes(current.lifecycle.phase)
+      && (!current.artifacts.jsonl || !current.artifacts.stderr)) {
+      throw new Error(`task_execution_terminal_artifacts_required:${executionId}`);
+    }
     const requeued = current.lifecycle.phase === 'interrupted' && transition.phase === 'queued';
     const lifecycle: TaskExecutionLifecycle = {
       phase: transition.phase,
@@ -345,7 +350,7 @@ export function createTaskExecutionRepository(input: {
     if (!current) throw new Error(`task_execution_not_found:${executionId}`);
     // WHAT: Permit immutable artifact capture before the terminal lifecycle contribution.
     // WHY: Requiring terminal state here structurally created a replicated terminal window with no durable evidence.
-    if (!['running', 'cancelling', ...terminalPhases].includes(current.lifecycle.phase)) {
+    if (!['starting', 'running', 'cancelling', ...terminalPhases].includes(current.lifecycle.phase)) {
       throw new Error(`task_execution_artifacts_phase_invalid:${executionId}:${current.lifecycle.phase}`);
     }
     const changedAt = artifacts.changedAt ?? now().toISOString();

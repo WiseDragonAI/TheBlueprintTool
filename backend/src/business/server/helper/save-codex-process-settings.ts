@@ -9,6 +9,10 @@ import { readDecisionOsSettings } from './read-decision-os-settings.js';
 
 type AnyRecord = Record<string, unknown>;
 
+function isRecord(value: unknown): value is AnyRecord {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 export const minimumConcurrentCodexProcesses = 1;
 export const maximumConcurrentCodexProcesses = 32;
 
@@ -37,7 +41,11 @@ export function saveCodexProcessSettings(input: {
   const settingsFile = resolve(input.decisionOsRoot, '.settings.json');
   let settings: AnyRecord = {};
   try {
-    settings = existsSync(settingsFile) ? JSON.parse(readFileSync(settingsFile, 'utf8')) as AnyRecord : {};
+    const parsed = existsSync(settingsFile) ? JSON.parse(readFileSync(settingsFile, 'utf8')) as unknown : {};
+    if (!isRecord(parsed)) {
+      return { ok: false, statusCode: 409, code: 'invalid_project_settings_root', error: 'Project settings must be a JSON object; the existing file was preserved.' };
+    }
+    settings = parsed;
   } catch (error) {
     return { ok: false, statusCode: 500, error: `Could not read project settings: ${error instanceof Error ? error.message : String(error)}.` };
   }

@@ -103,6 +103,10 @@ test('indexes pipeline identity and preserves legal awaited lifecycle plus termi
     /task_execution_timestamp_regression:execution-pipeline/,
   );
   await repository.transition('execution-pipeline', { phase: 'cancelling' });
+  const finalized = await repository.finalizeArtifacts('execution-pipeline', {
+    jsonl: { hash: 'a'.repeat(64), bytes: 128, mediaType: 'application/x-ndjson' },
+    stderr: { hash: 'b'.repeat(64), bytes: 0, mediaType: 'text/plain' },
+  });
   const cancelled = await repository.transition('execution-pipeline', {
     phase: 'cancelled',
     result: { status: 'cancelled', summary: 'Cancelled by operator.' },
@@ -113,11 +117,6 @@ test('indexes pipeline identity and preserves legal awaited lifecycle plus termi
   assert.equal(cancelled.lifecycle.finishedAt, '2026-07-23T01:00:10.000Z');
   assert.deepEqual(repository.byPhase('cancelled').map((record) => record.metadata.executionId), ['execution-pipeline']);
   await assert.rejects(repository.transition('execution-pipeline', { phase: 'running' }), /task_execution_transition_invalid:cancelled:running/);
-
-  const finalized = await repository.finalizeArtifacts('execution-pipeline', {
-    jsonl: { hash: 'a'.repeat(64), bytes: 128, mediaType: 'application/x-ndjson' },
-    stderr: { hash: 'b'.repeat(64), bytes: 0, mediaType: 'text/plain' },
-  });
   assert.equal(finalized.artifacts.revision, 2);
   assert.equal(finalized.artifacts.jsonl?.hash, 'a'.repeat(64));
   assert.equal(finalized.artifacts.stderr?.hash, 'b'.repeat(64));

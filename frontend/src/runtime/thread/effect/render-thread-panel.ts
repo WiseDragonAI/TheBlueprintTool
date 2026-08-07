@@ -26,6 +26,7 @@ import { renderThreadJumpButton } from './render-thread-jump-button.js';
 import { renderThreadNotes } from './render-thread-notes.js';
 import { syncThreadCodexRunControls } from './sync-thread-codex-run-controls.js';
 import { restorePendingVoiceUploads } from '../../voice/effect/restore-pending-voice-uploads.js';
+import { restorePendingThreadAssets } from './restore-pending-thread-assets.js';
 import { SVG_NS } from '../../dom.js';
 
 const threadTabOrder: ThreadPanelTab[] = ['thread', 'codex-log'];
@@ -278,6 +279,7 @@ export function renderThreadPanel(): void {
   telemetry('render-thread-panel', { threadId: activeThreadId, tab: activeTab });
   renderThreadNotes();
   void restorePendingVoiceUploads(activeThreadId);
+  void restorePendingThreadAssets(activeThreadId);
   const previousRenderedThreadId = String(state.renderedThreadId ?? '');
   // WHAT: Release the previous task-log subscription before binding the newly selected thread.
   // WHY: A hidden thread must not retain its poll timer, EventSource ownership, or in-flight request.

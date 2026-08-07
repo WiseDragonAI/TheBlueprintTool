@@ -7,9 +7,10 @@ import type {
   TaskExecutionStateSummary,
 } from '../../../../../shared/schemas/task-execution-presentation-types.js';
 import { projectReplicaRequestPath, replicaRequestInit } from '../../project/helper/project-request-scope.js';
+import { taskClockFromResponse } from '../../refresh/helper/task-causal-clock.js';
 
 export type TaskExecutionReadResult<T> =
-  | { ok: true; value: T }
+  | { ok: true; value: T; taskClock: Record<string, number> | null }
   | { ok: false; error: string };
 
 async function requestJson<T>(input: {
@@ -33,7 +34,7 @@ async function requestJson<T>(input: {
     );
     const body = await response.json().catch(() => ({})) as Record<string, unknown>;
     if (!response.ok) return { ok: false, error: String(body.error ?? `Request failed with HTTP ${response.status}.`) };
-    return { ok: true, value: body as T };
+    return { ok: true, value: body as T, taskClock: taskClockFromResponse(response) };
   } catch (error) {
     return {
       ok: false,

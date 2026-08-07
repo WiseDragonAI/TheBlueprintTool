@@ -29,7 +29,7 @@ test('content manifest includes card, thread, and referenced managed assets with
   assert.equal(JSON.stringify(manifest).includes('status'), false);
 });
 
-test('content manifest covers normal file links and voice metadata across ledgers', (context) => {
+test('content manifest covers normal file links while excluding raw voice capture', (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-content-coverage-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(resolve(root, 'threads', 'tasks'), { recursive: true });
@@ -52,8 +52,8 @@ test('content manifest covers normal file links and voice metadata across ledger
   assert.deepEqual(manifest.resources.map((entry) => entry.key), [
     '.decision-os/files/manual.pdf',
     '.decision-os/threads/tasks/thread-a.md',
-    '.decision-os/voice-uploads/note.wav',
   ]);
+  assert.equal(manifest.resources.some((entry) => entry.key.includes('voice-uploads')), false);
 });
 
 test('a referenced workspace object is served only while its path still matches the advertised hash', async (context) => {

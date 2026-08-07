@@ -3,6 +3,9 @@
  * WHY: Controllers and the scheduler need one typed authority without importing the HTTP server composition root.
  */
 import type { ChildProcess } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { replaceTextFileAtomically } from '../../ledger/helper/card-content-file.js';
 import type { ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import type { TaskExecutionRouter } from './task-execution-router.js';
 
@@ -96,4 +99,28 @@ export async function finalizeTaskExecutionArtifacts(input: {
     telemetry: input.telemetry,
     result: input.result,
   });
+}
+
+export async function finalizeSyntheticTaskExecutionArtifacts(input: {
+  runtime: AnyRecord;
+  executionId: string;
+  reason: string;
+}): Promise<void> {
+  const state = taskExecutionState(input.runtime);
+  const current = state?.executions.find(input.executionId);
+  if (!state || !current || (current.artifacts.jsonl && current.artifacts.stderr)) return;
+  const decisionOsRoot = String(input.runtime.decisionOsRoot ?? resolve(state.store.root, '..', '..')).trim();
+  if (!decisionOsRoot) throw new Error(`task_execution_evidence_root_missing:${input.executionId}`);
+  const safeExecutionId = input.executionId.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'execution';
+  const directory = resolve(decisionOsRoot, 'task-execution-evidence', safeExecutionId);
+  const jsonl = resolve(directory, 'recovery.jsonl');
+  const stderr = resolve(directory, 'recovery.stderr.log');
+  mkdirSync(directory, { recursive: true });
+  replaceTextFileAtomically(jsonl, `${JSON.stringify({
+    type: 'decision_os.execution_recovery',
+    executionId: input.executionId,
+    reason: input.reason,
+  })}\n`);
+  replaceTextFileAtomically(stderr, `${input.reason}\n`);
+  await finalizeTaskExecutionArtifacts({ runtime: input.runtime, executionId: input.executionId, jsonl, stderr });
 }

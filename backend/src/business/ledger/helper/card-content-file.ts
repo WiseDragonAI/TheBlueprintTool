@@ -55,22 +55,26 @@ export function hydrateLedgerCardContent(ledger: AnyRecord, decisionOsRoot: stri
   return ledger;
 }
 
-export function writeCardDescriptionFile(input: { decisionOsRoot: string; card: AnyRecord; description: string; ledgerPath: string }): void {
-  const comment = commentFor(input.card);
-  const contentFile = typeof comment.contentFile === 'string' ? comment.contentFile : cardContentFileRef(input.ledgerPath, input.card);
-  const file = resolveCardContentFile(input.decisionOsRoot, contentFile);
-  if (!file) throw new Error(`Invalid card content file for ${String(input.card.id ?? '')}`);
+export function replaceTextFileAtomically(file: string, contents: string): void {
   mkdirSync(dirname(file), { recursive: true });
   const temporary = `${file}.tmp-${process.pid}-${randomUUID()}`;
   try {
-    // WHAT: Replace watched card Markdown through one atomic rename.
-    // WHY: A crash during a direct write must not expose truncated bytes to the content watcher.
-    writeFileSync(temporary, input.description, { encoding: 'utf8', flag: 'wx' });
+    writeFileSync(temporary, contents, { encoding: 'utf8', flag: 'wx' });
     renameSync(temporary, file);
   } catch (error) {
     rmSync(temporary, { force: true });
     throw error;
   }
+}
+
+export function writeCardDescriptionFile(input: { decisionOsRoot: string; card: AnyRecord; description: string; ledgerPath: string }): void {
+  const comment = commentFor(input.card);
+  const contentFile = typeof comment.contentFile === 'string' ? comment.contentFile : cardContentFileRef(input.ledgerPath, input.card);
+  const file = resolveCardContentFile(input.decisionOsRoot, contentFile);
+  if (!file) throw new Error(`Invalid card content file for ${String(input.card.id ?? '')}`);
+  // WHAT: Replace watched card Markdown through one atomic rename.
+  // WHY: A crash during a direct write must not expose truncated bytes to the content watcher.
+  replaceTextFileAtomically(file, input.description);
   const nextComment: AnyRecord = { ...comment, contentFile };
   delete nextComment.what;
   input.card.comment = nextComment;
@@ -188,7 +192,9 @@ export function duplicateCardContentFile(input: { decisionOsRoot: string; ledger
     : typeof sourceComment.what === 'string'
       ? sourceComment.what
       : undefined;
-  if (sourceBody === undefined) return;
+  // WHAT: Reject a copy whose source Markdown has not been materialized.
+  // WHY: A missing replica sidecar is unavailable content, not an empty card body.
+  if (sourceBody === undefined) throw new Error('task_source_card_content_not_materialized');
   writeCardDescriptionFile({
     decisionOsRoot: input.decisionOsRoot,
     card: input.targetCard,

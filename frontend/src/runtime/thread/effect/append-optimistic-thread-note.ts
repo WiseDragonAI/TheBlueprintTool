@@ -8,6 +8,8 @@ import { ensureCoordinatorOwnedActiveLedger } from '../../ledger/effect/reconcil
 import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 
 export type OptimisticThreadNoteInput = {
+  noteId?: string;
+  createdAt?: string;
   threadId: string;
   body: string;
   source?: string;
@@ -21,12 +23,12 @@ export function appendOptimisticThreadNote(input: OptimisticThreadNoteInput): st
   const ledger = ensureCoordinatorOwnedActiveLedger(currentLedgerStateId());
   const notesByThread = normalizeLedgerNotes(ledger);
   const notes = notesByThread[input.threadId] ?? [];
-  const noteId = `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const noteId = input.noteId || `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   notes.push({
     id: noteId,
     role: 'operator',
     message: input.body,
-    timestamp: new Date().toISOString(),
+    timestamp: input.createdAt || new Date().toISOString(),
     voiceFileRef: input.voiceFileRef ?? '',
     status: input.status ?? '',
     error: input.error ?? '',

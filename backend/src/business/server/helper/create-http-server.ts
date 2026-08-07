@@ -890,6 +890,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (!project) throw new Error(`Task-state authority has no project ${projectId}.`);
       return taskStateForProject(project).projection().ledger;
     };
+    projectRuntime.taskContentHeads = (key: string) => {
+      const project = projectCatalogStore.projects().find((entry) => entry.id === projectId);
+      if (!project) throw new Error(`Task-state authority has no project ${projectId}.`);
+      return taskStateForProject(project).store.contentHeads(key);
+    };
     projectRuntime.materializeTaskResources = async (
       keys: string[],
       validate?: (key: string, body: string) => void | Promise<void>,
@@ -906,7 +911,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         validate,
       });
     };
-    projectRuntime.persistTaskLedgerMutation = async (mutation: LedgerMutation): Promise<{ ledger: AnyRecord }> => {
+    projectRuntime.persistTaskLedgerMutation = async (mutation: LedgerMutation): Promise<{
+      ledger: AnyRecord;
+      taskClock: Record<string, number>;
+      receipt: Record<string, unknown>;
+    }> => {
       const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
       if (!project) throw new Error(`Task-state authority has no available project ${projectId}.`);
       const state = taskStateForProject(project);
@@ -934,11 +943,22 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         mutation,
       });
       if (mutationResult.error) {
-        throw new Error(String(mutationResult.error.body.error ?? 'Task ledger mutation failed.'));
+        const error = new Error(String(mutationResult.error.body.error ?? 'Task ledger mutation failed.')) as Error & { statusCode: number };
+        error.statusCode = mutationResult.error.statusCode;
+        throw error;
       }
       const committed = await state.executeMutation(mutation, before, after);
       if (committed.changed) controlRoomProjectionStore?.invalidate(projectId, committed.localChanges);
-      return { ledger: committed.ledger };
+      const taskClock = state.store.clientClock();
+      return {
+        ledger: committed.ledger,
+        taskClock,
+        receipt: {
+          mutationId: String(mutation.mutationId ?? ''),
+          clock: taskClock,
+          entities: committed.localChanges,
+        },
+      };
     };
     let watcher: ReturnType<typeof watchProjectFiles> | null = null;
     const broadcast = (message: string): void => {
@@ -950,6 +970,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const hasCompleteScope = Boolean(ledgerId && (event.kind !== 'thread-content' || String(event.threadId ?? '')));
       const resolvedEvent = hasCompleteScope ? null : resolveCardContentChange({
         decisionOsRoot: activeDecisionOsRoot,
+        taskProjection: () => activeTaskState?.projection().ledger ?? null,
         change: {
           contentFile: String(event.contentFile ?? ''),
           file: String(event.file ?? resolve(activeDecisionOsRoot, String(event.contentFile ?? '').replace(/^\/?\.decision-os\//, ''))),
@@ -1099,6 +1120,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     };
     watcher = watchProjectFiles({
       decisionOsRoot: activeDecisionOsRoot,
+      taskProjection: () => activeTaskState?.projection().ledger ?? null,
       onContentChange: publishCard,
       onProjectChange: publishLedger,
       onError: (error, context) => {
@@ -1626,6 +1648,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     intervalMs: Number(payload.runtimeIncidentReviewIntervalMs ?? 5_000),
     targetProject: () => projectCatalog().find((entry) => entry.available && entry.id === runtimeIncidentReviewProjectId) ?? null,
     taskState: taskStateForProject,
+    materializeResources: (project, keys) => materializeTaskResources({
+      projectId: project.id,
+      decisionOsRoot: project.decisionOsRoot,
+      keys,
+      store: taskStateForProject(project).store,
+      contentStore: federationContentStore,
+      drain: federationContentScheduler?.drain ?? null,
+    }),
     assignedNodeId: () => federation.localOwner().ownerNodeId,
     paused: () => pausedBackgroundComponents.has('runtime-incident-review'),
     onChanged: (projectId) => controlRoomProjectionStore?.invalidate(projectId),
@@ -2072,51 +2102,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           return;
         }
         const before = structuredClone(state.projection().ledger);
-        const threadId = String(mutation.note?.threadId ?? '');
-        if (threadId) {
-          const refs = before.threadFiles && typeof before.threadFiles === 'object' && !Array.isArray(before.threadFiles)
-            ? before.threadFiles as AnyRecord
-            : {};
-          const key = String(refs[threadId] ?? '');
-          if (!key) {
-            response.statusCode = 409;
-            response.end(JSON.stringify({ ok: false, error: 'task_thread_reference_missing', threadId }));
-            return;
-          }
-          const replicaRoot = resolve(masterDecisionOsRoot, 'cache', 'federation-task-state');
-          const localFile = resolve(replicaRoot, key.replace(/^\/?\.decision-os\//, ''));
-          const relativeFile = relative(replicaRoot, localFile);
-          if (!relativeFile || relativeFile.startsWith('..') || isAbsolute(relativeFile)) {
-            response.statusCode = 400;
-            response.end(JSON.stringify({ ok: false, error: 'task_thread_reference_invalid', threadId }));
-            return;
-          }
-          if (!existsSync(localFile)) {
-            const content = await readTaskContentOnDemand({
-              projectId: localProjectId,
-              store: state.store,
-              key,
-              contentStore: federationContentStore,
-              drain: federationContentScheduler?.drain ?? null,
-            });
-            if (!content.available || content.conflict) {
-              response.statusCode = 409;
-              response.end(JSON.stringify({
-                ok: false,
-                error: content.conflict ? 'task_thread_content_conflict' : 'task_thread_content_unavailable',
-                threadId,
-                candidates: content.candidates,
-              }));
-              return;
-            }
-            mkdirSync(dirname(localFile), { recursive: true });
-            const temporary = `${localFile}.install-${process.pid}-${Date.now()}`;
-            writeFileSync(temporary, content.body);
-            renameSync(temporary, localFile);
-          }
+        const replicaRoot = resolve(masterDecisionOsRoot, 'cache', 'federation-task-state');
+        try {
+          // WHAT: Use the same verified materialization boundary for replica and hosted task commands.
+          // WHY: A stale replica sidecar must never become the input to a newly published content head.
+          await materializeTaskMutationInputs({
+            projectId: localProjectId,
+            decisionOsRoot: replicaRoot,
+            ledger: before,
+            mutation,
+            store: state.store,
+            contentStore: federationContentStore,
+            drain: federationContentScheduler?.drain ?? null,
+          });
+        } catch (error) {
+          if (!(error instanceof TaskContentMaterializationError)) throw error;
+          response.statusCode = error.statusCode;
+          response.end(JSON.stringify({ ok: false, error: error.code, contentFile: error.key }));
+          return;
         }
         const after = structuredClone(before);
-        const replicaRoot = resolve(masterDecisionOsRoot, 'cache', 'federation-task-state');
         const replicaLedgerPath = resolve(replicaRoot, 'replica-ledgers', `${localProjectId}.json`);
         const mutationResult = applyLedgerMutation({
           decisionOsRoot: replicaRoot,
@@ -2550,6 +2555,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         response.end(JSON.stringify({ ok: false, error: 'task_execution_state_unavailable', taskId }));
         return;
       }
+      response.setHeader(
+        'x-decision-os-task-clock',
+        Buffer.from(JSON.stringify(executionState.store.clientClock())).toString('base64url'),
+      );
       // WHAT: Derive the complete lightweight hierarchy from the indexed Epoch 4 projection.
       // WHY: Opening a task must not read every JSONL artifact or depend on card session aliases.
       response.end(JSON.stringify(projectTaskExecutionState({
@@ -3010,6 +3019,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         pausedBackgroundComponents.delete('codex-process-scheduler');
         void scheduleGlobalCodexProcesses()
           .catch((error: unknown) => recordBackgroundFailure('codex-process-scheduler', 'settings-change-schedule', error));
+      } else if (result.code === 'invalid_project_settings_root') {
+        recordBackgroundFailure('project-settings', 'save-codex-process-settings', new Error(String(result.error ?? result.code)), {
+          decisionOsRoot: masterDecisionOsRoot,
+        });
       }
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
@@ -3028,6 +3041,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       try { body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord; } catch { body = {}; }
       const result = saveFederationSettings({ decisionOsRoot: masterDecisionOsRoot, runtime, value: body });
       if (result.ok === true) federation.reconfigure(result.settings);
+      else if (result.code === 'invalid_project_settings_root') {
+        recordBackgroundFailure('project-settings', 'save-federation-settings', new Error(String(result.error ?? result.code)), {
+          decisionOsRoot: masterDecisionOsRoot,
+        });
+      }
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
@@ -3480,6 +3498,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
+      if (requestUrl.searchParams.get('ledgerId') === 'tasks' && localProject) {
+        response.setHeader(
+          'x-decision-os-task-clock',
+          Buffer.from(JSON.stringify(taskStateForProject(localProject).store.clientClock())).toString('base64url'),
+        );
+      }
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
       return;
@@ -3927,6 +3951,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         controlRoomProjectionStore?.invalidate(localProject.id, delta.entities);
       }
       response.setHeader('content-type', 'application/json');
+      if (result.taskClock && typeof result.taskClock === 'object') {
+        response.setHeader(
+          'x-decision-os-task-clock',
+          Buffer.from(JSON.stringify(result.taskClock)).toString('base64url'),
+        );
+      }
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
       response.end(JSON.stringify({ body: result }));
       return;
@@ -4058,6 +4088,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         runtime_state: requestRuntime
       });
       response.setHeader('content-type', 'application/json');
+      if (result.taskClock && typeof result.taskClock === 'object') {
+        response.setHeader(
+          'x-decision-os-task-clock',
+          Buffer.from(JSON.stringify(result.taskClock)).toString('base64url'),
+        );
+      }
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
       response.end(JSON.stringify({ body: result }));
       return;

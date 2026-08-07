@@ -12,6 +12,10 @@ import { findTaskExecution } from '../helper/find-task-execution.js';
 import { taskExecutionDisplayStatus } from '../helper/task-execution-display-status.js';
 import { requestTaskExecutionPresentation, requestTaskExecutionState } from './request-task-execution-state.js';
 import { shouldAcceptReplicatedTaskState } from '../../refresh/helper/task-projection-acceptance.js';
+import {
+  completePendingTaskMutationReceipt,
+  pendingTaskMutationReceipt,
+} from '../../refresh/helper/pending-task-mutation-receipts.js';
 import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 import { stopThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
 import type { ThreadCodexRunLogIdentity } from './thread-codex-run-log-identity-types.js';
@@ -31,6 +35,7 @@ type TaskLogPoller = {
 
 const taskLogPollers = new Map<string, TaskLogPoller>();
 let executionEvents: EventSource | null = null;
+const activeExecutionPhases = new Set(['preparing', 'queued', 'starting', 'running', 'cancelling']);
 
 function recordState(name: string): Record<string, any> {
   // WHAT: Repair execution-presentation state maps when an older browser session is restored.
@@ -75,6 +80,56 @@ function schedule(poller: TaskLogPoller, delay = 900): void {
   if (typeof poller.timer === 'object' && poller.timer && 'unref' in poller.timer) poller.timer.unref();
 }
 
+function admitExecutionSummary(input: {
+  poller: TaskLogPoller;
+  local: TaskExecutionStateSummary | undefined;
+  incoming: TaskExecutionStateSummary;
+  taskClock: Record<string, number> | null;
+}): TaskExecutionStateSummary {
+  const localExecutions = new Map(
+    (input.local?.sessions ?? []).flatMap((session) => session.executions).map((execution) => [execution.executionId, execution]),
+  );
+  const sessions = input.incoming.sessions.map((session) => ({
+    ...session,
+    executions: session.executions.map((incoming) => {
+      const local = localExecutions.get(incoming.executionId);
+      const entityId = `request:${incoming.requestId}`;
+      const pending = pendingTaskMutationReceipt(
+        input.poller.identity.projectId,
+        input.poller.identity.ledgerId,
+        'queued-execution',
+        entityId,
+      );
+      const acknowledgedReceiptIds = pending && incoming.requestId === pending.receiptId ? [pending.receiptId] : [];
+      const accepted = shouldAcceptReplicatedTaskState({
+        domain: 'queued-execution',
+        local: local ? { entityId, phase: local.phase, revision: local.revision } : { entityId },
+        incoming: {
+          entityId,
+          phase: incoming.phase,
+          revision: incoming.revision,
+          acknowledgedReceiptIds,
+        },
+        pendingReceipt: pending,
+        source: 'relay-refresh',
+        incomingTaskClock: input.taskClock,
+      });
+      if (accepted && pending && acknowledgedReceiptIds.length > 0) {
+        completePendingTaskMutationReceipt(pending.receiptId);
+      }
+      return accepted || !local ? incoming : local;
+    }),
+  }));
+  const executions = sessions.flatMap((session) => session.executions);
+  const activeExecutionIds = executions.filter((execution) => activeExecutionPhases.has(execution.phase)).map((execution) => execution.executionId);
+  return {
+    ...input.incoming,
+    sessions,
+    activeExecutionIds,
+    defaultExecutionId: activeExecutionIds.at(-1) ?? executions.at(-1)?.executionId ?? null,
+  };
+}
+
 async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
   if (poller.inFlight || taskLogPollers.get(poller.identity.threadId) !== poller) return;
   poller.inFlight = true;
@@ -100,7 +155,13 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
       retryDelay = 1_500;
       return;
     }
-    const summary = summaryResult.value;
+    const installedSummary = recordState('threadTaskExecutionStateByThreadId')[threadId] as TaskExecutionStateSummary | undefined;
+    const summary = admitExecutionSummary({
+      poller,
+      local: installedSummary,
+      incoming: summaryResult.value,
+      taskClock: summaryResult.taskClock,
+    });
     recordState('threadTaskExecutionStateByThreadId')[threadId] = summary;
     delete recordState('threadExecutionStateErrorByThreadId')[threadId];
     const selectedIds = recordState('threadSelectedExecutionIdByThreadId');

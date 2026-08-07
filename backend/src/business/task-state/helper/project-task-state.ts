@@ -43,6 +43,39 @@ function projectionEntityChanges(changes: TaskEntityChange[]): TaskProjectionEnt
   return [...identities.values()];
 }
 
+function mutationCardResourceIds(mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): string[] {
+  const beforeCards = Array.isArray(before.cards) ? before.cards as AnyRecord[] : [];
+  const afterCards = Array.isArray(after.cards) ? after.cards as AnyRecord[] : [];
+  const ids = new Set<string>();
+  if ((mutation.action === 'patch-card' && typeof mutation.cardPatch?.description === 'string') || mutation.action === 'delete-card-image') {
+    ids.add(String(mutation.cardPatch?.id ?? mutation.cardId ?? ''));
+  }
+  if (mutation.action === 'create-card' || mutation.action === 'create-task-intake') ids.add(String(mutation.card?.id ?? ''));
+  if (mutation.action === 'create-master-task') {
+    ids.add(String(mutation.card?.id ?? ''));
+    for (const card of mutation.cards ?? []) ids.add(String(card.id ?? ''));
+  }
+  if (mutation.action === 'paste-selection') {
+    const previous = new Set(beforeCards.map((card) => String(card.id ?? '')));
+    for (const card of afterCards) if (!previous.has(String(card.id ?? ''))) ids.add(String(card.id ?? ''));
+  }
+  const resources = [...ids].filter(Boolean).flatMap((id) => {
+    const card = afterCards.find((candidate) => String(candidate.id ?? '') === id);
+    const comment = card?.comment && typeof card.comment === 'object' && !Array.isArray(card.comment) ? card.comment as AnyRecord : {};
+    return typeof comment.contentFile === 'string' && comment.contentFile ? [comment.contentFile] : [];
+  });
+  if (['create-card', 'create-task-intake', 'create-master-task'].includes(String(mutation.action))) {
+    const threadFiles = after.threadFiles && typeof after.threadFiles === 'object' && !Array.isArray(after.threadFiles)
+      ? after.threadFiles as AnyRecord
+      : {};
+    for (const id of ids) {
+      const resource = threadFiles[`thread-${id}`];
+      if (typeof resource === 'string' && resource) resources.push(resource);
+    }
+  }
+  return [...new Set(resources)];
+}
+
 export function createProjectTaskState(input: {
   projectId: string;
   writerId: string;
@@ -228,34 +261,34 @@ export function createProjectTaskState(input: {
       }
     }
     const command = taskCommandForMutation({ mutation, before, after });
-    let changedThreadResource = '';
+    const mutationResources = new Set(mutationCardResourceIds(mutation, before, after));
     if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(command.kind) && mutation.note?.threadId) {
       const threadFiles = after.threadFiles && typeof after.threadFiles === 'object' && !Array.isArray(after.threadFiles)
         ? after.threadFiles as Record<string, unknown>
         : {};
       const resourceId = String(threadFiles[mutation.note.threadId] ?? '');
+      mutationResources.add(resourceId);
+    }
+    const changedContentResources: string[] = [];
+    for (const resourceId of mutationResources) {
       const head = await contentObjects.capture(resourceId);
-      if (!head) throw new Error(`task_thread_content_capture_failed:${mutation.note.threadId}`);
+      if (!head) throw new Error(`task_content_capture_failed:${resourceId}`);
       const headChanged = !store.contentHeads(head.key).some((current) => (
         current.type === head.type && current.hash === head.hash && current.bytes === head.bytes
       ));
       if (headChanged) {
         command.changes.push({ entityType: 'resource', entityId: head.key, changes: [{ path: 'head', operation: 'set', value: head }] });
-        changedThreadResource = head.key;
+        changedContentResources.push(head.key);
       }
     }
     const priorHashes = command.changes.map(entityHash);
     const delta = await persistChanges(command.changes, { activationTaskId: command.activationTaskId, replication: command.replication });
-    if (changedThreadResource) await input.publishContent?.(changedThreadResource);
+    for (const resourceId of changedContentResources) await input.publishContent?.(resourceId);
     const changed = command.changes.some((change, index) => entityHash(change) !== priorHashes[index]);
     const deltas = delta.entities.length > 0 ? [delta] : [];
-    if (['append-note', 'update-note', 'delete-note', 'restore-note', 'delete-card-image'].includes(command.kind)) {
+    if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(command.kind)) {
       const body = String(mutation.note?.body ?? '');
-      const card = Array.isArray(after.cards) ? (after.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === String(mutation.cardId ?? '')) : null;
-      const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
-      const resourceIds = command.kind === 'delete-card-image'
-        ? [String(comment.contentFile ?? '')]
-        : taskContentReferences(body);
+      const resourceIds = taskContentReferences(body);
       deltas.push(await recordContentContribution(command.activationTaskId, resourceIds));
     }
     return { changed, deltas, localChanges: projectionEntityChanges(command.changes), ledger: store.projection().ledger };

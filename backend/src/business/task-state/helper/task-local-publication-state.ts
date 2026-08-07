@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-type HeldMarker = { version: 1; taskId: string; entityKeys: string[] };
+export type HeldMarker = { version: 1; taskId: string; entityKeys: string[] };
 type PendingMarkers = { writes: string[]; deletes: string[] };
 
 export function createTaskLocalPublicationState(heldDirectory: string) {
@@ -66,6 +66,11 @@ export function createTaskLocalPublicationState(heldDirectory: string) {
     hasPending: (): boolean => pendingWrites.size > 0 || pendingDeletes.size > 0,
     isHeld: (key: string): boolean => heldEntityKeys.has(key),
     keysForTask: (taskId: string): string[] => [...(heldByTask.get(taskId) ?? [])],
+    snapshot: (): HeldMarker[] => [...heldByTask].map(([taskId, entityKeys]) => ({
+      version: 1 as const,
+      taskId,
+      entityKeys: [...entityKeys].sort(),
+    })).sort((left, right) => left.taskId.localeCompare(right.taskId)),
     markerFile,
     marker: (taskId: string): HeldMarker => ({ version: 1, taskId, entityKeys: [...(heldByTask.get(taskId) ?? [])].sort() }),
   };

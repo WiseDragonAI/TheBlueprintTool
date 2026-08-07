@@ -5,6 +5,7 @@
 import { state } from '../../state.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { normalizeDeletedNoteIds } from './normalize-deleted-note-ids.js';
+import { pendingTaskMutationReceiptsForScope } from '../../refresh/helper/pending-task-mutation-receipts.js';
 
 function imageSizesRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -31,6 +32,33 @@ export function mergeLocalThreadNotes(
   if (!localNotes || typeof localNotes !== 'object') return ledger;
   const nextNotes = { ...normalizeLedgerNotes(ledger) } as Record<string, Array<Record<string, any>>>;
   const nextDeleted = { ...normalizeDeletedNoteIds(ledger) } as Record<string, string[]>;
+  const pendingReceipts = pendingTaskMutationReceiptsForScope({
+    projectId: String(state.projectId ?? ''),
+    ledgerId: String(state.activeTab ?? ''),
+    threadId: options.threadId,
+  });
+  for (const receipt of pendingReceipts) {
+    const note = receipt.mutation.note;
+    const threadId = String(note?.threadId ?? '');
+    const noteId = String(note?.id ?? '');
+    if (!threadId || !noteId || !includesThread(threadId, options.threadId)) continue;
+    const notes = Array.isArray(nextNotes[threadId]) ? nextNotes[threadId] : [];
+    const existing = notes.find((candidate) => String(candidate.id ?? '') === noteId);
+    const optimistic = {
+      id: noteId,
+      role: note?.role === 'agent' ? 'agent' : 'operator',
+      message: String(note?.body ?? existing?.message ?? ''),
+      timestamp: existing?.timestamp ?? receipt.createdAt,
+      ...Object.fromEntries(Object.entries(note ?? {}).filter(([key, value]) => (
+        !['id', 'threadId', 'body', 'role'].includes(key) && value !== undefined
+      ))),
+      optimistic: true,
+      mutationReceiptId: receipt.receiptId,
+    };
+    if (existing) Object.assign(existing, optimistic);
+    else notes.push(optimistic);
+    nextNotes[threadId] = notes;
+  }
   for (const [threadId, deletedIds] of Object.entries(localDeleted)) {
     if (!includesThread(threadId, options.threadId)) continue;
     const mergedDeleted = new Set([...(nextDeleted[threadId] ?? []), ...(Array.isArray(deletedIds) ? deletedIds : [])].map((id) => String(id)));

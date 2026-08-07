@@ -36,6 +36,9 @@ export function appendVoiceNote(input: { body: string; threadId?: string; voiceF
       transcriptionStartedAt: input.transcriptionStartedAt,
       source: 'voice'
     }
+  }, {
+    domain: 'voice',
+    entityId: `${threadId}/${noteId}`,
   });
   return { ok: true, noteId, committed };
 }

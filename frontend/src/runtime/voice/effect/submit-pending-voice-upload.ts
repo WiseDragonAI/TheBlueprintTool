@@ -12,6 +12,11 @@ import { applyVoiceServerNote, watchVoiceTranscription } from './reconcile-voice
 import { renderVoiceStatus } from './render-voice-status.js';
 import { uploadVoiceAudio } from './upload-voice-audio.js';
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
+import {
+  acknowledgePendingTaskMutationReceipt,
+  replacePendingTaskMutationReceipt,
+} from '../../refresh/helper/pending-task-mutation-receipts.js';
+import { acceptTaskClockForInstall } from '../../refresh/helper/task-causal-clock.js';
 
 export async function submitPendingVoiceUpload(noteId: string): Promise<boolean> {
   const pending = await readPendingVoiceUpload(noteId);
@@ -26,6 +31,8 @@ export async function submitPendingVoiceUpload(noteId: string): Promise<boolean>
     threadId: pending.threadId,
     cardId: pending.cardId,
     noteId,
+    mutationId: pending.mutationId,
+    voiceAttemptId: pending.voiceAttemptId,
     reviewContext: pending.reviewContext,
     launchMode: pending.launchMode
   });
@@ -44,6 +51,50 @@ export async function submitPendingVoiceUpload(noteId: string): Promise<boolean>
     renderVoiceStatus();
     return false;
   }
+  if (pending.ledgerId === 'tasks') {
+    const receiptId = String(upload.receipt?.mutationId ?? '');
+    if (receiptId !== pending.mutationId || !upload.taskClock) {
+      patchOptimisticThreadNote({
+        threadId: pending.threadId,
+        noteId,
+        body: 'Voice uploaded; exact task acceptance was not confirmed. Audio is saved locally.',
+        voiceFileRef: upload.voiceFileRef,
+        status: 'upload failed',
+        error: 'voice_task_receipt_missing',
+        localVoiceUploadId: noteId,
+      });
+      telemetry('voice-upload-retained', { noteId, threadId: pending.threadId, status: upload.status ?? 0, reason: 'receipt-missing' });
+      return false;
+    }
+    replacePendingTaskMutationReceipt(pending.mutationId, {
+      action: 'append-note',
+      mutationId: pending.mutationId,
+      note: {
+        id: noteId,
+        threadId: pending.threadId,
+        body: 'Voice uploaded.',
+        voiceFileRef: upload.voiceFileRef,
+        voiceAttemptId: upload.voiceAttemptId || pending.voiceAttemptId,
+        status: upload.lifecycleStatus || 'queued',
+        uploadReceivedAt: upload.uploadReceivedAt ?? '',
+        audioPersistedAt: upload.audioPersistedAt ?? '',
+        acceptedAt: upload.acceptedAt ?? '',
+        revision: upload.revision ?? 1,
+        source: 'voice',
+      },
+    });
+    acknowledgePendingTaskMutationReceipt(pending.mutationId, upload.taskClock);
+    if (!acceptTaskClockForInstall(upload.taskClock, 'voice-upload-response')) {
+      patchOptimisticThreadNote({
+        threadId: pending.threadId,
+        noteId,
+        status: 'upload failed',
+        error: 'voice_task_clock_not_admitted',
+        localVoiceUploadId: noteId,
+      });
+      return false;
+    }
+  }
 
   let localCopyDeleted = true;
   await deletePendingVoiceUpload(noteId).catch((error) => {
@@ -60,6 +111,7 @@ export async function submitPendingVoiceUpload(noteId: string): Promise<boolean>
       id: noteId,
       message: 'Voice uploaded.',
       voiceFileRef: upload.voiceFileRef,
+      voiceAttemptId: upload.voiceAttemptId || pending.voiceAttemptId,
       status: upload.lifecycleStatus || 'queued',
       error: '',
       uploadReceivedAt: upload.uploadReceivedAt ?? '',

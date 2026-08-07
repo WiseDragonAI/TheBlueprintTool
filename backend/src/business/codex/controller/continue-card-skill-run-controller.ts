@@ -2,9 +2,9 @@
  * WHAT: Continues an existing card-scoped Codex skill run with newer thread messages.
  * WHY: A durable run id must resume its captured session and recover with a new session only when that id is missing.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
-import { resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
+import { replaceTextFileAtomically, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildCardSkillContinuePrompt } from '../helper/build-card-skill-continue-prompt.js';
@@ -65,7 +65,7 @@ function appendRunStatus(filePath: string, status: ProcessStatus, detail: string
   const heading = status === 'complete' ? 'Completed' : status === 'failed' ? 'Failed' : status === 'cancelled' ? 'Cancelled' : 'Running';
   const markdown = [``, `---`, ``, `Codex run ${heading.toLowerCase()}: ${detail}`].join('\n');
   try {
-    writeFileSync(filePath, `${existsSync(filePath) ? readFileSync(filePath, 'utf8').replace(/\s+$/g, '') : ''}${markdown}\n`, 'utf8');
+    replaceTextFileAtomically(filePath, `${existsSync(filePath) ? readFileSync(filePath, 'utf8').replace(/\s+$/g, '') : ''}${markdown}\n`);
   } catch {
     // The JSONL and stderr log remain the fallback status records.
   }

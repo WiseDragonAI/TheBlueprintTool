@@ -40,6 +40,7 @@ test('contains task-state lookup failures inside the periodic incident review bo
       assignedNodeId: () => 'workstation',
       targetProject: () => project(root),
       taskState: () => { throw new Error('injected task-state lookup failure'); },
+      materializeResources: async () => {},
       paused: () => false,
       onChanged: () => assert.fail('A failed task-state lookup cannot change the projection.'),
       onBootstrapGate: () => assert.fail('The injected error is not a bootstrap gate.'),
@@ -73,6 +74,7 @@ test('records one transient bootstrap rejection while continuing to retry the sa
       intervalMs: 60_000,
       assignedNodeId: () => 'workstation',
       targetProject: () => project(root),
+      materializeResources: async () => {},
       taskState: () => {
         attempts += 1;
         throw new Error('task_state_bootstrap_incomplete');

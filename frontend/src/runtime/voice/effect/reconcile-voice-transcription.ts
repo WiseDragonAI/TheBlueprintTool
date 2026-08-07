@@ -11,6 +11,12 @@ import {
   voiceLifecycleFields,
   voiceTranscriptionDeadlineMs
 } from '../helper/voice-transcription-lifecycle.js';
+import {
+  pendingTaskMutationReceipt,
+  releaseSettledOptimisticNotes,
+  settlePendingTaskMutationReceipts,
+} from '../../refresh/helper/pending-task-mutation-receipts.js';
+import { acceptTaskClockForInstall, taskClockFromResponse } from '../../refresh/helper/task-causal-clock.js';
 
 type VoiceIdentity = { projectId?: string; replicaNodeId?: string; ledgerId: string; threadId: string; noteId: string };
 type Watcher = VoiceIdentity & { timer: ReturnType<typeof setTimeout> | null; finalRead: boolean };
@@ -40,7 +46,12 @@ export function applyVoiceServerNote(input: VoiceIdentity & { note: Record<strin
     if (Object.prototype.hasOwnProperty.call(input.note, field)) local[field] = input.note[field];
   }
   local.revision = Number(input.note.revision ?? local.revision ?? 0);
-  local.optimistic = false;
+  local.optimistic = Boolean(pendingTaskMutationReceipt(
+    voiceProjectId(input.projectId),
+    input.ledgerId,
+    'voice',
+    `${input.threadId}/${input.noteId}`,
+  ));
   local.updatedAt = new Date().toISOString();
   renderThread();
   return true;
@@ -79,6 +90,16 @@ export async function reconcileVoiceTranscription(input: VoiceIdentity): Promise
   const projectId = voiceProjectId(input.projectId);
   const replicaNodeId = voiceReplicaNodeId(input.replicaNodeId);
   const response = await fetch(projectScopedRequestPath(`/api/voice-transcription-status?${query.toString()}`, projectId), replicaRequestInit({ cache: 'no-store' }, replicaNodeId)).catch(() => undefined);
+  const taskClock = response?.ok && input.ledgerId === 'tasks' ? taskClockFromResponse(response) : null;
+  if (response?.ok && input.ledgerId === 'tasks' && !acceptTaskClockForInstall(taskClock, 'voice-status-response')) {
+    telemetry('voice-transcription-reconciled', { ...input, applied: false, httpStatus: response.status, reason: 'task-clock-not-admitted' });
+    if (watcher) schedule(watcher);
+    return false;
+  }
+  if (taskClock) {
+    const settled = settlePendingTaskMutationReceipts({ projectId, ledgerId: input.ledgerId, taskClock });
+    releaseSettledOptimisticNotes(state.activeLedger, settled);
+  }
   const payload = response?.ok ? await response.json().catch(() => null) : null;
   const serverNote = payload && typeof payload.note === 'object' ? payload.note as Record<string, unknown> : null;
   const applied = serverNote ? applyVoiceServerNote({ ...input, note: serverNote }) : false;

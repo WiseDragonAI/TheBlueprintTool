@@ -19,6 +19,14 @@ import { taskCurrentBaselineChanges } from './task-current-state-baseline.js';
 import { taskCurrentStateDiagnostics } from './task-current-state-diagnostics.js';
 import { createTaskCurrentStatePersistence } from './task-current-state-persistence.js';
 import {
+  buildTaskCurrentInventoryBucket,
+  buildTaskCurrentInventoryRoot,
+  taskCurrentInventoryBucketFile,
+  taskCurrentInventoryRootFile,
+  taskCurrentInventoryVersion,
+  validateTaskCurrentInventory,
+} from './task-current-state-inventory.js';
+import {
   taskCurrentBaselineEpoch,
   taskCurrentStateVersion,
   taskEntityTypes,
@@ -34,6 +42,7 @@ import {
 } from './task-current-state-types.js';
 
 type JournalDocument = { version: typeof taskCurrentStateVersion; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string };
+type LoadedJournal = { file: string; document: JournalDocument };
 type StoreOptions = {
   decisionOsRoot: string;
   projectId: string;
@@ -81,6 +90,8 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   const publication = createTaskLocalPublicationState(heldDirectory);
   const bucketEntries = new Map<string, Map<string, TaskCurrentEntity>>();
   const bucketSummaries = new Map<string, TaskCurrentBucket>();
+  const physicalBucketEntries = new Map<string, Map<string, TaskCurrentEntity>>();
+  const physicalBucketSummaries = new Map<string, TaskCurrentBucket>();
   const projection = emptyProjection(options.projectId);
   const pendingEntities = new Map<string, TaskCurrentEntity>();
   const pendingJournals = new Set<string>();
@@ -112,10 +123,23 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     bucketSummaries.set(bucket, { bucket, count: entries.size, checksum: hashTaskCurrentBucket(entries) });
   };
 
+  const updatePhysicalBucket = (key: string, entity: TaskCurrentEntity): void => {
+    const bucket = taskCurrentBucketForEntityKey(key);
+    const entries = physicalBucketEntries.get(bucket) ?? new Map<string, TaskCurrentEntity>();
+    entries.set(key, entity);
+    physicalBucketEntries.set(bucket, entries);
+    if (deferBucketSummaries) return;
+    physicalBucketSummaries.set(bucket, { bucket, count: entries.size, checksum: hashTaskCurrentBucket(entries) });
+  };
+
   const rebuildBucketSummaries = (): void => {
     bucketSummaries.clear();
     for (const [bucket, entries] of bucketEntries) {
       bucketSummaries.set(bucket, { bucket, count: entries.size, checksum: hashTaskCurrentBucket(entries) });
+    }
+    physicalBucketSummaries.clear();
+    for (const [bucket, entries] of physicalBucketEntries) {
+      physicalBucketSummaries.set(bucket, { bucket, count: entries.size, checksum: hashTaskCurrentBucket(entries) });
     }
   };
 
@@ -131,6 +155,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     } else joined = joinTaskEntities(undefined, incoming);
     if (entities.get(key)?.stateHash === joined.stateHash) return false;
     entities.set(key, joined);
+    updatePhysicalBucket(key, joined);
     updateBucket(key, joined);
     for (const register of Object.values(joined.fields)) {
       for (const [replicaId, counter] of Object.entries(register.clock)) {
@@ -177,7 +202,9 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       const directory = resolve(root, 'current', entityType);
       if (!existsSync(directory)) continue;
       for (const name of readdirSync(directory).filter((value) => value.endsWith('.json')).sort()) {
-        applyEntity(JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as TaskCurrentEntity, true);
+        const entity = JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as TaskCurrentEntity;
+        if (entity.entityType !== entityType || name !== `${encodeURIComponent(entity.entityId)}.json`) throw new Error(`task_current_entity_path_mismatch:${entityType}:${name}`);
+        applyEntity(entity, true);
       }
     }
     deferBucketSummaries = false;
@@ -198,7 +225,27 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     baselineEpoch: taskCurrentBaselineEpoch,
     projectId: options.projectId,
     baselineRoot: rootHash(),
+    inventoryVersion: taskCurrentInventoryVersion,
   });
+
+  const inventoryBucketDocument = (bucket: string) => buildTaskCurrentInventoryBucket(
+    options.projectId,
+    bucket,
+    physicalBucketEntries.get(bucket) ?? new Map(),
+  );
+
+  const inventoryRootDocument = () => buildTaskCurrentInventoryRoot(
+    options.projectId,
+    physicalBucketSummaries.values(),
+    publication.snapshot(),
+  );
+
+  const writeCompleteInventorySync = (): void => {
+    for (const bucket of [...physicalBucketEntries.keys()].sort()) {
+      persistence.atomicWriteSync(taskCurrentInventoryBucketFile(root, bucket), `${JSON.stringify(inventoryBucketDocument(bucket))}\n`);
+    }
+    persistence.atomicWriteSync(taskCurrentInventoryRootFile(root), `${JSON.stringify(inventoryRootDocument())}\n`);
+  };
 
   const initialize = (): void => {
     mkdirSync(journalDirectory, { recursive: true });
@@ -217,25 +264,55 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       replication: 'active',
     };
     for (const entity of applyMutation(batch)) persistence.atomicWriteSync(persistence.entityPath(entity), `${JSON.stringify(entity)}\n`);
+    writeCompleteInventorySync();
     if (!options.deferFormat) persistence.atomicWriteSync(formatFile, `${JSON.stringify(formatDocument())}\n`);
   };
 
-  const validateFormat = (): void => {
+  const validateFormat = (): TaskCurrentFormat | null => {
     if (!existsSync(formatFile)) {
       if (options.initializeLedger === undefined) throw new Error('task_state_offline_migration_required');
       initialize();
-      if (options.deferFormat) return;
+      if (options.deferFormat) return null;
     }
     const format = JSON.parse(readFileSync(formatFile, 'utf8')) as TaskCurrentFormat;
     if (format.stateProtocol !== taskStateProtocol || format.stateSchema !== taskCurrentStateVersion || format.baselineEpoch !== taskCurrentBaselineEpoch || format.projectId !== options.projectId) throw new Error('unsupported_task_current_state_format');
+    if (format.inventoryVersion !== undefined && format.inventoryVersion !== taskCurrentInventoryVersion) throw new Error('unsupported_task_current_inventory_format');
+    return format;
   };
 
-  const recoverJournals = (): void => {
-    if (!existsSync(journalDirectory)) return;
-    for (const name of readdirSync(journalDirectory).filter((value) => value.endsWith('.json')).sort()) {
+  const loadJournals = (): LoadedJournal[] => {
+    if (!existsSync(journalDirectory)) return [];
+    return readdirSync(journalDirectory).filter((value) => value.endsWith('.json')).sort().map((name) => {
       const file = resolve(journalDirectory, name);
       const document = JSON.parse(readFileSync(file, 'utf8')) as JournalDocument;
       if (document.version !== taskCurrentStateVersion) throw new Error('unsupported_task_current_state_journal');
+      if (document.mutation && (document.mutation.version !== taskCurrentStateVersion
+        || document.mutation.projectId !== options.projectId
+        || !Array.isArray(document.mutation.changes))) throw new Error('invalid_task_current_state_mutation_journal');
+      if (document.delta && (document.delta.version !== taskCurrentStateVersion
+        || document.delta.projectId !== options.projectId
+        || !Array.isArray(document.delta.entities))) throw new Error('invalid_task_current_state_delta_journal');
+      if (!document.mutation && !document.delta && !document.activateTaskId) throw new Error('empty_task_current_state_journal');
+      return { file, document };
+    });
+  };
+
+  const journalInventoryEffects = (journals: LoadedJournal[]): { entityKeys: Set<string>; taskIds: Set<string> } => {
+    const entityKeys = new Set<string>();
+    const taskIds = new Set<string>();
+    for (const { document } of journals) {
+      for (const change of document.mutation?.changes.flatMap(mutationLanes) ?? []) {
+        entityKeys.add(`${change.entityType}\u0000${change.entityId}`);
+      }
+      for (const entity of document.delta?.entities ?? []) entityKeys.add(taskCurrentEntityKey(entity));
+      if (document.activateTaskId) taskIds.add(document.activateTaskId);
+      if (document.mutation?.replication === 'held' && document.mutation.activationTaskId) taskIds.add(document.mutation.activationTaskId);
+    }
+    return { entityKeys, taskIds };
+  };
+
+  const recoverJournals = (journals: LoadedJournal[]): void => {
+    for (const { file, document } of journals) {
       const changed = document.mutation
         ? applyMutation(document.mutation)
         : (document.delta?.entities ?? []).filter((entity) => applyEntity(entity)).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
@@ -250,11 +327,17 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       const currentEntities = [...pendingEntities.values()];
       const held = publication.drain();
       const currentJournals = [...pendingJournals];
+      const inventoryBuckets = [...new Set(currentEntities.map((entity) => taskCurrentBucketForEntityKey(taskCurrentEntityKey(entity))))]
+        .sort()
+        .map((bucket) => ({ bucket, document: inventoryBucketDocument(bucket) }));
+      const inventoryRoot = inventoryRootDocument();
       pendingEntities.clear(); pendingJournals.clear();
       try {
         await runBoundedTaskMaterialization(currentEntities, async (entity) => persistence.atomicWrite(persistence.entityPath(entity), `${JSON.stringify(entity)}\n`));
         await runBoundedTaskMaterialization(held.writes, async (taskId) => persistence.atomicWrite(publication.markerFile(taskId), `${JSON.stringify(publication.marker(taskId))}\n`));
         await runBoundedTaskMaterialization(held.deletes, async (taskId) => persistence.durableRemove(publication.markerFile(taskId)));
+        await runBoundedTaskMaterialization(inventoryBuckets, async ({ bucket, document }) => persistence.atomicWrite(taskCurrentInventoryBucketFile(root, bucket), `${JSON.stringify(document)}\n`));
+        await persistence.atomicWrite(taskCurrentInventoryRootFile(root), `${JSON.stringify(inventoryRoot)}\n`);
         await runBoundedTaskMaterialization(currentJournals, persistence.durableRemove);
       } catch (error) {
         for (const entity of currentEntities) pendingEntities.set(taskCurrentEntityKey(entity), entity);
@@ -290,9 +373,34 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   };
 
   publication.load();
-  validateFormat();
+  const format = validateFormat();
   loadEntityFiles();
-  recoverJournals();
+  const journals = loadJournals();
+  const journalEffects = journalInventoryEffects(journals);
+  if (format?.inventoryVersion === taskCurrentInventoryVersion) {
+    validateTaskCurrentInventory({
+      root,
+      projectId: options.projectId,
+      physicalBuckets: physicalBucketEntries,
+      held: publication.snapshot(),
+      journalEntityKeys: journalEffects.entityKeys,
+      journalTaskIds: journalEffects.taskIds,
+    });
+  } else if (format) {
+    if (existsSync(taskCurrentInventoryRootFile(root))) {
+      validateTaskCurrentInventory({
+        root,
+        projectId: options.projectId,
+        physicalBuckets: physicalBucketEntries,
+        held: publication.snapshot(),
+        journalEntityKeys: journalEffects.entityKeys,
+        journalTaskIds: journalEffects.taskIds,
+      });
+    }
+    writeCompleteInventorySync();
+    persistence.atomicWriteSync(formatFile, `${JSON.stringify({ ...format, inventoryVersion: taskCurrentInventoryVersion })}\n`);
+  }
+  recoverJournals(journals);
   scheduleMaterializer();
 
   return {

@@ -79,10 +79,9 @@ export async function cancelTaskExecutionLocally(input: {
   const runtimeRun = runtimeRuns[execution.metadata.sessionId];
   if (runtimeRun) runtimeRun.cancelRequestedAt = cancelling.lifecycle.phaseSince;
   if (!signalCodexProcessTree({ child: process.child, signal: 'SIGTERM' })) {
-    await state.executions.transition(input.executionId, {
-      phase: 'failed',
-      error: { code: 'task_execution_cancel_signal_failed', message: 'Could not signal the live execution process.' },
-    });
+    // WHAT: Retain the cancelling lifecycle and process registration when signalling fails.
+    // WHY: Publishing terminal failure would hide a still-live child before its artifacts settle.
+    signalCodexProcessTree({ child: process.child, signal: 'SIGKILL' });
     return {
       ok: false,
       statusCode: 500,

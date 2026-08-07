@@ -28,7 +28,13 @@ function resourceKeys(ledger: AnyRecord, mutation: LedgerMutation): string[] {
   const threadFiles = ledger.threadFiles && typeof ledger.threadFiles === 'object' && !Array.isArray(ledger.threadFiles)
     ? ledger.threadFiles as AnyRecord
     : {};
-  if (threadId && typeof threadFiles[threadId] === 'string') keys.add(String(threadFiles[threadId]));
+  if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(String(mutation.action))) {
+    if (!threadId) throw new TaskContentMaterializationError(409, 'task_thread_identity_missing', '');
+    if (typeof threadFiles[threadId] !== 'string' || !String(threadFiles[threadId]).trim()) {
+      throw new TaskContentMaterializationError(409, 'task_thread_reference_missing', threadId);
+    }
+    keys.add(String(threadFiles[threadId]));
+  }
 
   const cardId = String(mutation.cardPatch?.id ?? mutation.cardId ?? '');
   const readsCardMarkdown = (
@@ -42,6 +48,34 @@ function resourceKeys(ledger: AnyRecord, mutation: LedgerMutation): string[] {
       ? card.comment as AnyRecord
       : {};
     if (typeof comment.contentFile === 'string') keys.add(comment.contentFile);
+  }
+  if (mutation.action === 'paste-selection') {
+    const cards = Array.isArray(ledger.cards) ? ledger.cards as AnyRecord[] : [];
+    for (const selectedId of mutation.selection?.cardIds ?? []) {
+      const card = cards.find((candidate) => String(candidate.id ?? '') === selectedId);
+      if (!card) throw new TaskContentMaterializationError(409, 'task_card_reference_missing', selectedId);
+      const comment = card.comment && typeof card.comment === 'object' && !Array.isArray(card.comment)
+        ? card.comment as AnyRecord
+        : {};
+      if (typeof comment.contentFile === 'string') keys.add(comment.contentFile);
+      else if (typeof comment.what !== 'string') throw new TaskContentMaterializationError(409, 'task_card_content_reference_missing', selectedId);
+    }
+  }
+  if (['create-card', 'create-task-intake', 'create-master-task'].includes(String(mutation.action))) {
+    const cards = Array.isArray(ledger.cards) ? ledger.cards as AnyRecord[] : [];
+    const submitted = [mutation.card, ...(mutation.action === 'create-master-task' ? mutation.cards ?? [] : [])]
+      .filter((card): card is AnyRecord => Boolean(card));
+    for (const candidate of submitted) {
+      const id = String(candidate.id ?? '');
+      const existing = cards.find((card) => String(card.id ?? '') === id);
+      if (!existing) continue;
+      const comment = existing.comment && typeof existing.comment === 'object' && !Array.isArray(existing.comment)
+        ? existing.comment as AnyRecord
+        : {};
+      if (typeof comment.contentFile === 'string') keys.add(comment.contentFile);
+      const existingThreadId = `thread-${id}`;
+      if (typeof threadFiles[existingThreadId] === 'string') keys.add(String(threadFiles[existingThreadId]));
+    }
   }
   return [...keys];
 }

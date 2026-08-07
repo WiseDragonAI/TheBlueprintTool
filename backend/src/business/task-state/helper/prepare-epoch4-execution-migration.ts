@@ -423,12 +423,19 @@ function captureArtifacts(decisionOsRoot: string, attempts: Attempt[]): {
   manifests: Map<string, TaskExecutionArtifacts>;
   objects: ArtifactObject[];
   missing: string[];
+  missingPrimary: string[];
 } {
   const objects = new Map<string, Buffer>();
   const manifests = new Map<string, TaskExecutionArtifacts>();
   const missing: string[] = [];
+  const missingPrimary: string[] = [];
   for (const attempt of attempts) {
     const heads: Partial<Record<ArtifactKind, TaskExecutionArtifacts[ArtifactKind]>> = {};
+    const capture = (kind: ArtifactKind, bytes: Buffer): void => {
+      const hash = createHash('sha256').update(bytes).digest('hex');
+      objects.set(hash, bytes);
+      heads[kind] = { hash, bytes: bytes.byteLength, mediaType: kind === 'jsonl' || kind === 'telemetry' ? 'application/x-ndjson' : 'text/plain' };
+    };
     for (const [kind, rawFile] of Object.entries(attempt.files) as Array<[ArtifactKind, string]>) {
       const file = isAbsolute(rawFile)
         ? resolve(rawFile)
@@ -445,9 +452,27 @@ function captureArtifacts(decisionOsRoot: string, attempts: Attempt[]): {
         continue;
       }
       const bytes = readFileSync(file);
-      const hash = createHash('sha256').update(bytes).digest('hex');
-      objects.set(hash, bytes);
-      heads[kind] = { hash, bytes: bytes.byteLength, mediaType: kind === 'jsonl' || kind === 'telemetry' ? 'application/x-ndjson' : 'text/plain' };
+      capture(kind, bytes);
+    }
+    if (terminal.has(attempt.lifecycle.phase)) {
+      for (const kind of ['jsonl', 'stderr'] as const) {
+        if (heads[kind]) continue;
+        const detail = `${attempt.metadata.executionId}:${kind}`;
+        if (!attempt.files[kind]) {
+          // WHAT: Give migrated terminal executions an explicit immutable recovery record when the legacy schema declared no file.
+          // WHY: Preserving the execution is safer than emitting a terminal lifecycle with a null primary head.
+          const bytes = kind === 'jsonl'
+            ? Buffer.from(`${JSON.stringify({
+              type: 'decision_os.migration',
+              executionId: attempt.metadata.executionId,
+              message: 'Legacy execution declared no JSONL artifact.',
+            })}\n`)
+            : Buffer.from('Legacy execution declared no stderr artifact.\n');
+          capture(kind, bytes);
+          continue;
+        }
+        missingPrimary.push(detail);
+      }
     }
     manifests.set(attempt.metadata.executionId, {
       jsonl: heads.jsonl ?? null,
@@ -462,6 +487,7 @@ function captureArtifacts(decisionOsRoot: string, attempts: Attempt[]): {
     manifests,
     objects: [...objects.entries()].map(([hash, bytes]) => ({ hash, bytes })),
     missing: [...new Set(missing)].sort(),
+    missingPrimary: [...new Set(missingPrimary)].sort(),
   };
 }
 
@@ -527,6 +553,11 @@ export function prepareEpoch4ExecutionMigration(input: {
     }
   }
   const artifacts = captureArtifacts(input.decisionOsRoot, attempts);
+  // WHAT: Reject terminal legacy executions whose primary evidence cannot be captured.
+  // WHY: Migration must not publish a terminal epoch-4 lifecycle with null JSONL or stderr heads.
+  if (artifacts.missingPrimary.length > 0) {
+    throw new Error(`task_execution_migration_primary_artifact_missing:${artifacts.missingPrimary.join(',')}`);
+  }
   const legacyFiles = ['codex-executions.json', 'codex-process-queue.json']
     .map((name) => resolve(input.decisionOsRoot, name))
     .filter(existsSync);

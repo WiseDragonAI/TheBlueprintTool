@@ -70,6 +70,7 @@ test('creates and refreshes one deterministic recurring runtime incident master 
       updatedAt: '2026-07-22T11:53:44.879Z',
       incidents: [incident()],
       incidentLedgerFile: join(root, '.decision-os', 'runtime-incidents.json'),
+      materializeResources: async () => {},
     };
 
     assert.equal((await synchronizeRuntimeIncidentReviewTask(firstSnapshot)).changed, true);

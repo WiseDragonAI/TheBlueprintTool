@@ -30,5 +30,8 @@ export async function updateVoiceNote(input: { threadId?: string; noteId: string
       transcriptionStartedAt: input.transcriptionStartedAt,
       source: 'voice'
     }
+  }, {
+    domain: 'voice',
+    entityId: `${threadId}/${input.noteId}`,
   });
 }

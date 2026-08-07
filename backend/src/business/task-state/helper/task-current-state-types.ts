@@ -84,4 +84,5 @@ export type TaskCurrentFormat = {
   baselineEpoch: typeof taskCurrentBaselineEpoch;
   projectId: string;
   baselineRoot: string;
+  inventoryVersion?: 1;
 };

@@ -3,10 +3,11 @@
  * WHY: Real ledgers and the hidden ledgers canvas must share the same card, zone, group, note, and geometry behavior.
  */
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import { relationshipReferencesCard } from './relationship-references-card.js';
-import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, sameMarkdownImageSource, writeCardDescriptionFile } from './card-content-file.js';
-import { hydrateLedgerThreadNotesFor, resolveThreadContentFile, threadContentFileRef, writeThreadNotesFile } from './thread-content-file.js';
+import { cardContentFileRef, deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, readCardDescription, resolveCardContentFile, sameMarkdownImageSource, writeCardDescriptionFile } from './card-content-file.js';
+import { hydrateLedgerThreadNotesFor, parseThreadMarkdown, resolveThreadContentFile, threadContentFileRef, writeThreadNotesFile } from './thread-content-file.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { CardQuestionnaires } from '../../../../../shared/schemas/questionnaire-types.js';
 import { normalizeGitReviewNotes, type GitReviewNote } from '../../../../../shared/schemas/git-review-types.js';
@@ -31,12 +32,14 @@ export type LedgerMutation = {
   geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
   viewport?: { x?: number; y?: number; scale?: number };
   region?: { id?: string; kind?: string; label?: string; color?: string };
-  note?: { id?: string; threadId?: string; body?: string; role?: 'operator' | 'agent'; voiceFileRef?: string; reviewContext?: Record<string, string>; status?: string; transcriptionStartedAt?: string; uploadReceivedAt?: string; audioPersistedAt?: string; acceptedAt?: string; providerStartedAt?: string; providerSettledAt?: string; completedAt?: string; revision?: number; source?: string; error?: string; codexQueueRequestId?: string; codexQueueLaunchMode?: string; codexQueueCardId?: string; codexQueuePipelineId?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
+  note?: { id?: string; threadId?: string; body?: string; role?: 'operator' | 'agent'; voiceFileRef?: string; voiceAttemptId?: string; reviewContext?: Record<string, string>; status?: string; transcriptionStartedAt?: string; uploadReceivedAt?: string; audioPersistedAt?: string; acceptedAt?: string; providerStartedAt?: string; providerSettledAt?: string; completedAt?: string; revision?: number; source?: string; error?: string; codexQueueRequestId?: string; codexQueueLaunchMode?: string; codexQueueCardId?: string; codexQueuePipelineId?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
   selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
   pasteSuffix?: string;
 };
 
 type MutationError = { statusCode: number; body: Record<string, unknown> };
+type CreateAdmission = { idempotent: boolean; error?: MutationError };
+type VoiceAdmission = { idempotent: boolean; error?: MutationError };
 
 function finiteNumber(value: unknown, fallback: number): number {
   const number = Number(value);
@@ -56,6 +59,51 @@ function assignment(nodeId: string, changedAt: unknown, revision: number): Recor
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function voiceAdmission(current: Record<string, unknown>, incoming: NonNullable<LedgerMutation['note']>): VoiceAdmission {
+  const currentVoice = String(current.voiceFileRef ?? '').trim();
+  const incomingVoice = String(incoming.voiceFileRef ?? '').trim();
+  const incomingStatus = String(incoming.status ?? '').trim();
+  if (!currentVoice && !incomingVoice && !incomingStatus) return { idempotent: false };
+  const currentStatus = String(current.status ?? '').trim();
+  const currentRevision = Number(current.revision ?? 0);
+  const incomingRevision = Number(incoming.revision ?? 0);
+  const currentAttempt = String(current.voiceAttemptId ?? '').trim();
+  const incomingAttempt = String(incoming.voiceAttemptId ?? '').trim();
+  const reject = (error: string): VoiceAdmission => ({
+    idempotent: false,
+    error: { statusCode: 409, body: { ok: false, error } },
+  });
+  if (!Number.isSafeInteger(incomingRevision) || incomingRevision < 1) return reject('voice_revision_required');
+  if (currentAttempt && !incomingAttempt) return reject('voice_attempt_identity_required');
+  if (incomingAttempt && currentAttempt && incomingAttempt !== currentAttempt) {
+    return incomingStatus === 'queued' && incomingRevision > currentRevision
+      ? { idempotent: false }
+      : reject('voice_attempt_transition_invalid');
+  }
+  if (incomingAttempt && !currentAttempt && currentRevision > 0) {
+    return incomingStatus === 'queued' && incomingRevision > currentRevision
+      ? { idempotent: false }
+      : reject('voice_attempt_transition_invalid');
+  }
+  if (incomingRevision < currentRevision) return reject('voice_revision_stale');
+  if (incomingRevision === currentRevision) {
+    const exact = Object.entries(incoming).every(([key, value]) => (
+      key === 'threadId'
+      || (key === 'body' ? isDeepStrictEqual(current.message, value) : isDeepStrictEqual(current[key], value))
+    ));
+    return exact ? { idempotent: true } : reject('voice_revision_conflict');
+  }
+  const allowed = new Map<string, Set<string>>([
+    ['', new Set(['queued'])],
+    ['queued', new Set(['transcribing', 'transcription failed'])],
+    ['transcribing', new Set(['finalizing', 'transcription failed'])],
+    ['finalizing', new Set(['transcribed', 'transcription failed'])],
+    ['transcribed', new Set(['execution launch failed'])],
+  ]);
+  if (!allowed.get(currentStatus)?.has(incomingStatus)) return reject('voice_lifecycle_transition_invalid');
+  return { idempotent: false };
 }
 
 function validQuestionnaires(value: unknown): value is CardQuestionnaires {
@@ -100,6 +148,112 @@ function revisedQuestionnairesCarryAnswers(card: Record<string, unknown> | undef
   return false;
 }
 
+function createCardIdentity(input: {
+  decisionOsRoot: string;
+  card: Record<string, unknown>;
+}): { record: Record<string, unknown>; body: string } | null {
+  const record = structuredClone(input.card);
+  const comment = isRecord(record.comment) ? { ...record.comment } : {};
+  if (typeof comment.contentFile === 'string') {
+    const file = resolveCardContentFile(input.decisionOsRoot, comment.contentFile);
+    if (!file || !existsSync(file)) return null;
+  }
+  const body = readCardDescription({ decisionOsRoot: input.decisionOsRoot, card: input.card });
+  delete comment.what;
+  delete comment.contentFile;
+  if (Object.keys(comment).length > 0) record.comment = comment;
+  else delete record.comment;
+  return { record, body };
+}
+
+function createSidecarsAreSafe(input: {
+  decisionOsRoot: string;
+  ledgerPath: string;
+  card: Record<string, unknown>;
+}): boolean {
+  const identity = createCardIdentity({ decisionOsRoot: input.decisionOsRoot, card: input.card });
+  if (!identity) return false;
+  const cardFile = resolveCardContentFile(input.decisionOsRoot, cardContentFileRef(input.ledgerPath, input.card));
+  if (cardFile && existsSync(cardFile) && readFileSync(cardFile, 'utf8') !== identity.body) return false;
+  const threadId = `thread-${String(input.card.id ?? '')}`;
+  const threadFile = resolveThreadContentFile(input.decisionOsRoot, threadContentFileRef(input.ledgerPath, threadId));
+  return !threadFile || !existsSync(threadFile) || parseThreadMarkdown(readFileSync(threadFile, 'utf8')).length === 0;
+}
+
+function existingThreadMatchesEmptyCreation(input: {
+  decisionOsRoot: string;
+  ledger: Record<string, unknown>;
+  threadId: string;
+}): boolean {
+  const refs = isRecord(input.ledger.threadFiles) ? input.ledger.threadFiles : {};
+  const contentFile = refs[input.threadId];
+  const file = resolveThreadContentFile(input.decisionOsRoot, contentFile);
+  return typeof contentFile === 'string' && Boolean(file && existsSync(file) && parseThreadMarkdown(readFileSync(file, 'utf8')).length === 0);
+}
+
+function admitCreateMutation(input: {
+  decisionOsRoot: string;
+  ledgerPath: string;
+  ledger: Record<string, unknown>;
+  mutation: LedgerMutation;
+}): CreateAdmission {
+  const action = String(input.mutation.action ?? '');
+  const cards = Array.isArray(input.ledger.cards) ? input.ledger.cards as Record<string, unknown>[] : [];
+  const annotations = Array.isArray(input.ledger.annotations) ? input.ledger.annotations as Record<string, unknown>[] : [];
+  const relationships = Array.isArray(input.ledger.relationships) ? input.ledger.relationships as Record<string, unknown>[] : [];
+  const submittedCards = action === 'create-master-task'
+    ? [input.mutation.card, ...(input.mutation.cards ?? [])].filter((card): card is Record<string, unknown> => Boolean(card))
+    : ['create-card', 'create-task-intake'].includes(action) && input.mutation.card
+      ? [input.mutation.card]
+      : [];
+  const submittedAnnotations = ['create-zone', 'create-group', 'create-task-intake', 'create-master-task'].includes(action) && input.mutation.annotation
+    ? [input.mutation.annotation]
+    : [];
+  const submittedRelationships = action === 'create-master-task'
+    ? input.mutation.relationships ?? []
+    : action === 'create-relationship' && input.mutation.relationship
+      ? [input.mutation.relationship]
+      : [];
+  if (submittedCards.length + submittedAnnotations.length + submittedRelationships.length === 0) return { idempotent: false };
+
+  const existingCards = submittedCards.map((card) => cards.find((candidate) => String(candidate.id ?? '') === String(card.id ?? '')) ?? null);
+  const existingAnnotations = submittedAnnotations.map((annotation) => annotations.find((candidate) => String(candidate.id ?? '') === String(annotation.id ?? '')) ?? null);
+  const existingRelationships = submittedRelationships.map((relationship) => relationships.find((candidate) => String(candidate.id ?? '') === String(relationship.id ?? '')) ?? null);
+  const entities = [...existingCards, ...existingAnnotations, ...existingRelationships];
+  const existingCount = entities.filter(Boolean).length;
+  if (existingCount > 0 && existingCount !== entities.length) {
+    return { idempotent: false, error: { statusCode: 409, body: { ok: false, error: 'task_create_partial_collision' } } };
+  }
+
+  if (existingCount === entities.length && entities.length > 0) {
+    const cardsMatch = submittedCards.every((card, index) => {
+      const submitted = createCardIdentity({ decisionOsRoot: input.decisionOsRoot, card });
+      const existing = createCardIdentity({ decisionOsRoot: input.decisionOsRoot, card: existingCards[index]! });
+      return Boolean(submitted && existing
+        && isDeepStrictEqual(submitted.record, existing.record)
+        && submitted.body === existing.body
+        && existingThreadMatchesEmptyCreation({
+          decisionOsRoot: input.decisionOsRoot,
+          ledger: input.ledger,
+          threadId: `thread-${String(card.id ?? '')}`,
+        }));
+    });
+    const annotationsMatch = submittedAnnotations.every((annotation, index) => isDeepStrictEqual(annotation, existingAnnotations[index]));
+    const relationshipsMatch = submittedRelationships.every((relationship, index) => isDeepStrictEqual(relationship, existingRelationships[index]));
+    if (cardsMatch && annotationsMatch && relationshipsMatch) return { idempotent: true };
+    return { idempotent: false, error: { statusCode: 409, body: { ok: false, error: 'task_create_identity_collision' } } };
+  }
+
+  if (submittedCards.some((card) => !createSidecarsAreSafe({
+    decisionOsRoot: input.decisionOsRoot,
+    ledgerPath: input.ledgerPath,
+    card,
+  }))) {
+    return { idempotent: false, error: { statusCode: 409, body: { ok: false, error: 'task_create_content_collision' } } };
+  }
+  return { idempotent: false };
+}
+
 export function applyLedgerMutation(input: {
   decisionOsRoot: string;
   ledgerPath: string;
@@ -114,12 +268,19 @@ export function applyLedgerMutation(input: {
   mutation: LedgerMutation;
 }): { ok: boolean; ledger: Record<string, unknown>; error?: MutationError } {
   const { decisionOsRoot, ledgerPath, ledger, mutation } = input;
-  if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(String(mutation.action)) && mutation.note?.threadId) {
-    const referencedThreadFile = ledger.threadFiles?.[mutation.note.threadId];
+  if (['append-note', 'update-note', 'delete-note', 'restore-note'].includes(String(mutation.action))) {
+    const threadId = String(mutation.note?.threadId ?? '');
+    if (!threadId) {
+      return { ok: false, ledger, error: { statusCode: 409, body: { ok: false, error: 'task_thread_identity_missing' } } };
+    }
+    const referencedThreadFile = ledger.threadFiles?.[threadId];
+    if (typeof referencedThreadFile !== 'string' || !referencedThreadFile.trim()) {
+      return { ok: false, ledger, error: { statusCode: 409, body: { ok: false, error: 'task_thread_reference_missing', threadId } } };
+    }
     const resolvedThreadFile = resolveThreadContentFile(decisionOsRoot, referencedThreadFile);
     // WHAT: Reject mutation of an explicitly referenced thread whose bytes are not materialized.
     // WHY: Missing Epoch 4 bytes mean unavailable content, not an intentionally empty conversation.
-    if (typeof referencedThreadFile === 'string' && (!resolvedThreadFile || !existsSync(resolvedThreadFile))) {
+    if (!resolvedThreadFile || !existsSync(resolvedThreadFile)) {
       return {
         ok: false,
         ledger,
@@ -129,17 +290,7 @@ export function applyLedgerMutation(input: {
         },
       };
     }
-    if (mutation.action === 'restore-note') {
-      const threadFiles = ledger.threadFiles && typeof ledger.threadFiles === 'object' && !Array.isArray(ledger.threadFiles)
-        ? ledger.threadFiles
-        : (ledger.threadFiles = {});
-      if (!threadFiles[mutation.note.threadId]) {
-        const canonicalRef = threadContentFileRef(ledgerPath, mutation.note.threadId);
-        const canonicalFile = resolveThreadContentFile(decisionOsRoot, canonicalRef);
-        if (canonicalFile && existsSync(canonicalFile)) threadFiles[mutation.note.threadId] = canonicalRef;
-      }
-    }
-    hydrateLedgerThreadNotesFor(ledger, decisionOsRoot, mutation.note.threadId);
+    hydrateLedgerThreadNotesFor(ledger, decisionOsRoot, threadId);
   }
   let mutationError: MutationError | undefined;
   if (mutation.action === 'create-task-intake' || mutation.action === 'create-master-task') {
@@ -164,6 +315,9 @@ export function applyLedgerMutation(input: {
       for (const card of mutation.cards ?? []) delete card.assignment;
     }
   }
+  const createAdmission = admitCreateMutation({ decisionOsRoot, ledgerPath, ledger, mutation });
+  if (createAdmission.error) return { ok: false, ledger, error: createAdmission.error };
+  if (createAdmission.idempotent) return { ok: true, ledger };
   if (mutation.action === 'reassign-task') {
     const cardId = String(mutation.cardId ?? '');
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
@@ -178,6 +332,7 @@ export function applyLedgerMutation(input: {
 
   const voiceMetadata = (note: Record<string, unknown> | undefined): Record<string, unknown> => ({
     voiceFileRef: note?.voiceFileRef ?? '',
+    voiceAttemptId: note?.voiceAttemptId ?? '',
     status: note?.status ?? '',
     transcriptionStartedAt: note?.transcriptionStartedAt ?? '',
     uploadReceivedAt: note?.uploadReceivedAt ?? '',
@@ -196,7 +351,7 @@ export function applyLedgerMutation(input: {
   });
 
   const patchVoiceMetadata = (target: Record<string, unknown>, note: Record<string, unknown> | undefined, options: { overwrite: boolean }): void => {
-    for (const key of ['voiceFileRef', 'reviewContext', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt', 'error', 'codexQueueRequestId', 'codexQueueLaunchMode', 'codexQueueCardId', 'codexQueuePipelineId']) {
+    for (const key of ['voiceFileRef', 'voiceAttemptId', 'reviewContext', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt', 'error', 'codexQueueRequestId', 'codexQueueLaunchMode', 'codexQueueCardId', 'codexQueuePipelineId']) {
       if ((typeof note?.[key] === 'string' || (key === 'reviewContext' && typeof note?.[key] === 'object')) && (options.overwrite || !target[key])) target[key] = note[key];
     }
     if (Number.isFinite(Number(note?.revision)) && (options.overwrite || !target.revision)) target.revision = Number(note?.revision);
@@ -463,12 +618,18 @@ export function applyLedgerMutation(input: {
       return { ok: true, ledger };
     }
     let note = notes.find((entry) => String(entry.id ?? '') === noteId || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
+    const existed = Boolean(note);
     if (!note && noteId) {
       note = { id: noteId, role: 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), ...voiceMetadata(mutation.note) };
       if (mutation.note.imageSizes && typeof mutation.note.imageSizes === 'object') note.imageSizes = mutation.note.imageSizes;
       notes.push(note);
     }
     if (note) {
+      if (existed) {
+        const admission = voiceAdmission(note, mutation.note);
+        if (admission.error) return { ok: false, ledger, error: admission.error };
+        if (admission.idempotent) return { ok: true, ledger };
+      }
       mutation.note.id = String(note.id ?? noteId);
       if (typeof mutation.note.body === 'string') note.message = mutation.note.body;
       patchVoiceMetadata(note, mutation.note, { overwrite: true });

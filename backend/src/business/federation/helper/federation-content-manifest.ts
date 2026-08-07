@@ -3,7 +3,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { resolveCardContentFile } from '../../ledger/helper/card-content-file.js';
-import { parseThreadMarkdown, resolveThreadContentFile } from '../../ledger/helper/thread-content-file.js';
+import { resolveThreadContentFile } from '../../ledger/helper/thread-content-file.js';
 
 type AnyRecord = Record<string, unknown>;
 export type FederationContentResourceType = 'card-markdown' | 'thread-markdown' | 'managed-asset';
@@ -33,15 +33,6 @@ function assetFiles(decisionOsRoot: string, markdown: string): string[] {
     const file = resolve(decisionOsRoot, normalized.slice('.decision-os/'.length));
     if (!inside(decisionOsRoot, file) || !existsSync(file)) return [];
     return [file];
-  });
-}
-
-function voiceFiles(decisionOsRoot: string, markdown: string): string[] {
-  return parseThreadMarkdown(markdown).flatMap((note) => {
-    const source = String(note.voiceFileRef ?? '');
-    if (!source) return [];
-    const file = isAbsolute(source) ? resolve(source) : resolve(decisionOsRoot, source.replace(/^\/?\.decision-os\//, ''));
-    return inside(decisionOsRoot, file) && existsSync(file) ? [file] : [];
   });
 }
 
@@ -83,7 +74,9 @@ export function buildFederationContentManifest(input: { projectId: string; decis
       if (!file || !existsSync(file)) continue;
       files.set(file, 'thread-markdown');
       const markdown = readFileSync(file, 'utf8');
-      for (const asset of [...assetFiles(input.decisionOsRoot, markdown), ...voiceFiles(input.decisionOsRoot, markdown)]) files.set(asset, 'managed-asset');
+      // WHAT: Replicate transcript-bearing thread Markdown and explicitly linked assets only.
+      // WHY: Raw voice capture remains node-local even when its metadata contains a local voiceFileRef.
+      for (const asset of assetFiles(input.decisionOsRoot, markdown)) files.set(asset, 'managed-asset');
     }
   }
   return {
@@ -125,7 +118,7 @@ export async function buildFederationContentManifestAsync(input: {
       files.set(file, 'thread-markdown');
       const key = resourceKey(input.decisionOsRoot, file);
       const markdown = input.overrides?.get(key)?.toString('utf8') ?? readFileSync(file, 'utf8');
-      for (const asset of [...assetFiles(input.decisionOsRoot, markdown), ...voiceFiles(input.decisionOsRoot, markdown)]) files.set(asset, 'managed-asset');
+      for (const asset of assetFiles(input.decisionOsRoot, markdown)) files.set(asset, 'managed-asset');
     }
   }
   const entries = [...files].sort(([left], [right]) => left.localeCompare(right));

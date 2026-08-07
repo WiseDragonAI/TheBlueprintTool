@@ -13,6 +13,7 @@ export type TaskExecutionArtifactAvailability = {
 
 export type TaskExecutionStateItem = {
   readonly executionId: string;
+  readonly requestId: string;
   readonly sessionId: string;
   readonly kind: TaskExecutionKind;
   readonly phase: TaskExecutionPhase;

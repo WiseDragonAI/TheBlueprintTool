@@ -23,6 +23,7 @@ import { runtimeServerRoot } from '../helper/server-skill-context.js';
 import { readScopedCodexPipelineStores } from '../helper/server-pipeline-catalog.js';
 import {
   maxConcurrentCodexProcesses,
+  materializePipelineCardContent,
   reassessPipelineAfterSkill,
   resolvePipelineLedgerContext,
   type PipelineLedgerContext,
@@ -129,6 +130,20 @@ export async function startPipelineRun(input: {
   if (!context) return { ok: false, statusCode: 404, error: 'Ledger not found.', ledgerId: input.ledgerId };
   const source = sourceCard(context, input.sourceCardId);
   if (!source) return { ok: false, statusCode: 404, error: 'Source card not found.', cardId: input.sourceCardId };
+  try {
+    // WHAT: Resolve and verify the source body before creating any output card or pipeline manifest.
+    // WHY: A valid immutable input must not become an empty prompt after the ledger has already changed.
+    await materializePipelineCardContent({ context, runtime: input.runtime, cardId: input.sourceCardId });
+  } catch (error) {
+    const statusCode = Number((error as { statusCode?: unknown })?.statusCode);
+    return {
+      ok: false,
+      statusCode: statusCode === 409 ? 409 : 503,
+      code: 'task_pipeline_input_unavailable',
+      retryable: statusCode !== 409,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
   const replicatedState = taskExecutionState(input.runtime);
   const router = taskExecutionRouter(input.runtime);
   if (!replicatedState || !router) {

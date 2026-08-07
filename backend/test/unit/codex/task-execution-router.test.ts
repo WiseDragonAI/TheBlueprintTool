@@ -101,7 +101,7 @@ test('admits a local assigned task without a peer or relay round trip and retrie
   assert.equal(dispatchCount, 0);
 });
 
-test('remote retry after a lost response preserves one assigned-node execution and no local execution', async (context) => {
+test('remote retry after a lost response preserves one assigned-node execution and one origin preparing intent', async (context) => {
   const workstation = fixture('workstation', 'phone');
   const phone = fixture('phone', 'phone');
   context.after(() => dispose(workstation, phone));
@@ -137,14 +137,15 @@ test('remote retry after a lost response preserves one assigned-node execution a
 
   assert.deepEqual(retried, admitted);
   assert.equal(dispatchCount, 3);
-  assert.deepEqual(workstation.state.executions.all(), []);
-  assert.equal(workstation.state.executions.byTaskId('master').length, 0);
+  assert.equal(workstation.state.executions.find('execution-a')?.lifecycle.phase, 'preparing');
+  assert.equal(workstation.state.executions.find('execution-a')?.lifecycle.executorNodeId, 'phone');
+  assert.equal(workstation.state.executions.byTaskId('master').length, 1);
   assert.equal(phone.state.executions.find('execution-a')?.lifecycle.phase, 'queued');
   assert.equal(phone.state.executions.find('execution-a')?.lifecycle.executorNodeId, 'phone');
   assert.equal(phone.state.executions.byTaskId('master').length, 1);
 });
 
-test('returns assigned_node_unreachable and creates no execution when the assigned peer is offline', async (context) => {
+test('returns assigned_node_unreachable after durably preserving the remote preparing intent', async (context) => {
   const workstation = fixture('workstation', 'phone');
   context.after(() => dispose(workstation));
   const router = createTaskExecutionRouter({
@@ -162,8 +163,37 @@ test('returns assigned_node_unreachable and creates no execution when the assign
     assert.deepEqual(error.context, { assignedNodeId: 'phone' });
     return true;
   });
-  assert.deepEqual(workstation.state.executions.all(), []);
-  assert.equal(workstation.state.executions.byTaskId('master').length, 0);
+  assert.equal(workstation.state.executions.find('execution-a')?.lifecycle.phase, 'preparing');
+  assert.equal(workstation.state.executions.find('execution-a')?.lifecycle.executorNodeId, 'phone');
+  assert.equal(workstation.state.executions.byTaskId('master').length, 1);
+});
+
+test('the assigned node advances a replicated origin preparing intent to queued', async (context) => {
+  const workstation = fixture('workstation', 'phone');
+  const phone = fixture('phone', 'phone');
+  context.after(() => dispose(workstation, phone));
+  const originRouter = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => workstation.state,
+    localNodeId: () => 'workstation',
+    peer: () => ({ online: false }),
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+  });
+  await assert.rejects(originRouter.route(request()), /Assigned node phone is unreachable/);
+  await phone.state.store.merge(workstation.state.store.activeDelta(['execution\u0000execution-a']));
+  const phoneRouter = createTaskExecutionRouter({
+    projectId: 'project-a',
+    state: () => phone.state,
+    localNodeId: () => 'phone',
+    peer: () => null,
+    dispatchRemote: async () => { throw new Error('unexpected_remote_dispatch'); },
+  });
+
+  const admitted = await phoneRouter.admitLocal(request());
+
+  assert.equal(admitted.phase, 'queued');
+  assert.equal(phone.state.executions.find('execution-a')?.lifecycle.phase, 'queued');
+  assert.equal(phone.state.executions.find('execution-a')?.lifecycle.executorNodeId, 'phone');
 });
 
 test('blocks an assignment conflict before admission and preserves the explicit conflict', async (context) => {

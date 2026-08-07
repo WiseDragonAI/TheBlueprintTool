@@ -12,6 +12,10 @@ import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
 import { refreshZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 import { overlayPendingActiveLedger } from './run-optimistic-active-ledger-mutation.js';
 import { acceptTaskClockForInstall } from '../../refresh/helper/task-causal-clock.js';
+import {
+  releaseSettledOptimisticNotes,
+  settlePendingTaskMutationReceipts,
+} from '../../refresh/helper/pending-task-mutation-receipts.js';
 
 type AnyRecord = Record<string, any>;
 
@@ -262,6 +266,14 @@ export function reconcileActiveLedgerState(input: ReconcileActiveLedgerInput): b
 
   const sameLedger = Boolean(state.activeLedger && state.activeLedgerId === input.request.ledgerStateId);
   const localLedger = sameLedger ? state.activeLedger : null;
+  const settled = input.taskClock
+    ? settlePendingTaskMutationReceipts({
+      projectId: String(state.projectId ?? ''),
+      ledgerId: input.request.ledgerStateId,
+      taskClock: input.taskClock,
+    })
+    : [];
+  releaseSettledOptimisticNotes(localLedger, settled);
   const preserve = sameLedger && isRecord(localLedger)
     ? geometryIdsToPreserve(input, localLedger)
     : {

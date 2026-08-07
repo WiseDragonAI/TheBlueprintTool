@@ -142,10 +142,10 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
     const relationships = records(mutation.relationships);
     activationTaskId = String(mutation.card.id);
     replication = 'held';
-    changes.push(...entity('annotation', String(mutation.annotation.id), null, recordById(after, 'annotations', String(mutation.annotation.id))));
+    changes.push(...entity('annotation', String(mutation.annotation.id), recordById(before, 'annotations', String(mutation.annotation.id)), recordById(after, 'annotations', String(mutation.annotation.id))));
     for (const card of cards) {
       const cardId = String(card.id ?? '');
-      changes.push(...entity('card', cardId, null, recordById(after, 'cards', cardId)));
+      changes.push(...entity('card', cardId, recordById(before, 'cards', cardId), recordById(after, 'cards', cardId)));
       const threadId = `thread-${cardId}`;
       const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
       const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};
@@ -153,34 +153,34 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
     }
     for (const relationship of relationships) {
       const relationshipId = String(relationship.id ?? '');
-      changes.push(...entity('relationship', relationshipId, null, recordById(after, 'relationships', relationshipId)));
+      changes.push(...entity('relationship', relationshipId, recordById(before, 'relationships', relationshipId), recordById(after, 'relationships', relationshipId)));
     }
   } else if (action === 'create-task-intake' && mutation.card?.id && mutation.annotation?.id) {
     const cardId = String(mutation.card.id);
     const annotationId = String(mutation.annotation.id);
     activationTaskId = cardId;
     replication = 'held';
-    changes.push(...entity('annotation', annotationId, null, recordById(after, 'annotations', annotationId)));
-    changes.push(...entity('card', cardId, null, recordById(after, 'cards', cardId)));
+    changes.push(...entity('annotation', annotationId, recordById(before, 'annotations', annotationId), recordById(after, 'annotations', annotationId)));
+    changes.push(...entity('card', cardId, recordById(before, 'cards', cardId), recordById(after, 'cards', cardId)));
     const threadId = `thread-${cardId}`;
     const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
     const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};
     changes.push(...ledgerField(`threadFiles/${threadId}`, beforeRefs[threadId], afterRefs[threadId]));
   } else if ((action === 'create-zone' || action === 'create-group') && mutation.annotation?.id) {
     const id = String(mutation.annotation.id);
-    changes.push(...entity('annotation', id, null, recordById(after, 'annotations', id)));
+    changes.push(...entity('annotation', id, recordById(before, 'annotations', id), recordById(after, 'annotations', id)));
   } else if (action === 'create-card' && mutation.card?.id) {
     const id = String(mutation.card.id);
     activationTaskId = id;
     replication = 'held';
-    changes.push(...entity('card', id, null, recordById(after, 'cards', id)));
+    changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
     const threadId = `thread-${id}`;
     const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
     const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};
     changes.push(...ledgerField(`threadFiles/${threadId}`, beforeRefs[threadId], afterRefs[threadId]));
   } else if (action === 'create-relationship' && mutation.relationship?.id) {
     const id = String(mutation.relationship.id);
-    changes.push(...entity('relationship', id, null, recordById(after, 'relationships', id)));
+    changes.push(...entity('relationship', id, recordById(before, 'relationships', id), recordById(after, 'relationships', id)));
   } else if (action === 'transition-card-lifecycle' && mutation.cardId) {
     const id = String(mutation.cardId);
     activationTaskId = id;

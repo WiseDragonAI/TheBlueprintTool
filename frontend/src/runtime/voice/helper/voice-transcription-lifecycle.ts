@@ -14,6 +14,7 @@ const statusRank: Record<string, number> = {
 export const voiceLifecycleFields = [
   'message',
   'voiceFileRef',
+  'voiceAttemptId',
   'status',
   'error',
   'transcriptionStartedAt',

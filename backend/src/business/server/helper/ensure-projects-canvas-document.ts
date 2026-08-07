@@ -2,8 +2,9 @@
  * WHAT: Mirrors registered projects into the master projects canvas while preserving operator geometry.
  * WHY: Project membership and project layout need separate authoritative persistence boundaries.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { replaceTextFileAtomically } from '../../ledger/helper/card-content-file.js';
 import type { DecisionOsProject } from './project-catalog.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -32,8 +33,17 @@ export function ensureProjectsCanvasDocument(input: { masterDecisionOsRoot: stri
   document: AnyRecord & { cards: AnyRecord[]; annotations: AnyRecord[]; relationships: AnyRecord[] };
 } {
   const path = resolve(input.masterDecisionOsRoot, 'projects-canvas.json');
-  const existing = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
-  const document = isRecord(existing) ? existing : {};
+  const existing = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) as unknown : {};
+  if (!isRecord(existing)) throw new Error('invalid_projects_canvas_root');
+  const document = existing;
+  for (const field of ['cards', 'annotations', 'relationships'] as const) {
+    if (Object.hasOwn(document, field) && (!Array.isArray(document[field]) || (document[field] as unknown[]).some((entry) => !isRecord(entry)))) {
+      throw new Error(`invalid_projects_canvas_${field}`);
+    }
+  }
+  for (const field of ['diagramSize', 'viewport', 'notes'] as const) {
+    if (Object.hasOwn(document, field) && !isRecord(document[field])) throw new Error(`invalid_projects_canvas_${field}`);
+  }
   const cards = Array.isArray(document.cards) ? document.cards as AnyRecord[] : [];
   const registeredIds = new Set(input.projects.map((project) => project.id));
   const nextCards = cards.filter((card) => {
@@ -69,8 +79,7 @@ export function ensureProjectsCanvasDocument(input: { masterDecisionOsRoot: stri
   document.annotations = Array.isArray(document.annotations) ? document.annotations : [];
   document.relationships = Array.isArray(document.relationships) ? document.relationships : [];
   document.notes = isRecord(document.notes) ? document.notes : {};
-  mkdirSync(input.masterDecisionOsRoot, { recursive: true });
-  writeFileSync(path, JSON.stringify(document, null, 2));
+  replaceTextFileAtomically(path, JSON.stringify(document, null, 2));
   return {
     path,
     document: document as AnyRecord & { cards: AnyRecord[]; annotations: AnyRecord[]; relationships: AnyRecord[] },

@@ -2,7 +2,7 @@
  * WHAT: Stores uploaded voice audio in the local workspace cache and returns its file ref.
  * WHY: Optimistic voice notes must keep recorded audio available for transcription retry.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { telemetry } from '@backend/telemetry/harness.js';
@@ -22,8 +22,23 @@ export function persistUploadedVoiceAudio(input: { action_payload?: AnyRecord; r
   mkdirSync(uploadRoot, { recursive: true });
   const mimeType = String(payload.mimeType ?? 'audio/webm');
   const extension = mimeType.includes('wav') ? 'wav' : mimeType.includes('mpeg') || mimeType.includes('mp3') ? 'mp3' : mimeType.includes('ogg') ? 'ogg' : 'webm';
-  const voiceFileRef = resolve(uploadRoot, `voice-${Date.now()}-${randomUUID()}.${extension}`);
-  writeFileSync(voiceFileRef, audioBuffer);
+  const stableIdentity = [payload.noteId, payload.voiceAttemptId]
+    .map((value) => String(value ?? '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, ''))
+    .filter(Boolean)
+    .join('-');
+  const voiceFileRef = resolve(uploadRoot, `voice-${stableIdentity || `${Date.now()}-${randomUUID()}`}.${extension}`);
+  if (existsSync(voiceFileRef)) {
+    if (!readFileSync(voiceFileRef).equals(audioBuffer)) return { ok: false, error: 'voice_upload_identity_conflict' };
+  } else {
+    const temporary = `${voiceFileRef}.upload-${process.pid}-${randomUUID()}`;
+    try {
+      writeFileSync(temporary, audioBuffer, { flag: 'wx' });
+      renameSync(temporary, voiceFileRef);
+    } catch (error) {
+      rmSync(temporary, { force: true });
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
   runtime.voiceFileRef = voiceFileRef;
   runtime.voiceUploadStatus = 'uploaded';
   runtime.voiceUpload = { voiceFileRef, size: audioBuffer.byteLength, mimeType };

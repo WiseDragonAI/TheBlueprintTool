@@ -32,6 +32,14 @@ import {
   optimisticExecutionConfirmed,
 } from './optimistic-execution-projection.js';
 import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execution-request-id.js';
+import { taskClockFromResponse, taskMutationReceiptMatches } from '/src/runtime/refresh/helper/task-causal-clock.js';
+import { acceptResponsiveTaskClock } from './task-clock-admission.js';
+import {
+  acknowledgePendingTaskMutationReceipt,
+  beginPendingTaskMutationReceipt,
+  completePendingTaskMutationReceipt,
+  pendingTaskMutationReceiptsForScope,
+} from '/src/runtime/refresh/helper/pending-task-mutation-receipts.js';
 
 installProjectRequestScope();
 
@@ -405,9 +413,17 @@ function navigate(path, replace = false, returnPathOverride = '') {
 }
 
 function beginOptimisticExecution(detail) {
-  if (!state.controlRoom || !detail?.requestId) return '';
-  const task = controlRoomTaskForExecution(state.controlRoom, detail);
-  if (!task) return '';
+  if (!detail?.requestId) return '';
+  const task = state.controlRoom ? controlRoomTaskForExecution(state.controlRoom, detail) : null;
+  beginPendingTaskMutationReceipt({
+    mutationId: String(detail.requestId),
+    entityId: `request:${String(detail.requestId)}`,
+    projectId: String(detail.projectId || task?.projectId || ''),
+    ledgerId: String(detail.ledgerId || task?.ledgerId || 'tasks'),
+    domain: detail.kind === 'pipeline' ? 'pipeline' : 'queued-execution',
+    mutation: { detail: structuredClone(detail), task: task ? structuredClone(task) : null },
+  });
+  if (!state.controlRoom || !task) return '';
   const intent = createOptimisticExecutionIntent(task, detail);
   const identity = taskIdentity(task);
   optimisticExecutionIntents.set(identity, intent);
@@ -418,6 +434,8 @@ function beginOptimisticExecution(detail) {
 
 function acknowledgeOptimisticExecution(detail) {
   const clientRequestId = String(detail?.clientRequestId ?? detail?.requestId ?? '');
+  if (!clientRequestId || String(detail?.requestId ?? '') !== clientRequestId) return;
+  acknowledgePendingTaskMutationReceipt(clientRequestId, null);
   const intent = [...optimisticExecutionIntents.values()].find((candidate) => candidate.requestId === clientRequestId);
   if (intent) {
     intent.requestId = String(detail.requestId ?? intent.requestId);
@@ -434,6 +452,7 @@ function rejectOptimisticExecution(detail) {
   for (const [identity, intent] of optimisticExecutionIntents) {
     if (intent.requestId === rejectedRequestId) optimisticExecutionIntents.delete(identity);
   }
+  completePendingTaskMutationReceipt(rejectedRequestId);
   elements['mutation-error-message'].textContent = String(detail?.error || 'Execution admission was rejected and confirmed state was restored.');
   elements['mutation-error'].hidden = false;
   void loadControlRoom({ force: true }).then(() => {
@@ -648,6 +667,7 @@ function responsiveLedgerScopeKey(scope) {
 }
 
 async function requestLedgerMutation(ledgerId, mutation, projectId, replicaNodeId) {
+  mutation = mutation.mutationId ? mutation : { ...mutation, mutationId: crypto.randomUUID() };
   const response = await projectFetch(`/decision-os/${encodeURIComponent(ledgerId)}`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
@@ -655,6 +675,14 @@ async function requestLedgerMutation(ledgerId, mutation, projectId, replicaNodeI
   }, projectId, replicaNodeId);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
+  if (ledgerId === 'tasks') {
+    const taskClock = payload?.taskClock && typeof payload.taskClock === 'object' && !Array.isArray(payload.taskClock)
+      ? payload.taskClock
+      : taskClockFromResponse(response);
+    if (!taskMutationReceiptMatches(payload, mutation.mutationId) || !acceptResponsiveTaskClock({ projectId, ledgerId }, taskClock)) {
+      throw new Error('task_mutation_receipt_not_admitted');
+    }
+  }
   return payload;
 }
 
@@ -685,6 +713,9 @@ const responsiveLedgerTransactions = createOptimisticLedgerTransactionCoordinato
         throw error;
       }
       const response = await projectFetch(`/api/ledgers/${encodeURIComponent(scope.ledgerId)}/canvas`, { cache: 'no-store' }, scope.projectId, scope.replicaNodeId);
+      if (!acceptResponsiveTaskClock(scope, taskClockFromResponse(response))) {
+        return { ok: true };
+      }
       const confirmed = await response.json().catch(() => null);
       if (!response.ok || !confirmed || typeof confirmed !== 'object' || Array.isArray(confirmed)) {
         console.error(`Ledger confirmation refresh failed with HTTP ${response.status}; the accepted mutation remains optimistic.`);
@@ -1836,10 +1867,31 @@ async function loadControlRoom({ force = false, deferDuringQueueDrag = false, ow
   if (response.status === 304 && state.controlRoom) return false;
   if (!response.ok) throw new Error(`Could not load the Control Room (${response.status}).`);
   const nextControlRoom = await response.json();
+  const taskScopes = new Set((nextControlRoom.allTasks ?? []).map((task) => String(task.projectId ?? '')).filter(Boolean));
+  for (const projectId of taskScopes) {
+    for (const receipt of pendingTaskMutationReceiptsForScope({ projectId, ledgerId: 'tasks' })) {
+      if (!['queued-execution', 'pipeline'].includes(receipt.domain)) continue;
+      const detail = receipt.mutation.detail;
+      const storedTask = receipt.mutation.task;
+      const serverTask = (nextControlRoom.allTasks ?? []).find((task) => (
+        String(task.projectId ?? '') === projectId
+        && String(task.ledgerId ?? '') === String(detail?.ledgerId ?? 'tasks')
+        && String(task.cardId ?? '') === String(detail?.cardId ?? '')
+      ));
+      const task = serverTask ?? storedTask;
+      if (!task) continue;
+      const identity = taskIdentity(task);
+      if (!optimisticExecutionIntents.has(identity)) {
+        const intent = createOptimisticExecutionIntent(task, detail);
+        optimisticExecutionIntents.set(identity, intent);
+      }
+    }
+  }
   for (const [identity, intent] of optimisticExecutionIntents) {
     const serverTask = (nextControlRoom.allTasks ?? []).find((task) => taskIdentity(task) === identity);
     if (optimisticExecutionConfirmed(intent, serverTask)) {
       optimisticExecutionIntents.delete(identity);
+      completePendingTaskMutationReceipt(intent.requestId);
       continue;
     }
     // Keep the request-owned preparing projection until the exact request revision is visible.
@@ -2720,6 +2772,9 @@ async function loadLedger(ledgerId, owner) {
   const response = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/navigation`, { cache: 'no-store', signal: owner.signal }, owner.route.projectId, owner.route.replicaNodeId);
   requireRouteOwnership(owner);
   if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
+  if (!acceptResponsiveTaskClock({ projectId: owner.route.projectId, ledgerId }, taskClockFromResponse(response))) {
+    throw new Error('The task projection is older than the locally persisted state.');
+  }
   const ledger = await response.json();
   requireRouteOwnership(owner);
   if (!ledger || !Array.isArray(ledger.cards)) throw new Error('The ledger response does not contain a card list.');
@@ -2737,7 +2792,11 @@ async function loadLedger(ledgerId, owner) {
     onQuickVoiceSubmitted: navigateVoiceSubmission,
     onLedgerRefresh: async (activeLedgerId, replicaNodeId) => {
       const projectId = state.resourceProjectId;
-      const refreshed = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }, projectId, replicaNodeId).then((result) => result.ok ? result.json() : null);
+      const refreshedResponse = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }, projectId, replicaNodeId);
+      const refreshed = refreshedResponse.ok
+        && acceptResponsiveTaskClock({ projectId, ledgerId: activeLedgerId }, taskClockFromResponse(refreshedResponse))
+        ? await refreshedResponse.json().catch(() => null)
+        : null;
       const reconciled = refreshed
         ? responsiveLedgerTransactions.reconcile(responsiveLedgerScopeKey({ projectId, replicaNodeId, ledgerId: activeLedgerId }), refreshed)
         : null;

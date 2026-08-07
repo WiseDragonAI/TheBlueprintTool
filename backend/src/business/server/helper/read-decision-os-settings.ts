@@ -9,6 +9,13 @@ import { resolveDecisionOsRoot } from './resolve-decision-os-root.js';
 
 type AnyRecord = Record<string, unknown>;
 
+function settingsDocument(file: string): AnyRecord {
+  if (!existsSync(file)) return {};
+  const value = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`invalid_project_settings_root:${file}`);
+  return value as AnyRecord;
+}
+
 export function readDecisionOsSettings(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Record<string, unknown> {
   telemetry('read-decision-os-settings', { role: 'helper', action: 'read-decision-os-settings' });
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
@@ -22,12 +29,12 @@ export function readDecisionOsSettings(input: { action_payload?: AnyRecord; runt
     ?? runtime.repositorySettingsFile
     ?? settingsFile
   ));
-  const repositorySettings = existsSync(repositorySettingsFile) ? JSON.parse(readFileSync(repositorySettingsFile, 'utf8')) as AnyRecord : {};
+  const repositorySettings = settingsDocument(repositorySettingsFile);
   // WHAT: Avoid loading the same file twice when the repository itself is the active workspace.
   // WHY: One parsed source preserves the same override semantics without redundant file IO.
   const workspaceSettings = settingsFile === repositorySettingsFile
     ? {}
-    : existsSync(settingsFile) ? JSON.parse(readFileSync(settingsFile, 'utf8')) as AnyRecord : {};
+    : settingsDocument(settingsFile);
   const raw = { ...repositorySettings, ...workspaceSettings };
   const settings: AnyRecord = { ...raw };
   settings.decisionOsFrontendRoot = raw.decisionOsFrontendRoot ?? raw.frontendRoot ?? raw.DECISION_OS_FRONTEND_ROOT;

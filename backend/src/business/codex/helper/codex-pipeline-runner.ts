@@ -12,7 +12,7 @@ import type {
   CodexPipelineStatus,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
-import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
+import { hydrateLedgerCardContent, replaceTextFileAtomically, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
 import { codexRunExecutionFinishedMarker } from './codex-run-segment-marker.js';
 import { readCodexPipelineStore } from './codex-pipeline-store.js';
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
@@ -101,7 +101,7 @@ function appendRunStatus(filePath: string, status: TerminalStatus, detail: strin
   const markdown = ['', '---', '', `Codex run ${status === 'complete' ? 'completed' : status}: ${detail}`].join('\n');
   try {
     const current = existsSync(filePath) ? readFileSync(filePath, 'utf8').replace(/\s+$/g, '') : '';
-    writeFileSync(filePath, `${current}${markdown}\n`, 'utf8');
+    replaceTextFileAtomically(filePath, `${current}${markdown}\n`);
   } catch {
     // The durable manifest and process logs remain authoritative when card output cannot be patched.
   }
@@ -136,7 +136,30 @@ function cardContent(input: { context: PipelineLedgerContext; decisionOsRoot: st
   ) as { cards?: AnyRecord[] };
   const card = (hydrated.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
-  return String(comment.what ?? comment.body ?? comment.description ?? '');
+  if (Object.hasOwn(comment, 'what')) return String(comment.what ?? '');
+  if (Object.hasOwn(comment, 'body')) return String(comment.body ?? '');
+  if (Object.hasOwn(comment, 'description')) return String(comment.description ?? '');
+  throw new Error(`task_pipeline_input_content_missing:${input.cardId}`);
+}
+
+export async function materializePipelineCardContent(input: {
+  context: PipelineLedgerContext;
+  runtime: AnyRecord;
+  cardId: string;
+}): Promise<void> {
+  const card = (input.context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
+  if (!card) throw new Error(`task_pipeline_input_card_missing:${input.cardId}`);
+  const comment = card.comment && typeof card.comment === 'object' && !Array.isArray(card.comment) ? card.comment as AnyRecord : {};
+  const contentFile = typeof comment.contentFile === 'string' ? comment.contentFile : '';
+  if (!contentFile) {
+    if (typeof comment.what !== 'string' && typeof comment.body !== 'string' && typeof comment.description !== 'string') {
+      throw new Error(`task_pipeline_input_content_reference_missing:${input.cardId}`);
+    }
+    return;
+  }
+  const materialize = input.runtime.materializeTaskResources;
+  if (typeof materialize !== 'function') throw new Error('task_content_materializer_unavailable');
+  await materialize([contentFile]);
 }
 
 export function outputFileForPipelineCard(context: PipelineLedgerContext, decisionOsRoot: string, cardId: string): string {
@@ -342,6 +365,10 @@ export async function spawnPipelineSkillProcess(input: {
   const replicatedExecution = replicatedState?.executions.find(input.skill.executionId) ?? null;
   if (!replicatedState || !replicatedExecution) throw new Error(`task_execution_not_found:${input.skill.executionId}`);
   if (replicatedExecution.lifecycle.phase !== 'starting') throw new Error(`task_execution_spawn_phase_invalid:${replicatedExecution.lifecycle.phase}`);
+  const flattened = input.pipelineRun.steps.flatMap((step) => step.skills.map((skill) => ({ step, skill })));
+  const skillIndex = flattened.findIndex((entry) => entry.skill.runId === input.skill.runId);
+  const inputCardId = skillIndex <= 0 ? input.pipelineRun.sourceCardId : flattened[skillIndex - 1].step.outputCardId;
+  await materializePipelineCardContent({ context, runtime: input.runtime, cardId: inputCardId });
   const stageInput = priorInput({
     run: input.pipelineRun,
     step: input.step,

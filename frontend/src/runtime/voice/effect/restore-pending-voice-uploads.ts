@@ -8,6 +8,7 @@ import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { deletePendingVoiceUpload, listPendingVoiceUploads } from './persist-pending-voice-upload.js';
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
+import { beginPendingTaskMutationReceipt } from '../../refresh/helper/pending-task-mutation-receipts.js';
 
 const activeRestores = new Set<string>();
 const restoredScopes = new Set<string>();
@@ -27,6 +28,28 @@ export async function restorePendingVoiceUploads(threadId: string): Promise<bool
     const notes = notesByThread[threadId] ?? [];
     let changed = false;
     for (const entry of entries) {
+      if (entry.ledgerId === 'tasks') {
+        beginPendingTaskMutationReceipt({
+          mutationId: entry.mutationId,
+          entityId: `${entry.threadId}/${entry.noteId}`,
+          projectId: projectId || String(entry.projectId ?? ''),
+          ledgerId: entry.ledgerId,
+          domain: 'voice',
+          mutation: {
+            action: 'append-note',
+            mutationId: entry.mutationId,
+            note: {
+              id: entry.noteId,
+              threadId: entry.threadId,
+              body: 'Voice note captured. Upload pending.',
+              source: 'voice',
+              status: 'uploading',
+              voiceAttemptId: entry.voiceAttemptId,
+              revision: 0,
+            },
+          },
+        });
+      }
       const note = notes.find((candidate) => String(candidate.id ?? '') === entry.noteId);
       if (note) {
         if (note.voiceFileRef && (note.acceptedAt || note.audioPersistedAt)) {
@@ -47,6 +70,8 @@ export async function restorePendingVoiceUploads(threadId: string): Promise<bool
         status: 'upload failed',
         error: 'Upload did not reach server acceptance.',
         localVoiceUploadId: entry.noteId,
+        voiceAttemptId: entry.voiceAttemptId,
+        mutationReceiptId: entry.mutationId,
         optimistic: true
       });
       changed = true;

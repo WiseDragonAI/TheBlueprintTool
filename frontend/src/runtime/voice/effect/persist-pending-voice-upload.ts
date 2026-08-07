@@ -6,13 +6,15 @@
 import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
 
 const databaseName = 'decision-os-voice';
-const databaseVersion = 2;
+const databaseVersion = 3;
 const storeName = 'pending-uploads';
 const threadScopeIndex = 'ledger-thread';
 const memoryStore = new Map<string, PendingVoiceUpload>();
 
 export type PendingVoiceUpload = {
   noteId: string;
+  mutationId: string;
+  voiceAttemptId: string;
   projectId?: string;
   replicaNodeId?: string;
   threadId: string;
@@ -24,9 +26,11 @@ export type PendingVoiceUpload = {
   createdAt: string;
 };
 
-type LegacyPendingVoiceUpload = Omit<PendingVoiceUpload, 'launchMode'> & {
+type LegacyPendingVoiceUpload = Omit<PendingVoiceUpload, 'launchMode' | 'mutationId' | 'voiceAttemptId'> & {
   launchMode?: VoiceLaunchMode;
   queueCodex?: boolean;
+  mutationId?: string;
+  voiceAttemptId?: string;
 };
 
 function cloneEntry(entry: PendingVoiceUpload): PendingVoiceUpload {
@@ -45,17 +49,27 @@ function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
         ? request.transaction!.objectStore(storeName)
         : request.result.createObjectStore(storeName, { keyPath: 'noteId' });
       if (!store.indexNames.contains(threadScopeIndex)) store.createIndex(threadScopeIndex, ['ledgerId', 'threadId']);
-      if (event.oldVersion < 2) {
+      if (event.oldVersion < databaseVersion) {
         const cursorRequest = store.openCursor();
         cursorRequest.onsuccess = () => {
           const cursor = cursorRequest.result;
           if (!cursor) return;
           const entry = cursor.value as LegacyPendingVoiceUpload;
+          let changed = false;
           if (!entry.launchMode) {
             entry.launchMode = entry.queueCodex ? 'run' : 'send';
             delete entry.queueCodex;
-            cursor.update(entry);
+            changed = true;
           }
+          if (!entry.mutationId) {
+            entry.mutationId = crypto.randomUUID();
+            changed = true;
+          }
+          if (!entry.voiceAttemptId) {
+            entry.voiceAttemptId = `voice-attempt-${crypto.randomUUID()}`;
+            changed = true;
+          }
+          if (changed) cursor.update(entry);
           cursor.continue();
         };
       }
@@ -90,6 +104,7 @@ async function runRequest<T>(mode: IDBTransactionMode, operation: (store: IDBObj
 export async function persistPendingVoiceUpload(entry: PendingVoiceUpload): Promise<void> {
   const copy = cloneEntry(entry);
   if (!indexedDbFactory()) {
+    if (typeof globalThis.window === 'object') throw new Error('voice_upload_storage_unavailable');
     memoryStore.set(copy.noteId, copy);
     return;
   }
@@ -97,7 +112,10 @@ export async function persistPendingVoiceUpload(entry: PendingVoiceUpload): Prom
 }
 
 export async function readPendingVoiceUpload(noteId: string): Promise<PendingVoiceUpload | null> {
-  if (!indexedDbFactory()) return memoryStore.has(noteId) ? cloneEntry(memoryStore.get(noteId)!) : null;
+  if (!indexedDbFactory()) {
+    if (typeof globalThis.window === 'object') throw new Error('voice_upload_storage_unavailable');
+    return memoryStore.has(noteId) ? cloneEntry(memoryStore.get(noteId)!) : null;
+  }
   const result = await runRequest<PendingVoiceUpload | undefined>('readonly', (store) => store.get(noteId));
   return result ? cloneEntry(result) : null;
 }
@@ -106,6 +124,7 @@ export async function listPendingVoiceUploads(input: { projectId?: string; repli
   const ownsTarget = (entry: PendingVoiceUpload): boolean => (!entry.projectId || entry.projectId === input.projectId)
     && (!entry.replicaNodeId || entry.replicaNodeId === input.replicaNodeId);
   if (!indexedDbFactory()) {
+    if (typeof globalThis.window === 'object') throw new Error('voice_upload_storage_unavailable');
     return Array.from(memoryStore.values(), cloneEntry).filter((entry) => entry.ledgerId === input.ledgerId
       && entry.threadId === input.threadId
       && ownsTarget(entry));
@@ -116,6 +135,7 @@ export async function listPendingVoiceUploads(input: { projectId?: string; repli
 
 export async function deletePendingVoiceUpload(noteId: string): Promise<void> {
   if (!indexedDbFactory()) {
+    if (typeof globalThis.window === 'object') throw new Error('voice_upload_storage_unavailable');
     memoryStore.delete(noteId);
     return;
   }

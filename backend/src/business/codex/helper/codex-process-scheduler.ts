@@ -12,7 +12,7 @@ import {
 } from './codex-pipeline-runner.js';
 import { startThreadCodexProcessController } from '../controller/start-thread-codex-process-controller.js';
 import { continueCardSkillRunController } from '../controller/continue-card-skill-run-controller.js';
-import { taskExecutionNodeId, taskExecutionState } from './task-execution-runtime.js';
+import { finalizeSyntheticTaskExecutionArtifacts, taskExecutionNodeId, taskExecutionState } from './task-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -87,12 +87,18 @@ export function unifiedCodexQueuePosition(input: { decisionOsRoot: string; id: s
 
 async function failClaim(input: {
   state: NonNullable<ReturnType<typeof taskExecutionState>>;
+  runtime: AnyRecord;
   executionId: string;
   code: string;
   message: string;
 }): Promise<void> {
   const current = input.state.executions.find(input.executionId);
   if (current?.lifecycle.phase !== 'starting') return;
+  await finalizeSyntheticTaskExecutionArtifacts({
+    runtime: input.runtime,
+    executionId: input.executionId,
+    reason: `${input.code}: ${input.message}`,
+  });
   await input.state.executions.transition(input.executionId, {
     phase: 'failed',
     error: { code: input.code, message: input.message },
@@ -166,6 +172,7 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
         }
         await failClaim({
           state,
+          runtime: input.runtime,
           executionId: claimed.metadata.executionId,
           code: String(result.code ?? 'task_execution_dispatch_failed'),
           message: String(result.error ?? 'Dispatch failed.'),

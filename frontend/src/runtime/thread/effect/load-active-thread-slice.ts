@@ -13,6 +13,10 @@ import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
 import { pinThreadFeedToLastMessage } from './pin-thread-feed-to-last-message.js';
 import { projectScopedRequestPath, replicaRequestInit } from '../../project/helper/project-request-scope.js';
 import { acceptTaskClockForInstall, taskClockFromResponse } from '../../refresh/helper/task-causal-clock.js';
+import {
+  releaseSettledOptimisticNotes,
+  settlePendingTaskMutationReceipts,
+} from '../../refresh/helper/pending-task-mutation-receipts.js';
 
 type AnyRecord = Record<string, any>;
 
@@ -99,6 +103,18 @@ export async function loadActiveThreadSlice(scope: ThreadContentRefreshScope): P
   }
 
   const threadId = scope.threadId;
+  const incomingTaskClock = taskClockFromResponse(response);
+  // WHAT: Admit the causal floor before releasing any browser-persisted intent.
+  // WHY: A stale relay slice cannot acknowledge the exact local mutation merely by containing the same note ID.
+  if (!acceptTaskClockForInstall(incomingTaskClock, 'event-thread-content-refresh')) return false;
+  const settled = incomingTaskClock
+    ? settlePendingTaskMutationReceipts({
+      projectId: scope.projectId,
+      ledgerId: scope.ledgerId,
+      taskClock: incomingTaskClock,
+    })
+    : [];
+  releaseSettledOptimisticNotes(activeLedgerAtRequest, settled);
   const serverNotes = normalizeLedgerNotes(incomingLedger)[threadId];
   const serverDeletedNoteIds = normalizeDeletedNoteIds(incomingLedger)[threadId];
   const incomingSlice = mergeLocalThreadNotes({
@@ -114,10 +130,6 @@ export async function loadActiveThreadSlice(scope: ThreadContentRefreshScope): P
     telemetry('thread-content-refresh-skipped', { reason: 'active-thread-changed-before-apply', ...scope });
     return false;
   }
-  // WHAT: Submit the notes-only fast path to the same Epoch 4 clock gate as complete ledger projections.
-  // WHY: An event-triggered thread read must not bypass acknowledgement of a locally persisted message.
-  if (!acceptTaskClockForInstall(taskClockFromResponse(response), 'event-thread-content-refresh')) return false;
-
   normalizeLedgerNotes(activeLedgerAtRequest)[threadId] = normalizeLedgerNotes(incomingSlice)[threadId] ?? [];
   normalizeDeletedNoteIds(activeLedgerAtRequest)[threadId] = normalizeDeletedNoteIds(incomingSlice)[threadId] ?? [];
   renderThreadNotes();

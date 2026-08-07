@@ -300,11 +300,11 @@ export function createTaskExecutionRouter(input: {
       });
     }
     const existing = state.executions.findByRequest(resolved.taskId, request.requestId);
-    if (existing) return receipt(existing, resolved.assignedNodeId);
     const metadata = metadataFor(request, resolved);
     let admitted: ReplicatedTaskExecutionRecord | null = null;
     try {
-      admitted = await state.executions.admit({ metadata, executorNodeId: localNodeId });
+      if (existing && existing.lifecycle.phase !== 'preparing') return receipt(existing, resolved.assignedNodeId);
+      admitted = existing ?? await state.executions.admit({ metadata, executorNodeId: localNodeId });
       const conflicts = state.projection().conflicts.filter((conflict) => (
         conflict.kind === 'task-conflict'
         && conflict.entityType === 'card'
@@ -533,6 +533,14 @@ export function createTaskExecutionRouter(input: {
     const localNodeId = input.localNodeId();
     const resolved = resolveTask({ state, request, localNodeId });
     if (resolved.assignedNodeId === localNodeId) return localAdmission(request);
+    const existing = state.executions.findByRequest(resolved.taskId, request.requestId);
+    if (existing && existing.lifecycle.phase !== 'preparing') return receipt(existing, resolved.assignedNodeId);
+    // WHAT: Persist the remote execution intent on the accepting node before checking relay reachability.
+    // WHY: An unavailable assigned node must leave a durable preparing request that an exact retry can dispatch.
+    await state.executions.admit({
+      metadata: metadataFor(request, resolved),
+      executorNodeId: resolved.assignedNodeId,
+    });
     if (!input.peer(resolved.assignedNodeId)?.online) {
       throw new TaskExecutionAdmissionError(
         'assigned_node_unreachable',
@@ -561,6 +569,22 @@ export function createTaskExecutionRouter(input: {
     if (uniqueDestinations.length !== 1) throw new TaskExecutionAdmissionError('task_execution_topology_executor_mismatch', 409);
     const assignedNodeId = uniqueDestinations[0];
     if (assignedNodeId === localNodeId) return localBatchAdmission(requests);
+    const executionIds = new Set(requests.map((request) => request.executionId));
+    const requestIds = new Set(requests.map((request) => request.requestId));
+    if (executionIds.size !== requests.length) throw new TaskExecutionAdmissionError('task_execution_topology_execution_duplicate', 400);
+    if (requestIds.size !== requests.length) throw new TaskExecutionAdmissionError('task_execution_topology_request_duplicate', 400);
+    const pipelineRunId = requests[0].pipelineRunId;
+    if (!pipelineRunId || requests.some((request) => request.kind !== 'pipeline-skill' || request.pipelineRunId !== pipelineRunId)) {
+      throw new TaskExecutionAdmissionError('task_execution_topology_pipeline_mismatch', 400);
+    }
+    // WHAT: Persist the complete remote topology as preparing state before any relay call.
+    // WHY: Dispatch failure must retain every queued-run intent on the node that accepted the operator action.
+    for (let index = 0; index < requests.length; index += 1) {
+      await state.executions.admit({
+        metadata: metadataFor(requests[index], resolveTask({ state, request: requests[index], localNodeId })),
+        executorNodeId: assignedNodeId,
+      });
+    }
     if (!input.peer(assignedNodeId)?.online) {
       throw new TaskExecutionAdmissionError(
         'assigned_node_unreachable',

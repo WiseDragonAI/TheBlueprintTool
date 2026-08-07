@@ -100,6 +100,7 @@ export async function synchronizeRuntimeIncidentReviewTask(input: {
   updatedAt: string;
   incidents: RuntimeIncident[];
   incidentLedgerFile: string;
+  materializeResources: (keys: string[]) => Promise<void>;
 }): Promise<{ changed: boolean; cardId: string; zoneId: string }> {
   // WHAT: Avoid materializing an operational task without incident evidence.
   // WHY: The task exists to expose retained failures, not to create an empty process artifact.
@@ -150,6 +151,14 @@ export async function synchronizeRuntimeIncidentReviewTask(input: {
       relationships: [],
     };
   } else {
+    const comment = existingCard.comment && typeof existingCard.comment === 'object' && !Array.isArray(existingCard.comment)
+      ? existingCard.comment as AnyRecord
+      : {};
+    const contentFile = String(comment.contentFile ?? '');
+    if (!contentFile) throw new Error(`task_card_content_reference_missing:${runtimeIncidentReviewCardId}`);
+    // WHAT: Resolve the authoritative incident-card body before comparing and replacing it.
+    // WHY: A missing or stale sidecar is not an empty previous incident snapshot.
+    await input.materializeResources([contentFile]);
     const currentBody = readCardDescription({ decisionOsRoot: input.project.decisionOsRoot, card: existingCard });
     // WHAT: Leave an already-current task and content resource untouched.
     // WHY: An unchanged periodic pass must produce no task-state mutation.

@@ -511,6 +511,61 @@ test('migration preserves corrupt execution evidence byte-identically and perfor
   assert.equal(existsSync(rollbackRoot), false);
 });
 
+test('migration preserves declared missing terminal artifacts and refuses a partial epoch-4 cutover', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-missing-execution-artifact-'));
+  const rollbackRoot = `${root}-rollback`;
+  context.after(() => [root, rollbackRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'project-a';
+  const tasksFile = resolve(root, 'tasks.json');
+  const executionFile = resolve(root, 'codex-executions.json');
+  const executionBytes = JSON.stringify({
+    version: 1,
+    projectId,
+    updatedAt: '2026-07-22T02:00:00.000Z',
+    executions: [{
+      executionId: 'missing-artifact-execution',
+      sessionId: 'missing-artifact-session',
+      projectId,
+      ledgerId: 'tasks',
+      taskId: 'master-a',
+      ownerCardId: 'master-a',
+      kind: 'thread',
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      phase: 'succeeded',
+      requestedAt: '2026-07-22T01:00:00.000Z',
+      phaseSince: '2026-07-22T01:01:00.000Z',
+      startedAt: '2026-07-22T01:00:30.000Z',
+      finishedAt: '2026-07-22T01:01:00.000Z',
+      executorNodeId: 'workstation',
+      processId: null,
+      processStartTime: null,
+      stdoutFile: resolve(root, 'runs', 'missing.jsonl'),
+      stderrFile: resolve(root, 'runs', 'missing.stderr.log'),
+      result: { status: 'succeeded', summary: 'legacy result' },
+      error: null,
+      revision: 2,
+    }],
+  });
+  writeFileSync(tasksFile, JSON.stringify({ cards: [{ id: 'master-a', title: 'Master' }], annotations: [], relationships: [] }));
+  writeFileSync(executionFile, executionBytes);
+
+  await assert.rejects(migrateTaskCurrentState({
+    decisionOsRoot: root,
+    projectId,
+    nodeId: 'workstation',
+    targetEpoch: 4,
+    defaultAssignedNodeId: 'workstation',
+    tasksLedgerFile: tasksFile,
+    backupRoot: rollbackRoot,
+  }), /task_execution_migration_primary_artifact_missing:missing-artifact-execution:jsonl,missing-artifact-execution:stderr/);
+
+  assert.equal(readFileSync(executionFile, 'utf8'), executionBytes);
+  assert.equal(existsSync(resolve(root, 'task-state', projectId, 'format.json')), false);
+  assert.equal(existsSync(rollbackRoot), false);
+});
+
 test('migration refuses to publish epoch 4 when a locally owned resource head has no collected object', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-missing-object-'));
   const rollbackRoot = `${root}-rollback`;

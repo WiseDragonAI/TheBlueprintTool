@@ -8,6 +8,7 @@ import { routeTab } from '../../navigation/helper/route-tab.js';
 import { projectScopedRequestPath, replicaRequestInit } from '../../project/helper/project-request-scope.js';
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
 import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
+import { taskClockFromResponse } from '../../refresh/helper/task-causal-clock.js';
 
 export type VoiceTranscriptionResult = {
   ok: boolean;
@@ -27,6 +28,9 @@ export type VoiceTranscriptionResult = {
   audioPersistedAt?: string;
   acceptedAt?: string;
   providerStartedAt?: string;
+  voiceAttemptId?: string;
+  receipt?: Record<string, unknown>;
+  taskClock?: Record<string, number> | null;
 };
 
 export type VoiceUploadOptions = {
@@ -36,6 +40,8 @@ export type VoiceUploadOptions = {
   threadId?: string;
   cardId?: string;
   noteId?: string;
+  mutationId?: string;
+  voiceAttemptId?: string;
   launchMode?: VoiceLaunchMode;
   reviewContext?: Record<string, string>;
 };
@@ -75,6 +81,8 @@ export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | 
   form.append('threadId', threadId);
   form.append('cardId', cardIdFromThread(threadId, options.cardId));
   form.append('noteId', options.noteId ?? '');
+  form.append('mutationId', options.mutationId ?? '');
+  form.append('voiceAttemptId', options.voiceAttemptId ?? '');
   const launchMode = options.launchMode ?? 'send';
   form.append('launchMode', launchMode);
   form.append('queueCodex', launchMode === 'run' ? 'true' : 'false');
@@ -104,5 +112,10 @@ export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | 
   if (body.audioPersistedAt) result.audioPersistedAt = String(body.audioPersistedAt);
   if (body.acceptedAt) result.acceptedAt = String(body.acceptedAt);
   if (body.providerStartedAt) result.providerStartedAt = String(body.providerStartedAt);
+  if (body.voiceAttemptId) result.voiceAttemptId = String(body.voiceAttemptId);
+  if (body.receipt && typeof body.receipt === 'object' && !Array.isArray(body.receipt)) result.receipt = body.receipt;
+  result.taskClock = body.taskClock && typeof body.taskClock === 'object' && !Array.isArray(body.taskClock)
+    ? body.taskClock as Record<string, number>
+    : 'headers' in response ? taskClockFromResponse(response as Response) : null;
   return result;
 }

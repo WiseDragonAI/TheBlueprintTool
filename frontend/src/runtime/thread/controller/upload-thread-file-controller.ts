@@ -1,58 +1,84 @@
 /**
- * WHAT: Uploads selected local files and records them as markdown thread notes.
- * WHY: Thread context needs durable attachments without bypassing the ledger note mutation path.
+ * WHAT: Persists selected files and their note intents before rendering or upload.
+ * WHY: Attachments must survive reload and remote-owner unavailability.
  */
-import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
+import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
+import { replicaNodeIdFromLocation } from '../../project/helper/project-request-scope.js';
+import { beginPendingTaskMutationReceipt } from '../../refresh/helper/pending-task-mutation-receipts.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 import { appendOptimisticThreadNote } from '../effect/append-optimistic-thread-note.js';
-import { patchOptimisticThreadNote } from '../effect/patch-optimistic-thread-note.js';
-
-type ThreadFileUploadResponse = {
-  ok?: boolean;
-  fileRef?: string;
-  markdown?: string;
-  error?: string;
-};
-
-async function uploadThreadFile(threadId: string, file: File): Promise<ThreadFileUploadResponse> {
-  const response = await fetch('/api/thread-file-upload', {
-    method: 'POST',
-    headers: {
-      'content-type': file.type || 'application/octet-stream',
-      'x-thread-id': threadId,
-      'x-file-name': encodeURIComponent(file.name || 'attachment')
-    },
-    body: file
-  }).catch(() => undefined);
-  if (!response?.ok) return { ok: false, error: 'File upload failed.' };
-  return response.json().catch(() => ({ ok: false, error: 'File upload response was invalid.' })) as Promise<ThreadFileUploadResponse>;
-}
-
-async function uploadOneThreadFile(threadId: string, file: File): Promise<void> {
-  const noteId = appendOptimisticThreadNote({ threadId, body: `Uploading ${file.name || 'file'}...`, status: 'uploading file' });
-  const upload = await uploadThreadFile(threadId, file);
-  const markdown = String(upload.markdown || (upload.fileRef ? `[${file.name || 'Attachment'}](${upload.fileRef})` : ''));
-  if (upload.ok === false || !markdown) {
-    patchOptimisticThreadNote({ threadId, noteId, status: 'file upload failed', error: upload.error || 'File upload failed.', optimistic: true });
-    return;
-  }
-  patchOptimisticThreadNote({ threadId, noteId, body: markdown, status: 'committing file' });
-  const committed = await sendActiveLedgerMutation({
-    action: 'append-note',
-    note: { id: noteId, threadId, body: markdown }
-  });
-  patchOptimisticThreadNote({
-    threadId,
-    noteId,
-    status: committed ? '' : 'file note commit failed',
-    error: committed ? '' : 'Backend did not confirm the file note.',
-    optimistic: !committed
-  });
-}
+import { persistPendingThreadAsset } from '../effect/persist-pending-thread-asset.js';
+import { submitPendingThreadAsset } from '../effect/submit-pending-thread-asset.js';
 
 function isFileInput(value: HTMLInputElement | FileList | File[]): value is HTMLInputElement {
   return typeof HTMLInputElement !== 'undefined' && value instanceof HTMLInputElement;
+}
+
+async function persistAndSubmitFile(threadId: string, file: File): Promise<void> {
+  const ledgerId = currentLedgerStateId();
+  const projectId = String(state.projectId ?? '');
+  const replicaNodeId = replicaNodeIdFromLocation();
+  const noteId = `note-${Date.now()}-${crypto.randomUUID()}`;
+  const mutationId = crypto.randomUUID();
+  const assetId = `file-${crypto.randomUUID()}`;
+  const createdAt = new Date().toISOString();
+  try {
+    await persistPendingThreadAsset({
+      assetId,
+      mutationId,
+      noteId,
+      projectId,
+      replicaNodeId,
+      ledgerId,
+      threadId,
+      cardId: threadCodexCardId(state.activeLedger, threadId),
+      kind: 'file',
+      blob: file,
+      mimeType: file.type || 'application/octet-stream',
+      fileName: file.name || 'attachment',
+      createdAt,
+      phase: 'captured',
+      assetRef: '',
+      previewRef: '',
+      markdown: '',
+    });
+    if (ledgerId === 'tasks') {
+      beginPendingTaskMutationReceipt({
+        mutationId,
+        entityId: `${threadId}/${noteId}`,
+        projectId,
+        ledgerId,
+        domain: 'content-head',
+        mutation: {
+          action: 'append-note',
+          mutationId,
+          note: { id: noteId, threadId, body: `${file.name || 'Attachment'} saved locally. Upload pending.` },
+        },
+      });
+    }
+  } catch (error) {
+    telemetry('thread-file-persistence-failed', {
+      threadId,
+      fileName: file.name,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+  appendOptimisticThreadNote({
+    noteId,
+    createdAt,
+    threadId,
+    body: `${file.name || 'Attachment'} saved locally. Upload pending.`,
+    status: 'uploading file',
+  });
+  const note = state.activeLedger?.notes?.[threadId]?.find((candidate: Record<string, unknown>) => String(candidate.id ?? '') === noteId);
+  if (note) {
+    note.localAssetId = assetId;
+    note.mutationReceiptId = mutationId;
+  }
+  await submitPendingThreadAsset(assetId);
 }
 
 export async function uploadThreadFileController(input: HTMLInputElement | FileList | File[]): Promise<void> {
@@ -61,6 +87,10 @@ export async function uploadThreadFileController(input: HTMLInputElement | FileL
   if (files.length === 0) return;
   if (!state.threadId) state.threadId = 'conversation-ledger';
   const threadId = state.threadId;
-  telemetry('thread-file-upload', { threadId, count: files.length, bytes: files.reduce((total, file) => total + file.size, 0) });
-  for (const file of files) await uploadOneThreadFile(threadId, file);
+  telemetry('thread-file-upload', {
+    threadId,
+    count: files.length,
+    bytes: files.reduce((total, file) => total + file.size, 0),
+  });
+  for (const file of files) await persistAndSubmitFile(threadId, file);
 }

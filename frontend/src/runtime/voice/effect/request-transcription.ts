@@ -12,6 +12,7 @@ import { persistPendingVoiceUpload } from './persist-pending-voice-upload.js';
 import { submitPendingVoiceUpload } from './submit-pending-voice-upload.js';
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
 import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
+import { beginPendingTaskMutationReceipt } from '../../refresh/helper/pending-task-mutation-receipts.js';
 
 export type VoiceExecutionHandoff = {
   requestId: string;
@@ -49,10 +50,9 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
     renderVoiceStatus();
     return false;
   }
-  state.voice.transcriptionStatus = 'uploading voice';
-  telemetry('request-transcription', { configured: true, model: 'gpt-4o-mini-transcribe', threadId, launchMode });
-  renderVoiceStatus();
-  const noteId = appendOptimisticThreadNote({ threadId, body: 'Voice note captured. Uploading audio...', status: 'uploading', source: 'voice' });
+  const noteId = `note-${Date.now()}-${crypto.randomUUID()}`;
+  const mutationId = crypto.randomUUID();
+  const voiceAttemptId = `voice-attempt-${crypto.randomUUID()}`;
   const projectId = voiceProjectId(options.projectId);
   const ledgerId = options.ledgerId || currentLedgerStateId();
   const cardId = options.cardId ?? '';
@@ -60,6 +60,8 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
   try {
     await persistPendingVoiceUpload({
       noteId,
+      mutationId,
+      voiceAttemptId,
       projectId,
       replicaNodeId: voiceReplicaNodeId(options.replicaNodeId),
       threadId,
@@ -70,15 +72,51 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
       audio,
       createdAt: acceptedAt
     });
+    if (ledgerId === 'tasks') {
+      beginPendingTaskMutationReceipt({
+        mutationId,
+        entityId: `${threadId}/${noteId}`,
+        projectId,
+        ledgerId,
+        domain: 'voice',
+        mutation: {
+          action: 'append-note',
+          mutationId,
+          note: {
+            id: noteId,
+            threadId,
+            body: 'Voice note captured. Upload pending.',
+            source: 'voice',
+            status: 'uploading',
+            voiceAttemptId,
+            revision: 0,
+          },
+        },
+      });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    patchOptimisticThreadNote({ threadId, noteId, body: 'Voice recording could not be saved locally. Upload was not attempted.', status: 'capture failed', error: message });
     state.voice.transcriptionStatus = `voice save failed: ${message}`;
     telemetry('voice-upload-storage-failed', { noteId, threadId, error: message });
     renderVoiceStatus();
     return false;
   }
+  // WHAT: Expose the optimistic voice row only after audio and task intent are durable.
+  // WHY: Reload at any later point must reconstruct both the note and its captured bytes.
+  appendOptimisticThreadNote({
+    noteId,
+    createdAt: acceptedAt,
+    threadId,
+    body: 'Voice note captured. Uploading audio...',
+    status: 'uploading',
+    source: 'voice',
+  });
+  state.voice.transcriptionStatus = 'uploading voice';
+  telemetry('request-transcription', { configured: true, model: 'gpt-4o-mini-transcribe', threadId, launchMode });
+  renderVoiceStatus();
   patchOptimisticThreadNote({ threadId, noteId, localVoiceUploadId: noteId });
+  const optimistic = state.activeLedger?.notes?.[threadId]?.find((candidate: Record<string, unknown>) => String(candidate.id ?? '') === noteId);
+  if (optimistic) optimistic.mutationReceiptId = mutationId;
   telemetry('voice-upload-persisted', { noteId, threadId, size: audio.size, type: audio.type });
   options.onPersisted?.({
     requestId: `voice:${noteId}`,

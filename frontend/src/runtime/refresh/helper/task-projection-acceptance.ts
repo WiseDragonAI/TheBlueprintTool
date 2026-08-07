@@ -11,6 +11,7 @@ export type PendingTaskMutationReceipt = {
   localRevision: number;
   acknowledged: boolean;
   intent?: string;
+  taskClock?: Record<string, number> | null;
 };
 
 export type TaskProjectionAcceptanceInput = {
@@ -20,6 +21,7 @@ export type TaskProjectionAcceptanceInput = {
   pendingReceipt: PendingTaskMutationReceipt | null;
   source: 'relay-refresh' | 'mutation-response' | 'mutation-rejection';
   responseReceiptId?: string;
+  incomingTaskClock?: Record<string, number> | null;
 };
 
 const voiceTerminal = new Set(['transcribed', 'transcription failed', 'execution launch failed']);
@@ -58,7 +60,7 @@ export function shouldAcceptReplicatedTaskState(input: TaskProjectionAcceptanceI
     if (!explicitRetry) return false;
   }
   const pending = input.pendingReceipt;
-  if (!pending || pending.acknowledged) return true;
+  if (!pending) return true;
   const entityId = String(input.incoming.entityId ?? input.local.entityId ?? '');
   // WHAT: Scope one pending receipt to the exact entity whose local intent it owns.
   // WHY: An unacknowledged message must not block an unrelated image, execution, pipeline, or content-head projection.
@@ -66,5 +68,10 @@ export function shouldAcceptReplicatedTaskState(input: TaskProjectionAcceptanceI
   // WHAT: Limit optimistic rollback authority to the response for the exact mutation receipt.
   // WHY: An unrelated rejection cannot prove that this locally persisted intent failed.
   if (input.source === 'mutation-rejection') return input.responseReceiptId === pending.receiptId;
-  return texts(input.incoming.acknowledgedReceiptIds).includes(pending.receiptId);
+  if (input.source === 'mutation-response') return input.responseReceiptId === pending.receiptId;
+  if (texts(input.incoming.acknowledgedReceiptIds).includes(pending.receiptId)) return true;
+  if (!pending.acknowledged || !pending.taskClock || !input.incomingTaskClock) return false;
+  return Object.entries(pending.taskClock).every(([replicaId, counter]) => (
+    Number(input.incomingTaskClock?.[replicaId] ?? 0) >= counter
+  ));
 }

@@ -10,6 +10,10 @@ import { readDecisionOsSettings } from './read-decision-os-settings.js';
 type AnyRecord = Record<string, unknown>;
 const federationKeys = ['federationRelayUrl', 'federationId', 'federationNodeId', 'federationNodeLabel', 'federationNodeCredential'] as const;
 
+function isRecord(value: unknown): value is AnyRecord {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 function identifier(value: unknown, label: string): string {
   const normalized = String(value ?? '').trim();
   if (!/^[a-zA-Z0-9_-]+$/.test(normalized)) throw new Error(`${label} may contain only letters, numbers, underscores, and hyphens.`);
@@ -28,7 +32,12 @@ export function saveFederationSettings(input: { decisionOsRoot: string; runtime:
   const settingsFile = resolve(input.decisionOsRoot, '.settings.json');
   let current: AnyRecord = {};
   try {
-    current = existsSync(settingsFile) ? JSON.parse(readFileSync(settingsFile, 'utf8')) as AnyRecord : {};
+    if (!isRecord(input.value)) throw new Error('Federation settings request must be a JSON object.');
+    const parsed = existsSync(settingsFile) ? JSON.parse(readFileSync(settingsFile, 'utf8')) as unknown : {};
+    if (!isRecord(parsed)) {
+      return { ok: false, statusCode: 409, code: 'invalid_project_settings_root', error: 'Project settings must be a JSON object; the existing file was preserved.' };
+    }
+    current = parsed;
     if (input.value.enabled === false) {
       for (const key of federationKeys) delete current[key];
     } else {

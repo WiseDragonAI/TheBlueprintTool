@@ -3,7 +3,7 @@
  * WHY: A card mutation must never rewrite a project projection or retain permanent mutation files.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
@@ -21,6 +21,8 @@ test('one card mutation leaves one shard and removes its short-lived journal aft
   const stateRoot = resolve(root, 'task-state', 'project-a');
   assert.equal(readdirSync(resolve(stateRoot, 'current', 'card')).length, 1);
   assert.equal(readdirSync(resolve(stateRoot, 'journal')).length, 0);
+  assert.equal(existsSync(resolve(stateRoot, 'inventory.json')), true);
+  assert.ok(readdirSync(resolve(stateRoot, 'inventory')).length > 0);
   assert.equal(existsSync(resolve(stateRoot, 'projection.json')), false);
   assert.equal(existsSync(resolve(stateRoot, 'events')), false);
   assert.equal(existsSync(resolve(stateRoot, 'snapshots')), false);
@@ -36,6 +38,43 @@ test('restart reconstructs projection, clock, and buckets from current shards on
   assert.equal((restarted.projection().ledger.cards as Array<Record<string, unknown>>)[0].status, 'todo');
   assert.equal(restarted.clock().desktop, 1);
   assert.deepEqual(restarted.bucketManifest(), first.bucketManifest());
+});
+
+test('restart rejects a missing inventoried shard without rewriting the remaining state', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-missing-shard-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
+  await store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'lifecycle', operation: 'set', value: todoLifecycle }] }] });
+  await store.flush();
+  const stateRoot = resolve(root, 'task-state', 'project-a');
+  const shard = resolve(stateRoot, 'current', 'card', 'card-a.json');
+  const inventoryFile = resolve(stateRoot, 'inventory.json');
+  const inventoryBefore = readFileSync(inventoryFile, 'utf8');
+
+  unlinkSync(shard);
+
+  assert.throws(
+    () => createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' }),
+    /task_current_inventory_missing_entity/,
+  );
+  assert.equal(existsSync(shard), false);
+  assert.equal(readFileSync(inventoryFile, 'utf8'), inventoryBefore);
+});
+
+test('restart rejects a missing inventory after the format adopts completeness enforcement', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-missing-inventory-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
+  await store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Durable' }] }] });
+  await store.flush();
+  const stateRoot = resolve(root, 'task-state', 'project-a');
+  rmSync(resolve(stateRoot, 'inventory.json'));
+
+  assert.throws(
+    () => createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' }),
+    /task_current_inventory_missing_root/,
+  );
+  assert.equal((JSON.parse(readFileSync(resolve(stateRoot, 'format.json'), 'utf8')) as { inventoryVersion?: number }).inventoryVersion, 1);
 });
 
 test('concurrent local mutations reserve unique causal dots before journaling', async (context) => {

@@ -115,6 +115,40 @@ function selectedCandidate(candidates: TaskRegisterCandidate[]): TaskRegisterCan
   return candidates.slice().sort((left, right) => dotKey(left.dot).localeCompare(dotKey(right.dot)))[0];
 }
 
+function selectedPresenceCandidate(candidates: TaskRegisterCandidate[]): TaskRegisterCandidate | undefined {
+  const ordered = candidates.slice().sort((left, right) => dotKey(left.dot).localeCompare(dotKey(right.dot)));
+  // WHAT: Make task identity an add-wins register when live and deleted candidates are concurrent.
+  // WHY: A stale replica tombstone must remain an explicit conflict without removing a task another replica still owns.
+  return ordered.find((candidate) => candidate.operation === 'set' || candidate.operation === 'add') ?? ordered[0];
+}
+
+function selectedCardLifecycleCandidate(candidates: TaskRegisterCandidate[]): TaskRegisterCandidate | undefined {
+  const ordered = candidates.slice().sort((left, right) => dotKey(left.dot).localeCompare(dotKey(right.dot)));
+  const rank = (candidate: TaskRegisterCandidate): number => {
+    if (candidate.operation !== 'set' || !candidate.value || typeof candidate.value !== 'object' || Array.isArray(candidate.value)) return -1;
+    const status = String((candidate.value as AnyRecord).status ?? '');
+    return status === 'todo' ? 3 : status === 'backlog' ? 2 : status === 'done' ? 1 : 0;
+  };
+  // WHAT: Keep a concurrently active task visible until its lifecycle conflict is explicitly resolved.
+  // WHY: Selecting a stale terminal candidate would silently remove pending work from the Control Room queue.
+  return ordered.sort((left, right) => rank(right) - rank(left) || dotKey(left.dot).localeCompare(dotKey(right.dot)))[0];
+}
+
+function mergedCardLabels(candidates: TaskRegisterCandidate[]): string[] | null {
+  const live = candidates
+    .filter((candidate) => candidate.operation === 'set' || candidate.operation === 'add')
+    .sort((left, right) => dotKey(left.dot).localeCompare(dotKey(right.dot)));
+  if (live.length === 0) return null;
+  const labels: string[] = [];
+  for (const candidate of live) {
+    const values = Array.isArray(candidate.value) ? candidate.value : [candidate.value];
+    for (const value of values) {
+      if (typeof value === 'string' && value && !labels.includes(value)) labels.push(value);
+    }
+  }
+  return labels;
+}
+
 function distinctCandidates(candidates: TaskRegisterCandidate[]): TaskRegisterCandidate[] {
   const effects = new Map<string, TaskRegisterCandidate>();
   for (const candidate of candidates.slice().sort((left, right) => dotKey(left.dot).localeCompare(dotKey(right.dot)))) {
@@ -148,11 +182,19 @@ export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, 
   projection.clock = Object.fromEntries(Object.entries(projection.clock).sort(([left], [right]) => left.localeCompare(right)));
 
   const materialized: AnyRecord = entity.entityType === 'ledger' ? projection.ledger : { id: entity.entityId };
-  const entityTombstone = selectedCandidate(entity.fields.$entity?.candidates ?? []);
+  const entityTombstone = selectedPresenceCandidate(entity.fields.$entity?.candidates ?? []);
   for (const [path, register] of Object.entries(entity.fields).sort(([left], [right]) => left.localeCompare(right))) {
     const candidates = distinctCandidates(register.candidates);
-    const candidate = selectedCandidate(candidates);
-    if (path !== '$entity' && candidate) applyCandidate(materialized, path, candidate);
+    const candidate = entity.entityType === 'card' && path === 'lifecycle'
+      ? selectedCardLifecycleCandidate(candidates)
+      : selectedCandidate(candidates);
+    if (path !== '$entity' && candidate) {
+      const labels = entity.entityType === 'card' && path === 'labels' && candidates.length > 1
+        ? mergedCardLabels(candidates)
+        : null;
+      if (labels) materialized.labels = labels;
+      else applyCandidate(materialized, path, candidate);
+    }
     if (candidates.length > 1) {
       entityConflicts.push({
         kind: entity.entityType === 'card' && path === 'lifecycle'

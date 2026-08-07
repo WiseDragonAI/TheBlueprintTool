@@ -5,6 +5,7 @@
 import { isSameCodexProcess } from './codex-process-identity.js';
 import {
   finalizeTaskExecutionArtifacts,
+  finalizeSyntheticTaskExecutionArtifacts,
   removeTaskExecutionProcess,
   taskExecutionNodeId,
   taskExecutionProcess,
@@ -51,10 +52,6 @@ export async function recoverTaskExecutions(runtime: AnyRecord): Promise<TaskExe
         result.adopted.push(executionId);
         continue;
       }
-      await state.executions.transition(executionId, {
-        phase: 'interrupted',
-        result: { status: 'interrupted', summary: 'The executor restarted without the registered process.' },
-      });
       if (registered) {
         await finalizeTaskExecutionArtifacts({
           runtime,
@@ -63,8 +60,18 @@ export async function recoverTaskExecutions(runtime: AnyRecord): Promise<TaskExe
           stderr: registered.stderrFile,
           telemetry: `${registered.stdoutFile}.telemetry.jsonl`,
         });
-        removeTaskExecutionProcess(runtime, executionId);
+      } else {
+        await finalizeSyntheticTaskExecutionArtifacts({
+          runtime,
+          executionId,
+          reason: 'The executor restarted without a registered process or retained process paths.',
+        });
       }
+      await state.executions.transition(executionId, {
+        phase: 'interrupted',
+        result: { status: 'interrupted', summary: 'The executor restarted without the registered process.' },
+      });
+      if (registered) removeTaskExecutionProcess(runtime, executionId);
       result.interrupted.push(executionId);
     } catch (error) {
       result.failed.push(executionId);
@@ -79,5 +86,6 @@ export async function recoverTaskExecutions(runtime: AnyRecord): Promise<TaskExe
   if (result.queued.length > 0 && typeof runtime.scheduleCodexProcesses === 'function') {
     await (runtime.scheduleCodexProcesses as () => Promise<unknown>)();
   }
+  if (result.failed.length > 0) throw new Error(`task_execution_recovery_incomplete:${result.failed.join(',')}`);
   return result;
 }

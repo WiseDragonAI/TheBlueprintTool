@@ -2,6 +2,7 @@
  * WHAT: Persists normalized Codex run events as ordered, deduplicated notes in the owning card thread.
  * WHY: Durable lifecycle ingestion must update only the thread file and its ownership metadata.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { hydrateLedgerThreadNotesFor, resolveThreadContentFile, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
@@ -52,8 +53,22 @@ export function persistCardSkillRunEvents(input: {
   const resolvedThreadFile = resolveThreadContentFile(input.decisionOsRoot, previousThreadFile);
   // WHAT: Refuse legacy event persistence when its declared thread bytes were not materialized at admission.
   // WHY: A timer callback cannot safely fetch relay content and must never replace the thread with synthetic run events.
-  if (previousThreadFile && (!resolvedThreadFile || !existsSync(resolvedThreadFile))) {
+  if (!previousThreadFile || !resolvedThreadFile || !existsSync(resolvedThreadFile)) {
     throw new Error(`task_content_not_materialized:${previousThreadFile}`);
+  }
+  const contentHeads = typeof input.runtime?.taskContentHeads === 'function'
+    ? input.runtime.taskContentHeads(previousThreadFile) as Array<{ hash?: unknown; bytes?: unknown }>
+    : [];
+  if (contentHeads.length > 0) {
+    const hashes = new Set(contentHeads.map((head) => String(head.hash ?? '')));
+    const byteCounts = new Set(contentHeads.map((head) => Number(head.bytes)));
+    const bytes = readFileSync(resolvedThreadFile);
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    // WHAT: Fail the detached legacy writer when its existing sidecar is not the projected head.
+    // WHY: Extending stale bytes would publish an apparently valid head that discards newer notes.
+    if (hashes.size !== 1 || byteCounts.size !== 1 || !hashes.has(hash) || !byteCounts.has(bytes.byteLength)) {
+      throw new Error(`task_content_local_mismatch:${previousThreadFile}`);
+    }
   }
   hydrateLedgerThreadNotesFor(ledger, input.decisionOsRoot, threadId);
   const notesByThread = normalizeLedgerNotes(ledger);

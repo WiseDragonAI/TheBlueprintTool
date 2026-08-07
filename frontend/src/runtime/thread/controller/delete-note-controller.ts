@@ -10,6 +10,8 @@ import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderThreadPanel } from '../effect/render-thread-panel.js';
 import { deletePendingVoiceUpload } from '../../voice/effect/persist-pending-voice-upload.js';
+import { deletePendingThreadAsset } from '../effect/persist-pending-thread-asset.js';
+import { completePendingTaskMutationReceipt } from '../../refresh/helper/pending-task-mutation-receipts.js';
 
 export async function deleteNoteController(input: string | { threadId: string; noteId?: string }): Promise<void> {
   const threadId = typeof input === 'string' ? input : input.threadId;
@@ -27,6 +29,18 @@ export async function deleteNoteController(input: string | { threadId: string; n
     await deletePendingVoiceUpload(String(removed.note.localVoiceUploadId)).catch((error) => {
       telemetry('delete-pending-voice-upload-failed', { threadId, noteId, error: error instanceof Error ? error.message : String(error) });
     });
+  }
+  if (removed.note?.localAssetId) {
+    await deletePendingThreadAsset(String(removed.note.localAssetId)).catch((error) => {
+      telemetry('delete-pending-thread-asset-failed', { threadId, noteId, error: error instanceof Error ? error.message : String(error) });
+    });
+  }
+  if (removed.note?.mutationReceiptId) {
+    try {
+      completePendingTaskMutationReceipt(String(removed.note.mutationReceiptId));
+    } catch (error) {
+      telemetry('delete-pending-note-receipt-failed', { threadId, noteId, error: error instanceof Error ? error.message : String(error) });
+    }
   }
   modal.close?.();
 }

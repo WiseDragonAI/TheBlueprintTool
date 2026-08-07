@@ -109,28 +109,42 @@ export async function applyNotePatch(input: {
   runtime: AnyRecord;
   ledgerId: string;
   threadId: string;
+  mutationId?: string;
   note: NonNullable<LedgerMutation['note']>;
   onCardContentChange?: unknown;
   reason: string;
-}): Promise<{ ok: boolean; error?: string; stale?: boolean; statusCode?: number }> {
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  stale?: boolean;
+  statusCode?: number;
+  taskClock?: Record<string, number>;
+  receipt?: Record<string, unknown>;
+}> {
   const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
   if (!context.ok) return { ok: false, error: context.error };
   hydrateLedgerThreadNotesFor(context.ledger, context.decisionOsRoot, input.threadId);
-  const incomingRevision = Number(input.note.revision ?? 0);
-  const currentNote = (normalizeLedgerNotes(context.ledger)[input.threadId] ?? []).find((note) => String(note.id ?? '') === String(input.note.id ?? ''));
-  const currentRevision = Number(currentNote?.revision ?? 0);
-  if (incomingRevision > 0 && currentRevision > incomingRevision) return { ok: false, stale: true, error: 'Stale voice note revision.' };
-  const mutation = { action: 'update-note', note: { ...input.note, threadId: input.threadId } } satisfies LedgerMutation;
+  const mutation = {
+    action: 'update-note',
+    ...(input.mutationId ? { mutationId: input.mutationId } : {}),
+    note: { ...input.note, threadId: input.threadId },
+  } satisfies LedgerMutation;
   const persistTaskMutation = input.runtime.persistTaskLedgerMutation;
   if (context.ledgerId === 'tasks' && typeof persistTaskMutation === 'function') {
     try {
-      await persistTaskMutation(mutation);
+      const committed = await persistTaskMutation(mutation) as AnyRecord;
+      notifyThreadChange(context, input.threadId, input.onCardContentChange, input.reason, input.note as AnyRecord);
+      return {
+        ok: true,
+        ...(committed.taskClock && typeof committed.taskClock === 'object' ? { taskClock: committed.taskClock as Record<string, number> } : {}),
+        ...(committed.receipt && typeof committed.receipt === 'object' ? { receipt: committed.receipt as Record<string, unknown> } : {}),
+      };
     } catch (error) {
       const statusCode = Number((error as { statusCode?: unknown } | null)?.statusCode ?? 0);
       return {
         ok: false,
         error: error instanceof Error ? error.message : String(error),
-        ...(statusCode === 409 || statusCode === 503 ? { statusCode } : {}),
+        ...(statusCode === 409 || statusCode === 503 ? { statusCode, stale: statusCode === 409 } : {}),
       };
     }
   } else {
@@ -140,7 +154,14 @@ export async function applyNotePatch(input: {
       ledger: context.ledger,
       mutation
     });
-    if (mutationResult.error) return { ok: false, error: String(mutationResult.error.body.error ?? 'Ledger mutation failed.') };
+    if (mutationResult.error) {
+      return {
+        ok: false,
+        error: String(mutationResult.error.body.error ?? 'Ledger mutation failed.'),
+        statusCode: mutationResult.error.statusCode,
+        stale: mutationResult.error.statusCode === 409,
+      };
+    }
     writeLedger(context);
   }
   notifyThreadChange(context, input.threadId, input.onCardContentChange, input.reason, input.note as AnyRecord);
@@ -163,6 +184,7 @@ function voiceStatusPayload(note: AnyRecord): AnyRecord {
     id: String(note.id ?? ''),
     message: String(note.message ?? note.body ?? ''),
     voiceFileRef: String(note.voiceFileRef ?? ''),
+    voiceAttemptId: String(note.voiceAttemptId ?? ''),
     status: String(note.status ?? ''),
     error: String(note.error ?? ''),
     revision: Number(note.revision ?? 0),
@@ -289,6 +311,7 @@ async function finishVoiceUploadOrchestration(input: {
   cardId: string;
   noteId: string;
   voiceFileRef: string;
+  voiceAttemptId: string;
   audioBuffer: Buffer;
   mimeType: string;
   launchMode: VoiceLaunchMode;
@@ -317,6 +340,7 @@ async function finishVoiceUploadOrchestration(input: {
         id: input.noteId,
         body: 'Voice uploaded.',
         voiceFileRef: input.voiceFileRef,
+        voiceAttemptId: input.voiceAttemptId,
         status: 'transcribing',
         transcriptionStartedAt: providerStartedAt,
         uploadReceivedAt: input.uploadReceivedAt,
@@ -346,7 +370,7 @@ async function finishVoiceUploadOrchestration(input: {
         runtime: input.runtime,
         ledgerId: input.ledgerId,
         threadId: input.threadId,
-        note: { id: input.noteId, body: 'Finalizing transcript.', voiceFileRef: input.voiceFileRef, status: 'finalizing', providerSettledAt, revision: input.revisionBase + 2, error: '' },
+        note: { id: input.noteId, body: 'Finalizing transcript.', voiceFileRef: input.voiceFileRef, voiceAttemptId: input.voiceAttemptId, status: 'finalizing', providerSettledAt, revision: input.revisionBase + 2, error: '' },
         onCardContentChange: input.onCardContentChange,
         reason: 'voice-finalizing'
       });
@@ -364,6 +388,7 @@ async function finishVoiceUploadOrchestration(input: {
         id: input.noteId,
         body: text,
         voiceFileRef: input.voiceFileRef,
+        voiceAttemptId: input.voiceAttemptId,
         status: 'transcribed',
         providerSettledAt,
         completedAt,
@@ -392,6 +417,7 @@ async function finishVoiceUploadOrchestration(input: {
             id: input.noteId,
             body: text,
             voiceFileRef: input.voiceFileRef,
+            voiceAttemptId: input.voiceAttemptId,
             status: 'execution launch failed',
             providerSettledAt,
             completedAt,
@@ -420,6 +446,7 @@ async function finishVoiceUploadOrchestration(input: {
       id: input.noteId,
       body: `Voice uploaded; ${status}.`,
       voiceFileRef: input.voiceFileRef,
+      voiceAttemptId: input.voiceAttemptId,
       status,
       providerSettledAt,
       completedAt,
@@ -441,12 +468,18 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
   const threadId = optionalText(payload.threadId) || 'conversation-ledger';
   const cardId = cardIdForThread(threadId, payload.cardId);
   const id = noteId(payload.noteId);
+  const voiceAttemptId = optionalText(payload.voiceAttemptId) || `voice-attempt-${randomUUID()}`;
+  const mutationId = optionalText(payload.mutationId) || `voice-upload:${id}:${voiceAttemptId}`;
   const uploadReceivedAt = new Date().toISOString();
   lifecycleTelemetry({ noteId: id, phase: 'upload-received', at: uploadReceivedAt });
   const audioBuffer = payload.audioBuffer as Buffer | undefined;
   if (!audioBuffer?.byteLength) return { ok: false, statusCode: 400, error: 'No audio was uploaded.' };
   const mimeType = String(payload.mimeType ?? 'audio/webm');
-  const upload = persistUploadedVoiceAudio({ action_payload: { ...payload, audioBuffer, mimeType, threadId }, runtime_state: runtime, data_model: data });
+  const upload = persistUploadedVoiceAudio({
+    action_payload: { ...payload, noteId: id, voiceAttemptId, audioBuffer, mimeType, threadId },
+    runtime_state: runtime,
+    data_model: data,
+  });
   if (upload.ok === false || !upload.voiceFileRef) return { ok: false, statusCode: 400, error: upload.error ?? 'Voice upload failed.' };
   const voiceFileRef = String(upload.voiceFileRef);
   const audioPersistedAt = new Date().toISOString();
@@ -469,10 +502,12 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     runtime,
     ledgerId,
     threadId,
+    mutationId,
     note: {
       id,
       body: 'Voice uploaded.',
       voiceFileRef,
+      voiceAttemptId,
       reviewContext,
       status: 'queued',
       uploadReceivedAt,
@@ -506,6 +541,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     cardId,
     noteId: id,
     voiceFileRef,
+    voiceAttemptId,
     audioBuffer,
     mimeType,
     launchMode,
@@ -527,6 +563,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
         id,
         body: 'Voice uploaded; transcription failed.',
         voiceFileRef,
+        voiceAttemptId,
         status: 'transcription failed',
         completedAt: new Date().toISOString(),
         revision: 4,
@@ -537,7 +574,25 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     });
   });
   if (bool(payload.awaitCompletion)) await completion;
-  return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef, status: 'queued', revision: 1, uploadReceivedAt, audioPersistedAt, acceptedAt, queueCodex, launchMode, executionId };
+  return {
+    ok: true,
+    statusCode: 202,
+    uploaded: true,
+    configured: true,
+    noteId: id,
+    voiceFileRef,
+    voiceAttemptId,
+    status: 'queued',
+    revision: 1,
+    uploadReceivedAt,
+    audioPersistedAt,
+    acceptedAt,
+    queueCodex,
+    launchMode,
+    executionId,
+    taskClock: patch.taskClock,
+    receipt: patch.receipt,
+  };
 }
 
 export async function startVoiceRetryOrchestrationController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
@@ -560,6 +615,7 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
   const audioPersistedAt = uploadReceivedAt;
   const acceptedAt = new Date().toISOString();
   const revisionBase = Number(current.revision ?? 0) + 1;
+  const voiceAttemptId = `voice-attempt-${randomUUID()}`;
   const persistedLaunchMode = optionalText(current.codexQueueLaunchMode);
   const launchMode = persistedLaunchMode === 'run' || persistedLaunchMode === 'pipeline'
     ? persistedLaunchMode
@@ -576,6 +632,7 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
       id,
       body: 'Voice uploaded.',
       voiceFileRef,
+      voiceAttemptId,
       status: 'queued',
       uploadReceivedAt,
       audioPersistedAt,
@@ -609,6 +666,7 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
     cardId,
     noteId: id,
     voiceFileRef,
+    voiceAttemptId,
     audioBuffer: loaded.audioBuffer as Buffer,
     mimeType: String(loaded.mimeType ?? 'audio/webm'),
     launchMode,
@@ -623,5 +681,5 @@ export async function startVoiceRetryOrchestrationController(input: { action_pay
     onLedgerChange: payload.onLedgerChange
   }).catch(() => undefined);
   if (bool(payload.awaitCompletion)) await completion;
-  return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef, status: 'queued', revision: revisionBase, uploadReceivedAt, audioPersistedAt, acceptedAt, executionId };
+  return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef, voiceAttemptId, status: 'queued', revision: revisionBase, uploadReceivedAt, audioPersistedAt, acceptedAt, executionId };
 }

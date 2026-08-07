@@ -13,9 +13,14 @@ export async function submitThreadDraft(): Promise<void> {
   if (!draft || !body) return;
   if (!state.threadId) state.threadId = 'conversation-ledger';
   const threadId = state.threadId;
+  const note = createNoteController({ threadId, body });
+  if (!note.noteId) {
+    state.voice.transcriptionStatus = 'note was not saved locally; draft retained';
+    renderVoiceStatus();
+    return;
+  }
   draft.value = '';
   clearThreadDraft(threadId);
-  const note = createNoteController({ threadId, body });
   void note.committed.then((ok) => {
     if (ok) return;
     state.voice.transcriptionStatus = 'note commit failed; note retained for retry';

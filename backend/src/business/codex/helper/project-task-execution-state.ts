@@ -20,6 +20,7 @@ function executionItem(record: ExecutionRecord, queuePosition: number | null): T
   // WHY: Register candidates, content hashes, and artifact byte metadata are backend synchronization details.
   return {
     executionId: record.metadata.executionId,
+    requestId: record.metadata.requestId,
     sessionId: record.metadata.sessionId,
     kind: record.metadata.kind,
     phase: record.lifecycle.phase,

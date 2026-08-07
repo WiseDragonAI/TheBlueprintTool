@@ -24,6 +24,13 @@ function register(replicaId: string, counter: number, value: unknown): TaskCurre
   return { clock: { [replicaId]: counter }, candidates: [{ dot: { replicaId, counter }, operation: 'set', value }] };
 }
 
+function operationRegister(replicaId: string, counter: number, operation: 'set' | 'tombstone', value?: unknown): TaskCurrentRegister {
+  return {
+    clock: { [replicaId]: counter },
+    candidates: [{ dot: { replicaId, counter }, operation, ...(operation === 'set' ? { value } : {}) }],
+  };
+}
+
 function entity(replicaId: string, fields: TaskCurrentEntity['fields'], entityId = 'card-a'): TaskCurrentEntity {
   return finalizeTaskCurrentEntity({ version: taskCurrentStateVersion, projectId: 'project-a', entityType: 'card', entityId, fields });
 }
@@ -203,6 +210,49 @@ test('assignment and execution conflicts remain explicit after a convergent join
   );
   materializeTaskCurrentEntity(projection, execution);
   assert.equal(projection.conflicts.some((conflict) => conflict.kind === 'execution-conflict' && conflict.entityId === 'execution-a'), true);
+});
+
+test('concurrent replica state cannot hide a live task or discard labels', () => {
+  const live = entity('workstation', {
+    '$entity': operationRegister('workstation', 9, 'set', true),
+    title: register('workstation', 9, 'Keep this task'),
+    labels: register('workstation', 9, ['master-task', 'implemented', 'verified']),
+    lifecycle: register('workstation', 9, {
+      status: 'todo',
+      changedAt: '2026-07-26T00:00:00.000Z',
+      waitingAt: '2026-07-26T00:00:00.000Z',
+      closedAt: null,
+    }),
+  });
+  const staleMobile = entity('phone', {
+    '$entity': operationRegister('phone', 3, 'tombstone'),
+    title: register('phone', 3, 'Keep this task'),
+    labels: register('phone', 3, ['master-task']),
+    lifecycle: register('phone', 3, {
+      status: 'done',
+      changedAt: '2026-07-25T00:00:00.000Z',
+      waitingAt: null,
+      closedAt: '2026-07-25T00:00:00.000Z',
+    }),
+  });
+  const joined = joinTaskEntities(live, staleMobile);
+  const projection: TaskCurrentProjection = {
+    version: taskCurrentStateVersion,
+    projectId: 'project-a',
+    ledger: { cards: [], annotations: [], relationships: [] },
+    conflicts: [],
+    clock: {},
+  };
+
+  materializeTaskCurrentEntity(projection, joined);
+
+  const card = (projection.ledger.cards as Array<Record<string, unknown>>)[0];
+  assert.equal(card.id, 'card-a');
+  assert.equal(card.status, 'todo');
+  assert.deepEqual(card.labels, ['master-task', 'implemented', 'verified']);
+  assert.equal(projection.conflicts.some((conflict) => conflict.path === '$entity'), true);
+  assert.equal(projection.conflicts.some((conflict) => conflict.path === 'labels'), true);
+  assert.equal(projection.conflicts.some((conflict) => conflict.path === 'lifecycle'), true);
 });
 
 test('wire hashes exclude local publication metadata by rejecting it as an unhashed extension', () => {
