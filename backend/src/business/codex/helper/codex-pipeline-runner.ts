@@ -18,6 +18,7 @@ import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-
 import { codexRunExecutionFinishedMarker } from './codex-run-segment-marker.js';
 import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './codex-pipeline-store.js';
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
+import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildMeaningfulFileMap } from './build-meaningful-file-map.js';
 import { buildCardLaunchContext } from './build-card-launch-context.js';
 import { buildPipelineSubtasks, buildPipelineSubtaskContext } from './build-pipeline-subtask-context.js';
@@ -27,7 +28,7 @@ import {
   type PipelinePromptRuntimeContext,
 } from './pipeline-prompt-library.js';
 import { assertPipelineRunSkillPromptEvidence } from './pipeline-prompt-snapshot.js';
-import { decisionOsRuntimePlatform, resolveCodexCommand } from './resolve-codex-command.js';
+import { decisionOsRuntimePlatform, resolveCodexCommand, resolveCodexResumeCommand, type CodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 import { resolveServerSkillContext } from './server-skill-context.js';
 import { hasLedgerProjectionSource, readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
@@ -38,6 +39,7 @@ import {
   taskExecutionSettlementTimestamp,
 } from './commit-task-execution-settlement.js';
 import { signalCodexProcessTree } from './reconcile-terminal-codex-process.js';
+import { codexCapacityResumeDelayMs, isTransientCodexCapacityFailure, readCodexSessionId } from './transient-codex-capacity-failure.js';
 import {
   attachCodexRuntimeChild as attachRuntimeChild,
   codexRuntimeRun,
@@ -45,6 +47,7 @@ import {
   notifyCodexLifecycle as notify,
   publicCodexRuntimeRun,
   scheduleCodexRuntime,
+  scheduleCodexRuntimeTimer,
   updateCodexRuntimeRun as updateRuntimeRun,
 } from './codex-runtime-run-store.js';
 import {
@@ -605,7 +608,81 @@ export async function spawnPipelineSkillProcess(input: {
   mkdirSync(dirname(input.skill.stdoutFile), { recursive: true });
   const startedAt = replicatedExecution.lifecycle.startedAt ?? new Date().toISOString();
   let runtimeRun: AnyRecord = {};
-  await launchCodexExecutionProcess({
+  let capacityRetryCount = 0;
+  const settleCapacityRetryAdmissionFailure = async (error: unknown): Promise<void> => {
+    const current = replicatedState.executions.find(input.skill.executionId);
+    // WHAT: Skip terminal retry settlement after the execution has already left running.
+    // WHY: Cancellation and another terminal path can settle the retained execution before admission fails.
+    if (current?.lifecycle.phase !== 'running') return;
+    const detail = error instanceof Error ? error.message : String(error);
+    const finishedAt = taskExecutionSettlementTimestamp(current, new Date().toISOString());
+    appendRunStatus(outputFile, 'failed', detail);
+    appendFileSync(input.skill.stderrFile, `Codex run failed: ${detail}\n`, 'utf8');
+    appendFileSync(input.skill.stderrFile, codexRunExecutionFinishedMarker({ runId: input.skill.runId, executionId: input.skill.executionId, finishedAt, status: 'failed' }), 'utf8');
+    await finalizeTaskExecutionArtifacts({
+      runtime: input.runtime,
+      executionId: input.skill.executionId,
+      jsonl: input.skill.stdoutFile,
+      stderr: input.skill.stderrFile,
+      telemetry: `${input.skill.stdoutFile}.telemetry.jsonl`,
+    });
+    const committed = await commitTaskExecutionSettlement({
+      runtime: input.runtime,
+      executionId: input.skill.executionId,
+      requestedPhase: 'failed',
+      settledAt: finishedAt,
+      summary: detail,
+      failureCode: 'codex_pipeline_capacity_retry_failed',
+    });
+    // WHAT: Reject an impossible terminal lifecycle result before publishing pipeline state.
+    // WHY: An interrupted execution cannot be represented as a terminal local pipeline skill.
+    if (committed.status === 'interrupted') throw new Error(`task_execution_settlement_status_invalid:${input.skill.executionId}:interrupted`);
+    updateRuntimeRun(input.runtime, input.skill.runId, {
+      status: committed.status,
+      transientRetryAt: null,
+      capacityRetryTimerKey: '',
+      capacityRetryAbortController: undefined,
+      error: detail,
+      finishedAt: committed.finishedAt,
+      settledAt: new Date().toISOString(),
+    });
+    await cancelPipelineDependents({ runtime: input.runtime, pipelineRunId: input.pipelineRun.id, executionId: input.skill.executionId });
+    const reassessed = reassessPipelineAfterSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, settledStatus: 'failed', error: detail, finishedAt: committed.finishedAt });
+    notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-settled', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, cardId: input.step.outputCardId, status: 'failed', pipelineStatus: reassessed?.status ?? 'failed' });
+    scheduleCodexRuntime(input.runtime, 'schedule-after-pipeline-capacity-retry-failure', { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId });
+    // WHAT: Notify the optional run-settlement observer after terminal retry failure.
+    // WHY: Consumers that own downstream projections require the terminal result.
+    if (typeof input.runtime.onCodexRunSettled === 'function') {
+      await input.runtime.onCodexRunSettled({
+        ledgerId: input.pipelineRun.ledgerId,
+        cardId: input.step.outputCardId,
+        outputCardId: input.step.outputCardId,
+        threadId: `thread-${input.step.outputCardId}`,
+        runId: input.skill.runId,
+        executionId: input.skill.executionId,
+        pipelineRunId: input.pipelineRun.id,
+        status: 'failed',
+        pipelineStatus: reassessed?.status ?? 'failed',
+        pipelineTerminal: Boolean(reassessed && isTerminal(reassessed.status)),
+        exitCode: null,
+        finishedAt: committed.finishedAt,
+      });
+    }
+  };
+  const launch = async (attemptCommand: CodexCommand, attemptPrompt: string, segment: 'start' | 'continue', releaseSlot: () => void = () => undefined): Promise<void> => {
+    const eventStartLine = segment === 'start' ? 0 : prepareCardSkillRunEventAppend(input.skill.stdoutFile);
+    const stdoutByteOffset = existsSync(input.skill.stdoutFile) ? statSync(input.skill.stdoutFile).size : 0;
+    const stderrByteOffset = existsSync(input.skill.stderrFile) ? statSync(input.skill.stderrFile).size : 0;
+    let releasedSlot = false;
+    const releaseCapacitySlot = (): void => {
+      // WHAT: Release a shared retry reservation exactly once.
+      // WHY: Both failed spawn and successful registration can reach this cleanup boundary.
+      if (releasedSlot) return;
+      releasedSlot = true;
+      releaseSlot();
+    };
+    try {
+      await launchCodexExecutionProcess({
     decisionOsRoot: input.decisionOsRoot,
     runtime: input.runtime,
     workspaceRoot,
@@ -614,21 +691,21 @@ export async function spawnPipelineSkillProcess(input: {
     cardId: input.step.outputCardId,
     runId: input.skill.runId,
     executionId: input.skill.executionId,
-    command,
+    command: attemptCommand,
     env: decisionOsCodexEnvironment({
       runtime: input.runtime,
       decisionOsRoot: input.decisionOsRoot,
       ledgerFile: context.ledgerPath,
       executionId: input.skill.executionId,
     }),
-    developerPrompt,
-    prompt: userPrompt,
+    developerPrompt: segment === 'start' ? developerPrompt : undefined,
+    prompt: attemptPrompt,
     stdoutFile: input.skill.stdoutFile,
     stderrFile: input.skill.stderrFile,
-    segment: 'start',
-    startLine: 0,
-    startedAt,
-    metadata: { sourceCardTitle: input.pipelineRun.sourceCardTitle, codexModel: command.model, codexEffort: command.effort },
+    segment,
+    startLine: eventStartLine,
+    startedAt: segment === 'start' ? startedAt : undefined,
+    metadata: { sourceCardTitle: input.pipelineRun.sourceCardTitle, codexModel: attemptCommand.model, codexEffort: attemptCommand.effort },
     onSpawn: async (child, launchedAt) => {
       runtimeRun = updateRuntimeRun(input.runtime, input.skill.runId, {
         id: input.skill.runId,
@@ -646,8 +723,8 @@ export async function spawnPipelineSkillProcess(input: {
         outputFile,
         stdoutFile: input.skill.stdoutFile,
         stderrFile: input.skill.stderrFile,
-        codexModel: input.skill.codexModel,
-        codexEffort: input.skill.codexEffort,
+        codexModel: attemptCommand.model,
+        codexEffort: attemptCommand.effort,
         pid: child.pid ?? 0,
         status: 'running',
         startedAt: launchedAt,
@@ -666,10 +743,18 @@ export async function spawnPipelineSkillProcess(input: {
         stderrFile: input.skill.stderrFile,
       });
       try {
-        await replicatedState.executions.transition(input.skill.executionId, { phase: 'running' });
+        const current = replicatedState.executions.find(input.skill.executionId);
+        // WHAT: Move only the first pipeline child from its scheduler claim into running.
+        // WHY: Capacity continuation retains the same already-running execution identity.
+        if (current?.lifecycle.phase === 'starting') await replicatedState.executions.transition(input.skill.executionId, { phase: 'running' });
+        // WHAT: Reject a resumed child whose durable lifecycle has already settled.
+        // WHY: Cancellation during capacity waiting must prevent a stale timer from spawning work.
+        else if (current?.lifecycle.phase !== 'running') throw new Error(`task_execution_spawn_phase_invalid:${current?.lifecycle.phase ?? 'missing'}`);
       } catch (error) {
         removeTaskExecutionProcess(input.runtime, input.skill.executionId);
         throw error;
+      } finally {
+        releaseCapacitySlot();
       }
       notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-started', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', cardId: input.step.outputCardId });
     },
@@ -679,6 +764,53 @@ export async function spawnPipelineSkillProcess(input: {
     onSettled: async (settlement) => {
       const current = replicatedState.executions.find(input.skill.executionId);
       const cancelled = current?.lifecycle.phase === 'cancelling';
+      const sessionId = settlement.kind === 'close' && !cancelled && settlement.exitCode !== 0
+        ? readCodexSessionId(input.skill.stdoutFile)
+        : '';
+      // WHAT: Retain the local pipeline execution through its one recoverable capacity continuation.
+      // WHY: Terminal settlement would cancel dependents and destroy the durable same-session resume boundary.
+      if (settlement.kind === 'close'
+        && !cancelled
+        && settlement.exitCode !== 0
+        && sessionId
+        && capacityRetryCount === 0
+        && isTransientCodexCapacityFailure({ stdoutFile: input.skill.stdoutFile, stderrFile: input.skill.stderrFile, stdoutByteOffset, stderrByteOffset })) {
+        capacityRetryCount += 1;
+        const retryAt = new Date(Date.now() + codexCapacityResumeDelayMs).toISOString();
+        const retryKey = `capacity-retry:${input.skill.runId}:${input.skill.executionId}`;
+        const retryAbortController = new AbortController();
+        updateRuntimeRun(input.runtime, input.skill.runId, {
+          status: 'running',
+          transientRetryAt: retryAt,
+          capacityRetryTimerKey: retryKey,
+          capacityRetryAbortController: retryAbortController,
+          exitCode: settlement.exitCode,
+        });
+        removeTaskExecutionProcess(input.runtime, input.skill.executionId);
+        scheduleCodexRuntimeTimer(input.runtime, retryKey, codexCapacityResumeDelayMs, 'resume-pipeline-after-capacity-wait', async () => {
+          const active = replicatedState.executions.find(input.skill.executionId);
+          // WHAT: Admit a resume only while its original execution remains active.
+          // WHY: Cancellation can settle while no child process exists during the retry wait.
+          if (retryAbortController.signal.aborted || active?.lifecycle.phase !== 'running') return;
+          const acquire = input.runtime.acquireProjectSyncCodexSlot;
+          let release = (): void => undefined;
+          try {
+            release = typeof acquire === 'function'
+              ? await acquire({ signal: retryAbortController.signal, timeoutMs: codexExecutionTimeoutMs(input.runtime) }) as () => void
+              : () => undefined;
+            // WHAT: Recheck cancellation after shared-capacity admission.
+            // WHY: The wait can complete concurrently with operator cancellation.
+            if (retryAbortController.signal.aborted || replicatedState.executions.find(input.skill.executionId)?.lifecycle.phase !== 'running') return;
+            updateRuntimeRun(input.runtime, input.skill.runId, { transientRetryAt: null, capacityRetryTimerKey: '', capacityRetryAbortController: undefined });
+            const resumeCommand = resolveCodexResumeCommand({ workspaceRoot, runtime: input.runtime, sessionId, codexModel: attemptCommand.model, codexEffort: attemptCommand.effort });
+            await launch(resumeCommand, 'Continue the interrupted task from the durable session context.', 'continue', release);
+          } catch (error) {
+            release();
+            await settleCapacityRetryAdmissionFailure(error);
+          }
+        }, { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, sessionId });
+        return;
+      }
       const predictedStatus: TerminalStatus = cancelled
         ? 'cancelled'
         : settlement.kind === 'error'
@@ -750,7 +882,13 @@ export async function spawnPipelineSkillProcess(input: {
         });
       }
     },
-  });
+      });
+    } catch (error) {
+      releaseCapacitySlot();
+      throw error;
+    }
+  };
+  await launch(command, userPrompt, 'start');
   return publicPipelineSkillRuntimeRun(runtimeRun);
 }
 

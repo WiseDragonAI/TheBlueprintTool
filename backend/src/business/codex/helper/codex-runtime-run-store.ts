@@ -131,6 +131,22 @@ export function scheduleCodexRuntimeTimer(
   timers.set(key, timer);
 }
 
+export function clearCodexRuntimeTimer(runtime: AnyRecord, key: string): void {
+  const timers = runtime.codexRuntimeTimers instanceof Map
+    ? runtime.codexRuntimeTimers as Map<string, NodeJS.Timeout>
+    : null;
+  // WHAT: Clear one execution-owned deferred operation before terminal cancellation.
+  // WHY: A capacity retry has no live child to signal and must not spawn after its execution settles.
+  // WHAT: Leave a runtime without deferred timers unchanged.
+  // WHY: Only initialized Codex runtimes can own a capacity-retry callback.
+  if (!timers) return;
+  const timer = timers.get(key);
+  // WHAT: Cancel the deferred callback when its timer is still registered.
+  // WHY: The callback must not launch a resumed child after cancellation.
+  if (timer) clearTimeout(timer);
+  timers.delete(key);
+}
+
 export function stopCodexRuntimeTimers(runtime: AnyRecord): void {
   const timers = runtime.codexRuntimeTimers instanceof Map
     ? runtime.codexRuntimeTimers as Map<string, NodeJS.Timeout>

@@ -991,6 +991,153 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
   }
 });
 
+test('a pipeline capacity retry resumes the same session before settling or launching its dependent', async () => {
+  const previousCodexBin = process.env.CODEX_BIN;
+  const { workspace, decisionOsRoot } = createWorkspace('decision-os-pipeline-capacity-retry-');
+  const fakeCodex = join(workspace, 'fake-codex.mjs');
+  const launchesFile = join(workspace, 'launches.jsonl');
+  for (const name of ['capacity-root', 'dependent']) createSkill(workspace, name);
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { appendFileSync } from "node:fs";',
+    'const args = process.argv.slice(2);',
+    'const developerArgument = args.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    `appendFileSync(${JSON.stringify(launchesFile)}, JSON.stringify(args) + "\\n");`,
+    'process.stdin.resume();',
+    'process.stdin.on("end", () => {',
+    '  if (!args.includes("resume") && developerArgument.includes("Current skill: capacity-root")) {',
+    '    console.log(JSON.stringify({ type: "thread.started", thread_id: "pipeline-capacity-session" }));',
+    '    console.log(JSON.stringify({ type: "error", message: "Selected model is at capacity. Please try a different model." }));',
+    '    process.exitCode = 1;',
+    '    return;',
+    '  }',
+    '  console.log(JSON.stringify({ type: "turn.completed" }));',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  const now = '2026-08-04T00:00:00.000Z';
+  writeCodexPipelineStore({
+    decisionOsRoot,
+    availableSkillNames: ['capacity-root', 'dependent'],
+    store: {
+      pipelines: [{ id: 'capacity-pipeline', name: 'Capacity pipeline', purpose: '', stepIds: ['root', 'next'], createdAt: now, updatedAt: now }],
+      steps: [
+        { id: 'root', name: 'Root', purpose: '', createdAt: now, updatedAt: now, skills: [{ id: 'root-skill', skillName: 'capacity-root', codexModel: 'gpt-5.4', codexEffort: 'high' }] },
+        { id: 'next', name: 'Next', purpose: '', createdAt: now, updatedAt: now, skills: [{ id: 'next-skill', skillName: 'dependent', codexModel: null, codexEffort: null }] },
+      ],
+      runs: [], skillLibrary: [], authoredContent: basePromptAuthoredContent(), activeWorkspaceRun: null,
+    },
+  });
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const response = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', sourceCardId: 'source-card', pipelineId: 'capacity-pipeline' }),
+    });
+    assert.equal(response.status, 202);
+    const started = await response.json() as Record<string, any>;
+    const [root, dependent] = started.run.steps.flatMap((step: Record<string, any>) => step.skills) as Array<Record<string, any>>;
+    await waitFor(() => Boolean((runtime.codexSkillRuns as Record<string, Record<string, unknown>>)?.[root.runId]?.transientRetryAt) ? true : null, 'capacity retry wait');
+    const executionsDuringWait = taskExecutionState(runtime)?.executions.byPipelineRunId(started.run.id) ?? [];
+    assert.equal(executionsDuringWait.find((entry) => entry.metadata.executionId === root.executionId)?.lifecycle.phase, 'running');
+    assert.equal(executionsDuringWait.find((entry) => entry.metadata.executionId === dependent.executionId)?.lifecycle.phase, 'queued');
+    assert.equal((runtime.taskExecutionProcesses as Map<string, unknown>).has(root.executionId), false);
+    const outputFile = started.run.steps[0].outputCardId as string;
+    const outputPath = join(decisionOsRoot, 'cards', 'specs', `${outputFile}.md`);
+    assert.equal(existsSync(outputPath) ? /Codex run (failed|cancelled|completed)/.test(readFileSync(outputPath, 'utf8')) : false, false);
+
+    const completed = await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(started.run.id)}`).then((entry) => entry.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? detail.run : null;
+    }, 'capacity pipeline completion');
+    const launches = readFileSync(launchesFile, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as string[]);
+    assert.equal(launches.length, 3);
+    assert.equal(launches[1].includes('resume'), true);
+    assert.equal(launches[1].includes('pipeline-capacity-session'), true);
+    assert.equal(launches[1].includes('gpt-5.4'), true);
+    assert.equal(completed.steps.flatMap((step: Record<string, any>) => step.skills).every((skill: Record<string, any>) => skill.status === 'complete'), true);
+  } finally {
+    await closeServer(server);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('cancelling a pipeline during capacity waiting prevents its resumed child', async () => {
+  const previousCodexBin = process.env.CODEX_BIN;
+  const { workspace, decisionOsRoot } = createWorkspace('decision-os-pipeline-capacity-cancel-');
+  const fakeCodex = join(workspace, 'fake-codex.mjs');
+  const launchesFile = join(workspace, 'launches.txt');
+  for (const name of ['capacity-root', 'dependent']) createSkill(workspace, name);
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { appendFileSync } from "node:fs";',
+    `appendFileSync(${JSON.stringify(launchesFile)}, "launch\\n");`,
+    'process.stdin.resume();',
+    'process.stdin.on("end", () => {',
+    '  console.log(JSON.stringify({ type: "thread.started", thread_id: "pipeline-cancel-session" }));',
+    '  console.log(JSON.stringify({ type: "error", message: "Selected model is at capacity. Please try a different model." }));',
+    '  process.exitCode = 1;',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  const now = '2026-08-04T00:00:00.000Z';
+  writeCodexPipelineStore({
+    decisionOsRoot,
+    availableSkillNames: ['capacity-root', 'dependent'],
+    store: {
+      pipelines: [{ id: 'capacity-cancel-pipeline', name: 'Capacity cancel pipeline', purpose: '', stepIds: ['root', 'next'], createdAt: now, updatedAt: now }],
+      steps: [
+        { id: 'root', name: 'Root', purpose: '', createdAt: now, updatedAt: now, skills: [{ id: 'root-skill', skillName: 'capacity-root', codexModel: 'gpt-5.4', codexEffort: 'high' }] },
+        { id: 'next', name: 'Next', purpose: '', createdAt: now, updatedAt: now, skills: [{ id: 'next-skill', skillName: 'dependent', codexModel: null, codexEffort: null }] },
+      ],
+      runs: [], skillLibrary: [], authoredContent: basePromptAuthoredContent(), activeWorkspaceRun: null,
+    },
+  });
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const response = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', sourceCardId: 'source-card', pipelineId: 'capacity-cancel-pipeline' }),
+    });
+    assert.equal(response.status, 202);
+    const started = await response.json() as Record<string, any>;
+    const [root, dependent] = started.run.steps.flatMap((step: Record<string, any>) => step.skills) as Array<Record<string, any>>;
+    await waitFor(() => Boolean((runtime.codexSkillRuns as Record<string, Record<string, unknown>>)?.[root.runId]?.transientRetryAt) ? true : null, 'capacity cancellation wait');
+    const cancelled = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(started.run.id)}/cancel`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ executionId: root.executionId }),
+    });
+    assert.equal(cancelled.status, 202);
+    await waitFor(() => {
+      const executions = taskExecutionState(runtime)?.executions.byPipelineRunId(started.run.id) ?? [];
+      return executions.find((entry) => entry.metadata.executionId === root.executionId)?.lifecycle.phase === 'cancelled'
+        && executions.find((entry) => entry.metadata.executionId === dependent.executionId)?.lifecycle.phase === 'cancelled'
+        ? true
+        : null;
+    }, 'capacity retry cancellation');
+    await new Promise((resolve) => setTimeout(resolve, 5_200));
+    assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, 1);
+    assert.equal((runtime.taskExecutionProcesses as Map<string, unknown>).has(root.executionId), false);
+    assert.equal((runtime.codexRuntimeTimers as Map<string, unknown>).size, 0);
+  } finally {
+    await closeServer(server);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('saved pipeline failure cancels every dependent execution without launching it', async () => {
   const previousCodexBin = process.env.CODEX_BIN;
   const { workspace, decisionOsRoot } = createWorkspace('decision-os-pipeline-failure-');

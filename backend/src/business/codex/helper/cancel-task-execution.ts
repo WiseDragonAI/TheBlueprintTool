@@ -11,6 +11,7 @@ import {
   taskExecutionState,
   type TaskExecutionCancellationResult,
 } from './task-execution-runtime.js';
+import { clearCodexRuntimeTimer } from './codex-runtime-run-store.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -110,7 +111,40 @@ export async function cancelTaskExecutionLocally(input: {
       cancellationRequested: true,
     };
   }
+  const runtimeRuns = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object'
+    ? input.runtime.codexSkillRuns as Record<string, AnyRecord>
+    : {};
+  const runtimeRun = runtimeRuns[execution.metadata.sessionId];
   const process = taskExecutionProcess(input.runtime, input.executionId);
+  // WHAT: Route cancellation to a deferred capacity retry when no child is registered.
+  // WHY: The exited child has released its lease, so process signalling cannot reach the pending resume.
+  if (!process && runtimeRun?.transientRetryAt) {
+    const retryKey = String(runtimeRun.capacityRetryTimerKey ?? '');
+    // WHAT: Clear the exact runtime timer that owns the deferred resume.
+    // WHY: A settled execution must not receive a later asynchronous launch callback.
+    if (retryKey) clearCodexRuntimeTimer(input.runtime, retryKey);
+    const controller = runtimeRun.capacityRetryAbortController;
+    // WHAT: Abort an in-progress shared-capacity acquisition.
+    // WHY: Clearing the timer alone cannot stop a callback that already started admission.
+    if (controller instanceof AbortController) controller.abort();
+    runtimeRun.transientRetryAt = null;
+    runtimeRun.status = 'cancelled';
+    const cancelled = await state.executions.transition(input.executionId, {
+      phase: 'cancelled',
+      result: { status: 'cancelled', summary: 'Cancelled by operator during capacity retry.' },
+    });
+    await publishQueuedCancellation(input.runtime, cancelled);
+    return {
+      ok: true,
+      statusCode: 202,
+      executionId: input.executionId,
+      executorNodeId: localNodeId,
+      phase: cancelled.lifecycle.phase,
+      revision: cancelled.lifecycle.revision,
+      finishedAt: cancelled.lifecycle.finishedAt ?? undefined,
+      cancellationRequested: true,
+    };
+  }
   if (!process || (process.child ? process.child.exitCode !== null : !isSameCodexProcess(process.processId, process.processStartTime))) {
     return {
       ok: false,
@@ -123,10 +157,6 @@ export async function cancelTaskExecutionLocally(input: {
   const cancelling = await state.executions.transition(input.executionId, { phase: 'cancelling' });
   const finishedAt = cancelling.lifecycle.finishedAt;
   if (!finishedAt) throw new Error(`task_execution_cancel_timestamp_missing:${input.executionId}`);
-  const runtimeRuns = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object'
-    ? input.runtime.codexSkillRuns as Record<string, AnyRecord>
-    : {};
-  const runtimeRun = runtimeRuns[execution.metadata.sessionId];
   if (runtimeRun) {
     runtimeRun.cancelRequestedAt = finishedAt;
     runtimeRun.finishedAt = finishedAt;
