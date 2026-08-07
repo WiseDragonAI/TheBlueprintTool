@@ -116,7 +116,15 @@
 
 - **Never open, control, navigate, or interact with the operator's browser.** This includes invoking a CLI flow that automatically opens a browser, such as `wrangler login` with its default browser behavior.
 - Use existing non-interactive credentials for authenticated operations.
-- When operator authentication is unavoidable, run the provider's no-browser flow, give the operator the URL, and wait for the operator to complete the browser interaction.
+- When operator authentication is unavoidable for a provider other than Cloudflare, run the provider's no-browser flow, give the operator the URL, and wait for the operator to complete the browser interaction.
+
+### Cloudflare Deployment Authentication
+
+- **Cloudflare never requires operator browser authentication in this repository.** Never run `wrangler login`, never invoke a Wrangler command that opens a browser, and never ask the operator to authenticate Cloudflare through a URL.
+- The canonical delivery CLI loads `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from the process environment, then from the ignored file `<deliveryRepositoryRoot>/.env`. On this workstation that file is `/home/jbb/dev/EditorBP/decision-os/.env`; it already contains both non-interactive credentials and must remain mode `0600` and Git-ignored.
+- Before a Cloudflare mutation, verify without printing values that `.env` is Git-ignored and both required keys are non-empty. Never print, log, copy, commit, or place either value in delivery evidence.
+- Use `node bin/decision-os-delivery.mjs promote ...` for production Cloudflare deployment. The delivery runtime passes the loaded credentials to the pinned Wrangler process. Do not use direct `wrangler deploy`, `wrangler versions upload`, `wrangler versions deploy`, or `wrangler rollback` as the routine release path.
+- `delivery_relay_credentials_missing` and Cloudflare authentication rejection are hard configuration failures. Stop and report the exact error; do not fall back to interactive authentication.
 
 ## decision-os Server Procedure
 

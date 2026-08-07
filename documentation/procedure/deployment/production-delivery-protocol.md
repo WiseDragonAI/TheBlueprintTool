@@ -23,7 +23,10 @@
 3. CLI flags cannot supply a repository path, release root, relay URL, Cloudflare token, SSH key, node capability, supervisor command, port, environment, evidence path, and recovery path.
 4. The ignored settings file owns `deliveryRepositoryRoot`, `deliveryReleaseRoot`, `deliveryCurrentPointer`, `deliveryCandidateCurrentPointer`, `deliveryDecisionOsRoot`, `deliveryNodeId`, `deliverySupervisorProfile`, `deliverySupervisorAdopted`, `deliverySupervisedExit`, `deliveryEmergencyHealth`, `deliveryLocalDispatchToken`, `projectSyncGitSshIdentityFile`, and `federationRelayUrl`.
 5. `projectSyncGitSshIdentityFile` is an absolute non-interactive Wise SSH identity. Delivery uses `BatchMode=yes` and disables terminal prompting.
-6. Cloudflare credentials come from the process environment or an ignored repository `.env` as `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Delivery rejects a loaded credential file that Git does not prove ignored. Credentials never enter journal evidence.
+6. Cloudflare delivery is always non-interactive. The CLI first reads `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from its process environment, then fills missing values from `<deliveryRepositoryRoot>/.env`. On the production workstation the fixed file is `/home/jbb/dev/EditorBP/decision-os/.env`; both credentials are already present, the file is mode `0600`, and Git proves it ignored.
+7. Never run `wrangler login`, invoke a Wrangler command that opens a browser, or ask the operator to authenticate Cloudflare through a URL. `delivery_relay_credentials_missing` and Cloudflare authentication rejection are configuration failures and stop delivery.
+8. Verify credential presence without printing values. Never print, log, copy, commit, or write either value into candidate evidence, journals, receipts, and incident context.
+9. Production Cloudflare mutation runs only through `node bin/decision-os-delivery.mjs promote ...`. The runtime passes the loaded credentials to the repository-pinned Wrangler process; direct Wrangler deployment and rollback commands are not the routine release path.
 
 ---
 
