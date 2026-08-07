@@ -25,6 +25,7 @@ test('Done is a one-column project-first archive sorted by completion date', asy
       id: card.id,
       title: card.title,
       status: 'done',
+      lifecycle: { status: 'done', changedAt: card.completedAt, waitingAt: null, closedAt: card.completedAt },
       labels: ['master-task', card.label],
       x: 20,
       y: 20 + index * 220,

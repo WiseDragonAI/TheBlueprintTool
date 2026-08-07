@@ -13,20 +13,20 @@
     <template id="canvas-surface-shell">
       <main class="shell" aria-label="Core canvas workspace">
       <aside class="rail" id="toolbox-rail" aria-label="Toolbox">
-        <button class="tool rail-toggle" type="button" data-action="toggle-rail" title="Collapse toolbox" aria-controls="toolbox-rail" aria-expanded="true"><span>‹</span><span class="rail-toggle-label">Collapse</span></button>
-        <button class="tool active" type="button" data-tool="select" title="Select" data-spec="40000007"><span>↖</span><span>Select</span></button>
-        <button class="tool" type="button" data-tool="card" title="Card"><span>▤</span><span>Card</span></button>
-        <button class="tool" type="button" data-tool="zone" title="Zone" data-spec="e0b4d11a 20000014 bd0651aa"><span>▣</span><span>Zone</span></button>
-        <button class="tool" type="button" data-tool="group" title="Group" data-spec="53d49146 90d84349"><span>◎</span><span>Group</span></button>
-        <button class="tool" type="button" data-tool="relationship" title="Relationship" data-spec="61bea65c 9bd42e71"><span>↗</span><span>Link</span></button>
-        <button class="tool" type="button" data-action="resize" title="Resize selected cards"><span>↕</span><span>Resize</span></button>
-        <button class="tool" type="button" data-action="open-control-room" title="Control Room" aria-label="Control Room"><span>⌂</span><span>Control</span></button>
-        <button class="tool" type="button" data-action="open-ledgers-canvas" title="Ledgers"><span>▦</span><span>Ledgers</span></button>
-        <button class="tool" type="button" data-action="open-pipelines-modal" title="Pipelines"><span>⌁</span><span>Pipelines</span></button>
-        <button class="tool" type="button" data-action="refresh" title="Refresh" data-spec="cfed85d3 50000006"><span>⟳</span><span>Refresh</span></button>
-        <button class="tool" type="button" data-tool="thread" data-action="conversation" title="Conversation ledger" data-spec="7abd939e 667ae9a9 2b67c924"><span>☰</span><span>Threads</span></button>
-        <button class="tool" type="button" data-action="shortcut-help" title="Shortcut help" data-spec="33c20993"><span>⌘</span><span>Keys</span></button>
-        <button class="tool" type="button" data-action="runbook" title="Runbook" data-spec="676c6a7a"><span>?</span><span>Runbook</span></button>
+        <button class="tool rail-toggle" type="button" data-action="toggle-rail" data-command="canvas.toggle-rail" data-command-owner="delegated" title="Collapse toolbox" aria-controls="toolbox-rail" aria-expanded="true"><span>‹</span><span class="rail-toggle-label">Collapse</span></button>
+        <button class="tool active" type="button" data-tool="select" data-command="canvas.select-tool" data-command-owner="component" title="Select" data-spec="40000007"><span>↖</span><span>Select</span></button>
+        <button class="tool" type="button" data-tool="card" data-command="canvas.card-tool" data-command-owner="component" title="Card"><span>▤</span><span>Card</span></button>
+        <button class="tool" type="button" data-tool="zone" data-command="canvas.zone-tool" data-command-owner="component" title="Zone" data-spec="e0b4d11a 20000014 bd0651aa"><span>▣</span><span>Zone</span></button>
+        <button class="tool" type="button" data-tool="group" data-command="canvas.group-tool" data-command-owner="component" title="Group" data-spec="53d49146 90d84349"><span>◎</span><span>Group</span></button>
+        <button class="tool" type="button" data-tool="relationship" data-command="canvas.relationship-tool" data-command-owner="component" title="Relationship" data-spec="61bea65c 9bd42e71"><span>↗</span><span>Link</span></button>
+        <button class="tool" type="button" data-action="resize" data-command="canvas.resize-selection" data-command-owner="delegated" data-command-keyboard="Control+D" title="Resize selected cards"><span>↕</span><span>Resize</span></button>
+        <button class="tool" type="button" data-action="open-control-room" data-command="canvas.open-control-room" data-command-owner="delegated" title="Control Room" aria-label="Control Room"><span>⌂</span><span>Control</span></button>
+        <button class="tool" type="button" data-action="open-ledgers-canvas" data-command="canvas.open-ledgers" data-command-owner="delegated" title="Ledgers"><span>▦</span><span>Ledgers</span></button>
+        <button class="tool" type="button" data-action="open-pipelines-modal" data-command="canvas.open-pipelines" data-command-owner="delegated" title="Pipelines"><span>⌁</span><span>Pipelines</span></button>
+        <button class="tool" type="button" data-action="refresh" data-command="canvas.refresh" data-command-owner="delegated" title="Refresh" data-spec="cfed85d3 50000006"><span>⟳</span><span>Refresh</span></button>
+        <button class="tool" type="button" data-tool="thread" data-action="conversation" data-command="thread.open-panel" data-command-owner="delegated" data-command-keyboard="A" title="Conversation ledger" data-spec="7abd939e 667ae9a9 2b67c924"><span>☰</span><span>Threads</span></button>
+        <button class="tool" type="button" data-action="shortcut-help" data-command="canvas.open-shortcuts" data-command-owner="delegated" title="Shortcut help" data-spec="33c20993"><span>⌘</span><span>Keys</span></button>
+        <button class="tool" type="button" data-action="runbook" data-command="canvas.open-runbook" data-command-owner="delegated" title="Runbook" data-spec="676c6a7a"><span>?</span><span>Runbook</span></button>
         <label class="color-picker" hidden data-spec="9f9279ff 20000014">
           <input type="color" value="#55b8ff" data-action="zone-color" aria-label="Zone color">
         </label>
@@ -35,7 +35,7 @@
         <header class="topbar">
           <div>
             <p class="kicker">Project</p>
-            <h1><button class="topbar-title-action" type="button" data-action="open-ledgers-canvas">Ledger</button></h1>
+            <h1><button class="topbar-title-action" type="button" data-action="open-ledgers-canvas" data-command="canvas.open-ledgers" data-command-owner="delegated">Ledger</button></h1>
           </div>
           <nav class="tabs" aria-label="Open ledgers" data-spec="12749dcd ac137fe2 51a6af83 e6a91d34 f2d6c8b1"></nav>
         </header>
@@ -72,7 +72,7 @@
               <div class="resize-handle se" data-spec="60000006"></div>
               <strong>Boot surface</strong>
               <p data-markdown-source="# Boot surface">Load ledger, derive route, clear transient selection, render canvas.</p>
-              <div class="card-actions"><button type="button" data-action="open-card-thread">Notes</button></div>
+              <div class="card-actions"><button type="button" data-action="open-card-thread" data-command="thread.open-card" data-command-owner="delegated">Notes</button></div>
             </article>
             <article class="card" data-card-id="card-zone" data-thread-id="thread-card-zone" data-card-class="zone-card" data-spec="60000006 6000000a 6000000b 6000000c 6000000d 6000000e 6000000f cd58fd49">
               <div class="resize-handle nw" data-spec="60000006"></div>
@@ -81,7 +81,7 @@
               <div class="resize-handle se" data-spec="60000006"></div>
               <strong>Zone model</strong>
               <p>Persistent ID, name, color, geometry and notes.</p>
-              <div class="card-actions"><button type="button" data-action="open-card-thread">Notes</button></div>
+              <div class="card-actions"><button type="button" data-action="open-card-thread" data-command="thread.open-card" data-command-owner="delegated">Notes</button></div>
             </article>
             <article class="card" data-card-id="card-ledger" data-thread-id="thread-card-ledger" data-spec="60000006 70000001 70000002 70000003 70000004 70000005 70000006 70000007">
               <div class="resize-handle nw" data-spec="60000006"></div>
@@ -90,7 +90,7 @@
               <div class="resize-handle se" data-spec="60000006"></div>
               <strong>Ledger routing</strong>
               <p>Serve ledgers, accept edits and publish refresh.</p>
-              <div class="card-actions"><button type="button" data-action="open-card-thread">Notes</button></div>
+              <div class="card-actions"><button type="button" data-action="open-card-thread" data-command="thread.open-card" data-command-owner="delegated">Notes</button></div>
             </article>
             <div class="marquee" hidden></div>
             <svg class="relationships" width="5200" height="2600" viewBox="0 0 5200 2600" role="img" aria-label="Relationships" data-spec="61bea65c 81557a54 708a7bfc 53dc0295 6f01b700 47237c02 5027f419 b200b57e ba1544b0 f93e1bb7 1d6f456a 9bd42e71 3f9c2a11">
@@ -120,10 +120,10 @@
                 <div class="thread-toolbar">
                   <p class="thread-target" title="No thread selected">No thread selected</p>
                   <div class="thread-tabs" role="tablist" aria-label="Thread views">
-                    <button id="thread-tab-thread" class="thread-tab" type="button" role="tab" aria-selected="true" aria-controls="thread-panel-thread" tabindex="0">Thread</button>
-                    <button id="thread-tab-codex-log" class="thread-tab" type="button" role="tab" aria-selected="false" aria-controls="thread-panel-codex-log" tabindex="-1">Codex Log</button>
+                    <button id="thread-tab-thread" class="thread-tab" type="button" data-command="thread.show-thread" data-command-owner="component" role="tab" aria-selected="true" aria-controls="thread-panel-thread" tabindex="0">Thread</button>
+                    <button id="thread-tab-codex-log" class="thread-tab" type="button" data-command="thread.show-codex-log" data-command-owner="component" role="tab" aria-selected="false" aria-controls="thread-panel-codex-log" tabindex="-1">Codex Log</button>
                   </div>
-                  <button class="thread-close terminal-button terminal-button--compact" type="button" data-action="close-thread-panel" title="Close thread panel" aria-label="Close thread panel"><span aria-hidden="true">×</span></button>
+                  <button class="thread-close terminal-button terminal-button--compact" type="button" data-action="close-thread-panel" data-command="thread.close-panel" data-command-owner="delegated" data-command-keyboard="Escape" title="Close thread panel" aria-label="Close thread panel"><span aria-hidden="true">×</span></button>
                 </div>
                 <div class="thread-actions"></div>
               </header>
@@ -146,8 +146,8 @@
       </aside>
       <dialog class="confirm-modal" data-spec="20000012 20000015 20000016">
         <p>Delete selected zone?</p>
-        <button type="button" data-action="confirm-delete">Delete</button>
-        <button type="button" data-action="cancel-delete">Cancel</button>
+        <button type="button" data-action="confirm-delete" data-command="canvas.confirm-delete" data-command-owner="delegated">Delete</button>
+        <button type="button" data-action="cancel-delete" data-command="canvas.cancel-delete" data-command-owner="delegated" data-command-keyboard="Escape">Cancel</button>
       </dialog>
       <dialog class="shortcut-modal" data-spec="33c20993" aria-labelledby="shortcut-modal-title">
         <h2 id="shortcut-modal-title">Keys</h2>
@@ -162,7 +162,7 @@
           <div><dt>Ctrl+V</dt><dd>Paste the copied selection.</dd></div>
           <div><dt>Ctrl+D</dt><dd>Resize selected cards to their content.</dd></div>
         </dl>
-        <button type="button" data-action="close-shortcut-help">Close</button>
+        <button type="button" data-action="close-shortcut-help" data-command="canvas.close-shortcuts" data-command-owner="delegated">Close</button>
       </dialog>
       <dialog class="runbook-modal" data-spec="676c6a7a" aria-labelledby="runbook-modal-title">
         <h2 id="runbook-modal-title">Runbook</h2>
@@ -186,7 +186,7 @@
             <p>Saved pipelines, reusable steps, run manifests, and skill defaults stay local in <code>.decision-os/codex-pipelines.json</code>. One pipeline can be active per workspace. Restart clears every generated step card body and its <code>thread-card-*</code> notes before the first skill runs again.</p>
           </section>
         </div>
-        <button type="button" data-action="close-runbook">Close</button>
+        <button type="button" data-action="close-runbook" data-command="canvas.close-runbook" data-command-owner="delegated">Close</button>
       </dialog>
       <dialog class="skill-modal process-modal" aria-labelledby="card-process-modal-title"></dialog>
       <dialog class="pipelines-modal codex-admin-modal" aria-labelledby="pipelines-modal-title"></dialog>
@@ -209,7 +209,7 @@
           </label>
           <div class="project-settings-field">
             <span>Color</span>
-            <button class="project-settings-color-trigger" type="button" aria-haspopup="dialog" aria-controls="canvas-project-color-picker-modal">
+            <button class="project-settings-color-trigger" type="button" data-command="canvas.project-color-open" data-command-owner="component" aria-haspopup="dialog" aria-controls="canvas-project-color-picker-modal">
               <span class="project-settings-color-swatch" aria-hidden="true"></span>
               <span class="project-settings-color-value">#38d9e8</span>
             </button>
@@ -217,8 +217,8 @@
           </div>
           <p class="project-settings-error" role="alert" hidden></p>
           <footer>
-            <button class="project-settings-cancel" type="button">Cancel</button>
-            <button class="project-settings-save" type="submit">Save</button>
+            <button class="project-settings-cancel" type="button" data-command="canvas.project-settings-cancel" data-command-owner="component">Cancel</button>
+            <button class="project-settings-save" type="submit" data-command="canvas.project-settings-submit" data-command-owner="form">Save</button>
           </footer>
         </form>
       </dialog>
@@ -242,8 +242,8 @@
             <span class="project-color-picker-swatch" aria-hidden="true"></span>
           </div>
           <footer>
-            <button class="project-color-picker-cancel" type="button">Cancel</button>
-            <button class="project-color-picker-set" type="button">Set</button>
+            <button class="project-color-picker-cancel" type="button" data-command="canvas.project-color-cancel" data-command-owner="component">Cancel</button>
+            <button class="project-color-picker-set" type="button" data-command="canvas.project-color-set" data-command-owner="component">Set</button>
           </footer>
         </section>
       </dialog>
@@ -252,29 +252,29 @@
     <template id="responsive-application-shell">
       <div class="app-shell shell">
         <header class="topbar">
-          <button class="icon-button menu-button" type="button" aria-label="Open navigation" aria-expanded="false">☰</button>
+          <button class="icon-button menu-button" type="button" data-command="responsive.open-menu" data-command-owner="component" aria-label="Open navigation" aria-expanded="false">☰</button>
           <a class="brand" href="/" aria-label="Control room home">
             <span class="brand-mark">D</span>
             <span><strong id="project-name">decision-os</strong><small>Control room</small></span>
           </a>
-          <button class="icon-button refresh-button" type="button" aria-label="Refresh ledger">↻</button>
+          <button class="icon-button refresh-button" type="button" data-command="responsive.refresh" data-command-owner="component" aria-label="Refresh ledger">↻</button>
         </header>
 
         <div class="layout">
           <nav class="ledger-nav" aria-label="Application navigation">
             <div class="nav-heading">
               <span>Navigation</span>
-              <button class="icon-button close-menu-button" type="button" aria-label="Close navigation">×</button>
+              <button class="icon-button close-menu-button" type="button" data-command="responsive.close-menu" data-command-owner="component" aria-label="Close navigation">×</button>
             </div>
             <div id="ledger-links" class="ledger-links"></div>
-            <button class="nav-server-restart-button" type="button">Restart server</button>
+            <button class="nav-server-restart-button" type="button" data-command="responsive.restart-server" data-command-owner="component">Restart server</button>
           </nav>
-          <button class="nav-scrim" type="button" aria-label="Close navigation"></button>
+          <button class="nav-scrim" type="button" data-command="responsive.close-menu" data-command-owner="component" aria-label="Close navigation"></button>
 
           <main class="content" tabindex="-1">
             <section id="mutation-error" class="mutation-error" role="alert" hidden>
               <span id="mutation-error-message"></span>
-              <button class="mutation-error-retry" type="button">Retry refresh</button>
+              <button class="mutation-error-retry" type="button" data-command="responsive.retry-mutation-refresh" data-command-owner="component">Retry refresh</button>
             </section>
             <section id="loading-view" class="state-view">
               <span class="spinner" aria-hidden="true"></span>
@@ -285,7 +285,7 @@
               <div class="state-icon">!</div>
               <h1>Could not load this ledger</h1>
               <p id="error-message"></p>
-              <button class="primary-button retry-button" type="button">Try again</button>
+              <button class="primary-button retry-button" type="button" data-command="responsive.retry-load" data-command-owner="component">Try again</button>
             </section>
 
             <section id="empty-view" class="state-view" hidden>
@@ -301,7 +301,7 @@
                   <h1>Ledgers</h1>
                   <p id="overview-summary" class="muted"></p>
                 </div>
-                <button class="create-button create-ledger-button" type="button">+ Ledger</button>
+                <button class="create-button create-ledger-button" type="button" data-command="responsive.create-ledger" data-command-owner="component">+ Ledger</button>
               </div>
               <div id="overview-ledgers" class="overview-ledgers"></div>
             </section>
@@ -313,13 +313,13 @@
                   <h1>Projects</h1>
                   <p id="projects-summary" class="muted"></p>
                 </div>
-                <button class="create-button create-project-button" type="button">+ Project</button>
+                <button class="create-button create-project-button" type="button" data-command="responsive.create-project" data-command-owner="component">+ Project</button>
               </div>
               <div id="project-list" class="project-list"></div>
             </section>
 
             <section id="project-detail-view" class="project-detail-view" hidden>
-              <button class="back-to-projects-button back-button" type="button">← Back to projects</button>
+              <button class="back-to-projects-button back-button" type="button" data-command="responsive.back-projects" data-command-owner="component">← Back to projects</button>
               <div class="project-detail-header">
                 <span id="project-detail-color" class="project-detail-color" aria-hidden="true"></span>
                 <div>
@@ -329,8 +329,8 @@
                 </div>
               </div>
               <div class="project-detail-actions">
-                <button class="open-project-button primary-button" type="button">Open project</button>
-                <button class="project-settings-button" type="button">Settings</button>
+                <button class="open-project-button primary-button" type="button" data-command="responsive.open-project" data-command-owner="component">Open project</button>
+                <button class="project-settings-button" type="button" data-command="responsive.open-project-settings" data-command-owner="component">Settings</button>
               </div>
               <dl class="project-detail-metadata">
                 <dt>Status</dt><dd id="project-detail-status"></dd>
@@ -350,9 +350,9 @@
                 <fieldset class="codex-process-limit-field">
                   <legend>Maximum concurrent Codex processes</legend>
                   <div class="codex-process-stepper">
-                    <button class="codex-icon codex-settings-increase" type="button" aria-label="Increase maximum concurrent Codex processes">↑</button>
+                    <button class="codex-icon codex-settings-increase" type="button" data-command="responsive.codex-limit-increase" data-command-owner="component" aria-label="Increase maximum concurrent Codex processes">↑</button>
                     <output id="codex-settings-limit" aria-live="polite">1</output>
-                    <button class="codex-icon codex-settings-decrease" type="button" aria-label="Decrease maximum concurrent Codex processes" disabled>↓</button>
+                    <button class="codex-icon codex-settings-decrease" type="button" data-command="responsive.codex-limit-decrease" data-command-owner="component" aria-label="Decrease maximum concurrent Codex processes" disabled>↓</button>
                   </div>
                 </fieldset>
                 <p class="muted settings-help">New launches wait in FIFO order after this number of Codex processes are running.</p>
@@ -361,7 +361,7 @@
                 <label class="settings-field"><span>Master-task completion pipeline</span><select id="codex-settings-master-task-completion-pipeline" name="masterTaskCompletionPipelineId"><option value="">Not configured</option></select></label>
                 <p class="muted settings-help">Complete with pipeline queues this server pipeline against the selected master task.</p>
                 <p id="codex-settings-message" class="settings-message" role="status"></p>
-                <button class="primary-button codex-settings-save" type="submit">Save settings</button>
+                <button class="primary-button codex-settings-save" type="submit" data-command="responsive.codex-settings-submit" data-command-owner="form">Save settings</button>
               </form>
               <form class="federation-settings-form settings-panel">
                 <header class="settings-section-header">
@@ -389,8 +389,8 @@
                 <div id="federation-peer-list" class="federation-peer-list" aria-label="Federation environments"></div>
                 <p id="federation-settings-message" class="settings-message" role="status"></p>
                 <div class="settings-actions">
-                  <button class="primary-button federation-settings-save" type="submit">Save and connect</button>
-                  <button class="federation-settings-disconnect" type="button">Disconnect</button>
+                  <button class="primary-button federation-settings-save" type="submit" data-command="responsive.federation-settings-submit" data-command-owner="form">Save and connect</button>
+                  <button class="federation-settings-disconnect" type="button" data-command="responsive.federation-disconnect" data-command-owner="component">Disconnect</button>
                 </div>
               </form>
             </section>
@@ -402,16 +402,16 @@
                   <div id="control-filters" class="control-filters" aria-label="Filter tasks by ledger"></div>
                 </div>
                 <nav class="control-tabs" aria-label="Task status">
-                  <button type="button" data-control-tab="queue" role="tab" aria-selected="true"><span>Queue</span><small>0 tasks</small></button>
-                  <button type="button" data-control-tab="exec" role="tab" aria-selected="false"><span>Exec</span><small>0 tasks</small></button>
-                  <button type="button" data-control-tab="backlog" role="tab" aria-selected="false"><span>Backlog</span><small>0 tasks</small></button>
-                  <button class="new-task-button mobile-new-task-button" type="button"><span>+ New task</span><small>Create</small></button>
+                  <button type="button" data-control-tab="queue" data-command="responsive.control-queue" data-command-owner="component" role="tab" aria-selected="true"><span>Queue</span><small>0 tasks</small></button>
+                  <button type="button" data-control-tab="exec" data-command="responsive.control-exec" data-command-owner="component" role="tab" aria-selected="false"><span>Exec</span><small>0 tasks</small></button>
+                  <button type="button" data-control-tab="backlog" data-command="responsive.control-backlog" data-command-owner="component" role="tab" aria-selected="false"><span>Backlog</span><small>0 tasks</small></button>
+                  <button class="new-task-button mobile-new-task-button" type="button" data-command="responsive.new-task" data-command-owner="component" data-command-keyboard="X"><span>+ New task</span><small>Create</small></button>
                 </nav>
               </div>
               <div id="control-task-list" class="control-task-list"></div>
               <p id="control-empty" class="control-empty" hidden></p>
               <div class="control-board-footer">
-                <button class="new-task-button desktop-new-task-button terminal-button terminal-button--action" type="button">
+                <button class="new-task-button desktop-new-task-button terminal-button terminal-button--action" type="button" data-command="responsive.new-task" data-command-owner="component" data-command-keyboard="X">
                   <span class="terminal-button__key">X</span><span class="terminal-button__label">NEW TASK</span>
                 </button>
               </div>
@@ -459,20 +459,20 @@
                   <h1 id="ledger-title"></h1>
                   <p id="ledger-summary" class="muted"></p>
                 </div>
-                <button class="create-button create-zone-button" type="button">+ Zone</button>
+                <button class="create-button create-zone-button" type="button" data-command="responsive.create-zone" data-command-owner="component">+ Zone</button>
               </div>
               <div id="zone-list" class="zone-list"></div>
             </section>
 
             <section id="zone-view" hidden>
-              <button class="back-to-ledger-button back-button" type="button">← Back to zones</button>
+              <button class="back-to-ledger-button back-button" type="button" data-command="responsive.back-ledger" data-command-owner="component">← Back to zones</button>
               <div class="ledger-header">
                 <div>
                   <p class="eyebrow">Zone</p>
                   <h1 id="zone-title"></h1>
                   <p id="zone-summary" class="muted"></p>
                 </div>
-                <button class="create-button create-card-button" type="button">+ Card</button>
+                <button class="create-button create-card-button" type="button" data-command="responsive.create-card" data-command-owner="component">+ Card</button>
                 <label class="search-field">
                   <span aria-hidden="true">⌕</span>
                   <input id="card-search" type="search" inputmode="search" placeholder="Search cards" autocomplete="off" />
@@ -485,14 +485,14 @@
             <article id="card-view" class="card-detail" hidden>
               <div class="card-detail-header">
                 <div class="card-detail-actions">
-                  <button class="back-to-zone-button back-button" type="button">← Back</button>
-                  <button class="process-card-button" type="button">Process card</button>
-                  <button class="thread-open-button" type="button">Thread</button>
+                  <button class="back-to-zone-button back-button" type="button" data-command="responsive.back-card" data-command-owner="component" data-command-keyboard="Escape">← Back</button>
+                  <button class="process-card-button" type="button" data-command="codex.open-process" data-command-owner="component">Process card</button>
+                  <button class="thread-open-button" type="button" data-command="thread.open-card" data-command-owner="component">Thread</button>
                 </div>
                 <h1 id="card-title"></h1>
               </div>
               <div id="card-body" class="card-body" aria-live="polite"></div>
-              <button class="quick-voice-comment-button terminal-button" type="button" aria-label="Record a voice comment" title="Record voice comment" hidden>
+              <button class="quick-voice-comment-button terminal-button" type="button" data-command="thread.quick-voice-comment" data-command-owner="component" aria-label="Record a voice comment" title="Record voice comment" hidden>
                 <svg class="terminal-button__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg>
               </button>
             </article>
@@ -506,10 +506,10 @@
                 <header class="thread-heading">
                   <div class="thread-toolbar">
                     <div class="thread-tabs" role="tablist" aria-label="Thread views">
-                      <button id="thread-tab-thread" class="thread-tab" type="button" role="tab" aria-selected="true" aria-controls="thread-panel-thread" tabindex="0">Thread</button>
-                      <button id="thread-tab-codex-log" class="thread-tab" type="button" role="tab" aria-selected="false" aria-controls="thread-panel-codex-log" tabindex="-1">Codex Log</button>
+                      <button id="thread-tab-thread" class="thread-tab" type="button" data-command="thread.show-thread" data-command-owner="component" role="tab" aria-selected="true" aria-controls="thread-panel-thread" tabindex="0">Thread</button>
+                      <button id="thread-tab-codex-log" class="thread-tab" type="button" data-command="thread.show-codex-log" data-command-owner="component" role="tab" aria-selected="false" aria-controls="thread-panel-codex-log" tabindex="-1">Codex Log</button>
                     </div>
-                    <button class="thread-close-button" type="button" aria-label="Close thread">×</button>
+                    <button class="thread-close-button" type="button" data-command="thread.close-responsive" data-command-owner="component" data-command-keyboard="Escape" aria-label="Close thread">×</button>
                   </div>
                   <div class="thread-actions"></div>
                 </header>
@@ -529,15 +529,15 @@
 
         <dialog class="confirm-modal mobile-confirm-modal">
           <p>Delete this note?</p>
-          <button type="button" data-action="delete-note">Delete note</button>
-          <button type="button" data-action="cancel-delete">Cancel</button>
+          <button type="button" data-action="delete-note" data-command="thread.delete-note" data-command-owner="delegated">Delete note</button>
+          <button type="button" data-action="cancel-delete" data-command="thread.cancel-delete" data-command-owner="delegated">Cancel</button>
         </dialog>
 
         <dialog class="delete-master-task-modal mobile-confirm-modal" aria-labelledby="delete-master-task-title">
           <h2 id="delete-master-task-title">Delete master task?</h2>
           <p>This permanently removes the master task card. Its linked subtask cards are kept.</p>
-          <button class="confirm-delete-master-task-button" type="button">Delete master task</button>
-          <button class="cancel-delete-master-task-button" type="button">Cancel</button>
+          <button class="confirm-delete-master-task-button" type="button" data-command="responsive.confirm-delete-master-task" data-command-owner="component">Delete master task</button>
+          <button class="cancel-delete-master-task-button" type="button" data-command="responsive.cancel-delete-master-task" data-command-owner="component">Cancel</button>
         </dialog>
 
         <dialog class="new-task-project-modal" aria-labelledby="new-task-project-title">
@@ -550,7 +550,7 @@
             <div class="new-task-node-tabs" role="tablist" aria-label="Choose a node"></div>
             <div id="new-task-project-panel" class="new-task-project-list" role="tabpanel"></div>
             <p class="new-task-project-error" role="alert" hidden></p>
-            <footer><button class="new-task-project-cancel" type="button">Cancel</button></footer>
+            <footer><button class="new-task-project-cancel" type="button" data-command="responsive.cancel-new-task" data-command-owner="component">Cancel</button></footer>
           </section>
         </dialog>
 
@@ -573,7 +573,7 @@
               <div class="creation-directory-control">
                 <input id="creation-directory-display" type="text" readonly placeholder="Choose a directory" aria-label="Project directory" aria-describedby="creation-directory-help" />
                 <input id="creation-directory" name="directory" type="hidden" />
-                <button class="creation-directory-browse" type="button">Browse</button>
+                <button class="creation-directory-browse" type="button" data-command="responsive.browse-project-directory" data-command-owner="component">Browse</button>
               </div>
               <small id="creation-directory-help">Choose an existing directory below this server's catalog root.</small>
               <section class="creation-directory-browser" aria-label="Project directory browser" hidden>
@@ -587,8 +587,8 @@
             </label>
             <p class="creation-error" role="alert" hidden></p>
             <footer>
-              <button class="creation-cancel" type="button">Cancel</button>
-              <button class="creation-submit primary-button" type="submit">Create</button>
+              <button class="creation-cancel" type="button" data-command="responsive.cancel-creation" data-command-owner="component">Cancel</button>
+              <button class="creation-submit primary-button" type="submit" data-command="responsive.creation-submit" data-command-owner="form">Create</button>
             </footer>
           </form>
         </dialog>
@@ -610,7 +610,7 @@
             </label>
             <div class="creation-field">
               <span>Color</span>
-              <button class="project-settings-color-trigger" type="button" aria-haspopup="dialog" aria-controls="project-color-picker-modal">
+              <button class="project-settings-color-trigger" type="button" data-command="responsive.project-color-open" data-command-owner="component" aria-haspopup="dialog" aria-controls="project-color-picker-modal">
                 <span class="project-settings-color-swatch" aria-hidden="true"></span>
                 <span class="project-settings-color-value">#38d9e8</span>
               </button>
@@ -620,11 +620,11 @@
             <section class="project-settings-sync-panel" aria-labelledby="project-sync-title">
               <h3 id="project-sync-title">Repository synchronization</h3>
               <p class="muted">Creates a synchronization task and opens it in Control Room.</p>
-              <button class="project-settings-sync" type="button">Synchronize project</button>
+              <button class="project-settings-sync" type="button" data-command="responsive.synchronize-project" data-command-owner="component">Synchronize project</button>
             </section>
             <footer>
-              <button class="project-settings-cancel" type="button">Cancel</button>
-              <button class="project-settings-save primary-button" type="submit">Save</button>
+              <button class="project-settings-cancel" type="button" data-command="responsive.project-settings-cancel" data-command-owner="component">Cancel</button>
+              <button class="project-settings-save primary-button" type="submit" data-command="responsive.project-settings-submit" data-command-owner="form">Save</button>
             </footer>
           </form>
         </dialog>
@@ -648,21 +648,21 @@
               <span class="project-color-picker-swatch" aria-hidden="true"></span>
             </div>
             <footer>
-              <button class="project-color-picker-cancel" type="button">Cancel</button>
-              <button class="project-color-picker-set" type="button">Set</button>
+              <button class="project-color-picker-cancel" type="button" data-command="responsive.project-color-cancel" data-command-owner="component">Cancel</button>
+              <button class="project-color-picker-set" type="button" data-command="responsive.project-color-set" data-command-owner="component">Set</button>
             </footer>
           </section>
         </dialog>
 
         <dialog class="codex-modal process-modal" aria-labelledby="process-title">
           <section class="codex-sheet">
-            <header><button class="codex-back process-close" type="button" aria-label="Close card processing">×</button><div><p class="eyebrow">Card processing</p><h2 id="process-title">Process card</h2></div><button class="codex-secondary process-resynchronize" type="button" hidden>Resynchronize</button></header>
-            <div class="codex-tabs" role="tablist" aria-label="Processing library"><button type="button" data-process-tab="skills" aria-selected="true">Skills</button><button type="button" data-process-tab="pipelines" aria-selected="false">Pipelines</button></div>
+            <header><button class="codex-back process-close" type="button" data-command="codex.close-process" data-command-owner="component" data-command-keyboard="Escape" aria-label="Close card processing">×</button><div><p class="eyebrow">Card processing</p><h2 id="process-title">Process card</h2></div><button class="codex-secondary process-resynchronize" type="button" data-command="codex.resynchronize-process" data-command-owner="component" hidden>Resynchronize</button></header>
+            <div class="codex-tabs" role="tablist" aria-label="Processing library"><button type="button" data-process-tab="skills" data-command="codex.show-skills" data-command-owner="component" aria-selected="true">Skills</button><button type="button" data-process-tab="pipelines" data-command="codex.show-pipelines" data-command-owner="component" aria-selected="false">Pipelines</button></div>
             <div class="codex-library-controls">
               <label class="codex-library-search"><span aria-hidden="true">⌕</span><input class="process-search" type="search" placeholder="Search library" aria-label="Search processing library"></label>
               <div class="process-project-filters codex-filter-row" aria-label="Filter processing library by project"></div>
               <div class="process-tag-filters codex-filter-row" aria-label="Filter processing library by tag"></div>
-              <button class="process-filter-clear codex-filter-clear" type="button">Clear filters</button>
+              <button class="process-filter-clear codex-filter-clear" type="button" data-command="codex.clear-process-filters" data-command-owner="component">Clear filters</button>
             </div>
             <p class="codex-message process-message" role="status"></p>
             <div class="process-library codex-list"></div>
@@ -672,12 +672,12 @@
 
         <dialog class="codex-modal pipelines-modal" aria-labelledby="pipelines-title">
           <section class="codex-sheet">
-            <header><button class="codex-back pipelines-close" type="button" aria-label="Close pipelines">×</button><div><p class="eyebrow">Library</p><h2 id="pipelines-title">Pipelines</h2></div><div class="codex-header-actions"><button class="codex-secondary pipelines-resynchronize" type="button">Resynchronize</button><button class="primary-button pipeline-new" type="button">New</button></div></header>
+            <header><button class="codex-back pipelines-close" type="button" data-command="codex.close-pipelines" data-command-owner="component" data-command-keyboard="Escape" aria-label="Close pipelines">×</button><div><p class="eyebrow">Library</p><h2 id="pipelines-title">Pipelines</h2></div><div class="codex-header-actions"><button class="codex-secondary pipelines-resynchronize" type="button" data-command="codex.resynchronize-pipelines" data-command-owner="component">Resynchronize</button><button class="primary-button pipeline-new" type="button" data-command="codex.new-pipeline" data-command-owner="component">New</button></div></header>
             <div class="codex-library-controls">
               <label class="codex-library-search"><span aria-hidden="true">⌕</span><input class="pipelines-search" type="search" placeholder="Search pipelines" aria-label="Search pipelines"></label>
               <div class="pipelines-project-filters codex-filter-row" aria-label="Filter pipelines by project"></div>
               <div class="pipelines-tag-filters codex-filter-row" aria-label="Filter pipelines by tag"></div>
-              <button class="pipelines-filter-clear codex-filter-clear" type="button">Clear filters</button>
+              <button class="pipelines-filter-clear codex-filter-clear" type="button" data-command="codex.clear-pipeline-filters" data-command-owner="component">Clear filters</button>
             </div>
             <p class="codex-message pipelines-message" role="status"></p>
             <div class="pipeline-library codex-list"></div>
@@ -686,24 +686,24 @@
 
         <dialog class="codex-modal pipeline-editor-modal" aria-labelledby="pipeline-editor-title">
           <form class="codex-sheet pipeline-editor-form">
-            <header><button class="codex-back pipeline-editor-back" type="button" aria-label="Back to pipelines">←</button><div><p class="eyebrow">Pipeline</p><h2 id="pipeline-editor-title">Edit pipeline</h2></div><button class="primary-button pipeline-save" type="submit">Save</button></header>
+            <header><button class="codex-back pipeline-editor-back" type="button" data-command="codex.back-pipeline-editor" data-command-owner="component" data-command-keyboard="Escape" aria-label="Back to pipelines">←</button><div><p class="eyebrow">Pipeline</p><h2 id="pipeline-editor-title">Edit pipeline</h2></div><button class="primary-button pipeline-save" type="submit" data-command="codex.pipeline-submit" data-command-owner="form">Save</button></header>
             <p class="codex-message pipeline-editor-message" role="alert"></p>
             <label class="codex-field"><span>Name</span><input name="pipeline-name" required maxlength="120"></label>
             <label class="codex-field"><span>Purpose</span><textarea name="pipeline-purpose" rows="3"></textarea></label>
             <div class="pipeline-steps"></div>
-            <button class="codex-secondary pipeline-add-step" type="button">+ Add step</button>
+            <button class="codex-secondary pipeline-add-step" type="button" data-command="codex.add-pipeline-step" data-command-owner="component">+ Add step</button>
           </form>
         </dialog>
 
         <dialog class="codex-modal skill-picker-modal" aria-labelledby="skill-picker-title">
           <section class="codex-sheet">
-            <header><button class="codex-back skill-picker-back" type="button" aria-label="Back to pipeline editor">←</button><div><p class="eyebrow">Step skill</p><h2 id="skill-picker-title">Add skill</h2></div></header>
+            <header><button class="codex-back skill-picker-back" type="button" data-command="codex.back-skill-picker" data-command-owner="component" data-command-keyboard="Escape" aria-label="Back to pipeline editor">←</button><div><p class="eyebrow">Step skill</p><h2 id="skill-picker-title">Add skill</h2></div></header>
             <div class="skill-picker-controls codex-library-controls"></div>
             <p class="codex-message skill-picker-message" role="alert"></p>
             <div class="skill-picker-list codex-list"></div>
             <footer class="skill-picker-actions">
               <label class="codex-field"><span>Insert position</span><select class="skill-picker-position" aria-label="Insert position"></select></label>
-              <div><button class="skill-picker-cancel codex-secondary" type="button">Cancel</button><button class="skill-picker-confirm primary-button" type="button">Add skill</button></div>
+              <div><button class="skill-picker-cancel codex-secondary" type="button" data-command="codex.cancel-skill-picker" data-command-owner="component">Cancel</button><button class="skill-picker-confirm primary-button" type="button" data-command="codex.confirm-skill-picker" data-command-owner="component">Add skill</button></div>
             </footer>
           </section>
         </dialog>

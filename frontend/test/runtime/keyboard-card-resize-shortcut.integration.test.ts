@@ -15,7 +15,9 @@ test('ctrl-d routes selected card resize through the same controller as the tool
 
   assert.match(keyboard, /resizeSelectedCardsController/);
   assert.match(keyboard, /event\.ctrlKey && key === 'd'/);
-  assert.match(keyboard, /event\.preventDefault\(\);\s*\n\s*await resizeSelectedCardsController\(\);/);
+  assert.match(keyboard, /event\.preventDefault\(\);[\s\S]*querySelector\('\[data-action="resize"\]'\)/);
+  assert.match(keyboard, /if \(resize\) await dispatchRuntimeAction\(resize, event\);/);
+  assert.match(keyboard, /else await resizeSelectedCardsController\(\);/);
   assert.match(actionClick, /action === 'resize'[\s\S]*await resizeSelectedCardsController\(\);/);
   assert.match(resizeController, /commitActiveLedgerMutation\(\{ action: 'patch-geometry', geometry \}/);
   assert.match(resizeEffect, /expandSelectedZonesToCards/);

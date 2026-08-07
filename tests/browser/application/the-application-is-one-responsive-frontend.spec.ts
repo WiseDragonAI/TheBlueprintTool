@@ -4,9 +4,10 @@
  */
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type Page } from '@playwright/test';
@@ -295,7 +296,8 @@ test('A new desktop task remains in its task view while its optimistic creation 
 });
 
 test('Master-task completion exposes manual and configured pipeline actions at desktop and mobile widths.', { timeout: 60_000 }, async () => {
-  const server = await startDecisionOsServer();
+  const workspace = createMasterTaskWorkspace();
+  const server = await startDecisionOsServer(workspace);
   let browser: Browser | undefined;
   try {
     browser = await chromium.launch({
@@ -303,7 +305,7 @@ test('Master-task completion exposes manual and configured pipeline actions at d
       executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
-    const route = await resolveMasterTaskRoute(server.url);
+    const route = await resolveMasterTaskRoute(server.url, workspace);
     const settingsPayload = JSON.stringify({
       ok: true,
       maxConcurrentCodexProcesses: 1,
@@ -392,6 +394,7 @@ test('Master-task completion exposes manual and configured pipeline actions at d
   } finally {
     await browser?.close();
     await stopDecisionOsServer(server.process);
+    rmSync(workspace, { recursive: true, force: true });
   }
 });
 
@@ -425,11 +428,11 @@ async function resolveCurrentProject(serverUrl: string): Promise<{ id: string; n
   return project;
 }
 
-async function resolveMasterTaskRoute(serverUrl: string): Promise<string> {
+async function resolveMasterTaskRoute(serverUrl: string, workspaceRoot: string): Promise<string> {
   const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
     projects?: Array<{ id: string; root: string; ledgers?: Array<{ id: string }> }>;
   };
-  const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
+  const project = catalog.projects?.find((candidate) => candidate.root === workspaceRoot);
   assert.ok(project, 'The test workspace must be registered in its project catalog.');
   for (const ledger of project.ledgers ?? []) {
     const canvas = await fetch(`${serverUrl}/p/${encodeURIComponent(project.id)}/api/ledgers/${encodeURIComponent(ledger.id)}/canvas`).then((response) => response.json()) as {
@@ -441,6 +444,37 @@ async function resolveMasterTaskRoute(serverUrl: string): Promise<string> {
     if (zone?.id && card?.id) return `/p/${encodeURIComponent(project.id)}/ledgers/${encodeURIComponent(ledger.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`;
   }
   assert.fail('The test workspace must expose one open master task and one zone.');
+}
+
+function createMasterTaskWorkspace(): string {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-completion-browser-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const cardsRoot = join(decisionOsRoot, 'cards', 'tasks');
+  mkdirSync(cardsRoot, { recursive: true });
+  const waitingAt = '2026-07-20T09:00:00.000Z';
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(cardsRoot, 'master-completion.md'), '## A. Goal\n\n1. Verify master-task completion controls.\n');
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{
+      id: 'master-completion',
+      title: 'Master completion fixture',
+      status: 'todo',
+      lifecycle: { status: 'todo', changedAt: waitingAt, waitingAt, closedAt: null },
+      labels: ['master-task'],
+      x: 40,
+      y: 40,
+      w: 320,
+      h: 180,
+      comment: { contentFile: '.decision-os/cards/tasks/master-completion.md' },
+    }],
+    annotations: [{ id: 'zone-completion', x: 0, y: 0, width: 800, height: 600, color: '#38d9e8' }],
+    relationships: [],
+    notes: {},
+    threadFiles: {},
+  }));
+  return workspace;
 }
 
 function collectPageErrors(page: Page): string[] {
@@ -456,11 +490,11 @@ function collectPageErrors(page: Page): string[] {
   return errors;
 }
 
-async function startDecisionOsServer(): Promise<{ process: ChildProcess; url: string }> {
+async function startDecisionOsServer(cwd = repoRoot): Promise<{ process: ChildProcess; url: string }> {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, [resolve(repoRoot, 'bin/decision-os-server.mjs')], {
-    cwd: repoRoot,
+    cwd,
     detached: true,
     env: {
       ...process.env,

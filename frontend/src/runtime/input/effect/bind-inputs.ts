@@ -35,11 +35,16 @@ import { enterProjectsCanvasController } from '../../navigation/controller/enter
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { bindDesktopVoiceActionPreview } from '../../voice/effect/update-desktop-voice-action-preview.js';
+import { commandBindingForElement, dispatchCommand, registerDeclaredCommandSurface, validateCommandSurface } from '../command-ownership.js';
 
 export function bindInputs(): void {
+  registerDeclaredCommandSurface({ root: document, surface: 'canvas-shell', resourceIdentity: window.location.pathname });
   bindCanvasControlOverlayHover();
   document.querySelectorAll('[data-tool]').forEach((button) => {
-    button.addEventListener('click', () => {
+    if ((button as HTMLElement).dataset.action) return;
+    button.addEventListener('click', (event) => {
+      const binding = commandBindingForElement(button as HTMLElement);
+      const execute = () => {
       state.activeTool = (button as HTMLElement).dataset.tool;
       if (state.activeTool === 'thread' && !state.threadId) selectThread('conversation-ledger');
       telemetry('tool-button-click', { tool: state.activeTool });
@@ -47,6 +52,9 @@ export function bindInputs(): void {
       renderToolbox();
       if (state.activeTool === 'thread') openThreadPanel();
       renderCanvasSurface();
+      };
+      if (!binding) execute();
+      else void dispatchCommand(binding.descriptor.commandId, { descriptor: binding.descriptor, source: 'click', event, element: button as HTMLElement, execute });
     });
   });
 
@@ -58,11 +66,13 @@ export function bindInputs(): void {
   document.querySelector('.tabs')?.addEventListener('click', async (event) => {
     const overviewButton = (event.target as HTMLElement).closest('[data-action="open-ledgers-canvas"]') as HTMLElement | null;
     if (overviewButton) {
+      event.stopPropagation();
       await enterLedgersCanvasController();
       return;
     }
     const createButton = (event.target as HTMLElement).closest('[data-action="create-ledger"]') as HTMLElement | null;
     if (createButton) {
+      event.stopPropagation();
       await createNewLedger();
       return;
     }
@@ -117,4 +127,5 @@ export function bindInputs(): void {
       void enterLedgerController(nextLedger, { replace: true, canonicalMinScale: false });
     }
   });
+  for (const issue of validateCommandSurface(document)) console.error(`Canvas command ownership: ${issue}`);
 }

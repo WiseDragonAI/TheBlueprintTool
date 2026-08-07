@@ -21,7 +21,8 @@ import { hydrateFederationForm } from './federation-form-hydration.js';
 import { createProjectRequest, loadProjectDirectoryRequest } from './project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 import { projectFilterChipPresentation, projectFilterGroups, projectFilterIncludes } from './project-filter-chip.js';
-import { acceptedRunOwnsRoute, captureRouteSnapshot, cardPresentationIdentity, federationEventOwnsCard, sameRouteSnapshot } from './navigation-ownership.js';
+import { acceptedRunOwnsRoute, captureRouteSnapshot, cardPresentationIdentity, createNavigationTransitionDescriptor, federationEventOwnsCard, resolveParentCardDestination, sameRouteSnapshot } from './navigation-ownership.js';
+import { commandBindingForElement, createCommandDescriptor, dispatchCommand, registerDeclaredCommandSurface, tryRegisterCommandElement, updateCommandElementDescriptor, validateCommandSurface } from '/src/runtime/input/command-ownership.js';
 import { completedTaskLabels, filterCompletedTasks } from './completed-tasks.js';
 import { createOptimisticLedgerTransactionCoordinator } from '/src/runtime/ledger/helper/optimistic-ledger-transaction.js';
 import { applyTaskIntentToProjection, taskIdentity, taskIntentConfirmed } from './optimistic-task-projection.js';
@@ -120,11 +121,121 @@ let presentedCardIdentity = '';
 let routeLoadGeneration = 0;
 let routeLoadController = null;
 let codexSettingsRequest = null;
+let cardBackTransition = null;
 const optimisticExecutionIntents = new Map();
 const optimisticTaskIntents = new Map();
 
 function currentRouteSnapshot() {
   return captureRouteSnapshot(location, parseProjectScope);
+}
+
+function commandDescriptorForElement(element, { stateOwner, transitionOwner, resourceIdentity = location.pathname, presentationGeneration = routeLoadGeneration, pendingPolicy = 'allow', reconciliationPolicy = 'none', keyboardBinding } = {}) {
+  const commandId = String(element?.dataset.command || '').trim();
+  const commandScope = commandId.split('.', 1)[0] || 'responsive';
+  return createCommandDescriptor({
+    commandId,
+    stateOwner: stateOwner ?? `${commandScope}-state`,
+    transitionOwner: transitionOwner ?? `${commandScope}-transition`,
+    resourceIdentity,
+    presentationGeneration,
+    pendingPolicy,
+    reconciliationPolicy,
+    keyboardBinding: keyboardBinding ?? element?.getAttribute('aria-keyshortcuts') ?? element?.dataset.commandKeyboard ?? '',
+  });
+}
+
+function bindResponsiveCommand(element, execute, { commandId, ...descriptorOptions } = {}) {
+  if (commandId) element.dataset.command = commandId;
+  const descriptor = commandDescriptorForElement(element, descriptorOptions);
+  tryRegisterCommandElement({ element, descriptor, ownershipClass: 'component', execute, surface: 'responsive-application' });
+  element.addEventListener('click', (event) => {
+    const binding = commandBindingForElement(element);
+    if (!binding) {
+      Promise.resolve(execute({ event, element })).catch((error) => console.error(`Responsive command ${descriptor.commandId} failed.`, error));
+      return;
+    }
+    void dispatchCommand(binding.descriptor.commandId, { descriptor: binding.descriptor, source: 'click', event, element })
+      .then((settlement) => {
+        if (settlement.status === 'failed') console.error(`Responsive command ${binding.descriptor.commandId} failed.`, settlement.error);
+      });
+  });
+  return element;
+}
+
+function currentCardPresentation() {
+  return cardPresentationIdentity(currentRouteSnapshot()) || `${location.pathname}${location.search}`;
+}
+
+function executeCardBackTransition() {
+  const transition = cardBackTransition;
+  if (!transition || transition.presentation !== currentCardPresentation()) return false;
+  if (transition.owner === 'zone-route') return navigate(transition.destination, transition.historyMode === 'replace');
+  void navigateTaskBack(transition.destination);
+  return true;
+}
+
+function executeRouteTransition(transition) {
+  if (transition.presentation !== `${location.pathname}${location.search}`) return false;
+  return navigate(transition.destination, transition.historyMode === 'replace');
+}
+
+function resolveCardBackTransition(parsedTask) {
+  const route = currentRouteSnapshot();
+  const presentation = currentCardPresentation();
+  if (parsedTask.masterTask) {
+    return createNavigationTransitionDescriptor({
+      owner: 'master-task-route',
+      destination: completionReturnPath(),
+      historyMode: 'push',
+      guard: 'voice-and-card-detail',
+      presentation,
+    });
+  }
+  if (parsedTask.parentMasterTask) {
+    const parent = resolveParentCardDestination({
+      projectId: route.projectId,
+      ledgerId: route.ledgerId,
+      parentCardId: parsedTask.parentMasterTask.cardId,
+      zones: ledgerZones(),
+      replicaNodeId: route.replicaNodeId,
+    });
+    if (parent) {
+      return createNavigationTransitionDescriptor({
+        owner: 'subtask-route',
+        destination: parent.destination,
+        historyMode: 'push',
+        guard: 'voice-and-card-detail',
+        presentation,
+      });
+    }
+    console.warn('Subtask parent has no containing zone.', { cardId: parsedTask.cardId, parentCardId: parsedTask.parentMasterTask.cardId });
+  } else if (parsedTask.ancestryDiagnostic) {
+    console.warn('Subtask ancestry is invalid.', parsedTask.ancestryDiagnostic);
+  }
+  return createNavigationTransitionDescriptor({
+    owner: 'zone-route',
+    destination: zonePath(state.activeLedgerId, state.activeZoneId),
+    historyMode: 'push',
+    guard: 'voice-and-card-detail',
+    presentation,
+  });
+}
+
+function syncCardBackCommand(backButton, transition) {
+  cardBackTransition = transition;
+  backButton.setAttribute('aria-keyshortcuts', 'Escape');
+  backButton.title = 'Back (Esc)';
+  const binding = commandBindingForElement(backButton);
+  if (!binding) return;
+  try {
+    updateCommandElementDescriptor(backButton, commandDescriptorForElement(backButton, {
+      resourceIdentity: transition.presentation,
+      presentationGeneration: routeLoadGeneration,
+      keyboardBinding: 'Escape',
+    }));
+  } catch (error) {
+    console.error('Card Back command presentation registration failed.', error);
+  }
 }
 
 function beginRouteLoad() {
@@ -328,6 +439,8 @@ function renderTaskReplicaShell(task, replica = task?.replica) {
     offline: 'The owner is offline. Waiting for a retained replica…'
   }[status] || 'Synchronizing this task…';
   elements['card-title'].textContent = task?.title || 'Loading task';
+  elements['card-view'].dataset.parentMasterTaskId = '';
+  elements['card-view'].dataset.ancestryDiagnostic = '';
   const backButton = document.querySelector('.back-to-zone-button');
   const backIcon = document.createElement('span');
   backIcon.className = 'back-button__icon';
@@ -336,7 +449,13 @@ function renderTaskReplicaShell(task, replica = task?.replica) {
   const backLabel = document.createElement('span');
   backLabel.textContent = 'Back';
   backButton.replaceChildren(backIcon, backLabel);
-  backButton.dataset.destination = 'control-room';
+  syncCardBackCommand(backButton, createNavigationTransitionDescriptor({
+    owner: 'master-task-route',
+    destination: completionReturnPath(),
+    historyMode: 'push',
+    guard: 'voice-and-card-detail',
+    presentation: currentCardPresentation(),
+  }));
   const shell = document.createElement('section');
   shell.className = 'task-state-skeleton';
   shell.dataset.replicaStatus = status;
@@ -1434,10 +1553,11 @@ function selectControlProject(projectId) {
 }
 
 function taskRow(task, tab, index) {
+  const taskId = taskIdentity(task);
   const article = document.createElement('article');
   article.className = `control-task${index === 0 && tab === 'queue' ? ' next-task' : ''}`;
-  article.id = `task-${taskIdentity(task)}`;
-  article.dataset.taskId = taskIdentity(task);
+  article.id = `task-${taskId}`;
+  article.dataset.taskId = taskId;
   article.draggable = false;
   const summary = document.createElement('button');
   summary.type = 'button';
@@ -1524,29 +1644,45 @@ function taskRow(task, tab, index) {
     diagnostic.textContent = task.diagnostics.join(' · ');
     summary.querySelector('.task-copy').append(diagnostic);
   }
-  if (task.projectSyncCanonical !== false) summary.addEventListener('click', () => navigate(pathForTask(task)));
-  else {
+  const taskDestination = task.projectSyncCanonical !== false ? pathForTask(task) : '';
+  if (task.projectSyncCanonical === false) {
     summary.setAttribute('aria-disabled', 'true');
     summary.style.cursor = 'default';
   }
+  bindResponsiveCommand(summary, () => taskDestination ? navigate(taskDestination) : false, {
+    commandId: 'responsive.open-control-task',
+    stateOwner: 'responsive-route-state',
+    transitionOwner: 'responsive-navigation',
+    resourceIdentity: `control-task:${taskId}:${taskDestination}`,
+  });
   article.append(summary);
   if (task.projectSyncFailed) {
+    const syncId = String(task.projectSyncId || '');
+    const route = currentRouteSnapshot();
     const retry = document.createElement('button');
     retry.type = 'button';
     retry.className = 'project-sync-retry';
     retry.textContent = 'Retry synchronization';
-    retry.addEventListener('click', async () => {
+    bindResponsiveCommand(retry, async () => {
       retry.disabled = true;
       try {
-        const response = await fetch(`/api/project-sync/${encodeURIComponent(task.projectSyncId)}/retry`, { method: 'POST' });
+        const response = await fetch(`/api/project-sync/${encodeURIComponent(syncId)}/retry`, { method: 'POST' });
         const payload = await response.json().catch(() => null);
         if (!response.ok || !payload?.run) throw new Error(payload?.error || `Retry failed (${response.status}).`);
+        if (!sameRouteSnapshot(route, currentRouteSnapshot())) return;
         await loadControlRoom({ force: true });
-        renderControlRoom();
+        if (sameRouteSnapshot(route, currentRouteSnapshot()) && retry.isConnected) renderControlRoom();
       } catch (cause) {
-        retry.disabled = false;
-        console.error('Project synchronization retry failed.', cause);
+        if (retry.isConnected) retry.disabled = false;
+        throw cause;
       }
+    }, {
+      commandId: 'responsive.retry-project-sync',
+      stateOwner: 'control-room-state',
+      transitionOwner: 'project-sync-request',
+      resourceIdentity: `project-sync:${syncId}:${taskId}`,
+      pendingPolicy: 'ignore',
+      reconciliationPolicy: 'confirmed-state',
     });
     article.append(retry);
   }
@@ -1603,8 +1739,12 @@ function projectFilterButton(project, selected, onSelect) {
     remoteIcon.innerHTML = '<path d="M5.5 3.5h-2v9h9v-2M8 3.5h4.5V8M12 4 7 9" />';
     button.append(remoteIcon);
   }
-  button.addEventListener('click', () => onSelect(project.id));
-  return button;
+  return bindResponsiveCommand(button, () => onSelect(project.id), {
+    commandId: 'responsive.select-control-project',
+    stateOwner: 'control-room-state',
+    transitionOwner: 'control-room-filter',
+    resourceIdentity: `control-project:${project.id}`,
+  });
 }
 
 function renderControlRoom() {
@@ -1628,18 +1768,27 @@ function renderControlRoom() {
     button.className = 'ledger-filter-chip';
     button.textContent = filter.title;
     button.setAttribute('aria-pressed', String(filter.id === state.controlFilter));
-    button.addEventListener('click', () => { state.controlFilter = filter.id; renderControlRoom(); });
-    return button;
+    return bindResponsiveCommand(button, () => { state.controlFilter = filter.id; renderControlRoom(); }, {
+      commandId: 'responsive.select-control-ledger',
+      stateOwner: 'control-room-state',
+      transitionOwner: 'control-room-filter',
+      resourceIdentity: `control-ledger:${state.projectFilter}:${filter.id}`,
+    });
   });
   const clearProject = document.createElement('button');
   clearProject.type = 'button';
   clearProject.className = 'filter-clear-button';
   clearProject.textContent = 'Clear';
   clearProject.setAttribute('aria-label', 'Clear project and ledger filters');
-  clearProject.addEventListener('click', () => {
+  bindResponsiveCommand(clearProject, () => {
     state.projectFilter = 'All';
     state.controlFilter = 'All';
     renderControlRoom();
+  }, {
+    commandId: 'responsive.clear-control-filters',
+    stateOwner: 'control-room-state',
+    transitionOwner: 'control-room-filter',
+    resourceIdentity: `control-filter:${state.projectFilter}:${state.controlFilter}`,
   });
   elements['control-filters'].hidden = showProjectFilters;
   elements['control-filters'].replaceChildren(...(showProjectFilters ? [] : [...ledgerButtons, clearProject]));
@@ -2183,6 +2332,7 @@ function renderCards(cards) {
       .some((value) => asText(value).toLocaleLowerCase().includes(query));
   });
   const rows = filtered.map((card) => {
+    const destination = cardPath(state.activeLedgerId, state.activeZoneId, card.id);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'card-row';
@@ -2198,8 +2348,12 @@ function renderCards(cards) {
     arrow.setAttribute('aria-hidden', 'true');
     arrow.textContent = '›';
     button.append(copy, arrow);
-    button.addEventListener('click', () => navigate(cardPath(state.activeLedgerId, state.activeZoneId, card.id)));
-    return button;
+    return bindResponsiveCommand(button, () => navigate(destination), {
+      commandId: 'responsive.open-card',
+      stateOwner: 'responsive-route-state',
+      transitionOwner: 'responsive-navigation',
+      resourceIdentity: destination,
+    });
   });
   elements['card-list'].replaceChildren(...rows);
   elements['no-results'].hidden = rows.length > 0;
@@ -2299,7 +2453,18 @@ function initializeMobileCarousels(root) {
 }
 
 function renderCard(card) {
-  state.activeCardId = asText(card.id);
+  const cardId = asText(card.id);
+  state.activeCardId = cardId;
+  const cardScope = Object.freeze(responsiveLedgerScope());
+  const cardGeneration = routeLoadGeneration;
+  const cardPresentation = currentCardPresentation();
+  const ownsCardPresentation = (element) => element.isConnected
+    && routeLoadGeneration === cardGeneration
+    && state.resourceProjectId === cardScope.projectId
+    && currentRouteSnapshot().replicaNodeId === cardScope.replicaNodeId
+    && state.activeLedgerId === cardScope.ledgerId
+    && state.activeCardId === cardId
+    && currentCardPresentation() === cardPresentation;
   const cardAccent = responsiveCardAccent(card);
   elements['card-title'].textContent = asText(card.title).trim() || `Card ${card.id}`;
   const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' ? card.imageSizes : {};
@@ -2311,6 +2476,8 @@ function renderCard(card) {
     relationships: state.ledger?.relationships ?? []
   });
   elements['card-view'].dataset.masterTask = String(parsedTask.masterTask);
+  elements['card-view'].dataset.parentMasterTaskId = parsedTask.parentMasterTask?.cardId ?? '';
+  elements['card-view'].dataset.ancestryDiagnostic = parsedTask.ancestryDiagnostic?.code ?? '';
   const backButton = document.querySelector('.back-to-zone-button');
   const backIcon = document.createElement('span');
   backIcon.className = 'back-button__icon';
@@ -2319,16 +2486,11 @@ function renderCard(card) {
   const backLabel = document.createElement('span');
   backLabel.textContent = 'Back';
   backButton.replaceChildren(backIcon, backLabel);
-  backButton.dataset.destination = parsedTask.masterTask ? 'control-room' : 'zone';
+  syncCardBackCommand(backButton, resolveCardBackTransition(parsedTask));
   if (parsedTask.masterTask) {
     const key = shortcutKey('Esc');
     key.setAttribute('aria-hidden', 'true');
     backButton.append(key);
-    backButton.setAttribute('aria-keyshortcuts', 'Escape');
-    backButton.title = 'Back (Esc)';
-  } else {
-    backButton.removeAttribute('aria-keyshortcuts');
-    backButton.removeAttribute('title');
   }
   destroyMobileCarousels(elements['card-body']);
   const persistCardImageResize = async (source, dimensions) => {
@@ -2396,8 +2558,9 @@ function renderCard(card) {
     const retry = document.createElement('button');
     retry.type = 'button';
     retry.textContent = 'Retry saving task';
-    retry.addEventListener('click', async () => {
-      const annotation = (state.ledger?.annotations ?? []).find((entry) => String(entry.id) === String(state.activeZoneId));
+    const retryZoneId = String(state.activeZoneId);
+    bindResponsiveCommand(retry, async () => {
+      const annotation = (state.ledger?.annotations ?? []).find((entry) => String(entry.id) === retryZoneId);
       if (!annotation) return;
       retry.disabled = true;
       retry.textContent = 'Retrying…';
@@ -2407,15 +2570,25 @@ function renderCard(card) {
       delete persistedCard.persistenceError;
       delete persistedCard.replicationState;
       try {
-        await ledgerMutation(state.activeLedgerId, { action: 'create-task-intake', annotation, card: persistedCard });
-        const confirmed = state.ledger?.cards?.find((entry) => String(entry.id) === String(card.id));
+        await ledgerMutation(cardScope.ledgerId, { action: 'create-task-intake', annotation, card: persistedCard }, cardScope.projectId, cardScope.replicaNodeId);
+        if (!ownsCardPresentation(retry)) return;
+        const confirmed = state.ledger?.cards?.find((entry) => String(entry.id) === cardId);
         if (confirmed) renderCard(confirmed);
         void loadControlRoom({ force: true }).catch((error) => console.error('Task retry confirmation failed.', error));
       } catch (cause) {
         card.persistenceState = 'failed';
         card.persistenceError = cause instanceof Error ? cause.message : 'Task creation failed.';
-        renderCard(card);
+        if (ownsCardPresentation(retry)) renderCard(card);
+        throw cause;
       }
+    }, {
+      commandId: 'responsive.retry-task-persistence',
+      stateOwner: 'responsive-ledger-state',
+      transitionOwner: 'task-persistence-request',
+      resourceIdentity: `${cardPresentation}:task-persistence:${cardId}`,
+      presentationGeneration: cardGeneration,
+      pendingPolicy: 'ignore',
+      reconciliationPolicy: 'confirmed-state',
     });
     persistenceFailure.append(message, retry);
   }
@@ -2432,15 +2605,20 @@ function renderCard(card) {
     const subtasks = document.createElement('div');
     subtasks.className = 'task-subtasks';
     subtasks.replaceChildren(...parsedTask.subtasks.map((subtask) => {
+      const zone = ledgerZones().find((entry) => entry.cards.some((entryCard) => String(entryCard.id) === subtask.cardId));
+      const destination = cardPath(cardScope.ledgerId, zone?.id ?? 'ungrouped', subtask.cardId);
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'subtask-row';
       button.innerHTML = '<span></span><small></small>';
       button.querySelector('span').textContent = subtask.title;
       button.querySelector('small').textContent = subtask.status;
-      button.addEventListener('click', () => {
-        const zone = ledgerZones().find((entry) => entry.cards.some((entryCard) => String(entryCard.id) === subtask.cardId));
-        navigate(cardPath(state.activeLedgerId, zone?.id ?? 'ungrouped', subtask.cardId));
+      bindResponsiveCommand(button, () => navigate(destination), {
+        commandId: 'responsive.open-subtask',
+        stateOwner: 'responsive-route-state',
+        transitionOwner: 'responsive-navigation',
+        resourceIdentity: destination,
+        presentationGeneration: cardGeneration,
       });
       return button;
     }));
@@ -2452,17 +2630,17 @@ function renderCard(card) {
     delayButton.className = 'delay-master-task-button';
     delayButton.textContent = backlog ? 'Restore to queue' : 'Move to backlog';
     delayButton.disabled = card.status === 'done';
-    delayButton.addEventListener('click', async () => {
-      const nextStatus = backlog ? 'todo' : 'backlog';
-      const scope = responsiveLedgerScope();
+    const nextStatus = backlog ? 'todo' : 'backlog';
+    const lifecycleDestination = controlRoomPath(nextStatus === 'backlog' ? 'backlog' : 'queue');
+    bindResponsiveCommand(delayButton, async () => {
       const task = taskForCurrentRoute();
       const identity = task ? taskIdentity(task) : '';
       if (task) applyTaskIntentLocally(task, { kind: 'lifecycle', lifecycleStatus: nextStatus });
       const committed = runResponsiveLedgerTransaction({
-        scope,
-        mutation: { action: 'transition-card-lifecycle', cardId: card.id, lifecycleStatus: nextStatus },
+        scope: cardScope,
+        mutation: { action: 'transition-card-lifecycle', cardId, lifecycleStatus: nextStatus },
         apply: (ledger) => {
-          const current = (ledger.cards ?? []).find((entry) => String(entry.id) === String(card.id));
+          const current = (ledger.cards ?? []).find((entry) => String(entry.id) === cardId);
           if (current) current.status = nextStatus;
         },
         onRejected: (cause) => {
@@ -2470,11 +2648,21 @@ function renderCard(card) {
           elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task status update failed.';
         },
       });
-      navigate(controlRoomPath(nextStatus === 'backlog' ? 'backlog' : 'queue'), true);
+      navigate(lifecycleDestination, true);
       if (await committed) {
         if (identity) acknowledgeTaskIntent(identity);
-        void loadControlRoom({ force: true }).then(renderControlRoom).catch((error) => console.error('Task lifecycle confirmation failed.', error));
+        void loadControlRoom({ force: true }).then(() => {
+          if (location.pathname === '/') renderControlRoom();
+        }).catch((error) => console.error('Task lifecycle confirmation failed.', error));
       }
+    }, {
+      commandId: 'responsive.transition-master-task-lifecycle',
+      stateOwner: 'responsive-ledger-state',
+      transitionOwner: 'responsive-ledger-transaction',
+      resourceIdentity: `${cardPresentation}:lifecycle:${cardId}:${nextStatus}`,
+      presentationGeneration: cardGeneration,
+      pendingPolicy: 'ignore',
+      reconciliationPolicy: 'rollback',
     });
     const completionActions = document.createElement('div');
     completionActions.className = 'master-task-completion-actions';
@@ -2483,22 +2671,21 @@ function renderCard(card) {
     manualCompleteButton.className = 'complete-master-task-button complete-master-task-manually-button';
     manualCompleteButton.textContent = card.status === 'done' ? 'Master task complete' : 'Complete manually';
     manualCompleteButton.disabled = card.status === 'done';
-    manualCompleteButton.addEventListener('click', async () => {
+    bindResponsiveCommand(manualCompleteButton, async () => {
       manualCompleteButton.disabled = true;
       manualCompleteButton.textContent = 'Master task complete';
-      const scope = responsiveLedgerScope();
       const task = taskForCurrentRoute();
       const identity = task ? taskIdentity(task) : '';
       const childIds = new Set((state.ledger.relationships ?? [])
-        .filter((relationship) => String(relationship.from) === String(card.id) && relationship.label === 'subtask')
+        .filter((relationship) => String(relationship.from) === cardId && relationship.label === 'subtask')
         .map((relationship) => String(relationship.to)));
       if (task) applyTaskIntentLocally(task, { kind: 'lifecycle', lifecycleStatus: 'done' });
       const committed = runResponsiveLedgerTransaction({
-        scope,
-        mutation: { action: 'complete-master-task', masterTaskId: card.id },
+        scope: cardScope,
+        mutation: { action: 'complete-master-task', masterTaskId: cardId },
         apply: (ledger) => {
           for (const candidate of ledger.cards ?? []) {
-            if (String(candidate.id) === String(card.id) || childIds.has(String(candidate.id))) candidate.status = 'done';
+            if (String(candidate.id) === cardId || childIds.has(String(candidate.id))) candidate.status = 'done';
           }
         },
         onRejected: (cause) => {
@@ -2509,8 +2696,19 @@ function renderCard(card) {
       navigate(completionReturnPath(), true);
       if (await committed) {
         if (identity) acknowledgeTaskIntent(identity);
-        void loadControlRoom({ force: true }).then(() => location.pathname === '/done' ? renderDone() : renderControlRoom()).catch((error) => console.error('Task completion confirmation failed.', error));
+        void loadControlRoom({ force: true }).then(() => {
+          if (location.pathname === '/done') renderDone();
+          else if (location.pathname === '/') renderControlRoom();
+        }).catch((error) => console.error('Task completion confirmation failed.', error));
       }
+    }, {
+      commandId: 'responsive.complete-master-task-manually',
+      stateOwner: 'responsive-ledger-state',
+      transitionOwner: 'responsive-ledger-transaction',
+      resourceIdentity: `${cardPresentation}:complete:${cardId}`,
+      presentationGeneration: cardGeneration,
+      pendingPolicy: 'ignore',
+      reconciliationPolicy: 'rollback',
     });
     const pipelineCompleteButton = document.createElement('button');
     pipelineCompleteButton.type = 'button';
@@ -2522,22 +2720,34 @@ function renderCard(card) {
       pipelineCompleteButton.title = configured ? '' : 'Configure a master-task completion pipeline in Settings.';
     };
     syncPipelineCompleteButton();
-    pipelineCompleteButton.addEventListener('click', async () => {
+    bindResponsiveCommand(pipelineCompleteButton, async () => {
       const pipelineId = state.masterTaskCompletionPipelineId;
       if (!pipelineId) return;
       pipelineCompleteButton.disabled = true;
       pipelineCompleteButton.textContent = 'Queueing pipeline…';
       try {
-        const result = await requestCodexPipelineRun({ ledgerId: state.activeLedgerId, sourceCardId: String(card.id), pipelineId });
+        const result = await requestCodexPipelineRun({ ledgerId: cardScope.ledgerId, sourceCardId: cardId, pipelineId });
         if (!result.ok) throw new Error(result.error || 'Master-task completion pipeline admission failed.');
+        if (!ownsCardPresentation(pipelineCompleteButton)) return;
         pipelineCompleteButton.textContent = 'Pipeline queued';
         navigate(controlRoomPath('exec'), true);
       } catch (cause) {
-        pipelineCompleteButton.textContent = 'Complete with pipeline';
-        syncPipelineCompleteButton();
-        elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master-task completion pipeline admission failed.';
-        setView('error-view');
+        if (ownsCardPresentation(pipelineCompleteButton)) {
+          pipelineCompleteButton.textContent = 'Complete with pipeline';
+          syncPipelineCompleteButton();
+          elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master-task completion pipeline admission failed.';
+          setView('error-view');
+        }
+        throw cause;
       }
+    }, {
+      commandId: 'responsive.queue-master-task-completion-pipeline',
+      stateOwner: 'responsive-codex-state',
+      transitionOwner: 'codex-pipeline-run-request',
+      resourceIdentity: `${cardPresentation}:completion-pipeline:${cardId}`,
+      presentationGeneration: cardGeneration,
+      pendingPolicy: 'ignore',
+      reconciliationPolicy: 'confirmed-state',
     });
     completionActions.append(manualCompleteButton, pipelineCompleteButton);
     if (!state.codexSettingsLoaded) {
@@ -2551,9 +2761,15 @@ function renderCard(card) {
     deleteButton.type = 'button';
     deleteButton.className = 'delete-master-task-button';
     deleteButton.textContent = 'Delete master task';
-    deleteButton.addEventListener('click', () => {
-      deleteMasterTaskModal.dataset.cardId = String(card.id);
+    bindResponsiveCommand(deleteButton, () => {
+      deleteMasterTaskModal.dataset.cardId = cardId;
       deleteMasterTaskModal.showModal();
+    }, {
+      commandId: 'responsive.open-delete-master-task',
+      stateOwner: 'responsive-layer-state',
+      transitionOwner: 'delete-master-task-dialog',
+      resourceIdentity: `${cardPresentation}:delete:${cardId}`,
+      presentationGeneration: cardGeneration,
     });
     completion.append(delayButton, completionActions, deleteButton);
     overview.append(status, heading, subtasks, completion);
@@ -2884,7 +3100,13 @@ document.querySelector('.refresh-button').addEventListener('click', () => {
   void loadRoute();
 });
 document.querySelector('.retry-button').addEventListener('click', () => loadRoute());
-document.querySelector('.back-to-projects-button').addEventListener('click', () => navigate(projectPath()));
+bindResponsiveCommand(document.querySelector('.back-to-projects-button'), () => executeRouteTransition(createNavigationTransitionDescriptor({
+  owner: 'project-route',
+  destination: projectPath(),
+  historyMode: 'push',
+  guard: 'voice-and-card-detail',
+  presentation: `${location.pathname}${location.search}`,
+})));
 document.querySelector('.open-project-button').addEventListener('click', () => {
   navigate(ledgerPathForProject(state.viewedProjectId));
 });
@@ -2926,16 +3148,14 @@ document.querySelector('.federation-settings-form').addEventListener('input', ()
   federationFormDirty = true;
 });
 document.querySelector('.federation-settings-disconnect').addEventListener('click', () => void submitFederationSettings(false));
-document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
-document.querySelector('.back-to-zone-button').addEventListener('click', (event) => {
-  const controlRoomDestination = event.currentTarget.dataset.destination === 'control-room';
-  const destination = controlRoomDestination ? completionReturnPath() : zonePath(state.activeLedgerId, state.activeZoneId);
-  if (controlRoomDestination) {
-    void navigateTaskBack(destination);
-    return;
-  }
-  navigate(destination);
-});
+bindResponsiveCommand(document.querySelector('.back-to-ledger-button'), () => executeRouteTransition(createNavigationTransitionDescriptor({
+  owner: 'ledger-route',
+  destination: ledgerPath(state.activeLedgerId),
+  historyMode: 'push',
+  guard: 'voice-and-card-detail',
+  presentation: `${location.pathname}${location.search}`,
+})));
+bindResponsiveCommand(document.querySelector('.back-to-zone-button'), executeCardBackTransition, { keyboardBinding: 'Escape' });
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
 document.querySelector('.create-project-button').addEventListener('click', () => openCreationModal('project'));
 document.querySelector('.creation-directory-browse').addEventListener('click', () => void loadProjectDirectory('.'));
@@ -3012,7 +3232,20 @@ window.addEventListener('keydown', async (event) => {
     }
   }
   if (await handleResponsiveThreadShortcut(event)) return;
-  if (event.key === 'Escape' && document.body.classList.contains('menu-open')) closeMenu();
+  if (event.key === 'Escape' && document.body.classList.contains('menu-open')) {
+    closeMenu();
+    return;
+  }
+  if (event.key === 'Escape' && elements['card-view'].hidden === false && cardBackTransition) {
+    const backButton = document.querySelector('.back-to-zone-button');
+    const binding = commandBindingForElement(backButton);
+    if (binding) {
+      event.preventDefault();
+      const settlement = await dispatchCommand(binding.descriptor.commandId, { descriptor: binding.descriptor, source: 'keyboard', event, element: backButton });
+      if (settlement.status === 'failed') console.error(`Responsive command ${binding.descriptor.commandId} failed.`, settlement.error);
+      return;
+    }
+  }
 });
 
 window.matchMedia('(min-width: 760px)').addEventListener('change', () => {
@@ -3021,6 +3254,8 @@ window.matchMedia('(min-width: 760px)').addEventListener('change', () => {
 
 initializeMobileThread();
 initializeMobileCodex();
+registerDeclaredCommandSurface({ root: document, surface: 'responsive-application', resourceIdentity: location.pathname, presentationGeneration: routeLoadGeneration });
+for (const issue of validateCommandSurface(document)) console.error(`Responsive command ownership: ${issue}`);
 window.setInterval(() => {
   document.querySelectorAll('.task-stopwatch[data-execution-since]').forEach((stopwatch) => {
     stopwatch.textContent = executionStopwatch(stopwatch.dataset.executionSince);

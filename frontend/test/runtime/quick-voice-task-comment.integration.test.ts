@@ -9,13 +9,14 @@ test('task details expose the quick voice action only for master cards and relat
   const thread = source('frontend/src/app/responsive/thread.js');
   const application = source('frontend/src/app/responsive/application.js');
   const styles = source('frontend/assets/application.css');
+  const setMobileThreadCard = thread.match(/export function setMobileThreadCard\(card, \{ subtask = false \} = \{\}\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(markup, /quick-voice-comment-button[\s\S]*aria-label="Record a voice comment"/);
   assert.doesNotMatch(markup, /quick-voice-comment-button[\s\S]*Record a voice comment and queue Codex/);
   assert.match(application, /String\(relationship\.to\) === String\(card\.id\) && relationship\.label === 'subtask'/);
   assert.match(application, /setMobileThreadCard\(card, \{ subtask \}\)/);
-  assert.match(thread, /hidden = !labels\.includes\('master-task'\) && !subtask/);
-  assert.doesNotMatch(thread, /labels[\s\S]*['"]subtask['"]/);
+  assert.match(setMobileThreadCard, /hidden = !labels\.includes\('master-task'\) && !subtask/);
+  assert.doesNotMatch(setMobileThreadCard, /labels\.includes\(['"]subtask['"]\)/);
   assert.match(styles, /\.quick-voice-comment-button\s*\{[\s\S]*position:\s*fixed;[\s\S]*right:\s*max\(18px, env\(safe-area-inset-right\)\);[\s\S]*bottom:\s*max\(18px, env\(safe-area-inset-bottom\)\)/);
 });
 

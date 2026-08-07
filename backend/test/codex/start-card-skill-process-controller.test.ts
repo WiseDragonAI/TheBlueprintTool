@@ -104,6 +104,7 @@ test('card skill process route creates a linked output card and launches codex',
   const previousCodexBin = process.env.CODEX_BIN;
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-'));
   const fakeCodex = join(workspace, 'fake-codex.mjs');
+  const fakeCodexCompletionGate = join(workspace, 'allow-fake-codex-completion');
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
   mkdirSync(join(workspace, '.skills', 'test-skill'), { recursive: true });
   writeFileSync(join(workspace, '.skills', 'test-skill', 'SKILL.md'), [
@@ -141,10 +142,11 @@ test('card skill process route creates a linked output card and launches codex',
   }, null, 2));
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
-    'import { writeFileSync } from "node:fs";',
+    'import { existsSync, writeFileSync } from "node:fs";',
     'let input = "";',
     'process.stdin.on("data", (chunk) => { input += chunk; });',
-    'process.stdin.on("end", () => {',
+    'process.stdin.on("end", async () => {',
+    `  while (!existsSync(${JSON.stringify(fakeCodexCompletionGate)})) await new Promise((resolve) => setTimeout(resolve, 10));`,
     '  const match = input.match(/Write the final result to this Markdown file: (.+)/);',
     '  const threadMatch = input.match(/Run summary: (.+)/);',
     '  if (!match && !threadMatch) process.exit(2);',
@@ -228,6 +230,9 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(sourceStatus.pipelineStepName, 'test-skill');
     assert.equal(sourceStatus.skillName, 'test-skill');
     assert.equal(sourceStatus.pipelineStatus, 'running');
+    // WHAT: Release the deterministic fake child only after the initial lifecycle state is observed.
+    // WHY: Child scheduling must not allow terminal output to race the route's meaningful `running` assertion.
+    writeFileSync(fakeCodexCompletionGate, 'release');
 
     const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=${body.run.outputCardId}&since=0`);
     assert.equal(statusResponse.status, 200);
@@ -306,6 +311,7 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(replacedSource?.codexPipelineStepName, undefined);
     assert.equal(replacedSource?.codexSkillName, undefined);
   } finally {
+    writeFileSync(fakeCodexCompletionGate, 'release');
     server.close();
     process.chdir(originalCwd);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;

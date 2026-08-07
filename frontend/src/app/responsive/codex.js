@@ -11,6 +11,98 @@ const el = (selector) => document.querySelector(selector);
 const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const message = (selector, text, bad = false) => { const node = el(selector); node.textContent = text; node.classList.toggle('error', bad); };
 const setBusy = (node, busy) => { node.disabled = busy; if (busy) node.setAttribute('aria-busy', 'true'); else node.removeAttribute('aria-busy'); };
+
+function codexTransitionPresentation(layer) {
+  return `${layer}:${state.projectId}:${state.ledgerId}:${state.cardId}:${processActionGeneration}:${processDetailGeneration}`;
+}
+
+function resolveCodexTransition(commandId) {
+  if (commandId === 'codex.close-process') {
+    const detailOpen = !el('.process-detail').hidden;
+    return createNavigationTransitionDescriptor({
+      owner: detailOpen ? 'codex-process-detail-layer' : 'codex-process-layer',
+      destination: detailOpen ? 'codex:process-library' : 'codex:process-closed',
+      historyMode: 'none',
+      guard: 'active-codex-presentation',
+      presentation: codexTransitionPresentation('process'),
+    });
+  }
+  if (commandId === 'codex.close-pipelines') return createNavigationTransitionDescriptor({ owner: 'codex-pipelines-layer', destination: 'codex:pipelines-closed', historyMode: 'none', guard: 'active-codex-presentation', presentation: codexTransitionPresentation('pipelines') });
+  if (commandId === 'codex.back-pipeline-editor') return createNavigationTransitionDescriptor({ owner: 'codex-pipeline-editor-layer', destination: 'codex:pipelines', historyMode: 'none', guard: 'active-codex-presentation', presentation: codexTransitionPresentation('pipeline-editor') });
+  if (commandId === 'codex.back-skill-picker') return createNavigationTransitionDescriptor({ owner: 'codex-skill-picker-layer', destination: 'codex:pipeline-editor', historyMode: 'none', guard: 'active-codex-presentation', presentation: codexTransitionPresentation('skill-picker') });
+  throw new Error(`Unknown Codex transition command: ${commandId}`);
+}
+
+function executeCodexTransition(transition) {
+  if (transition.destination === 'codex:process-library') {
+    setMobileCodexView(document, 'library', { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines' });
+    return;
+  }
+  if (transition.destination === 'codex:process-closed') {
+    el('.process-modal').close();
+    processActionGeneration += 1;
+    return;
+  }
+  if (transition.destination === 'codex:pipelines-closed') {
+    el('.pipelines-modal').close();
+    return;
+  }
+  if (transition.destination === 'codex:pipelines') {
+    el('.pipeline-editor-modal').close();
+    el('.pipelines-modal').showModal();
+    return;
+  }
+  if (transition.destination === 'codex:pipeline-editor') closePicker();
+}
+
+function bindCodexTransition(selector, dialogSelector) {
+  const element = el(selector);
+  const commandId = String(element.dataset.command || '');
+  const descriptor = createCommandDescriptor({
+    commandId,
+    stateOwner: 'codex-state',
+    transitionOwner: 'codex-transition',
+    resourceIdentity: codexTransitionPresentation(commandId),
+    presentationGeneration: processActionGeneration,
+    pendingPolicy: 'ignore',
+    reconciliationPolicy: 'none',
+    keyboardBinding: 'Escape',
+  });
+  tryRegisterCommandElement({ element, descriptor, ownershipClass: 'component', surface: 'responsive-codex' });
+  const dispatch = (event) => {
+    const transition = resolveCodexTransition(commandId);
+    const binding = commandBindingForElement(element);
+    const execute = () => executeCodexTransition(transition);
+    if (!binding) {
+      execute();
+      return;
+    }
+    let activeDescriptor = binding.descriptor;
+    try {
+      activeDescriptor = updateCommandElementDescriptor(element, createCommandDescriptor({
+        ...binding.descriptor,
+        resourceIdentity: transition.presentation,
+        presentationGeneration: processActionGeneration,
+      }));
+    } catch (error) {
+      console.error(`Codex command ${commandId} presentation registration failed.`, error);
+    }
+    void dispatchCommand(commandId, {
+      descriptor: activeDescriptor,
+      source: event.type === 'cancel' ? 'keyboard' : 'click',
+      event,
+      element,
+      execute,
+    }).then((settlement) => {
+      if (settlement.status === 'failed') console.error(`Codex command ${commandId} failed.`, settlement.error);
+    });
+  };
+  element.addEventListener('click', dispatch);
+  el(dialogSelector).addEventListener('cancel', (event) => {
+    event.preventDefault();
+    dispatch(event);
+  });
+}
 async function jsonRequest(url, options, projectId = state.projectId) {
   const response = await fetch(projectScopedRequestPath(url, projectId), options).catch(() => null);
   if (!response) throw new Error('Request failed.');
@@ -51,7 +143,51 @@ async function loadGlobalLibraries() {
   state.steps = (serverPipelines.steps || []).map((step) => ({ ...step, scope: 'server', projectId: '' }));
   return { issues: serverPipelines.issues || [], failedProjects: 0 };
 }
-function button(label, className, action) { const node = document.createElement('button'); node.type = 'button'; node.className = className; node.textContent = label; node.addEventListener('click', action); return node; }
+function codexResourceIdentity(surface, ...parts) {
+  return JSON.stringify([surface, state.projectId, state.ledgerId, state.cardId, ...parts.map((part) => String(part ?? ''))]);
+}
+
+function button(label, className, action, {
+  commandId,
+  stateOwner = 'codex-state',
+  transitionOwner = 'codex-component',
+  resourceIdentity = codexResourceIdentity(commandId),
+  presentationGeneration = processActionGeneration,
+  pendingPolicy = 'allow',
+  reconciliationPolicy = 'none',
+} = {}) {
+  const node = document.createElement('button');
+  node.type = 'button';
+  node.className = className;
+  node.textContent = label;
+  const descriptor = createCommandDescriptor({
+    commandId,
+    stateOwner,
+    transitionOwner,
+    resourceIdentity,
+    presentationGeneration,
+    pendingPolicy,
+    reconciliationPolicy,
+  });
+  tryRegisterCommandElement({ element: node, descriptor, ownershipClass: 'component', execute: action, surface: 'responsive-codex-dynamic' });
+  node.addEventListener('click', (event) => {
+    const binding = commandBindingForElement(node);
+    if (!binding) {
+      Promise.resolve().then(() => action({ descriptor, source: 'click', event, element: node }))
+        .catch((error) => console.error(`Codex command ${descriptor.commandId} failed.`, error));
+      return;
+    }
+    void dispatchCommand(binding.descriptor.commandId, {
+      descriptor: binding.descriptor,
+      source: 'click',
+      event,
+      element: node,
+    }).then((settlement) => {
+      if (settlement.status === 'failed') console.error(`Codex command ${binding.descriptor.commandId} failed.`, settlement.error);
+    });
+  });
+  return node;
+}
 function pipelineSteps(pipeline) { return pipeline.stepIds.map((id) => state.steps.find((step) => step.id === id && step.scope === pipeline.scope && (pipeline.scope === 'server' || step.projectId === pipeline.projectId))).filter(Boolean); }
 function catalogRecord(record, kind) {
   return {
@@ -84,7 +220,10 @@ function renderProcessList() {
     renderRecord: (record) => {
     const card = document.createElement('article'); card.className = 'codex-list-card';
     card.style.setProperty('--skill-category-color', colorForSkillTag(recordTags(record)[0] || 'Uncategorized'));
-    const node = button('', 'codex-list-item', () => { void renderProcessDetail(record); });
+    const node = button('', 'codex-list-item', () => renderProcessDetail(record), {
+      commandId: state.processTab === 'skills' ? 'codex.open-skill-detail' : 'codex.open-pipeline-detail',
+      resourceIdentity: codexResourceIdentity('process-record', record.source, record.id),
+    });
     if (state.processTab === 'skills') { node.replaceChildren(...renderSkillLibraryItemContent(record)); card.append(node); return card; }
     const title = document.createElement('strong'); title.textContent = record.name;
     const detail = document.createElement('span');
@@ -104,7 +243,12 @@ function renderSkillTagChoices(record) {
   const choices = document.createElement('div'); choices.className = 'skill-tag-choices'; choices.setAttribute('aria-label', 'Select one skill tag');
   const selected = Array.isArray(record.tags) ? record.tags[0] : '';
   for (const tag of state.availableTags) {
-    const choice = button(tag, 'skill-tag-choice', () => { void saveGlobalSkillTag(record, tag); });
+    const choice = button(tag, 'skill-tag-choice', () => saveGlobalSkillTag(record, tag), {
+      commandId: 'codex.set-skill-tag',
+      resourceIdentity: codexResourceIdentity('skill-tag', record.source, record.name, record.revision, tag),
+      pendingPolicy: 'ignore',
+      reconciliationPolicy: 'confirmed-state',
+    });
     choice.setAttribute('aria-pressed', String(selected === tag));
     choice.setAttribute('aria-label', `Set ${tag} tag`);
     choice.disabled = state.tagSaving;
@@ -129,6 +273,9 @@ function renderSkillReferences(references) {
     const toggle = button(reference.name, 'skill-reference-toggle', () => {
       state.selectedReference = state.selectedReference === reference.name ? '' : reference.name;
       section.replaceWith(renderSkillReferences(references));
+    }, {
+      commandId: 'codex.toggle-skill-reference',
+      resourceIdentity: codexResourceIdentity('skill-reference', state.selected?.source, state.selected?.name, state.selected?.revision, reference.name),
     });
     toggle.setAttribute('aria-label', reference.name);
     const expanded = state.selectedReference === reference.name;
@@ -187,7 +334,12 @@ async function renderProcessDetail(record) {
       const scroll = document.createElement('div'); scroll.className = 'skill-detail-scroll';
       const actions = document.createElement('footer'); actions.className = 'skill-detail-actions';
       const tagsField = renderSkillTagChoices(record);
-      const favorite = button(record.favorite ? '★' : '☆', 'skill-favorite-toggle', () => { void toggleGlobalSkillFavorite(record); });
+      const favorite = button(record.favorite ? '★' : '☆', 'skill-favorite-toggle', () => toggleGlobalSkillFavorite(record), {
+        commandId: 'codex.toggle-skill-favorite',
+        resourceIdentity: codexResourceIdentity('skill-favorite', record.source, record.name, record.revision),
+        pendingPolicy: 'ignore',
+        reconciliationPolicy: 'confirmed-state',
+      });
       favorite.setAttribute('aria-label', record.favorite ? 'Remove from favorites' : 'Add to favorites');
       favorite.setAttribute('aria-pressed', String(record.favorite === true));
       const status = document.createElement('p'); status.className = 'codex-message process-detail-message'; status.setAttribute('role', 'status');
@@ -201,14 +353,24 @@ async function renderProcessDetail(record) {
     model.append(option('', `Inherit (${record.effectiveCodexModel || 'default'})`), ...modelOptions.map((item) => option(item)));
     const effort = document.createElement('select'); effort.setAttribute('aria-label', 'Codex effort');
     effort.append(option('', `Inherit (${record.effectiveCodexEffort || 'default'})`), ...effortOptions.map((item) => option(item)));
-    const start = button('Start skill', 'primary-button process-start', () => startSkill(record, model.value, effort.value));
+    const start = button('Start skill', 'primary-button process-start', () => startSkill(record, model.value, effort.value), {
+      commandId: 'codex.start-skill',
+      resourceIdentity: codexResourceIdentity('skill-run', record.name),
+      pendingPolicy: 'ignore',
+      reconciliationPolicy: 'confirmed-state',
+    });
     start.disabled = !state.cardId;
     if (!state.cardId) start.title = 'Open a card to run this skill.';
     detail.append(model, effort, start);
   } else {
     const steps = document.createElement('ol');
     for (const step of pipelineSteps(record)) { const item = document.createElement('li'); item.textContent = `${step.name}: ${step.skills.map((skill) => skill.skillName).join(', ') || 'No skills'}`; steps.append(item); }
-    const start = button('Start pipeline', 'primary-button process-start', () => startPipeline(record));
+    const start = button('Start pipeline', 'primary-button process-start', () => startPipeline(record), {
+      commandId: 'codex.start-pipeline',
+      resourceIdentity: codexResourceIdentity('pipeline-run', record.id),
+      pendingPolicy: 'ignore',
+      reconciliationPolicy: 'confirmed-state',
+    });
     start.disabled = !state.cardId;
     if (!state.cardId) start.title = 'Open a card to run this pipeline.';
     detail.append(steps, start);
@@ -381,7 +543,10 @@ function renderPipelineLibrary() {
     onFiltersChanged: (filters) => { state.query = filters.query; state.projectFilter = filters.projectId; state.tagFilter = filters.tag; renderPipelineLibrary(); },
     renderRecord: (pipeline) => {
     const card = document.createElement('article'); card.className = 'codex-list-card'; card.style.setProperty('--skill-category-color', pipeline.projectColor);
-    const node = button('', 'codex-list-item', () => openEditor(pipeline)); const title = document.createElement('strong'); title.textContent = pipeline.name; const copy = document.createElement('span'); copy.textContent = pipeline.purpose || `${pipeline.stepIds.length} steps`; const metadata = document.createElement('small'); metadata.textContent = `${pipeline.projectName} · ${pipelineTags(pipeline).join(' · ')}`; node.append(title, copy, metadata); card.append(node); return card;
+    const node = button('', 'codex-list-item', () => openEditor(pipeline), {
+      commandId: 'codex.edit-pipeline',
+      resourceIdentity: codexResourceIdentity('pipeline-editor', pipeline.scope, pipeline.projectId, pipeline.id),
+    }); const title = document.createElement('strong'); title.textContent = pipeline.name; const copy = document.createElement('span'); copy.textContent = pipeline.purpose || `${pipeline.stepIds.length} steps`; const metadata = document.createElement('small'); metadata.textContent = `${pipeline.projectName} · ${pipelineTags(pipeline).join(' · ')}`; node.append(title, copy, metadata); card.append(node); return card;
     },
   });
   if (!pipelines.length) message('.pipelines-message', state.pipelines.length ? 'No matching pipelines.' : 'No saved pipelines.');
@@ -399,17 +564,18 @@ function renderEditor() {
 function renderStep(step, index) {
   const node = document.createElement('section'); node.className = 'pipeline-step';
   const heading = document.createElement('div'); heading.className = 'pipeline-step-heading'; const label = document.createElement('strong'); label.textContent = `Step ${index + 1}`;
-  const controls = document.createElement('span'); const up = button('↑', 'codex-icon', () => { move(state.editor.steps, index, -1); renderEditor(); }); up.disabled = index === 0; up.setAttribute('aria-label', 'Move step earlier'); const down = button('↓', 'codex-icon', () => { move(state.editor.steps, index, 1); renderEditor(); }); down.disabled = index === state.editor.steps.length - 1; down.setAttribute('aria-label', 'Move step later'); const remove = button('×', 'codex-icon', () => { state.editor.steps.splice(index, 1); renderEditor(); }); remove.setAttribute('aria-label', 'Remove step'); controls.append(up, down, remove); heading.append(label, controls);
+  const controls = document.createElement('span'); const up = button('↑', 'codex-icon', () => { move(state.editor.steps, index, -1); renderEditor(); }, { commandId: 'codex.move-pipeline-step-earlier', resourceIdentity: codexResourceIdentity('pipeline-step', step.id) }); up.disabled = index === 0; up.setAttribute('aria-label', 'Move step earlier'); const down = button('↓', 'codex-icon', () => { move(state.editor.steps, index, 1); renderEditor(); }, { commandId: 'codex.move-pipeline-step-later', resourceIdentity: codexResourceIdentity('pipeline-step', step.id) }); down.disabled = index === state.editor.steps.length - 1; down.setAttribute('aria-label', 'Move step later'); const remove = button('×', 'codex-icon', () => { state.editor.steps.splice(index, 1); renderEditor(); }, { commandId: 'codex.remove-pipeline-step', resourceIdentity: codexResourceIdentity('pipeline-step', step.id) }); remove.setAttribute('aria-label', 'Remove step'); controls.append(up, down, remove); heading.append(label, controls);
   const name = document.createElement('input'); name.value = step.name; name.placeholder = 'Step name'; name.setAttribute('aria-label', `Step ${index + 1} name`); name.addEventListener('input', () => { step.name = name.value; });
   const purpose = document.createElement('textarea'); purpose.value = step.purpose; purpose.placeholder = 'Step purpose'; purpose.setAttribute('aria-label', `Step ${index + 1} purpose`); purpose.addEventListener('input', () => { step.purpose = purpose.value; });
   const skills = document.createElement('div'); skills.className = 'pipeline-skill-list'; skills.replaceChildren(...step.skills.map((skill, skillIndex) => renderStepSkill(step, skill, skillIndex)));
-  node.append(heading, name, purpose, skills, button('+ Add skill', 'codex-secondary', () => openSkillPicker(step.id))); return node;
+  node.append(heading, name, purpose, skills, button('+ Add skill', 'codex-secondary', () => openSkillPicker(step.id), { commandId: 'codex.open-skill-picker', resourceIdentity: codexResourceIdentity('pipeline-step', step.id) })); return node;
 }
 function renderStepSkill(step, skill, index) {
   const node = document.createElement('div'); node.className = 'pipeline-skill'; const title = document.createElement('strong'); title.textContent = skill.skillName;
   const model = document.createElement('select'); model.setAttribute('aria-label', `${skill.skillName} model`); model.append(option('', 'Inherit model'), ...modelOptions.map((item) => option(item))); model.value = skill.codexModel || ''; model.addEventListener('change', () => { skill.codexModel = model.value || null; });
   const effort = document.createElement('select'); effort.setAttribute('aria-label', `${skill.skillName} effort`); effort.append(option('', 'Inherit effort'), ...effortOptions.map((item) => option(item))); effort.value = skill.codexEffort || ''; effort.addEventListener('change', () => { skill.codexEffort = effort.value || null; });
-  const controls = document.createElement('span'); const up = button('↑', 'codex-icon', () => { move(step.skills, index, -1); renderEditor(); }); up.disabled = index === 0; up.setAttribute('aria-label', 'Move skill earlier'); const down = button('↓', 'codex-icon', () => { move(step.skills, index, 1); renderEditor(); }); down.disabled = index === step.skills.length - 1; down.setAttribute('aria-label', 'Move skill later'); const remove = button('×', 'codex-icon', () => { step.skills.splice(index, 1); renderEditor(); }); remove.setAttribute('aria-label', 'Remove skill'); controls.append(up, down, remove); node.append(title, model, effort, controls); return node;
+  const skillIdentity = codexResourceIdentity('pipeline-step-skill', step.id, skill.skillName, index);
+  const controls = document.createElement('span'); const up = button('↑', 'codex-icon', () => { move(step.skills, index, -1); renderEditor(); }, { commandId: 'codex.move-step-skill-earlier', resourceIdentity: skillIdentity }); up.disabled = index === 0; up.setAttribute('aria-label', 'Move skill earlier'); const down = button('↓', 'codex-icon', () => { move(step.skills, index, 1); renderEditor(); }, { commandId: 'codex.move-step-skill-later', resourceIdentity: skillIdentity }); down.disabled = index === step.skills.length - 1; down.setAttribute('aria-label', 'Move skill later'); const remove = button('×', 'codex-icon', () => { step.skills.splice(index, 1); renderEditor(); }, { commandId: 'codex.remove-step-skill', resourceIdentity: skillIdentity }); remove.setAttribute('aria-label', 'Remove skill'); controls.append(up, down, remove); node.append(title, model, effort, controls); return node;
 }
 function pickerSkills() {
   const skills = state.editor.scope === 'server'
@@ -439,7 +605,10 @@ function renderSkillPicker() {
     onFiltersChanged: (filters) => { state.pickerQuery = filters.query; state.pickerProjectFilter = filters.projectId; state.pickerTagFilter = filters.tag; renderSkillPicker(); },
     renderRecord: (skill, selected) => {
       const card = document.createElement('article'); card.className = `codex-list-card${selected ? ' is-selected' : ''}`; card.style.setProperty('--skill-category-color', colorForSkillTag(skillTags(skill)[0] || 'Uncategorized'));
-      const select = button('', 'codex-list-item', () => { state.pickerSelectedSkillName = skill.name; renderSkillPicker(); });
+      const select = button('', 'codex-list-item', () => { state.pickerSelectedSkillName = skill.name; renderSkillPicker(); }, {
+        commandId: 'codex.select-picker-skill',
+        resourceIdentity: codexResourceIdentity('skill-picker-record', skill.source, skill.name, skill.revision),
+      });
       select.setAttribute('aria-pressed', String(selected));
       select.replaceChildren(...renderSkillLibraryItemContent(skill));
       card.append(select);
@@ -510,14 +679,8 @@ export function initializeMobileCodex() {
     if (navigationButton.classList.contains('nav-pipelines-button')) void openPipelines();
     else void openSkills();
   });
-  el('.process-close').addEventListener('click', () => {
-    if (!el('.process-detail').hidden) {
-      setMobileCodexView(document, 'library', { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines' });
-      return;
-    }
-    el('.process-modal').close();
-    processActionGeneration += 1;
-  }); el('.pipelines-close').addEventListener('click', () => el('.pipelines-modal').close());
+  bindCodexTransition('.process-close', '.process-modal');
+  bindCodexTransition('.pipelines-close', '.pipelines-modal');
   el('.process-resynchronize').addEventListener('click', (event) => { void resynchronizeGlobalLibraries(event.currentTarget, '.process-message', renderProcessList); });
   el('.pipelines-resynchronize').addEventListener('click', (event) => { void resynchronizeGlobalLibraries(event.currentTarget, '.pipelines-message', renderPipelineLibrary); });
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.addEventListener('click', () => { state.processTab = tab.dataset.processTab; state.query = ''; state.tagFilter = 'All'; document.querySelectorAll('[data-process-tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); setMobileCodexView(document, 'library', { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines' }); message('.process-message', ''); renderProcessList(); }));
@@ -525,9 +688,11 @@ export function initializeMobileCodex() {
   el('.process-filter-clear').addEventListener('click', () => { state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All'; renderProcessList(); });
   el('.pipelines-search').addEventListener('input', (event) => { state.query = event.target.value; renderPipelineLibrary(); event.target.focus(); });
   el('.pipelines-filter-clear').addEventListener('click', () => { state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All'; renderPipelineLibrary(); });
-  el('.pipeline-new').addEventListener('click', () => { state.projectId = state.projectFilter === 'All' ? '' : state.projectFilter; openEditor(); }); el('.pipeline-editor-back').addEventListener('click', () => { el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); });
+  el('.pipeline-new').addEventListener('click', () => { state.projectId = state.projectFilter === 'All' ? '' : state.projectFilter; openEditor(); });
+  bindCodexTransition('.pipeline-editor-back', '.pipeline-editor-modal');
   el('.pipeline-add-step').addEventListener('click', () => { state.editor.steps.push({ id: uid('codex-step'), name: `Step ${state.editor.steps.length + 1}`, purpose: '', skills: [] }); renderEditor(); });
-  el('.pipeline-editor-form').addEventListener('submit', (event) => { event.preventDefault(); void saveEditor(); }); el('.skill-picker-back').addEventListener('click', closePicker);
+  el('.pipeline-editor-form').addEventListener('submit', (event) => { event.preventDefault(); void saveEditor(); });
+  bindCodexTransition('.skill-picker-back', '.skill-picker-modal');
   el('.skill-picker-cancel').addEventListener('click', closePicker);
   el('.skill-picker-confirm').addEventListener('click', confirmPicker);
   el('.skill-picker-position').addEventListener('change', (event) => { state.pickerInsertionIndex = Number(event.target.value); });
@@ -539,3 +704,5 @@ import { renderSkillLibraryItemContent } from '/src/runtime/codex/component/rend
 import { renderCodexLibrary } from '/src/runtime/codex/component/render-codex-library.js';
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { setMobileCodexView } from './codex-view.js';
+import { createNavigationTransitionDescriptor } from './navigation-ownership.js';
+import { commandBindingForElement, createCommandDescriptor, dispatchCommand, tryRegisterCommandElement, updateCommandElementDescriptor } from '/src/runtime/input/command-ownership.js';

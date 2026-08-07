@@ -3,6 +3,7 @@
  * WHY: Control placement must follow current geometry and may use an explicit gesture selection.
  */
 import { canvas, content, controlOverlay as initialControlOverlay } from '../../dom.js';
+import { createCommandDescriptor, tryRegisterCommandElement } from '../../input/command-ownership.js';
 import { renderLedgerCardDeleteButton } from '../../ledger/component/render-ledger-card-delete-button.js';
 import { renderLedgerCardStatusButton } from '../../ledger/component/render-ledger-card-status-button.js';
 import { state, type SelectionState } from '../../state.js';
@@ -16,6 +17,26 @@ let hoveredTarget: ControlTarget | null = null;
 let hoverBindingInitialized = false;
 const removalTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
 const controlFadeDurationMs = 160;
+
+function canvasPresentationGeneration(): number {
+  const generation = Number(state.ledgerReconciliation?.routeEpoch ?? 0);
+  return Number.isFinite(generation) && generation >= 0 ? generation : 0;
+}
+
+function registerCanvasControlCommand(
+  element: HTMLButtonElement,
+  descriptor: Omit<Parameters<typeof createCommandDescriptor>[0], 'presentationGeneration'>,
+): void {
+  tryRegisterCommandElement({
+    element,
+    descriptor: createCommandDescriptor({
+      ...descriptor,
+      presentationGeneration: canvasPresentationGeneration(),
+    }),
+    ownershipClass: 'delegated',
+    surface: 'canvas-control-overlay',
+  });
+}
 
 function targetKey(target: ControlTarget | null): string {
   return target ? `${target.kind}:${target.id}` : '';
@@ -143,6 +164,12 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
     settings.dataset.projectId = card.dataset.targetProjectId;
     settings.title = 'Settings';
     settings.setAttribute('aria-label', 'Settings');
+    registerCanvasControlCommand(settings, {
+      commandId: 'canvas.open-project-settings',
+      stateOwner: 'project-settings-state',
+      transitionOwner: 'project-settings-modal',
+      resourceIdentity: `project:${card.dataset.targetProjectId}`,
+    });
     const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     icon.setAttribute('viewBox', '0 0 24 24');
     icon.setAttribute('aria-hidden', 'true');
@@ -163,6 +190,12 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   edit.title = card.dataset.targetLedgerId ? 'Edit ledger name' : 'Edit card title';
   edit.ariaLabel = edit.title;
   edit.textContent = '✎';
+  registerCanvasControlCommand(edit, {
+    commandId: 'canvas.edit-card-title',
+    stateOwner: 'ledger-card-state',
+    transitionOwner: 'ledger-card-title-editor',
+    resourceIdentity: `card:${cardId}`,
+  });
   const editBody = document.createElement('button');
   editBody.className = 'ledger-card-edit-toggle terminal-button terminal-button--compact';
   editBody.type = 'button';
@@ -171,6 +204,12 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   editBody.title = 'Edit card content';
   editBody.setAttribute('aria-label', editBody.title);
   editBody.textContent = 'edit';
+  registerCanvasControlCommand(editBody, {
+    commandId: 'canvas.edit-card-description',
+    stateOwner: 'ledger-card-state',
+    transitionOwner: 'ledger-card-description-editor',
+    resourceIdentity: `card:${cardId}`,
+  });
   const skill = document.createElement('button');
   skill.className = 'ledger-card-skill-toggle terminal-button terminal-button--compact';
   skill.type = 'button';
@@ -179,6 +218,14 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   skill.title = 'Process card';
   skill.setAttribute('aria-label', skill.title);
   skill.textContent = 'fx';
+  registerCanvasControlCommand(skill, {
+    commandId: 'canvas.open-card-process',
+    stateOwner: 'codex-process-state',
+    transitionOwner: 'card-process-modal',
+    resourceIdentity: `card:${cardId}`,
+    pendingPolicy: 'ignore',
+    reconciliationPolicy: 'confirmed-state',
+  });
   const controls = card.dataset.targetLedgerId
     ? [edit, renderLedgerCardDeleteButton(cardId)]
     : [skill, renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), editBody, renderLedgerCardDeleteButton(cardId)];
@@ -202,6 +249,12 @@ function syncZoneControls(group: HTMLElement, zone: HTMLElement, kind: 'zone' | 
   edit.title = kind === 'zone' ? 'Edit zone name' : 'Edit group name';
   edit.ariaLabel = edit.title;
   edit.textContent = '✎';
+  registerCanvasControlCommand(edit, {
+    commandId: 'canvas.edit-region',
+    stateOwner: 'canvas-region-state',
+    transitionOwner: 'region-editor',
+    resourceIdentity: `${kind}:${id}`,
+  });
   const controls: HTMLElement[] = [edit];
 
   if (kind === 'zone') {
@@ -222,6 +275,12 @@ function syncZoneControls(group: HTMLElement, zone: HTMLElement, kind: 'zone' | 
     deleteButton.title = 'Delete group';
     deleteButton.setAttribute('aria-label', 'Delete group');
     deleteButton.textContent = 'X';
+    registerCanvasControlCommand(deleteButton, {
+      commandId: 'canvas.confirm-delete-group',
+      stateOwner: 'canvas-group-state',
+      transitionOwner: 'group-deletion-confirmation',
+      resourceIdentity: `group:${id}`,
+    });
     controls.push(deleteButton);
   }
 

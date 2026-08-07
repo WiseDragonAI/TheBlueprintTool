@@ -46,6 +46,10 @@ import { stopThreadCodexRunController } from '../../codex/controller/stop-thread
 import { confirmThreadCodexSessionDeletionController } from '../../codex/controller/confirm-thread-codex-session-deletion-controller.js';
 import { deleteThreadCodexSessionController } from '../../codex/controller/delete-thread-codex-session-controller.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { commandBindingForElement, dispatchCommand } from '../command-ownership.js';
+import { renderToolbox } from '../../toolbox/effect/render-toolbox.js';
+import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
+import { createNavigationTransitionDescriptor } from '../../../app/responsive/navigation-ownership.js';
 
 function toggleRail(button: HTMLElement): void {
   const collapsed = !state.railCollapsed;
@@ -60,14 +64,18 @@ function openLedgersCanvasInNewTab(): void {
   telemetry('open-ledgers-canvas-new-tab', { url });
 }
 
-export async function handleActionClick(event: MouseEvent): Promise<void> {
+async function executeActionClick(event: MouseEvent, actionTarget: HTMLElement, action: string): Promise<void> {
   const targetElement = event.target as HTMLElement;
-  const actionTarget = targetElement.closest('[data-action]') as HTMLElement | null;
-  const action = actionTarget?.dataset.action;
-  if (!action) return;
   telemetry('tool-button-click', { action });
   if (action === 'close-thread-panel') {
-    closeThreadPanel();
+    const transition = createNavigationTransitionDescriptor({
+      owner: 'desktop-thread-layer',
+      destination: 'thread:closed',
+      historyMode: 'none',
+      guard: 'voice-recording',
+      presentation: `${String(state.activeTab ?? '')}:${String(state.threadId ?? '')}`,
+    });
+    if (transition.destination === 'thread:closed') closeThreadPanel();
     return;
   }
   if (action === 'open-ledgers-canvas') {
@@ -114,6 +122,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     if (target?.dataset.groupId) selectTarget('group', target.dataset.groupId, false);
     telemetry('resolve-thread-target', { threadId: state.threadId });
     openThreadPanel();
+    if (action === 'conversation') {
+      renderToolbox();
+      renderCanvasSurface();
+    }
   }
   if (action === 'voice-toggle') {
     if (state.voice.recording) await executeVoiceAction({ launchMode: voiceLaunchModeForModifiers(event) });
@@ -298,7 +310,16 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     await executeVoiceAction({ launchMode: parseVoiceLaunchMode(actionTarget.dataset.launchMode) });
   }
   if (action === 'confirm-delete') await deleteZoneController();
-  if (action === 'cancel-delete') modal.close?.();
+  if (action === 'cancel-delete') {
+    const transition = createNavigationTransitionDescriptor({
+      owner: 'confirmation-modal-layer',
+      destination: 'confirmation:closed',
+      historyMode: 'none',
+      guard: 'none',
+      presentation: `${String(modal.dataset.confirmKind ?? 'zone')}:${String(modal.dataset.cardId ?? modal.dataset.zoneId ?? modal.dataset.groupId ?? '')}`,
+    });
+    if (transition.destination === 'confirmation:closed') modal.close?.();
+  }
   if (action === 'shortcut-help') {
     telemetry('open-shortcut-help', { shortcuts: ['A', 'X', 'Shift+X', 'Ctrl+X', 'Escape', 'Delete', 'Ctrl+C', 'Ctrl+V', 'Ctrl+D'] });
     shortcutModal.showModal?.();
@@ -320,4 +341,29 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (action === 'refresh') {
     void refreshRuntimeState();
   }
+}
+
+export async function dispatchRuntimeAction(actionTarget: HTMLElement, event: MouseEvent | KeyboardEvent): Promise<void> {
+  const action = actionTarget.dataset.action;
+  if (!action) return;
+  const binding = commandBindingForElement(actionTarget);
+  if (!binding) {
+    await executeActionClick(event as MouseEvent, actionTarget, action);
+    return;
+  }
+  const settlement = await dispatchCommand(binding.descriptor.commandId, {
+    descriptor: binding.descriptor,
+    source: event.type === 'keydown' ? 'keyboard' : 'click',
+    event,
+    element: actionTarget,
+    execute: () => executeActionClick(event as MouseEvent, actionTarget, action),
+  });
+  if (settlement.status === 'failed') console.error(`Command ${binding.descriptor.commandId} failed.`, settlement.error);
+}
+
+export async function handleActionClick(event: MouseEvent): Promise<void> {
+  const targetElement = event.target as HTMLElement;
+  const actionTarget = targetElement.closest('[data-action]') as HTMLElement | null;
+  if (!actionTarget?.dataset.action) return;
+  await dispatchRuntimeAction(actionTarget, event);
 }

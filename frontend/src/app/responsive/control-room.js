@@ -8,9 +8,64 @@ export function cardCodexRunId(card) {
     || String(card?.codexRunId ?? '').trim();
 }
 
+export function resolveParentMasterTask({ card, cards = [], relationships = [] }) {
+  const cardId = String(card?.id ?? '');
+  const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
+  if (!labels.includes('subtask')) return Object.freeze({ parentMasterTask: null, diagnostic: null });
+  const incoming = relationships.filter((entry) => entry?.label === 'subtask' && String(entry?.to) === cardId);
+  if (!incoming.length) {
+    return Object.freeze({
+      parentMasterTask: null,
+      diagnostic: Object.freeze({ code: 'missing-parent-relationship', cardId, relationshipIds: [], sourceCardIds: [] })
+    });
+  }
+  const missingSource = incoming.filter((entry) => !cards.some((candidate) => String(candidate?.id) === String(entry?.from)));
+  const invalidSource = incoming.filter((entry) => {
+    const source = cards.find((candidate) => String(candidate?.id) === String(entry?.from));
+    const sourceLabels = Array.isArray(source?.labels) ? source.labels.map(String) : [];
+    return source && !sourceLabels.includes('master-task');
+  });
+  const valid = incoming.flatMap((relationship) => {
+    const source = cards.find((candidate) => String(candidate?.id) === String(relationship?.from));
+    const sourceLabels = Array.isArray(source?.labels) ? source.labels.map(String) : [];
+    return source && sourceLabels.includes('master-task') ? [{ relationship, source }] : [];
+  }).sort((left, right) => Number(left.relationship?.position) - Number(right.relationship?.position)
+    || String(left.relationship?.id ?? '').localeCompare(String(right.relationship?.id ?? '')));
+  const uniqueParents = [...new Map(valid.map((entry) => [String(entry.source.id), entry])).values()];
+  if (uniqueParents.length === 1) {
+    const [{ relationship, source }] = uniqueParents;
+    return Object.freeze({
+      parentMasterTask: Object.freeze({
+        cardId: String(source.id),
+        title: String(source.title || `Card ${source.id}`),
+        relationshipId: String(relationship.id ?? ''),
+      }),
+      diagnostic: null,
+    });
+  }
+  const diagnosticCode = uniqueParents.length > 1
+    ? 'ambiguous-parent-relationships'
+    : missingSource.length
+      ? 'missing-parent-source'
+      : invalidSource.length
+        ? 'invalid-parent-source-label'
+        : 'missing-parent-master-task';
+  return Object.freeze({
+    parentMasterTask: null,
+    diagnostic: Object.freeze({
+      code: diagnosticCode,
+      cardId,
+      relationshipIds: incoming.map((entry) => String(entry?.id ?? '')).sort(),
+      sourceCardIds: incoming.map((entry) => String(entry?.from ?? '')).sort(),
+    }),
+  });
+}
+
 export function projectMasterTask({ card, cards = [], relationships = [], ledgerTitle = '' }) {
   const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
   const masterTask = labels.includes('master-task');
+  const subtask = labels.includes('subtask');
+  const ancestry = resolveParentMasterTask({ card, cards, relationships });
   const lifecycle = card?.lifecycle && typeof card.lifecycle === 'object' ? card.lifecycle : {};
   const orderedRelationships = relationships
     .filter((entry) => String(entry?.from) === String(card?.id) && entry?.label === 'subtask')
@@ -46,6 +101,9 @@ export function projectMasterTask({ card, cards = [], relationships = [], ledger
   return {
     valid: masterTask && ['todo', 'backlog', 'done'].includes(lifecycleStatus),
     masterTask,
+    subtask,
+    parentMasterTask: ancestry.parentMasterTask,
+    ancestryDiagnostic: ancestry.diagnostic,
     cardId: String(card?.id ?? ''),
     title: String(card?.title || `Card ${card?.id ?? ''}`),
     ledger: String(ledgerTitle),

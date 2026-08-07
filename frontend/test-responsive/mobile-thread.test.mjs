@@ -106,8 +106,8 @@ test('responsive card threads own desktop split geometry and documented entry sh
   assert.match(source, /key === 'x'[\s\S]*startVoiceRecording\(\)/);
   assert.match(shortcut, /key === 'escape' && canvasState\.voice\.recording[\s\S]*cancelQuickVoiceComment\(\)/);
   assert.match(shortcut, /key === 'escape' && desktop && event\.target instanceof HTMLElement && event\.target\.closest\('\.thread-draft'\)[\s\S]*event\.target\.blur\(\)/);
-  assert.match(shortcut, /key === 'escape' && desktop && currentCard\?\.labels\?\.includes\('master-task'\)[\s\S]*querySelector\('\.back-to-zone-button'\)\?\.click\(\)/);
-  assert.match(shortcut, /key === 'escape' && canvasState\.threadPanelOpen[\s\S]*closeMobileThread\(\)/);
+  assert.match(shortcut, /key === 'escape' && desktop && \(currentCard\?\.labels\?\.includes\('master-task'\) \|\| currentCardSubtask\)[\s\S]*querySelector\('\.back-to-zone-button'\)\?\.click\(\)/);
+  assert.match(shortcut, /key === 'escape' && canvasState\.threadPanelOpen[\s\S]*dispatchMobileThreadClose\(event\)/);
   assert.match(keydown, /desktopThreadDraftEscape = event\.key === 'Escape'[\s\S]*target\?\.closest\('\.thread-draft'\)/);
   assert.match(keydown, /isCardEditingKeyboardTarget\(target\) && !desktopThreadDraftEscape/);
   assert.match(applicationSource, /await handleResponsiveThreadShortcut\(event\)/);
@@ -189,7 +189,7 @@ test('closing a mobile thread unregisters its project-scoped Codex run consumer'
 });
 
 test('every card route exit closes through the shared navigation lifecycle', () => {
-  const backHandler = applicationSource.match(/document\.querySelector\('\.back-to-zone-button'\)\.addEventListener\('click',[\s\S]*?\n\}\);/)?.[0] ?? '';
+  const backTransition = applicationSource.match(/function executeCardBackTransition\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   const closeMobileThread = source.match(/export function closeMobileThread\([^\n]*\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   const navigate = applicationSource.match(/function navigate\(path, replace = false\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   const navigateTaskBack = applicationSource.match(/async function navigateTaskBack\(destination\) \{[\s\S]*?\n\}/)?.[0] ?? '';
@@ -198,11 +198,12 @@ test('every card route exit closes through the shared navigation lifecycle', () 
   assert.match(applicationSource, /function closeCardDetail\(options\)/);
   assert.match(applicationSource, /name !== 'card-view' && name !== 'loading-view' && !closeCardDetail\(\)/);
   assert.match(navigate, /currentLocation !== nextLocation && !closeCardDetail\(\{ discardHistory: true \}\)/);
-  assert.match(backHandler, /controlRoomDestination[\s\S]*navigateTaskBack\(destination\)/);
-  assert.match(backHandler, /navigate\(destination\)/);
+  assert.match(applicationSource, /bindResponsiveCommand\(document\.querySelector\('\.back-to-zone-button'\), executeCardBackTransition, \{ keyboardBinding: 'Escape' \}\)/);
+  assert.match(backTransition, /transition\.owner === 'zone-route'[\s\S]*navigate\(transition\.destination/);
+  assert.match(backTransition, /navigateTaskBack\(transition\.destination\)/);
   assert.match(navigateTaskBack, /startViewTransition\(\(\) => \{ navigate\(destination\); \}\)/);
   assert.doesNotMatch(navigateTaskBack, /startViewTransition\(async/);
-  assert.match(applicationSource, /patch-card'[\s\S]*navigate\(controlRoomPath\(nextStatus === 'backlog'/);
+  assert.match(applicationSource, /const lifecycleDestination = controlRoomPath\(nextStatus === 'backlog' \? 'backlog' : 'queue'\);[\s\S]*action: 'transition-card-lifecycle', cardId, lifecycleStatus: nextStatus[\s\S]*navigate\(lifecycleDestination, true\)/);
   assert.match(applicationSource, /complete-master-task'[\s\S]*navigate\(completionReturnPath\(\), true\)/);
   assert.match(applicationSource, /delete-card'[\s\S]*navigate\(controlRoomPath\(state\.controlTab\), true\)/);
   assert.match(applicationSource, /popstate'[\s\S]*closeCardDetail\(\{ fromHistory: true \}\)[\s\S]*loadRoute/);
@@ -214,10 +215,11 @@ test('every card route exit closes through the shared navigation lifecycle', () 
 
 test('master-task Back uses a short accessible opacity-only handoff', () => {
   const renderCard = applicationSource.match(/function renderCard\(card\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const syncCardBackCommand = applicationSource.match(/function syncCardBackCommand\(backButton, transition\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(renderCard, /backIcon\.className = 'back-button__icon'[\s\S]*backIcon\.textContent = '←'[\s\S]*backLabel\.textContent = 'Back'[\s\S]*backButton\.replaceChildren\(backIcon, backLabel\)/);
-  assert.match(renderCard, /parsedTask\.masterTask[\s\S]*shortcutKey\('Esc'\)[\s\S]*aria-hidden[\s\S]*aria-keyshortcuts', 'Escape'/);
-  assert.match(renderCard, /else \{[\s\S]*removeAttribute\('aria-keyshortcuts'\)[\s\S]*removeAttribute\('title'\)/);
+  assert.match(renderCard, /syncCardBackCommand\(backButton, resolveCardBackTransition\(parsedTask\)\)[\s\S]*parsedTask\.masterTask[\s\S]*shortcutKey\('Esc'\)[\s\S]*aria-hidden[\s\S]*backButton\.append\(key\)/);
+  assert.match(syncCardBackCommand, /setAttribute\('aria-keyshortcuts', 'Escape'\)[\s\S]*title = 'Back \(Esc\)'/);
   assert.match(applicationCss, /\.back-button \{[^}]*display: inline-flex;[^}]*gap: 8px/);
   assert.match(applicationCss, /\.back-button__icon \{[^}]*display: inline-grid;[^}]*width: 14px;[^}]*height: 14px;[^}]*place-items: center;[^}]*line-height: 1/);
   assert.doesNotMatch(applicationCss, /\.back-button \.terminal-button__key/);

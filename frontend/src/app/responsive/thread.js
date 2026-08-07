@@ -36,8 +36,11 @@ import { bindDesktopVoiceActionPreview } from '/src/runtime/voice/effect/update-
 import { hydrateThreadViewportState, saveThreadPanelScrollPositions } from '/src/runtime/thread/effect/persist-thread-scroll.js';
 import { readPersistedState } from '/src/runtime/persistence/helper/read-persisted-state.js';
 import { deleteNoteController } from '/src/runtime/thread/controller/delete-note-controller.js';
+import { createNavigationTransitionDescriptor } from './navigation-ownership.js';
+import { commandBindingForElement, createCommandDescriptor, dispatchCommand, tryRegisterCommandElement, updateCommandElementDescriptor } from '/src/runtime/input/command-ownership.js';
 
 let currentCard = null;
+let currentCardSubtask = false;
 let currentProjectId = '';
 let currentReplicaNodeId = '';
 let currentLedgerId = '';
@@ -50,6 +53,44 @@ let eventSourceUrl = '';
 let quickVoiceCapture = false;
 let threadRefreshGeneration = 0;
 let threadPresentationGeneration = Number(document.body.dataset.threadPresentationGeneration || 0);
+
+function resolveThreadCloseTransition() {
+  const responsiveHistoryLayer = window.matchMedia?.('(max-width: 760px)').matches === true && Boolean(history.state?.responsiveThreadLayer);
+  return createNavigationTransitionDescriptor({
+    owner: 'responsive-thread-layer',
+    destination: `${location.pathname}${location.search}${location.hash}`,
+    historyMode: responsiveHistoryLayer ? 'back' : 'none',
+    guard: 'voice-recording',
+    presentation: `${currentProjectId}:${currentLedgerId}:${String(currentCard?.id || '')}:${String(canvasState.threadId || '')}:${threadPresentationGeneration}`,
+  });
+}
+
+async function dispatchMobileThreadClose(event) {
+  const button = document.querySelector('.thread-close-button');
+  const transition = resolveThreadCloseTransition();
+  const binding = commandBindingForElement(button);
+  const execute = () => closeMobileThread();
+  if (!binding) return execute();
+  let activeDescriptor = binding.descriptor;
+  try {
+    activeDescriptor = updateCommandElementDescriptor(button, createCommandDescriptor({
+      ...binding.descriptor,
+      resourceIdentity: transition.presentation,
+      presentationGeneration: threadPresentationGeneration,
+    }));
+  } catch (error) {
+    console.error('Responsive thread Close command presentation registration failed.', error);
+  }
+  const settlement = await dispatchCommand(binding.descriptor.commandId, {
+    descriptor: activeDescriptor,
+    source: event.type === 'keydown' ? 'keyboard' : 'click',
+    event,
+    element: button,
+    execute,
+  });
+  if (settlement.status === 'failed') console.error(`Thread command ${binding.descriptor.commandId} failed.`, settlement.error);
+  return settlement.status === 'succeeded' && settlement.value !== false;
+}
 
 function bumpThreadPresentationGeneration() {
   threadPresentationGeneration += 1;
@@ -230,14 +271,14 @@ export async function handleResponsiveThreadShortcut(event) {
     event.target.blur();
     return true;
   }
-  if (key === 'escape' && desktop && currentCard?.labels?.includes('master-task')) {
+  if (key === 'escape' && desktop && (currentCard?.labels?.includes('master-task') || currentCardSubtask)) {
     event.preventDefault();
     document.querySelector('.back-to-zone-button')?.click();
     return true;
   }
   if (key === 'escape' && canvasState.threadPanelOpen) {
     event.preventDefault();
-    closeMobileThread();
+    await dispatchMobileThreadClose(event);
     return true;
   }
   return false;
@@ -428,7 +469,23 @@ export function initializeMobileThread() {
     if (currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
   });
   document.querySelector('.quick-voice-comment-button').addEventListener('click', () => void startQuickVoiceComment());
-  document.querySelector('.thread-close-button').addEventListener('click', closeMobileThread);
+  const closeButton = document.querySelector('.thread-close-button');
+  tryRegisterCommandElement({
+    element: closeButton,
+    descriptor: createCommandDescriptor({
+      commandId: closeButton.dataset.command,
+      stateOwner: 'thread-state',
+      transitionOwner: 'thread-transition',
+      resourceIdentity: resolveThreadCloseTransition().presentation,
+      presentationGeneration: threadPresentationGeneration,
+      pendingPolicy: 'ignore',
+      reconciliationPolicy: 'none',
+      keyboardBinding: 'Escape',
+    }),
+    ownershipClass: 'component',
+    surface: 'responsive-thread',
+  });
+  closeButton.addEventListener('click', (event) => { void dispatchMobileThreadClose(event); });
   document.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-action]');
     if (!button || !button.closest('.mobile-thread-inspector, .mobile-confirm-modal')) return;
@@ -491,6 +548,7 @@ export function initializeMobileThread() {
 
 export function setMobileThreadCard(card, { subtask = false } = {}) {
   currentCard = card;
+  currentCardSubtask = subtask;
   const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
   document.querySelector('.quick-voice-comment-button').hidden = !labels.includes('master-task') && !subtask;
 }

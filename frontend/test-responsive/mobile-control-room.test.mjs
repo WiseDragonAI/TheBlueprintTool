@@ -78,7 +78,7 @@ test('canonicalizes invalid mobile Control Room URL state', () => {
 });
 
 test('persists Control Room tab navigation and the nearest task anchor in browser history', () => {
-  assert.match(mobile, /article\.id = `task-\$\{taskIdentity\(task\)\}`/);
+  assert.match(mobile, /const taskId = taskIdentity\(task\);[\s\S]*article\.id = `task-\$\{taskId\}`/);
   assert.match(mobile, /history\.pushState\(\{\}, '', controlRoomPath\(state\.controlTab\)\)/);
   assert.match(mobile, /history\.replaceState\(\{\}, '', nextPath\)/);
   assert.match(mobile, /document\.getElementById\(anchor\)\?\.scrollIntoView\(\{ block: 'start' \}\)/);
@@ -122,7 +122,7 @@ test('parks and restores master tasks through the shared card status mutation', 
   assert.match(mobile, /delayButton\.textContent = backlog \? 'Restore to queue' : 'Move to backlog'/);
   assert.doesNotMatch(mobile, /Park task|Parking task/);
   assert.match(mobile, /const nextStatus = backlog \? 'todo' : 'backlog'/);
-  assert.match(mobile, /runResponsiveLedgerTransaction\(\{[\s\S]*action: 'transition-card-lifecycle', cardId: card\.id, lifecycleStatus: nextStatus/);
+  assert.match(mobile, /runResponsiveLedgerTransaction\(\{[\s\S]*action: 'transition-card-lifecycle', cardId, lifecycleStatus: nextStatus/);
   assert.match(mobile, /applyTaskIntentLocally\(task, \{ kind: 'lifecycle', lifecycleStatus: nextStatus \}\)/);
   assert.match(mobile, /controlRoomPath\(nextStatus === 'backlog' \? 'backlog' : 'queue'\)/);
   assert.match(mobile, /backlog: 'No backlog tasks'/);
@@ -139,7 +139,7 @@ test('formats the exact executing Codex session duration as a minute-second stop
 
 test('renders every Control Room task as the same direct-link card without disclosure details', () => {
   assert.match(mobile, /runtimeStatus\.className = 'task-stopwatch'/);
-  assert.match(mobile, /summary\.addEventListener\('click'[\s\S]*navigate\(pathForTask\(task\)\)/);
+  assert.match(mobile, /const taskDestination = task\.projectSyncCanonical !== false \? pathForTask\(task\) : '';[\s\S]*bindResponsiveCommand\(summary, \(\) => taskDestination \? navigate\(taskDestination\) : false, \{[\s\S]*commandId: 'responsive\.open-control-task'/);
   const row = mobile.slice(mobile.indexOf('function taskRow('), mobile.indexOf('function renderControlRoom()'));
   assert.doesNotMatch(row, /aria-expanded|control-task-details|task-chevron|subtask-row/);
   assert.doesNotMatch(styles, /control-task-details|task-chevron/);
@@ -370,10 +370,12 @@ test('shows the settled image title for one second and then fades it out', () =>
   assert.match(styles, /\.ledger-card-media-title\.is-visible \{ opacity: 1; \}/);
 });
 
-test('routes master-task cards back to their task list and regular cards back to their zone', () => {
+test('routes master tasks to their task list, subtasks to their parent, and regular cards to their zone', () => {
   assert.match(mobile, /backButton\.replaceChildren\(backIcon, backLabel\)/);
-  assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
-  assert.match(mobile, /const controlRoomDestination = event\.currentTarget\.dataset\.destination === 'control-room';[\s\S]*const destination = controlRoomDestination \? completionReturnPath\(\) : zonePath/);
+  assert.match(mobile, /if \(parsedTask\.masterTask\) \{[\s\S]*owner: 'master-task-route',[\s\S]*destination: completionReturnPath\(\)/);
+  assert.match(mobile, /if \(parsedTask\.parentMasterTask\) \{[\s\S]*resolveParentCardDestination\(\{[\s\S]*parentCardId: parsedTask\.parentMasterTask\.cardId[\s\S]*owner: 'subtask-route',[\s\S]*destination: parent\.destination/);
+  assert.match(mobile, /owner: 'zone-route',[\s\S]*destination: zonePath\(state\.activeLedgerId, state\.activeZoneId\)/);
+  assert.match(mobile, /syncCardBackCommand\(backButton, resolveCardBackTransition\(parsedTask\)\)/);
 });
 
 test('commits retained Control Room and task-shell views before background route reads', () => {
@@ -408,12 +410,12 @@ test('renders and persists the shared carousel resize handle in a Control Room m
 });
 
 test('offers manual and configured-pipeline completion from the master-task detail', () => {
-  assert.match(mobile, /action: 'complete-master-task', masterTaskId: card\.id/);
+  assert.match(mobile, /runResponsiveLedgerTransaction\(\{\s*scope: cardScope,\s*mutation: \{ action: 'complete-master-task', masterTaskId: cardId \}/);
   assert.match(mobile, /navigate\(completionReturnPath\(\), true\)/);
   assert.match(mobile, /return returnPath\.startsWith\('\/'\) \? returnPath : controlRoomPath\('queue'\)/);
   assert.match(mobile, /manualCompleteButton\.textContent = card\.status === 'done' \? 'Master task complete' : 'Complete manually'/);
   assert.match(mobile, /pipelineCompleteButton\.textContent = 'Complete with pipeline'/);
-  assert.match(mobile, /requestCodexPipelineRun\(\{ ledgerId: state\.activeLedgerId, sourceCardId: String\(card\.id\), pipelineId \}\)/);
+  assert.match(mobile, /requestCodexPipelineRun\(\{ ledgerId: cardScope\.ledgerId, sourceCardId: cardId, pipelineId \}\)/);
   assert.match(mobile, /pipelineCompleteButton\.disabled = card\.status === 'done' \|\| !configured/);
   assert.match(mobile, /navigate\(controlRoomPath\('exec'\), true\)/);
   assert.match(mobile, /overview\.append\(status, heading, subtasks, completion\)/);

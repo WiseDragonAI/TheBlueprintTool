@@ -27,6 +27,7 @@ import { voiceLaunchModeForModifiers } from '../../voice/helper/voice-launch-mod
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { isCardEditingKeyboardTarget } from '../helper/is-card-editing-keyboard-target.js';
 import { currentVoiceCaptureOwner } from '../../voice/helper/voice-capture-ownership.js';
+import { dispatchRuntimeAction } from './handle-action-click.js';
 
 export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   const target = event.target as HTMLElement | null;
@@ -35,6 +36,11 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   if (modal.open) {
     if (key === 'enter') {
       event.preventDefault();
+      const confirmation = modal.querySelector('[data-action]:not([data-action="cancel-delete"])') as HTMLElement | null;
+      if (confirmation?.dataset.action) {
+        await dispatchRuntimeAction(confirmation, event);
+        return;
+      }
       if (modal.dataset.confirmKind === 'note') {
         await deleteNoteController({ threadId: modal.dataset.threadId ?? state.threadId, noteId: modal.dataset.noteId ?? '' });
       } else if (modal.dataset.confirmKind === 'card-image') {
@@ -55,13 +61,17 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
     }
     if (key === 'escape') {
       event.preventDefault();
-      modal.close?.();
+      const cancel = modal.querySelector('[data-action="cancel-delete"]') as HTMLElement | null;
+      if (cancel) await dispatchRuntimeAction(cancel, event);
+      else modal.close?.();
       return;
     }
   }
   if (target?.closest('.thread-draft') && event.ctrlKey && key === 'enter') {
     event.preventDefault();
-    await submitThreadDraft();
+    const submit = target.closest('.terminal-composer')?.querySelector('[data-action="submit-thread-draft"]') as HTMLElement | null;
+    if (submit) await dispatchRuntimeAction(submit, event);
+    else await submitThreadDraft();
     return;
   }
   if (isCardEditingKeyboardTarget(target)) return;
@@ -77,7 +87,9 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
     event.preventDefault();
     if (currentVoiceCaptureOwner()?.startsWith('git-review:')) return;
     if (!state.threadPanelOpen) openThreadPanel();
-    if (state.voice.recording) await executeVoiceAction({ launchMode: voiceLaunchModeForModifiers(event) });
+    const voiceToggle = document.querySelector('.thread-panel [data-action="voice-toggle"]') as HTMLElement | null;
+    if (voiceToggle) await dispatchRuntimeAction(voiceToggle, event);
+    else if (state.voice.recording) await executeVoiceAction({ launchMode: voiceLaunchModeForModifiers(event) });
     else void startVoiceRecording();
     return;
   }
@@ -87,7 +99,9 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
       return;
     }
     if (state.threadPanelOpen || state.activeTool === 'thread') {
-      closeThreadPanel();
+      const close = document.querySelector('.thread-close[data-action="close-thread-panel"]') as HTMLElement | null;
+      if (close) await dispatchRuntimeAction(close, event);
+      else closeThreadPanel();
       return;
     }
     state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
@@ -112,7 +126,9 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   }
   if (event.ctrlKey && key === 'd') {
     event.preventDefault();
-    await resizeSelectedCardsController();
+    const resize = document.querySelector('[data-action="resize"]') as HTMLElement | null;
+    if (resize) await dispatchRuntimeAction(resize, event);
+    else await resizeSelectedCardsController();
   }
   if (event.ctrlKey && key === 'v' && state.clipboard) {
     await pasteSelectionController();

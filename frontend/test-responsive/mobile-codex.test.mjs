@@ -223,6 +223,7 @@ test('skill detail is an exclusive modal view and the single close control resto
   assert.equal(selectors.get('.process-detail').hidden, true);
   assert.equal(selectors.get('#process-title').textContent, 'Skill library');
   assert.doesNotMatch(script, /Back to library/);
-  assert.match(script, /if \(!el\('\.process-detail'\)\.hidden\)/);
+  assert.match(script, /const detailOpen = !el\('\.process-detail'\)\.hidden/);
+  assert.match(script, /destination: detailOpen \? 'codex:process-library' : 'codex:process-closed'/);
   assert.match(script, /setMobileCodexView\(document, 'library'/);
 });

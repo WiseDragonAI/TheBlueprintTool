@@ -11,6 +11,7 @@ import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type Page } from '@playwright/test';
+import { migrateTaskCurrentState } from '../../../backend/src/business/task-state/helper/task-current-state-migration.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const chromiumExecutablePath = '/snap/bin/chromium';
@@ -18,9 +19,19 @@ const columnSelector = (column: string) => `[data-control-column-list="${column}
 
 test('column scroll survives task refresh, in-app task return, and browser back', { timeout: 60_000 }, async () => {
   const workspace = createScrollWorkspace();
-  const server = await startDecisionOsServer(workspace.root);
+  let server: Awaited<ReturnType<typeof startDecisionOsServer>> | undefined;
   let browser: Browser | undefined;
   try {
+    // WHAT: Install the fixture through the same epoch-3 cutover required by server bootstrap.
+    // WHY: A nonempty legacy tasks ledger is intentionally rejected as runtime authority.
+    await migrateTaskCurrentState({
+      decisionOsRoot: workspace.decisionOsRoot,
+      projectId: workspace.projectId,
+      nodeId: 'browser-test',
+      tasksLedgerFile: workspace.tasksLedgerFile,
+      backupRoot: join(workspace.root, '.task-state-migration-backup'),
+    });
+    server = await startDecisionOsServer(workspace.root);
     browser = await chromium.launch({
       headless: true,
       executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
@@ -45,14 +56,22 @@ test('column scroll survives task refresh, in-app task return, and browser back'
 
     await page.waitForTimeout(250);
     const projectId = await page.locator(`${columnSelector('queue')} .control-task`).first().evaluate((row) => decodeURIComponent(String((row as HTMLElement).dataset.taskId).split('--')[0]));
-    const refresh = await fetch(`${server.url}/p/${encodeURIComponent(projectId)}/decision-os/tasks`, {
+    const rename = await fetch(`${server.url}/p/${encodeURIComponent(projectId)}/decision-os/tasks`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'queue-17', title: 'Queue 17 refreshed', status: 'backlog' } }),
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'queue-17', title: 'Queue 17 refreshed' } }),
     });
-    const refreshPayload = await refresh.json() as { ok?: boolean; changedCard?: { id?: string; title?: string; status?: string } };
-    assert.equal(refresh.ok, true, JSON.stringify(refreshPayload));
-    assert.deepEqual(refreshPayload.changedCard && { id: refreshPayload.changedCard.id, title: refreshPayload.changedCard.title, status: refreshPayload.changedCard.status }, { id: 'queue-17', title: 'Queue 17 refreshed', status: 'backlog' });
+    const renamePayload = await rename.json() as { ok?: boolean; changedCard?: { id?: string; title?: string; status?: string } };
+    assert.equal(rename.ok, true, JSON.stringify(renamePayload));
+    assert.deepEqual(renamePayload.changedCard && { id: renamePayload.changedCard.id, title: renamePayload.changedCard.title, status: renamePayload.changedCard.status }, { id: 'queue-17', title: 'Queue 17 refreshed', status: 'todo' });
+    const transition = await fetch(`${server.url}/p/${encodeURIComponent(projectId)}/decision-os/tasks`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'transition-card-lifecycle', cardId: 'queue-17', lifecycleStatus: 'backlog' }),
+    });
+    const transitionPayload = await transition.json() as { ok?: boolean; changedCard?: { id?: string; title?: string; status?: string } };
+    assert.equal(transition.ok, true, JSON.stringify(transitionPayload));
+    assert.deepEqual(transitionPayload.changedCard && { id: transitionPayload.changedCard.id, title: transitionPayload.changedCard.title, status: transitionPayload.changedCard.status }, { id: 'queue-17', title: 'Queue 17 refreshed', status: 'backlog' });
     await page.locator('.refresh-button').click();
     await page.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
     await page.waitForFunction(() => [...document.querySelectorAll('[data-control-column-list="backlog"] .control-task strong')].some((node) => node.textContent === 'Queue 17 refreshed'));
@@ -74,9 +93,15 @@ test('column scroll survives task refresh, in-app task return, and browser back'
     await openControlRoom(page, server.url, false);
     assert.deepEqual(await readColumnScroll(page), { queue: 0, exec: 0, backlog: 0 });
   } finally {
-    await browser?.close();
-    await stopDecisionOsServer(server.process);
-    rmSync(workspace.root, { recursive: true, force: true });
+    try {
+      await browser?.close();
+    } finally {
+      try {
+        if (server) await stopDecisionOsServer(server.process);
+      } finally {
+        rmSync(workspace.root, { recursive: true, force: true });
+      }
+    }
   }
 });
 
@@ -111,9 +136,10 @@ async function assertColumnScroll(page: Page, expected: Record<'queue' | 'exec' 
   assert.deepEqual(await readColumnScroll(page), expected);
 }
 
-function createScrollWorkspace(): { root: string } {
+function createScrollWorkspace(): { root: string; decisionOsRoot: string; projectId: string; tasksLedgerFile: string } {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-scroll-browser-'));
   const decisionOsRoot = join(root, 'project-a', '.decision-os');
+  const projectId = 'scroll-browser-project';
   const cardsRoot = join(decisionOsRoot, 'cards', 'tasks');
   mkdirSync(cardsRoot, { recursive: true });
   const groups = [
@@ -138,8 +164,10 @@ function createScrollWorkspace(): { root: string } {
   }));
   mkdirSync(decisionOsRoot, { recursive: true });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
-  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards, annotations: [{ id: 'zone-a', x: 0, y: 0, width: 1200, height: 900, color: '#38d9e8' }], relationships: [], notes: {}, threadFiles: {} }));
-  return { root };
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: projectId }));
+  const tasksLedgerFile = join(decisionOsRoot, 'tasks.json');
+  writeFileSync(tasksLedgerFile, JSON.stringify({ cards, annotations: [{ id: 'zone-a', x: 0, y: 0, width: 1200, height: 900, color: '#38d9e8' }], relationships: [], notes: {}, threadFiles: {} }));
+  return { root, decisionOsRoot, projectId, tasksLedgerFile };
 }
 
 async function startDecisionOsServer(cwd: string): Promise<{ process: ChildProcess; url: string }> {
@@ -154,24 +182,61 @@ async function startDecisionOsServer(cwd: string): Promise<{ process: ChildProce
   const output: string[] = [];
   child.stdout?.on('data', (chunk) => output.push(String(chunk)));
   child.stderr?.on('data', (chunk) => output.push(String(chunk)));
-  await waitFor(async () => {
-    assert.equal(child.exitCode, null, `decision-os server exited early:\n${output.join('')}`);
-    return Boolean((await fetch(url, { method: 'HEAD' }).catch(() => undefined))?.ok);
-  }, `Timed out waiting for Decision OS at ${url}`);
-  await waitFor(async () => {
-    const response = await fetch(`${url}/api/control-room`).catch(() => undefined);
-    if (!response?.ok) return false;
-    const payload = await response.json() as { queue?: unknown[]; exec?: unknown[]; backlog?: unknown[] };
-    return payload.queue?.length === 36 && payload.exec?.length === 0 && payload.backlog?.length === 18;
-  }, `Timed out waiting for the Control Room projection at ${url}`);
-  return { process: child, url };
+  let lastProjection = 'not requested';
+  try {
+    await waitFor(async () => {
+      assert.equal(child.exitCode, null, `decision-os server exited early:\n${output.join('')}`);
+      return Boolean((await fetch(url, { method: 'HEAD' }).catch(() => undefined))?.ok);
+    }, () => `Timed out waiting for Decision OS at ${url}.\n${output.join('')}`);
+    await waitFor(async () => {
+      const response = await fetch(`${url}/api/control-room`).catch(() => undefined);
+      if (!response?.ok) {
+        lastProjection = `HTTP ${response?.status ?? 'unavailable'}`;
+        return false;
+      }
+      const payload = await response.json() as { queue?: unknown[]; exec?: unknown[]; backlog?: unknown[]; diagnostics?: unknown[] };
+      lastProjection = JSON.stringify({ queue: payload.queue?.length, exec: payload.exec?.length, backlog: payload.backlog?.length, diagnostics: payload.diagnostics?.length });
+      return payload.queue?.length === 36 && payload.exec?.length === 0 && payload.backlog?.length === 18;
+    }, () => `Timed out waiting for the Control Room projection at ${url}; last projection ${lastProjection}.\n${output.join('')}`);
+    return { process: child, url };
+  } catch (error) {
+    await stopDecisionOsServer(child);
+    throw error;
+  }
 }
 
 async function stopDecisionOsServer(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  if (child.pid) process.kill(-child.pid, 'SIGTERM');
-  await Promise.race([new Promise<void>((resolveExit) => child.once('exit', () => resolveExit())), delay(2_000)]);
-  if (child.exitCode === null && child.signalCode === null && child.pid) process.kill(-child.pid, 'SIGKILL');
+  if (child.exitCode === null && child.signalCode === null) {
+    signalProcessGroup(child, 'SIGTERM');
+    const exited = await Promise.race([waitForExit(child).then(() => true), delay(2_000).then(() => false)]);
+    if (!exited) {
+      signalProcessGroup(child, 'SIGKILL');
+      await Promise.race([waitForExit(child), delay(2_000)]);
+    }
+  }
+  child.stdout?.destroy();
+  child.stderr?.destroy();
+}
+
+function signalProcessGroup(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (child.pid) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // The detached process group may already be gone while the launcher handle is settling.
+    }
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // A concurrent exit has already completed cleanup.
+  }
+}
+
+function waitForExit(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolveExit) => child.once('exit', () => resolveExit()));
 }
 
 async function freePort(): Promise<number> {
@@ -183,13 +248,13 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-async function waitFor(check: () => Promise<boolean>, message: string): Promise<void> {
+async function waitFor(check: () => Promise<boolean>, message: string | (() => string)): Promise<void> {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     if (await check()) return;
     await delay(50);
   }
-  assert.fail(message);
+  assert.fail(typeof message === 'function' ? message() : message);
 }
 
 const delay = (milliseconds: number) => new Promise<void>((resolveDelay) => setTimeout(resolveDelay, milliseconds));

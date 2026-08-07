@@ -393,9 +393,10 @@ test('Reusable step pipelines preserve defaults and publish visible execution pr
 
     await createPipelineAndSkillDefaults(page);
     await runDirectInheritedSkill(page);
+    const loadsBeforePipeline = await page.evaluate(() => Number(sessionStorage.getItem('decision-os.pipeline-browser-loads') ?? 0));
     await runCancelRestartAndFailPipeline(page, resizedCardIds);
 
-    assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('decision-os.pipeline-browser-loads') ?? 0)), 1,
+    assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('decision-os.pipeline-browser-loads') ?? 0)), loadsBeforePipeline,
       'Pipeline progression must not reload the page.');
     const launches = readFileSync(fixture.launchFile, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line) as LaunchRecord);
     const direct = launches.find((entry) => entry.step === skillName);
@@ -485,18 +486,10 @@ async function runDirectInheritedSkill(page: Page): Promise<void> {
   assert.equal(await process.getByLabel('Effort · default high', { exact: true }).inputValue(), 'high');
   assert.equal(await process.getByText('Using skill default', { exact: true }).count(), 2);
   await process.getByRole('button', { name: 'Run one skill', exact: true }).click();
-  await process.waitFor({ state: 'hidden' });
-
-  const widget = pipelineWidget(page, `${skillName} run`, skillName);
-  await widget.waitFor({ state: 'visible' });
-  try {
-    await widget.locator('[data-codex-run-status]').filter({ hasText: 'COMPLETE' }).waitFor({ state: 'visible', timeout: 15_000 });
-  } catch (error) {
-    console.error('Direct pipeline widget did not complete:', await widget.innerText());
-    throw error;
-  }
-  assert.equal(await widget.locator('[data-codex-run-model]').inputValue(), 'gpt-5.4');
-  assert.equal(await widget.locator('[data-codex-run-effort]').inputValue(), 'high');
+  // Direct skill acceptance deliberately opens Exec; return to the canvas before exercising in-place pipeline progression.
+  await page.waitForURL((url) => url.pathname === '/' && url.searchParams.get('tab') === 'exec');
+  await page.goto(new URL('/specs', page.url()).toString(), { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction((cardId) => Boolean(window.__coreState?.activeLedger?.cards?.some((card: { id?: string }) => card.id === cardId)), sourceCardId);
 }
 
 async function runCancelRestartAndFailPipeline(page: Page, resizedCardIds: Set<string>): Promise<void> {
