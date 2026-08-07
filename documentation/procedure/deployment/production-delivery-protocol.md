@@ -108,12 +108,12 @@
 4. `relayConfiguration` contains `observedAt`, SHA-256 `configurationHash`, `wranglerVersion: "4.111.0"`, `productionWorkerName`, `devWorkerName`, `productionDurableObjectNamespace`, and `devDurableObjectNamespace`.
 5. `proofs` contains exactly one fresh `passed` receipt for each name: `authoring`, `editor`, `direct-path`, `prompt-execution`, and `federation`. Every receipt contains the exact `releaseSha`, `observedAt`, and `receiptId`.
 6. `nodeEvidence` records the settings-owned `deliveryNodeId` coordinator observed during candidate proof. Unrelated federation nodes do not participate in production admission. The record contains:
-   1. `nodeId`, `observedAt`, and exact `projectIds`
+   1. `nodeId`, `observedAt`, and exact `projectIds`. Delivery project identity includes only projects with a verified repository-origin fingerprint; node-local projects remain served but do not enter federation convergence.
    2. `release` with ready health, predecessor `releaseSha`, `processStartedAt`, `deliveryProtocol: 1`, `activeReleasePointer`, and zero `activeIncidentCount`
    3. `federationPhase: "connected"`
    4. Zero `activeExecutionCount`, `pendingExecutionCount`, `pendingProcessQueueDepth`, `pausedScopeCount`, and `fatalIncidentCount`. `pausedScopeCount` includes only paused server-fatal, `delivery:*`, and `delivery-dependency:*` incidents; unrelated contained incidents remain diagnostic and do not block delivery.
    5. Zero `stateRuntimeDirtyCount`, `statePendingDeliveryCount`, `contentQueueDepth`, and `unavailableContentResourceCount`
-   6. `convergedProjectIds` exactly equal to the node's owned `projectIds`
+   6. `convergedProjectIds` exactly equal to the node's synchronizable `projectIds`
 7. `promote` independently reads live production topology, selects only the settings-owned `deliveryNodeId`, and collects its fresh authenticated `status` response. A missing or offline coordinator rejects admission; unrelated online and offline federation nodes are ignored.
 8. Candidate, topology, health, relay, node, and proof timestamps must be within the admission freshness window. The default maximum age is five minutes.
 9. Before `promote`, publish the exact merge and release tags created by `decision-os-merge-dev`. `promote` re-fetches `origin/main` and `origin/dev`, proves the requested SHA equals `origin/dev`, proves `origin/main` has exactly the prior main and requested dev parents in canonical order, proves the protected `.decision-os` gitlink is unchanged, proves the release worktree is clean, rejects active Git operations, and binds the result to the candidate evidence SHA.
@@ -123,15 +123,15 @@
 ## F. Admission Receipt
 
 1. `promote` reads:
-   1. `GET http://127.0.0.1:50150/api/health`
-   2. `GET http://127.0.0.1:50151/api/health`
+   1. `GET http://127.0.0.1:50150/api/delivery/admission-state`
+   2. `GET http://127.0.0.1:50151/api/delivery/admission-state`
    3. `GET http://127.0.0.1:50152/health`
    4. `GET http://127.0.0.1:50150/api/federation/nodes`
-   5. Authenticated `POST http://127.0.0.1:50150/api/federation/nodes/:nodeId/delivery` with action `status` for every frozen project-owning node
-2. Production health must identify the exact `origin/main` predecessor. Canary and dev relay health must identify the requested `origin/dev` SHA.
+   5. Authenticated `POST http://127.0.0.1:50150/api/federation/nodes/:nodeId/delivery` with action `status` for the settings-owned coordinator
+2. Production delivery health must identify the exact first-parent predecessor of the requested `origin/main` merge. Canary and dev relay health must identify the requested `origin/dev` SHA.
 3. Dev relay health must report `deliveryProtocol: 1`, `protocolVersion: 1`, the current task-state protocol/schema/baseline, `environment: "dev"`, and the source-defined dev Worker plus Durable Object namespace.
 4. Production and dev Worker identities and Durable Object namespaces must differ. Relay configuration must identify pinned Wrangler `4.111.0`.
-5. Every relay-manifest node with at least one project is an active delivery target and must be online. Authenticated zero-project identities are recorded and excluded from activation.
+5. Only the settings-owned coordinator is a production delivery target and must be online. Unrelated federation nodes do not enter admission or activation.
 6. The target node set and project origin fingerprints are frozen. A later identity, project set, origin, and membership change returns `delivery_topology_changed`.
 7. The durable admission receipt records the evidence hash, topology fingerprint, production SHA, canary SHA, dev relay SHA, relay configuration hash, active-node count, and zero-project-node count before `main` promotion.
 8. Any admission rejection exits `2` before `main` push, relay upload, release preparation, pointer change, supervised exit, and restart.
@@ -172,6 +172,7 @@
 1. The standalone `decision-os-merge-dev` workflow solely owns the main merge and annotated parent plus child `rel-*` and `devrel-*` tags.
 2. Publish the exact main merge and its tags before invoking production delivery. Production delivery never creates, moves, or pushes Git refs.
 3. Production rollback authority is the exact published `mainSha`, delivery journal, Cloudflare predecessor version, and node predecessor receipts.
+4. The production node must run the requested release tag's exact first-parent predecessor before candidate admission. When published releases were skipped, advance the node through authenticated protocol-1 `prepare` and `activate` receipts until it reaches that predecessor; this alignment does not deploy the Cloudflare Worker.
 
 ---
 
