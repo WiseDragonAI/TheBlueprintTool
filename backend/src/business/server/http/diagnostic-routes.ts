@@ -53,7 +53,8 @@ export function handleDiagnosticReadRoutes(input: {
     || input.incidentSupervisor.pausedFederatedTaskProjects.size > 0
     || input.incidentSupervisor.pausedBackgroundComponents.size > 0
     || input.incidentSupervisor.pausedProjectWatchers.size > 0
-    || input.incidentSupervisor.pausedProjectRuntimes.size > 0;
+    || input.incidentSupervisor.pausedProjectRuntimes.size > 0
+    || input.incidentSupervisor.pausedFederationRepairs.size > 0;
   input.response.setHeader('cache-control', 'no-store');
   input.response.setHeader('content-type', 'application/json');
   input.response.end(JSON.stringify({
@@ -72,6 +73,7 @@ export function handleDiagnosticReadRoutes(input: {
     ].sort(),
     pausedProjectWatcherIds: [...input.incidentSupervisor.pausedProjectWatchers].sort(),
     pausedProjectRuntimeIds: [...input.incidentSupervisor.pausedProjectRuntimes].sort(),
+    pausedFederationRepairProjectIds: [...input.incidentSupervisor.pausedFederationRepairs.keys()].sort(),
     // WHAT: Include durable occurrence history and its completeness markers only on the existing incident endpoint.
     // WHY: Health retains its compact interruption contract while diagnostics remains the single incident evidence source.
     ...(input.requestPath === '/api/diagnostics/incidents'

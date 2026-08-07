@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   finalizeTaskCurrentEntity,
   hashTaskCurrentBucket,
+  hashTaskCurrentRoot,
   taskCurrentBucketForEntityKey,
   taskCurrentBaselineEpoch,
   taskCurrentEntityKey,
@@ -20,6 +21,7 @@ type FramePayload = {
   deliveryId?: string;
   entries?: Array<{ key: string; stateHash: string; entity: unknown }>;
   accepted?: Array<{ key: string; stateHash: string }>;
+  rejected?: Array<{ key: string; stateHash: string; relayStateHash?: string; collisions?: Array<{ path: string; replicaId: string; counter: number }>; code: string }>;
   root?: string;
   executionId?: string;
   observation?: unknown;
@@ -153,6 +155,72 @@ describe('federation relay', () => {
     reconnected.send(JSON.stringify(manifest('Workstation')));
     await expect(empty).resolves.toMatchObject({ payload: { buckets: [] } });
     reconnected.close(1000, 'test_complete');
+  });
+
+  it('deletes only one offline harness-owned canary federation and fails closed', async () => {
+    const federationId = `release_canary_${'a'.repeat(24)}`;
+    const controlFederationId = `release_canary_${'b'.repeat(24)}`;
+    const credential = await createNode(federationId, 'canary-a');
+    const controlCredential = await createNode(controlFederationId, 'control-a');
+    const socket = await connect(federationId, 'canary-a', credential);
+    socket.send(JSON.stringify(manifest('Canary A')));
+
+    const online = await SELF.fetch(`https://relay.test/admin/federations/${federationId}/canary-state`, {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer test-admin-secret' },
+    });
+    expect(online.status).toBe(409);
+    await expect(online.json()).resolves.toMatchObject({ ok: false, error: 'federation_nodes_online', nodes: ['canary-a'] });
+
+    const invalid = await SELF.fetch('https://relay.test/admin/federations/production/canary-state', {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer test-admin-secret' },
+    });
+    expect(invalid.status).toBe(404);
+
+    socket.close(1000, 'canary_cleanup');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const deleted = await SELF.fetch(`https://relay.test/admin/federations/${federationId}/canary-state`, {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer test-admin-secret' },
+    });
+    expect(deleted.status).toBe(200);
+    await expect(deleted.json()).resolves.toEqual({ ok: true, deleted: true, federationId });
+
+    const stale = await SELF.fetch(`https://relay.test/connect/${federationId}/canary-a`, {
+      headers: { upgrade: 'websocket', authorization: `Bearer ${credential}` },
+    });
+    expect(stale.status).toBe(401);
+    const control = await connect(controlFederationId, 'control-a', controlCredential);
+    control.close(1000, 'test_complete');
+  });
+
+  it('returns one correlated terminal rejection while preserving the relay entity', async () => {
+    const federationId = `collision-${crypto.randomUUID()}`;
+    const credential = await createNode(federationId, 'workstation');
+    const writer = await connect(federationId, 'workstation', credential);
+    writer.send(JSON.stringify(manifest('Workstation')));
+    const retained = currentEntity('shared', 'collision-card', 'todo');
+    const conflicting = currentEntity('shared', 'collision-card', 'done');
+    const firstDelivery = 'collision-retained';
+    const firstAck = nextFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === firstDelivery);
+    writer.send(JSON.stringify(stateBatch('shared', retained, firstDelivery)));
+    await expect(firstAck).resolves.toMatchObject({ payload: { accepted: [{ key: taskCurrentEntityKey(retained), stateHash: retained.stateHash }], rejected: [] } });
+
+    const rejectedDelivery = 'collision-rejected';
+    const rejection = nextFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === rejectedDelivery);
+    writer.send(JSON.stringify(stateBatch('shared', conflicting, rejectedDelivery)));
+    await expect(rejection).resolves.toMatchObject({
+      payload: {
+        accepted: [],
+        rejected: [{ key: taskCurrentEntityKey(conflicting), stateHash: conflicting.stateHash, relayStateHash: retained.stateHash, collisions: [{ path: 'lifecycle', replicaId: 'node-a', counter: 1 }], code: 'task_current_dot_collision' }],
+      },
+    });
+
+    const summary = nextFrame(writer, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared');
+    writer.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion } }));
+    await expect(summary).resolves.toMatchObject({ payload: { root: hashTaskCurrentRoot([{ bucket: taskCurrentBucketForEntityKey(taskCurrentEntityKey(retained)), count: 1, checksum: hashTaskCurrentBucket([[taskCurrentEntityKey(retained), retained]]) }]) } });
+    writer.close(1000, 'test_complete');
   });
 
   it('replaces a same-node socket without failing the new handshake', async () => {

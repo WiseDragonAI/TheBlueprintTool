@@ -7,14 +7,15 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
-import { createFederationTaskStateReplicator } from '../../../src/business/federation/helper/federation-task-state-replicator.js';
+import { createFederationTaskStateReplicator, firstBoundedStateFrame } from '../../../src/business/federation/helper/federation-task-state-replicator.js';
 import type { FederationStateFrame } from '../../../src/business/federation/helper/federation-node-connector.js';
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskCurrentBucket, type TaskCurrentEntity } from '../../../src/business/task-state/helper/task-current-state-types.js';
 import { createTaskExecutionRepository } from '../../../src/business/task-state/helper/task-execution-repository.js';
-import { taskCurrentEntityKey } from '../../../../shared/task-current-state-core.js';
+import { hashTaskCurrentBucket, hashTaskCurrentRoot, taskCurrentEntityKey } from '../../../../shared/task-current-state-core.js';
 import { federationMaximumStateFrameBytes, federationStateEntityBatchSize } from '../../../../shared/federation-state-transport.js';
 import { migrateTaskCurrentState } from '../../../src/business/task-state/helper/task-current-state-migration.js';
+import { finalizeTaskCurrentEntity } from '../../../src/business/task-state/helper/task-current-state-join.js';
 
 type Replicator = ReturnType<typeof createFederationTaskStateReplicator>;
 const lifecycle = (status: 'todo' | 'done') => ({ status, changedAt: '2026-07-21T00:00:00.000Z', waitingAt: status === 'todo' ? '2026-07-21T00:00:00.000Z' : null, closedAt: status === 'done' ? '2026-07-21T00:00:00.000Z' : null });
@@ -28,6 +29,16 @@ function mismatched(left: TaskCurrentBucket[], right: TaskCurrentBucket[]): stri
 function fixture(prefix: string): { root: string; store: TaskCurrentStateStore } {
   const root = mkdtempSync(resolve(tmpdir(), prefix));
   return { root, store: createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} }) };
+}
+
+function encodedStateBatchBytes(projectId: string, frame: { deliveryId: string; entries: unknown[] }): number {
+  return Buffer.byteLength(JSON.stringify({
+    version: 1,
+    type: 'state-entity-batch',
+    stateVersion: taskCurrentStateVersion,
+    projectId,
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId: frame.deliveryId, entries: frame.entries },
+  }));
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
@@ -540,6 +551,232 @@ test('relay acknowledgements clear only matching entity hashes from the project 
   assert.equal(replicator.diagnostics().runtimeDirty[0].entityKey, payload.entries[0].key);
 });
 
+test('correlated terminal rejection pauses reconnect delivery until equal-root explicit resume', async (context) => {
+  const node = fixture('decision-os-terminal-rejection-');
+  const healthyRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-terminal-healthy-'));
+  const healthyStore = createTaskCurrentStateStore({ decisionOsRoot: healthyRoot, projectId: 'project-b', initializeLedger: {} });
+  context.after(async () => {
+    await Promise.all([node.store.flush(), healthyStore.flush()]);
+    rmSync(node.root, { recursive: true, force: true });
+    rmSync(healthyRoot, { recursive: true, force: true });
+  });
+  const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const incidents: Array<{ projectId: string; rejected: Array<{ key: string; stateHash: string; code: string }> }> = [];
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', node.store], ['project-b', healthyStore]]),
+    publish: (_target, frame) => { sent.push(frame); return true; },
+    onTerminalRejection: ({ projectId, rejected }) => { incidents.push({ projectId, rejected }); },
+  });
+  const mutation = await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'collision', changes: [{ path: 'title', operation: 'set', value: 'Local authority' }] }] });
+  replicator.publishDelta(mutation.delta);
+  const delivery = sent.find((frame) => frame.type === 'state-entity-batch')!;
+  const payload = delivery.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  const rejected = payload.entries.map(({ key, stateHash }) => ({ key, stateHash, relayStateHash: 'f'.repeat(64), collisions: [{ path: 'title', replicaId: 'desktop', counter: 1 }], code: 'task_current_dot_collision' as const }));
+
+  await replicator.handleFrame({
+    type: 'state-relay-ack',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId: payload.deliveryId, accepted: [], rejected },
+  });
+
+  assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 0);
+  assert.equal(replicator.diagnostics().runtimeDirty.length, 1);
+  assert.equal(replicator.diagnostics().pausedRepairs.length, 1);
+  assert.deepEqual(incidents, [{ projectId: 'project-a', rejected }]);
+  const healthyMutation = await healthyStore.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'healthy', changes: [{ path: 'title', operation: 'set', value: 'Still online' }] }] });
+  replicator.publishDelta(healthyMutation.delta);
+  assert.equal(sent.some((frame) => frame.type === 'state-entity-batch' && frame.projectId === 'project-b'), true);
+  replicator.disconnectPeer('relay');
+  replicator.reconcileRelay();
+  assert.equal(sent.filter((frame) => frame.type === 'state-entity-batch' && frame.projectId === 'project-a').length, 1);
+  assert.equal(replicator.validateProjectRepairResume('project-a'), false);
+
+  const restartedSent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const restarted = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', node.store], ['project-b', healthyStore]]),
+    publish: (_target, frame) => { restartedSent.push(frame); return true; },
+  });
+  const retainedRelayBuckets = [{ bucket: '00', count: 0, checksum: hashTaskCurrentBucket([]) }];
+  const retainedRelayRoot = hashTaskCurrentRoot(retainedRelayBuckets);
+  const remoteOnly = createFederationTaskStateReplicator({
+    stores: () => new Map(),
+    storeFor: () => node.store,
+    publish: () => true,
+  });
+  assert.equal(remoteOnly.restorePausedProjectRepair('project-a', { peerRoot: retainedRelayRoot, rejected }), false);
+  const malformed = createFederationTaskStateReplicator({ stores: () => new Map([['project-a', node.store]]), publish: () => true });
+  assert.equal(malformed.restorePausedProjectRepair('project-a', { peerRoot: retainedRelayRoot, rejected: [{ ...rejected[0], relayStateHash: undefined }] }), false);
+  assert.equal(malformed.restorePausedProjectRepair('project-a', { peerRoot: retainedRelayRoot, rejected: [{ ...rejected[0], collisions: [rejected[0].collisions[0], rejected[0].collisions[0]] }] }), false);
+  assert.equal(await malformed.resolveProjectCollisionLocalWins('project-a'), false);
+  assert.equal(restarted.restorePausedProjectRepair('project-a', { peerRoot: retainedRelayRoot, rejected }), true);
+  restarted.reconcileRelay();
+  assert.equal(restartedSent.filter((frame) => frame.type === 'state-entity-batch').length, 0);
+  await restarted.handleFrame({
+    type: 'state-bucket-summary',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, root: retainedRelayRoot, buckets: retainedRelayBuckets },
+  });
+  assert.equal(restartedSent.filter((frame) => ['state-entity-batch', 'state-missing-request'].includes(frame.type)).length, 0);
+  const unrelatedChangedBuckets = [{ bucket: 'ff', count: 1, checksum: 'a'.repeat(64) }];
+  await restarted.handleFrame({
+    type: 'state-bucket-summary',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, root: hashTaskCurrentRoot(unrelatedChangedBuckets), buckets: unrelatedChangedBuckets },
+  });
+  assert.equal(restartedSent.filter((frame) => ['state-entity-batch', 'state-missing-request'].includes(frame.type)).length, 0);
+
+  assert.equal(await restarted.resolveProjectCollisionLocalWins('project-a'), true);
+  const successor = restartedSent.find((frame) => frame.type === 'state-entity-batch')!;
+  assert.ok(successor);
+  assert.equal(restartedSent.filter((frame) => frame.type === 'state-entity-batch').length, 1);
+  const successorPayload = successor.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  assert.notEqual(successorPayload.entries[0].stateHash, rejected[0].stateHash);
+  const successorStateHash = node.store.entity('card', 'collision')!.stateHash;
+  const afterRestartSent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const afterRestart = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', node.store], ['project-b', healthyStore]]),
+    publish: (_target, frame) => { afterRestartSent.push(frame); return true; },
+  });
+  assert.equal(afterRestart.restorePausedProjectRepair('project-a', { peerRoot: retainedRelayRoot, rejected }), true);
+  assert.equal(await afterRestart.resolveProjectCollisionLocalWins('project-a'), true);
+  assert.equal(node.store.entity('card', 'collision')!.stateHash, successorStateHash);
+  const restartedSuccessorPayload = afterRestartSent[0].payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  assert.equal(restartedSuccessorPayload.entries[0].stateHash, successorStateHash);
+  await afterRestart.handleFrame({
+    type: 'state-relay-ack',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId: restartedSuccessorPayload.deliveryId, accepted: restartedSuccessorPayload.entries, rejected: [] },
+  });
+  await afterRestart.handleFrame({
+    type: 'state-bucket-summary',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, root: node.store.rootHash(), buckets: node.store.bucketManifest() },
+  });
+  const equalRootBeforeResume = afterRestart.validateProjectRepairResume('project-a');
+  assert.equal(equalRootBeforeResume, true);
+  assert.equal(afterRestart.resumeProjectRepair('project-a'), true);
+  assert.equal(afterRestart.diagnostics().pausedRepairs.length, 0);
+  process.stdout.write(`${JSON.stringify({
+    event: 'federation-collision-recovery-canary',
+    terminalIncidentCount: incidents.length,
+    reconnectRetryCount: sent.filter((frame) => frame.type === 'state-entity-batch' && frame.projectId === 'project-a').length - 1,
+    successorCount: afterRestartSent.filter((frame) => frame.type === 'state-entity-batch' && frame.projectId === 'project-a').length,
+    equalRootBeforeResume,
+    pausedAfterResume: afterRestart.diagnostics().pausedRepairs.length,
+    healthyControlDeliveryCount: sent.filter((frame) => frame.type === 'state-entity-batch' && frame.projectId === 'project-b').length,
+  })}\n`);
+});
+
+test('collision recovery groups multiple dots by entity and path into one deterministic successor candidate', async (context) => {
+  const node = fixture('decision-os-collision-grouped-');
+  context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
+  const register = (path: string) => ({
+    clock: { desktop: 1, mobile: 1 },
+    candidates: [
+      { dot: { replicaId: 'desktop', counter: 1 }, operation: 'set' as const, value: `Desktop ${path}` },
+      { dot: { replicaId: 'mobile', counter: 1 }, operation: 'set' as const, value: `Mobile ${path}` },
+    ],
+  });
+  const first = finalizeTaskCurrentEntity({ version: taskCurrentStateVersion, projectId: 'project-a', entityType: 'card', entityId: 'first', fields: { description: register('description'), title: register('title') } });
+  const second = finalizeTaskCurrentEntity({ version: taskCurrentStateVersion, projectId: 'project-a', entityType: 'card', entityId: 'second', fields: { title: register('second-title') } });
+  await node.store.merge({ version: taskCurrentStateVersion, projectId: 'project-a', entities: [first, second] });
+  const rejectionFor = (entity: TaskCurrentEntity, collisions: Array<{ path: string; replicaId: string; counter: number }>) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, relayStateHash: 'e'.repeat(64), collisions, code: 'task_current_dot_collision' as const });
+  const rejected = [
+    rejectionFor(first, [
+      { path: 'description', replicaId: 'desktop', counter: 1 },
+      { path: 'title', replicaId: 'desktop', counter: 1 },
+      { path: 'title', replicaId: 'mobile', counter: 1 },
+    ]),
+    rejectionFor(second, [
+      { path: 'title', replicaId: 'desktop', counter: 1 },
+      { path: 'title', replicaId: 'mobile', counter: 1 },
+    ]),
+  ];
+  const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const replicator = createFederationTaskStateReplicator({ stores: () => new Map([['project-a', node.store]]), publish: (_target, frame) => { sent.push(frame); return true; } });
+  assert.equal(replicator.restorePausedProjectRepair('project-a', { peerRoot: 'd'.repeat(64), rejected }), true);
+  assert.equal(await replicator.resolveProjectCollisionLocalWins('project-a'), true);
+  const payload = sent[0].payload as { entries: Array<{ entity: TaskCurrentEntity }> };
+  assert.equal(payload.entries.length, 2);
+  assert.deepEqual(node.store.entity('card', 'first')!.fields.title.candidates.map((candidate) => candidate.value), ['Desktop title']);
+  assert.deepEqual(node.store.entity('card', 'first')!.fields.description.candidates.map((candidate) => candidate.value), ['Desktop description']);
+  assert.deepEqual(node.store.entity('card', 'second')!.fields.title.candidates.map((candidate) => candidate.value), ['Desktop second-title']);
+});
+
+test('repair deadline survives reconnect, pauses without retry, and clears on server close', async (context) => {
+  const source = fixture('decision-os-deadline-source-');
+  const target = fixture('decision-os-deadline-target-');
+  context.after(async () => {
+    await Promise.all([source.store.flush(), target.store.flush()]);
+    [source, target].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  await source.store.mutate({ replicaId: 'source', changes: [{ entityType: 'card', entityId: 'deadline', changes: [{ path: 'title', operation: 'set', value: 'Unresolved' }] }] });
+  const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const deadlines: Array<{ projectId: string; peerRoot: string }> = [];
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', target.store]]),
+    publish: (_target, frame) => { sent.push(frame); return true; },
+    repairDeadlineMs: 20,
+    onRepairDeadline: ({ projectId, peerRoot }) => { deadlines.push({ projectId, peerRoot }); },
+  });
+  const summary: FederationStateFrame = {
+    type: 'state-bucket-summary',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, root: source.store.rootHash(), buckets: source.store.bucketManifest() },
+  };
+  await replicator.handleFrame(summary);
+  replicator.disconnectPeer('relay');
+  await new Promise((resolveWait) => setTimeout(resolveWait, 40));
+  assert.deepEqual(deadlines, [{ projectId: 'project-a', peerRoot: source.store.rootHash() }]);
+  assert.equal(replicator.diagnostics().pausedRepairs.length, 1);
+  assert.equal(replicator.diagnostics().repairDeadlineCount, 0);
+  await replicator.handleFrame(summary);
+  assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, 1);
+  await source.store.mutate({ replicaId: 'source', changes: [{ entityType: 'card', entityId: 'changed-generation', changes: [{ path: 'title', operation: 'set', value: 'New relay authority' }] }] });
+  const changedSummary: FederationStateFrame = {
+    type: 'state-bucket-summary',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, root: source.store.rootHash(), buckets: source.store.bucketManifest() },
+  };
+  await replicator.handleFrame(changedSummary);
+  await replicator.handleFrame(changedSummary);
+  assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, 2);
+  replicator.close();
+
+  const closingDeadlines: string[] = [];
+  const closing = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', target.store]]),
+    publish: () => true,
+    repairDeadlineMs: 20,
+    onRepairDeadline: ({ projectId }) => { closingDeadlines.push(projectId); },
+  });
+  await closing.handleFrame(summary);
+  closing.close();
+  await new Promise((resolveWait) => setTimeout(resolveWait, 40));
+  assert.deepEqual(closingDeadlines, []);
+  assert.equal(closing.diagnostics().repairDeadlineCount, 0);
+
+  const convergedDeadlines: string[] = [];
+  const converged = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', target.store]]),
+    publish: () => true,
+    repairDeadlineMs: 20,
+    onRepairDeadline: ({ projectId }) => { convergedDeadlines.push(projectId); },
+  });
+  await converged.handleFrame(summary);
+  await converged.handleFrame({ type: 'state-converged', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, root: target.store.rootHash() } });
+  await new Promise((resolveWait) => setTimeout(resolveWait, 40));
+  assert.deepEqual(convergedDeadlines, []);
+  assert.equal(converged.diagnostics().repairDeadlineCount, 0);
+});
+
 test('relay publication keeps one project batch group in flight and advertises only after settlement', async (context) => {
   const node = fixture('decision-os-single-flight-publication-');
   context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
@@ -639,6 +876,60 @@ test('relay publication admits only one bounded transaction before its exact ack
   assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 0);
   assert.equal(replicator.diagnostics().runtimeDirty.length, 0);
   assert.equal(sent.filter((frame) => frame.type === 'state-bucket-summary').length, 1);
+});
+
+test('first relay frame stops at the exact count boundary without touching the unsent tail', async (context) => {
+  const node = fixture('decision-os-first-frame-count-');
+  context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
+  const entities: TaskCurrentEntity[] = [];
+  for (let index = 0; index < federationStateEntityBatchSize + 1; index += 1) {
+    const mutation = await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: `card-${index}`, changes: [{ path: 'title', operation: 'set', value: `Card ${index}` }] }] });
+    entities.push(...mutation.delta.entities);
+  }
+  Object.defineProperty(entities, federationStateEntityBatchSize, {
+    configurable: true,
+    get: () => { throw new Error('unsent_tail_was_touched'); },
+  });
+
+  const frame = firstBoundedStateFrame('project-a', entities);
+
+  assert.equal(frame?.entries.length, federationStateEntityBatchSize);
+  assert.ok(encodedStateBatchBytes('project-a', frame!) <= federationMaximumStateFrameBytes);
+});
+
+test('first relay frame stops at the exact encoded-byte boundary and leaves later entities for the next acknowledgement', async (context) => {
+  const node = fixture('decision-os-first-frame-bytes-');
+  context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
+  const entities: TaskCurrentEntity[] = [];
+  for (let index = 0; index < 10; index += 1) {
+    const mutation = await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: `card-${index}`, changes: [{ path: 'title', operation: 'set', value: `${index}${'x'.repeat(59_000)}` }] }] });
+    entities.push(...mutation.delta.entities);
+  }
+
+  const frame = firstBoundedStateFrame('project-a', entities)!;
+  const admittedBytes = encodedStateBatchBytes('project-a', frame);
+  const crossedBytes = encodedStateBatchBytes('project-a', { deliveryId: frame.deliveryId, entries: [...frame.entries, {
+    key: taskCurrentEntityKey(entities[frame.entries.length]),
+    stateHash: entities[frame.entries.length].stateHash,
+    entity: entities[frame.entries.length],
+  }] });
+
+  assert.ok(frame.entries.length < entities.length);
+  assert.ok(admittedBytes <= federationMaximumStateFrameBytes);
+  assert.ok(crossedBytes > federationMaximumStateFrameBytes);
+});
+
+test('first relay frame rejects a single entity larger than the shared frame ceiling', async (context) => {
+  const node = fixture('decision-os-first-frame-oversized-');
+  context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
+  const mutation = await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-oversized', changes: [{ path: 'title', operation: 'set', value: 'Card' }] }] });
+  const oversized = structuredClone(mutation.delta.entities[0]);
+  oversized.fields.oversized = {
+    clock: { desktop: 1 },
+    candidates: [{ dot: { replicaId: 'desktop', counter: 1 }, operation: 'set', value: 'x'.repeat(federationMaximumStateFrameBytes) }],
+  };
+
+  assert.throws(() => firstBoundedStateFrame('project-a', [oversized]), /state_frame_too_large/);
 });
 
 test('relay entity batches acknowledge without advertising intermediate roots', async (context) => {

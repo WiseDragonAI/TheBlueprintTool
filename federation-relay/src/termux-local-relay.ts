@@ -35,10 +35,15 @@ import {
 } from '../../shared/federation-repair-guard.js';
 import {
   hashTaskCurrentRoot,
+  taskEntityDotCollisions,
   taskCurrentBucketForEntityKey,
   taskCurrentEntityKey,
   taskCurrentStateVersion,
 } from '../../shared/task-current-state-core.js';
+import {
+  federationStateRejectionCode,
+  type FederationStateRejection,
+} from '../../shared/federation-state-transport.js';
 import {
   admitStateEntries,
   mismatchedBuckets,
@@ -243,8 +248,25 @@ function persistStateEntities(sender: Client, frame: RelayFrame): void {
   const project = stored.entities[projectId] ?? {};
   const changed: RelayEntity[] = [];
   const accepted: Array<{ key: string; stateHash: string }> = [];
+  const rejected: FederationStateRejection[] = [];
   for (const entry of entries) {
-    const joined = joinRelayEntity(project[entry.entityKey], entry.entity);
+    let joined: RelayEntity;
+    try {
+      joined = joinRelayEntity(project[entry.entityKey], entry.entity);
+    } catch (error) {
+      const code = federationStateRejectionCode(error);
+      // WHAT: Preserve the existing relay entity and correlate one terminal same-dot rejection to its delivery.
+      // WHY: Retrying an irreconcilable causal collision cannot change its outcome and previously caused reconnect floods.
+      if (code) {
+        const relayEntity = project[entry.entityKey];
+        // WHAT: Attach the exact relay hash and collision paths/dots to the correlated rejection.
+        // WHY: Non-destructive recovery must construct a causal successor without weakening join admission.
+        if (!relayEntity) throw error;
+        rejected.push({ key: entry.entityKey, stateHash: entry.entity.stateHash, relayStateHash: relayEntity.stateHash, collisions: taskEntityDotCollisions(relayEntity, entry.entity), code });
+        continue;
+      }
+      throw error;
+    }
     accepted.push({ key: entry.entityKey, stateHash: joined.stateHash });
     if (project[entry.entityKey]?.stateHash !== joined.stateHash) changed.push(joined);
     project[entry.entityKey] = joined;
@@ -253,6 +275,17 @@ function persistStateEntities(sender: Client, frame: RelayFrame): void {
   // WHAT: Advance the project generation only when the accepted batch changes durable relay state.
   // WHY: Duplicate delivery must not renew any node's repair allowance.
   if (changed.length > 0) stored.stateGenerations![projectId] = (stored.stateGenerations![projectId] ?? 0) + 1;
+  // WHAT: Retain the exact terminal rejection under the existing project-and-node repair key.
+  // WHY: Reconnect must not erase the evidence that automatic delivery cannot converge this causal dot.
+  if (rejected.length > 0) {
+    const generation = stored.stateGenerations![projectId] ?? 0;
+    const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
+    const retained = stored.stateRepairRecords![repairKey];
+    const record = currentFederationRepairRecord(retained, generation)
+      ? retained
+      : createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation });
+    stored.stateRepairRecords![repairKey] = { ...record, rejected };
+  }
   persistState();
   sendSocket(sender.socket, {
     version: 1,
@@ -260,7 +293,7 @@ function persistStateEntities(sender: Client, frame: RelayFrame): void {
     from: 'relay',
     projectId,
     stateVersion: taskCurrentStateVersion,
-    payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted },
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted, rejected },
   });
   for (const target of activeClients(sender.federationId)) {
     if (target.nodeId === sender.nodeId || !participates(target.federationId, target.nodeId, projectId)) continue;
@@ -278,10 +311,10 @@ function reconcileStateSummary(sender: Client, frame: RelayFrame): void {
   const stored = federation(sender.federationId);
   const generation = stored.stateGenerations![projectId] ?? 0;
   const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
-  // WHAT: Reuse only a repair record written for this live socket session.
-  // WHY: Duplicate summaries stay bounded while a replacement connection can recover a response lost during disconnect.
-  if (currentFederationRepairRecord(stored.stateRepairRecords![repairKey], generation, sender.sessionId)) return;
-  stored.stateRepairRecords![repairKey] = createFederationRepairRecord({ nodeId: sender.nodeId, sessionId: sender.sessionId, projectId, generation, peerRoot, peerManifestDigest });
+  // WHAT: Reuse one exact node, project, generation, peer-root, and manifest repair identity across socket replacement.
+  // WHY: Reconnecting with unchanged durable state must not purchase another scan or observer fan-out.
+  if (currentFederationRepairRecord(stored.stateRepairRecords![repairKey], generation, peerRoot, peerManifestDigest)) return;
+  stored.stateRepairRecords![repairKey] = createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation, peerRoot, peerManifestDigest });
   persistState();
   const local = stateBuckets(sender.federationId, projectId);
   const missing = mismatchedBuckets(local, remote);
@@ -382,12 +415,12 @@ function handleFrame(sender: Client, text: string): void {
         const generation = stored.stateGenerations![projectId] ?? 0;
         const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
         const retained = stored.stateRepairRecords![repairKey];
-        const existing = currentFederationRepairRecord(retained, generation, sender.sessionId)
+        const existing = currentFederationRepairRecord(retained, generation)
           ? retained
-          : createFederationRepairRecord({ nodeId: sender.nodeId, sessionId: sender.sessionId, projectId, generation });
+          : createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation });
         const claimed = claimFederationRepairBuckets(existing, buckets);
-        // WHAT: End a request already served inside this socket session before entity selection and summary generation.
-        // WHY: Duplicate frames stay bounded while a replacement connection can retry a response lost during disconnect.
+        // WHAT: End a request already served for this durable node, project, and relay generation.
+        // WHY: Socket replacement must not purchase another read of an unchanged canonical bucket.
         if (claimed.admitted.length === 0) return;
         sendStateEntities(sender, projectId, new Set(claimed.admitted));
         sendStateSummary(sender, projectId);
@@ -507,6 +540,43 @@ const server = createServer((request, response) => {
     federation(provision[1]).credentials[provision[2]] = digest(credential);
     persistState();
     json(response, 201, { ok: true, nodeId: provision[2], credential });
+    return;
+  }
+  const deleteCanary = url.pathname.match(/^\/admin\/federations\/([a-zA-Z0-9_-]+)\/canary-state$/);
+  if (request.method === 'DELETE' && deleteCanary) {
+    // WHAT: Keep administrator authentication at the existing outer HTTP boundary.
+    // WHY: Canary teardown must never be admitted by a node credential.
+    if (!sameSecret(bearer(request), administratorSecret)) {
+      json(response, 401, { ok: false, error: 'federation_authentication' });
+      return;
+    }
+    const federationId = deleteCanary[1];
+    // WHAT: Reject teardown outside the fixed harness-owned federation namespace.
+    // WHY: This route must not expose arbitrary production federation deletion.
+    if (!/^release_canary_[a-f0-9]{24}$/.test(federationId)) {
+      json(response, 404, { ok: false, error: 'not_found' });
+      return;
+    }
+    const online = [...clients.values()].filter((client) => client.federationId === federationId).map((client) => client.nodeId).sort();
+    // WHAT: Reject teardown while any node in the target canary federation remains online.
+    // WHY: Deletion must not race a live socket into partially recreated authority.
+    if (online.length > 0) {
+      json(response, 409, { ok: false, error: 'federation_nodes_online', nodes: online });
+      return;
+    }
+    delete state.federations[federationId];
+    for (const key of [...subscriptions.keys()]) {
+      // WHAT: Remove only disconnected subscription state owned by the deleted canary federation.
+      // WHY: Healthy control federations must remain byte- and runtime-identical.
+      if (key.startsWith(`${federationId}\u0000`)) subscriptions.delete(key);
+    }
+    for (const key of [...streams.keys()]) {
+      // WHAT: Remove only settled stream state owned by the deleted canary federation.
+      // WHY: Federation teardown cannot affect another federation's requests.
+      if (key.startsWith(`${federationId}\u0000`)) streams.delete(key);
+    }
+    persistState();
+    json(response, 200, { ok: true, federationId, deleted: true });
     return;
   }
   json(response, 404, { ok: false, error: 'not_found' });

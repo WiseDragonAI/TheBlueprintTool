@@ -200,9 +200,7 @@ function assertReleaseHealth(input: {
       field: input.field,
     });
   }
-  if (nonNegativeInteger(evidence.activeIncidentCount, `${input.field}.activeIncidentCount`) !== 0) {
-    throw new DeliveryAdmissionError('delivery_paused_or_fatal_scope', `${input.field} reports an active incident.`, { field: input.field });
-  }
+  nonNegativeInteger(evidence.activeIncidentCount, `${input.field}.activeIncidentCount`);
 }
 
 function assertRelayHealth(input: {

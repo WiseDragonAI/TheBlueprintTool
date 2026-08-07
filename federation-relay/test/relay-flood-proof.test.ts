@@ -139,7 +139,7 @@ describe('federation relay flood proof', () => {
     observer.close(1000, 'test_complete');
   });
 
-  it('serves one bucket once per connection and suppresses duplicate requests inside each session', async () => {
+  it('serves one bucket once per durable repair identity across twenty reconnects', async () => {
     const federationId = `bucket-flood-${crypto.randomUUID()}`;
     const [writerCredential, readerCredential] = await Promise.all([
       createNode(federationId, 'writer'),
@@ -166,25 +166,28 @@ describe('federation relay flood proof', () => {
     expect((await firstFrames).filter((frame) => frame.type === 'state-entity-batch')).toHaveLength(1);
 
     reader.close(1000, 'reconnect');
-    const replacement = await connect(federationId, 'reader', readerCredential);
-    replacement.send(JSON.stringify(manifest('Reader', [])));
-    const replacementSummary = nextFrame(replacement, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared');
-    replacement.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion } }));
-    await replacementSummary;
-    const repeatedFrames = observeFrames(replacement, 250);
-    replacement.send(JSON.stringify(request));
-    const replacementResponse = await repeatedFrames;
-    expect(replacementResponse.filter((frame) => frame.type === 'state-entity-batch')).toHaveLength(1);
-    expect(replacementResponse.filter((frame) => frame.type === 'state-bucket-summary')).toHaveLength(1);
-    const duplicateFrames = observeFrames(replacement, 250);
-    replacement.send(JSON.stringify(request));
-    expect((await duplicateFrames).filter((frame) => ['state-entity-batch', 'state-bucket-summary'].includes(frame.type))).toHaveLength(0);
+    let replacement: WebSocket | null = null;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      replacement = await connect(federationId, 'reader', readerCredential);
+      replacement.send(JSON.stringify(manifest('Reader', [])));
+      const replacementSummary = nextFrame(replacement, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared');
+      replacement.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion } }));
+      await replacementSummary;
+      const repeatedFrames = observeFrames(replacement, 50);
+      replacement.send(JSON.stringify(request));
+      expect((await repeatedFrames).filter((frame) => ['state-entity-batch', 'state-bucket-summary'].includes(frame.type))).toHaveLength(0);
+      // WHAT: Replace the socket while retaining the same durable node identity.
+      // WHY: Twenty socket sessions must not renew storage reads for unchanged repair work.
+      if (attempt < 19) {
+        replacement.close(1000, 'reconnect');
+      }
+    }
 
     const expectedChecksum = hashTaskCurrentBucket([[key, value]]);
     expect(expectedChecksum).toMatch(/^[a-f0-9]{64}$/);
     writer.close(1000, 'test_complete');
-    replacement.close(1000, 'test_complete');
-  });
+    replacement!.close(1000, 'test_complete');
+  }, 60_000);
 
   it('synchronizes a 20,000-entity state larger than 32 MiB across every epoch-4 bucket', async () => {
     const federationId = `huge-state-${crypto.randomUUID()}`;

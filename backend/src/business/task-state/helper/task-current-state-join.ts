@@ -11,4 +11,5 @@ export {
   joinTaskClocks,
   joinTaskEntities,
   joinTaskRegisters,
+  taskEntityDotCollisions,
 } from '../../../../../shared/task-current-state-core.js';

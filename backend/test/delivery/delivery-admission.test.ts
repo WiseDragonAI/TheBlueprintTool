@@ -183,6 +183,18 @@ test('writes one exact-SHA admission receipt only after every frozen authority a
   });
 });
 
+test('retains contained diagnostic incidents without treating them as delivery blockers', async () => {
+  const input = admissionInput();
+  input.productionHealth.activeIncidentCount = 7;
+  input.canaryHealth.activeIncidentCount = 7;
+  input.nodeEvidence[0].release.activeIncidentCount = 7;
+  input.nodeEvidence[1].release.activeIncidentCount = 7;
+
+  const admitted = await admitDecisionOsDelivery(input);
+
+  assert.equal(admitted.phase, 'admission');
+});
+
 test('rejects every stale, mismatched, busy, paused, queued, dirty, pending, unavailable, and unconverged boundary before persistence', async (context) => {
   const cases: Array<{
     name: string;

@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createTaskContentObjectStore } from '@backend/business/task-state/helper/task-content-object-store.js';
@@ -63,4 +63,14 @@ test('captures an atomic editor rename as the complete replacement version', asy
 
   assert.ok(head);
   assert.equal(readFileSync(store.objectFile(head.hash), 'utf8'), body);
+});
+
+test('does not allocate object-store directories for an absent source', async (context) => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-missing-content-capture-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const store = createTaskContentObjectStore({ decisionOsRoot, projectId: 'project-a' });
+  context.after(() => rmSync(workspace, { recursive: true, force: true }));
+
+  assert.equal(await store.capture('.decision-os/cards/tasks/missing.md'), null);
+  assert.equal(existsSync(join(decisionOsRoot, 'task-state')), false);
 });

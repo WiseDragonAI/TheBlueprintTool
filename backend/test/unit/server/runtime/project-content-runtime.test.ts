@@ -22,7 +22,11 @@ function deferred<T>() {
   return { promise, resolve: resolvePromise, reject: rejectPromise };
 }
 
-function fixture(recordContentContribution: () => Promise<typeof emptyDelta>, retainedHeads: unknown[] = []) {
+function fixture(
+  recordContentContribution: () => Promise<typeof emptyDelta>,
+  retainedHeads: unknown[] = [],
+  mutableFilePresent = true,
+) {
   const workspace = mkdtempSync(resolve(tmpdir(), 'decision-os-content-runtime-'));
   const decisionOsRoot = resolve(workspace, '.decision-os');
   const contentFile = '.decision-os/cards/tasks/card-a.md';
@@ -32,7 +36,9 @@ function fixture(recordContentContribution: () => Promise<typeof emptyDelta>, re
   writeFileSync(resolve(decisionOsRoot, 'state.json'), JSON.stringify({
     tabs: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
   }));
-  writeFileSync(file, 'Initial body.');
+  // WHAT: Materialize the mutable sidecar only when the test owns an existing-file scenario.
+  // WHY: Startup admission must distinguish a retained immutable head from a present workspace file.
+  if (mutableFilePresent) writeFileSync(file, 'Initial body.');
   const ledger = {
     cards: [{ id: 'card-a', comment: { contentFile } }],
     annotations: [], relationships: [], threadFiles: {},
@@ -122,6 +128,18 @@ test('startup scan leaves headless resources held and emits no success event', a
 
   assert.equal(await setup.runtime.ready, true);
   assert.equal(calls, 0);
+  assert.equal(setup.writes.length, 0);
+  assert.equal(setup.invalidations.length, 0);
+});
+
+test('startup scan ignores a missing mutable sidecar with one retained head', async (context) => {
+  let calls = 0;
+  const setup = fixture(async () => { calls += 1; return emptyDelta; }, [{}], false);
+  context.after(async () => { await setup.runtime.watcher.close(); rmSync(setup.workspace, { recursive: true, force: true }); });
+
+  assert.equal(await setup.runtime.ready, true);
+  assert.equal(calls, 0);
+  assert.equal(setup.incidents.length, 0);
   assert.equal(setup.writes.length, 0);
   assert.equal(setup.invalidations.length, 0);
 });

@@ -3,18 +3,19 @@
  * WHY: Nodes and relays must make identical duplicate-work decisions without changing the wire protocol.
  */
 import { hashTaskCurrentRoot } from './task-current-state-core.js';
+import type { FederationStateRejection } from './federation-state-transport.js';
 
 export type FederationRepairBucket = { bucket: string; count: number; checksum: string };
 export type FederationRepairRecord = {
   version: 1;
   responseVersion: 3;
   nodeId: string;
-  sessionId: string;
   projectId: string;
   generation: number;
   peerRoot: string;
   peerManifestDigest: string;
   servedBuckets: string[];
+  rejected?: FederationStateRejection[];
 };
 
 const canonicalBucket = /^[a-f0-9]{2}$/;
@@ -52,7 +53,6 @@ export function federationRepairRecordKey(nodeId: string, projectId: string): st
 
 export function createFederationRepairRecord(input: {
   nodeId: string;
-  sessionId: string;
   projectId: string;
   generation: number;
   peerRoot?: string;
@@ -62,21 +62,26 @@ export function createFederationRepairRecord(input: {
     version: 1,
     responseVersion: 3,
     nodeId: input.nodeId,
-    sessionId: input.sessionId,
     projectId: input.projectId,
     generation: input.generation,
     peerRoot: input.peerRoot ?? '',
     peerManifestDigest: input.peerManifestDigest ?? '',
     servedBuckets: [],
+    rejected: [],
   };
 }
 
 export function currentFederationRepairRecord(
   record: FederationRepairRecord | null | undefined,
   generation: number,
-  sessionId: string,
+  peerRoot?: string,
+  peerManifestDigest?: string,
 ): record is FederationRepairRecord {
-  return record?.version === 1 && record.responseVersion === 3 && record.generation === generation && record.sessionId === sessionId;
+  return record?.version === 1
+    && record.responseVersion === 3
+    && record.generation === generation
+    && (peerRoot === undefined || record.peerRoot === peerRoot)
+    && (peerManifestDigest === undefined || record.peerManifestDigest === peerManifestDigest);
 }
 
 export function claimFederationRepairBuckets(

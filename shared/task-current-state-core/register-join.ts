@@ -5,6 +5,19 @@
 import type { TaskCausalClock, TaskCurrentRegister, TaskDot, TaskRegisterCandidate } from './model.js';
 import { canonicalJson } from './canonical-json.js';
 
+export type TaskRegisterDotCollision = { replicaId: string; counter: number };
+
+export function taskRegisterDotCollisions(left: TaskCurrentRegister, right: TaskCurrentRegister): TaskRegisterDotCollision[] {
+  const rightCandidates = new Map(right.candidates.map((candidate) => [dotKey(candidate.dot), candidate]));
+  return left.candidates.flatMap((candidate) => {
+    const matching = rightCandidates.get(dotKey(candidate.dot));
+    // WHAT: Report only an identical dot carrying a different canonical candidate.
+    // WHY: Recovery evidence must describe the same invariant that the join continues to reject.
+    if (!matching || canonicalJson(candidate) === canonicalJson(matching)) return [];
+    return [{ replicaId: candidate.dot.replicaId, counter: candidate.dot.counter }];
+  }).sort((a, b) => a.replicaId.localeCompare(b.replicaId) || a.counter - b.counter);
+}
+
 export function dotKey(dot: TaskDot): string {
   return `${dot.replicaId}\u0000${String(dot.counter).padStart(16, '0')}`;
 }
@@ -22,12 +35,10 @@ export function joinTaskClocks(left: TaskCausalClock, right: TaskCausalClock): T
 export function joinTaskRegisters(left: TaskCurrentRegister, right: TaskCurrentRegister): TaskCurrentRegister {
   const leftCandidates = new Map(left.candidates.map((candidate) => [dotKey(candidate.dot), candidate]));
   const rightCandidates = new Map(right.candidates.map((candidate) => [dotKey(candidate.dot), candidate]));
-  for (const [key, candidate] of leftCandidates) {
-    const matching = rightCandidates.get(key);
-    if (matching && canonicalJson(candidate) !== canonicalJson(matching)) {
-      throw new Error(`task_current_dot_collision:${encodeURIComponent(candidate.dot.replicaId)}:${candidate.dot.counter}`);
-    }
-  }
+  const collision = taskRegisterDotCollisions(left, right)[0];
+  // WHAT: Preserve the terminal rejection for every same-dot different-value register join.
+  // WHY: Structured recovery evidence must not relax the CRDT collision invariant.
+  if (collision) throw new Error(`task_current_dot_collision:${encodeURIComponent(collision.replicaId)}:${collision.counter}`);
   const retained = new Map<string, TaskRegisterCandidate>();
   for (const [key, candidate] of leftCandidates) {
     if (rightCandidates.has(key) || !clockCovers(right.clock, candidate.dot)) retained.set(key, structuredClone(candidate));

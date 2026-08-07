@@ -174,10 +174,20 @@ export function watchCardContentFiles(input: {
     }
   }, input.auditIntervalMs ?? 500);
 
-  const ready = Promise.all([...ownership.values()]
-    .filter((change) => input.reconcileOnStart?.(change) === true)
-    .map((change) => publish(change, change.file)))
-    .then((outcomes) => outcomes.every(Boolean));
+  const reconcileStartup = async (): Promise<boolean> => {
+    for (const change of ownership.values()) {
+      // WHAT: Skip resources that the owning runtime did not admit for startup reconciliation.
+      // WHY: Held, conflicted, and absent mutable resources are not external edits.
+      if (input.reconcileOnStart?.(change) !== true) continue;
+      const published = await publish(change, change.file);
+      // WHAT: Stop this project watcher after its first failed startup publication.
+      // WHY: The error boundary pauses the owning project, and further captures would only multiply incidents.
+      if (!published) return false;
+    }
+    return true;
+  };
+
+  const ready = reconcileStartup();
 
   const settle = async (publications: Promise<boolean>[], timeoutMs: number, operation: string, file: string): Promise<boolean> => {
     // WHAT: Treat an empty publication set as already settled.

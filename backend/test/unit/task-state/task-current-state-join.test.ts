@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import test from 'node:test';
 import { taskCurrentStateVersion } from '../../../../shared/task-current-state-core.js';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
-import { finalizeTaskCurrentEntity, joinTaskEntities } from '../../../src/business/task-state/helper/task-current-state-join.js';
+import { finalizeTaskCurrentEntity, joinTaskEntities, taskEntityDotCollisions } from '../../../src/business/task-state/helper/task-current-state-join.js';
 
 function store(prefix: string, projectId = 'project-a') {
   const root = mkdtempSync(resolve(tmpdir(), prefix));
@@ -80,4 +80,5 @@ test('rejects different values that reuse one causal dot', () => {
     () => joinTaskEntities(entity('Left'), entity('Right')),
     /task_current_dot_collision:card:card-a:title:workstation:1/,
   );
+  assert.deepEqual(taskEntityDotCollisions(entity('Left'), entity('Right')), [{ path: 'title', replicaId: 'workstation', counter: 1 }]);
 });

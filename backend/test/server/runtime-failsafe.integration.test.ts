@@ -74,6 +74,50 @@ test('normal health reports the active release identity', async (context) => {
   assert.equal(health.deliveryProtocol, 1);
   assert.equal(health.activeReleasePointer, `current:${releaseSha}`);
   assert.equal(Number.isFinite(Date.parse(String(health.processStartedAt))), true);
+  const admission = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/delivery/admission-state`)
+    .then((response) => response.json()) as Record<string, unknown>;
+  assert.deepEqual(admission.projectIds, ['release-health']);
+});
+
+test('successful listener bind resolves a retained listener failure', async (context) => {
+  const home = mkdtempSync(join(tmpdir(), 'decision-os-listener-recovery-'));
+  const decisionOsRoot = join(home, '.decision-os');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: 'listener-recovery' }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  const incidents = createRuntimeIncidentLedger({ decisionOsRoot });
+  const retained = incidents.record({
+    severity: 'fatal',
+    scope: 'server-listener',
+    component: 'http-server',
+    operation: 'listen',
+    code: 'EADDRINUSE',
+    error: new Error('address already in use'),
+  });
+  const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({
+    action_payload: {
+      port: 0,
+      host: '127.0.0.1',
+      cwd: home,
+      decisionOsFrontendRoot: join(repositoryRoot, 'frontend'),
+    },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  context.after(async () => {
+    // WHAT: Close only the isolated test listener when it remained active.
+    // WHY: The regression must release its ephemeral port without touching a registered server.
+    if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  await once(server, 'listening');
+
+  const resolved = incidents.snapshot().incidents.find((incident) => incident.id === retained.id);
+  assert.equal(resolved?.status, 'resolved');
+  assert.match(String(resolved?.context.resolution), /listener bound successfully/);
 });
 
 async function waitUntil(assertion: () => boolean | Promise<boolean>, timeoutMs = 2_000): Promise<void> {

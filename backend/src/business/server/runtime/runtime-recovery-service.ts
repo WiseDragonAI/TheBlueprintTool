@@ -201,6 +201,28 @@ export function createRuntimeRecoveryService(input: {
     }
   };
 
+  const resumeFederationRepair = async (projectId: string, scope: string, resolution: string): Promise<string[]> => {
+    const replicator = input.replicator();
+    // WHAT: Reject recovery outside an explicitly paused durable federation incident.
+    // WHY: Operator recovery must never create causal authority for an unpaused project.
+    if (!input.incidentSupervisor.pausedFederationRepairs.has(projectId) || !replicator) return [];
+    // WHAT: Require the exact operator command before creating or resuming collision authority.
+    // WHY: Free-form incident text must never authorize a durable causal mutation.
+    if (resolution !== 'reconcile-local-authority') return [];
+    // WHAT: Create one non-destructive local-authority successor before attempting incident resolution.
+    // WHY: Equal roots must result from normal epoch-4 join, never relay reset, deletion, or empty-root reseed.
+    if (!replicator.validateProjectRepairResume(projectId)) {
+      await replicator.resolveProjectCollisionLocalWins(projectId);
+      return [];
+    }
+    const ids = resolveScope(scope, resolution);
+    // WHAT: Clear the validated in-memory pause only after durable incident resolution succeeds.
+    // WHY: A failed incident write must retain automatic repair containment.
+    if (!replicator.resumeProjectRepair(projectId)) throw new Error(`federation_repair_resume_validation_failed:${projectId}`);
+    input.incidentSupervisor.pausedFederationRepairs.delete(projectId);
+    return ids;
+  };
+
   const resumeProjectContext = (
     projectId: string,
     scope: string,
@@ -249,6 +271,12 @@ export function createRuntimeRecoveryService(input: {
     } else if (scope.startsWith('federated-task-state:')) {
       resolvedIncidentIds = resumeFederatedProject(
         scope.slice('federated-task-state:'.length),
+        scope,
+        resolution,
+      );
+    } else if (scope.startsWith('federation-repair:')) {
+      resolvedIncidentIds = await resumeFederationRepair(
+        scope.slice('federation-repair:'.length),
         scope,
         resolution,
       );

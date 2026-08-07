@@ -78,7 +78,7 @@ const isCurrentIncident = (incident: unknown): incident is CurrentRuntimeInciden
   && typeof incident.legacyHistoryBefore === 'string'
   && (!incident.legacyHistoryBefore || validIsoTimestamp(incident.legacyHistoryBefore))
 );
-const isIncidentDocument = (value: unknown): value is IncidentDocument => {
+export const isIncidentDocument = (value: unknown): value is IncidentDocument => {
   // WHAT: Reject non-object ledger roots before reading version-specific fields.
   // WHY: Corrupt durable state must enter the preservation boundary instead of being treated as an empty ledger.
   if (!value || typeof value !== 'object') return false;

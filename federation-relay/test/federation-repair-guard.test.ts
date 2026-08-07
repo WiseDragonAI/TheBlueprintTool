@@ -23,7 +23,7 @@ describe('federation repair guard', () => {
   });
 
   it('admits each canonical bucket once for one durable generation', () => {
-    const initial = createFederationRepairRecord({ nodeId: 'node-a', sessionId: 'session-a', projectId: 'project-a', generation: 7 });
+    const initial = createFederationRepairRecord({ nodeId: 'node-a', projectId: 'project-a', generation: 7 });
     const first = claimFederationRepairBuckets(initial, canonicalFederationRepairBuckets(['ff', '00', '00']));
     expect(first.admitted).toEqual(['00', 'ff']);
     const duplicate = claimFederationRepairBuckets(first.record, canonicalFederationRepairBuckets(['00', 'ff']));
@@ -33,12 +33,12 @@ describe('federation repair guard', () => {
     expect(() => canonicalFederationRepairBuckets(['gg'])).toThrow('invalid_state_missing_request');
   });
 
-  it('invalidates repair claims created before session-scoped response accounting', () => {
-    const current = createFederationRepairRecord({ nodeId: 'node-a', sessionId: 'session-a', projectId: 'project-a', generation: 7 });
+  it('retains one exact repair identity across sessions and invalidates prior response accounting', () => {
+    const current = createFederationRepairRecord({ nodeId: 'node-a', projectId: 'project-a', generation: 7, peerRoot: 'a'.repeat(64), peerManifestDigest: 'b'.repeat(64) });
     const legacy = { ...current, responseVersion: undefined };
-    expect(currentFederationRepairRecord(current, 7, 'session-a')).toBe(true);
-    expect(currentFederationRepairRecord(legacy as unknown as typeof current, 7, 'session-a')).toBe(false);
-    expect(currentFederationRepairRecord(current, 8, 'session-a')).toBe(false);
-    expect(currentFederationRepairRecord(current, 7, 'session-b')).toBe(false);
+    expect(currentFederationRepairRecord(current, 7, 'a'.repeat(64), 'b'.repeat(64))).toBe(true);
+    expect(currentFederationRepairRecord(legacy as unknown as typeof current, 7)).toBe(false);
+    expect(currentFederationRepairRecord(current, 8)).toBe(false);
+    expect(currentFederationRepairRecord(current, 7, 'c'.repeat(64), 'b'.repeat(64))).toBe(false);
   });
 });

@@ -33,9 +33,10 @@ export function buildDeliveryAdmissionState(input: {
       + pendingCodexProcessEntries(context.root, context.runtime).length,
     0,
   );
-  const blockingIncidents = deliveryBlockingIncidents(
-    input.incidentLedger.snapshot().incidents,
-  );
+  const activeIncidents = input.incidentLedger.snapshot().incidents.filter((incident) => (
+    incident.status === 'paused'
+  ));
+  const blockingIncidents = deliveryBlockingIncidents(activeIncidents);
   const stateStatus = input.replicationStatus();
   const contentStatus = input.contentStatus();
   const observedAt = new Date().toISOString();
@@ -49,7 +50,7 @@ export function buildDeliveryAdmissionState(input: {
       status: blockingIncidents.length > 0 ? 'degraded' : 'ready',
       observedAt,
       ...decisionOsReleaseHealthIdentity(input.releaseSettings),
-      activeIncidentCount: blockingIncidents.length,
+      activeIncidentCount: activeIncidents.length,
     },
     federationPhase: input.federationPhase,
     activeExecutionCount: localExecutions.filter((execution) => (
@@ -60,6 +61,7 @@ export function buildDeliveryAdmissionState(input: {
     )).length,
     pendingProcessQueueDepth,
     pausedScopeCount: blockingIncidents.length,
+    diagnosticPausedScopeCount: activeIncidents.length,
     fatalIncidentCount: blockingIncidents.filter((incident) => (
       incident.scope === 'server-runtime' && incident.severity === 'fatal'
     )).length,
@@ -102,6 +104,7 @@ export function buildDeliveryStatusEvidence(
     { key: 'pendingExecutionCount', value: state.pendingExecutionCount },
     { key: 'pendingProcessQueueDepth', value: state.pendingProcessQueueDepth },
     { key: 'pausedScopeCount', value: state.pausedScopeCount },
+    { key: 'diagnosticPausedScopeCount', value: state.diagnosticPausedScopeCount },
     { key: 'fatalIncidentCount', value: state.fatalIncidentCount },
     { key: 'stateRuntimeDirtyCount', value: state.stateRuntimeDirtyCount },
     { key: 'statePendingDeliveryCount', value: state.statePendingDeliveryCount },

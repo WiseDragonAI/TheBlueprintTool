@@ -7,10 +7,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  deployCanaryDevRelayVersion,
   deployRelayVersion,
   DeliveryRelayError,
+  readCurrentCanaryDevRelayDeployment,
   readCurrentRelayDeployment,
+  rollbackCanaryDevRelayVersion,
   rollbackRelayVersion,
+  uploadCanaryDevRelayVersion,
   uploadRelayVersion,
   verifyRelayReleaseHealth,
   type DeliveryRelayRunner,
@@ -125,6 +129,44 @@ test('uses fixed argv for deployment listing, exact-release upload, 100-percent 
     current.receipt,
     uploaded.receipt,
   ]).includes(token), false);
+});
+
+test('canary wrappers select only the source-owned env.dev Worker while production argv stays fixed', async () => {
+  const calls: RunBoundedProcessInput[] = [];
+  const runner: DeliveryRelayRunner = async (input) => {
+    calls.push(input);
+    const args = input.args ?? [];
+    // WHAT: Return the exact fixture shape required by the invoked Wrangler query.
+    // WHY: The test must observe argv without contacting Cloudflare.
+    if (args.includes('list')) {
+      return result(input, JSON.stringify([{
+        id: 'deployment-dev-1',
+        created_on: '2026-08-07T00:00:00.000Z',
+        versions: [{ version_id: priorVersionId, percentage: 100 }],
+      }]));
+    }
+    // WHAT: Supply a stable version identity only for upload.
+    // WHY: The canary upload parser requires real Wrangler-shaped evidence.
+    if (args.includes('upload')) return result(input, `Worker Version ID: ${uploadedVersionId}\n`);
+    return result(input, 'ok\n');
+  };
+  const common = {
+    releaseWorktree: resolve(import.meta.dirname, '../../..'),
+    runner,
+    environment: { CLOUDFLARE_API_TOKEN: token, CLOUDFLARE_ACCOUNT_ID: 'fixture-account' },
+  };
+  await readCurrentCanaryDevRelayDeployment(common);
+  await uploadCanaryDevRelayVersion({ ...common, mainSha: admittedSha });
+  await deployCanaryDevRelayVersion({ ...common, mainSha: admittedSha, versionId: uploadedVersionId });
+  await rollbackCanaryDevRelayVersion({ ...common, failedMainSha: admittedSha, priorVersionId });
+
+  assert.equal(calls.length, 4);
+  assert.equal(calls.every((call) => {
+    const args = call.args ?? [];
+    return args.includes('--env')
+      && args[args.indexOf('--env') + 1] === 'dev'
+      && args[args.indexOf('--name') + 1] === 'decision-os-federation-relay-dev';
+  }), true);
 });
 
 test('redacts token and bearer material from bounded Wrangler failures', async () => {

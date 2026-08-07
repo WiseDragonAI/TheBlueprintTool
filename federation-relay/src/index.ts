@@ -32,9 +32,14 @@ import {
 } from '../../shared/federation-repair-guard';
 import {
   hashTaskCurrentRoot,
+  taskEntityDotCollisions,
   taskCurrentEntityKey,
   taskCurrentStateVersion,
 } from '../../shared/task-current-state-core';
+import {
+  federationStateRejectionCode,
+  type FederationStateRejection,
+} from '../../shared/federation-state-transport';
 import {
   admitStateEntries,
   mismatchedBuckets,
@@ -61,7 +66,8 @@ type Stream = { requester: string; owner: string; requestCredit: number; respons
 type RelayRoute =
   | { kind: 'connect'; federationId: string; nodeId: string }
   | { kind: 'provision-node'; federationId: string; nodeId: string }
-  | { kind: 'reset-project-state'; federationId: string; projectId: string };
+  | { kind: 'reset-project-state'; federationId: string; projectId: string }
+  | { kind: 'delete-canary-state'; federationId: string };
 async function listAll<T>(storage: DurableObjectStorage, prefix: string): Promise<Map<string, T>> {
   const result = new Map<string, T>();
   let startAfter: string | undefined;
@@ -96,7 +102,9 @@ function routeParts(url: URL): RelayRoute | null {
   const admin = url.pathname.match(/^\/admin\/federations\/([a-zA-Z0-9_-]+)\/nodes\/([a-zA-Z0-9_-]+)$/);
   if (admin) return { kind: 'provision-node', federationId: admin[1], nodeId: admin[2] };
   const reset = url.pathname.match(/^\/admin\/federations\/([a-zA-Z0-9_-]+)\/projects\/([a-zA-Z0-9_-]+)\/reset-state$/);
-  return reset ? { kind: 'reset-project-state', federationId: reset[1], projectId: reset[2] } : null;
+  if (reset) return { kind: 'reset-project-state', federationId: reset[1], projectId: reset[2] };
+  const deleteCanary = url.pathname.match(/^\/admin\/federations\/([a-zA-Z0-9_-]+)\/canary-state$/);
+  return deleteCanary ? { kind: 'delete-canary-state', federationId: deleteCanary[1] } : null;
 }
 
 export default {
@@ -127,11 +135,25 @@ export default {
       if (!env.ADMIN_SECRET) return json({ ok: false, error: 'relay_not_configured' }, 503);
       const supplied = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
       if (!(await sameSecret(supplied, env.ADMIN_SECRET))) return json({ ok: false, error: 'federation_authentication' }, 401);
-      if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405);
+      // WHAT: Reject canary teardown for every federation outside the fixed harness-owned namespace.
+      // WHY: The administration surface must never expose arbitrary production federation deletion.
+      if (route.kind === 'delete-canary-state' && !/^release_canary_[a-f0-9]{24}$/.test(route.federationId)) return json({ ok: false, error: 'not_found' }, 404);
+      const expectedMethod = route.kind === 'delete-canary-state' ? 'DELETE' : 'POST';
+      // WHAT: Admit only the one method owned by the selected administration operation.
+      // WHY: Method ambiguity must not widen destructive authority.
+      if (request.method !== expectedMethod) return json({ ok: false, error: 'method_not_allowed' }, 405);
       const path = route.kind === 'reset-project-state'
         ? `/admin/projects/${route.projectId}/reset-state`
-        : `/admin/nodes/${route.nodeId}`;
-      return stub.fetch(new Request(`https://relay.internal${path}`, request));
+        : route.kind === 'delete-canary-state'
+          ? '/admin/canary-state'
+          : `/admin/nodes/${route.nodeId}`;
+      const response = await stub.fetch(new Request(`https://relay.internal${path}`, request));
+      // WHAT: Correlate successful destructive evidence to the exact outer-selected canary federation.
+      // WHY: The named Durable Object does not otherwise know the binding name used to address it.
+      if (route.kind === 'delete-canary-state' && response.status === 200) {
+        return json({ ...(await response.json() as Record<string, unknown>), federationId: route.federationId });
+      }
+      return response;
     }
 
     if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
@@ -232,6 +254,22 @@ export class FederationRelayV4 extends DurableObject<Env> {
     return json({ ok: true, projectId, entitiesDeleted, bucketsDeleted, root: hashTaskCurrentRoot([]), resetAt });
   }
 
+  private async deleteCanaryState(): Promise<Response> {
+    const connected = this.activeSockets().flatMap((socket) => {
+      const nodeId = (socket.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
+      return nodeId ? [nodeId] : [];
+    }).sort();
+    // WHAT: Reject teardown while any node in this federation can publish state.
+    // WHY: Canary deletion must not race a live socket into recreated partial authority.
+    if (connected.length > 0) return json({ ok: false, error: 'federation_nodes_online', nodes: connected }, 409);
+    await this.ctx.storage.deleteAll();
+    this.streams.clear();
+    this.subscriptions.clear();
+    this.manifests.clear();
+    this.nodeLabels.clear();
+    return json({ ok: true, deleted: true });
+  }
+
   private async sendStateSummary(socket: WebSocket, projectId: string): Promise<void> {
     const buckets = await this.stateBuckets(projectId);
     this.sendSocket(socket, { version: 1, type: 'state-bucket-summary', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, root: hashTaskCurrentRoot(buckets), buckets } });
@@ -251,32 +289,65 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const entries = admitStateEntries(projectId, wireEntries);
     const changed: RelayEntity[] = [];
     const accepted: Array<{ key: string; stateHash: string }> = [];
+    const rejected: FederationStateRejection[] = [];
     await this.ctx.storage.transaction(async (transaction) => {
       const existing = await transaction.get<RelayEntity>(entries.map((entry) => entry.key));
-      const joined = entries.map((entry) => ({ ...entry, value: joinRelayEntity(existing.get(entry.key), entry.entity) }));
+      const joined = entries.flatMap((entry) => {
+        try {
+          return [{ ...entry, value: joinRelayEntity(existing.get(entry.key), entry.entity) }];
+        } catch (error) {
+          const code = federationStateRejectionCode(error);
+          // WHAT: Preserve the existing relay entity and correlate one terminal same-dot rejection to its delivery.
+          // WHY: Retrying an irreconcilable causal collision cannot change its outcome and previously caused reconnect floods.
+          if (code) {
+            const relayEntity = existing.get(entry.key);
+            // WHAT: Attach the exact relay hash and collision paths/dots to the correlated rejection.
+            // WHY: Non-destructive recovery must construct a causal successor without weakening join admission.
+            if (!relayEntity) throw error;
+            rejected.push({ key: entry.entityKey, stateHash: entry.entity.stateHash, relayStateHash: relayEntity.stateHash, collisions: taskEntityDotCollisions(relayEntity, entry.entity), code });
+            return [];
+          }
+          throw error;
+        }
+      });
       accepted.push(...joined.map((entry) => ({ key: entry.entityKey, stateHash: entry.value.stateHash })));
       const additions = joined.filter((entry) => existing.get(entry.key)?.stateHash !== entry.value.stateHash);
       // WHAT: Leave the relay root generation unchanged when every accepted entity is already durable.
       // WHY: Duplicate deliveries must not create a fresh repair budget.
-      if (additions.length === 0) return;
-      changed.push(...additions.map((entry) => entry.value));
-      const bucketNames = [...new Set(additions.map((entry) => entry.bucket))];
-      const existingBuckets = await transaction.get<StateBucket>(bucketNames.map((bucket) => stateBucketKey(projectId, bucket)));
-      await transaction.put(Object.fromEntries(additions.map((entry) => [entry.key, entry.value])));
-      await transaction.put(Object.fromEntries(bucketNames.map((bucket) => {
-        const current = existingBuckets.get(stateBucketKey(projectId, bucket));
-        const bucketEntries = { ...(current?.entries ?? {}) };
-        for (const entry of additions.filter((candidate) => candidate.bucket === bucket)) {
-          bucketEntries[entry.entityKey] = entry.value.stateHash;
-        }
-        const value = summarizeBucket(bucket, bucketEntries);
-        return [stateBucketKey(projectId, bucket), value];
-      })));
       const generationKey = this.stateGenerationKey(projectId);
       const generation = await transaction.get<number>(generationKey) ?? 0;
-      await transaction.put(generationKey, generation + 1);
+      let resultingGeneration = generation;
+      // WHAT: Persist only entries that joined without a terminal causal collision.
+      // WHY: One rejected entity must not discard unrelated valid entries from the same bounded transaction.
+      if (additions.length > 0) {
+        changed.push(...additions.map((entry) => entry.value));
+        const bucketNames = [...new Set(additions.map((entry) => entry.bucket))];
+        const existingBuckets = await transaction.get<StateBucket>(bucketNames.map((bucket) => stateBucketKey(projectId, bucket)));
+        await transaction.put(Object.fromEntries(additions.map((entry) => [entry.key, entry.value])));
+        await transaction.put(Object.fromEntries(bucketNames.map((bucket) => {
+          const current = existingBuckets.get(stateBucketKey(projectId, bucket));
+          const bucketEntries = { ...(current?.entries ?? {}) };
+          for (const entry of additions.filter((candidate) => candidate.bucket === bucket)) {
+            bucketEntries[entry.entityKey] = entry.value.stateHash;
+          }
+          const value = summarizeBucket(bucket, bucketEntries);
+          return [stateBucketKey(projectId, bucket), value];
+        })));
+        resultingGeneration += 1;
+        await transaction.put(generationKey, resultingGeneration);
+      }
+      // WHAT: Retain the exact terminal rejection under the existing project-and-node repair key.
+      // WHY: Reconnect must not erase the evidence that automatic delivery cannot converge this causal dot.
+      if (rejected.length > 0) {
+        const repairKey = federationRepairRecordKey(sender, projectId);
+        const retained = await transaction.get<FederationRepairRecord>(repairKey);
+        const record = currentFederationRepairRecord(retained, resultingGeneration)
+          ? retained
+          : createFederationRepairRecord({ nodeId: sender, projectId, generation: resultingGeneration });
+        await transaction.put(repairKey, { ...record, rejected });
+      }
     });
-    this.sendSocket(socket, { version: 1, type: 'state-relay-ack', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted } });
+    this.sendSocket(socket, { version: 1, type: 'state-relay-ack', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted, rejected } });
     for (const target of this.activeSockets()) {
       const targetNodeId = (target.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
       if (target !== socket && changed.length > 0 && this.participatesInProject(targetNodeId, projectId)) this.sendStateEntities(target, projectId, changed);
@@ -291,14 +362,13 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const peerRoot = String(payload.root ?? '');
     const peerManifestDigest = assertFederationRepairManifest(peerRoot, remote);
     const generation = await this.ctx.storage.get<number>(this.stateGenerationKey(projectId)) ?? 0;
-    const sessionId = (socket.deserializeAttachment() as SocketIdentity).sessionId;
     const repairKey = federationRepairRecordKey(sender, projectId);
     const admitted = await this.ctx.storage.transaction(async (transaction) => {
       const existing = await transaction.get<FederationRepairRecord>(repairKey);
-      // WHAT: Reuse only a repair record written for this live socket session.
-      // WHY: Duplicate summaries stay bounded while a replacement connection can recover a response lost during disconnect.
-      if (currentFederationRepairRecord(existing, generation, sessionId)) return false;
-      await transaction.put(repairKey, createFederationRepairRecord({ nodeId: sender, sessionId, projectId, generation, peerRoot, peerManifestDigest }));
+      // WHAT: Reuse one exact node, project, generation, peer-root, and manifest repair identity across socket replacement.
+      // WHY: Reconnecting with unchanged durable state must not purchase another scan or observer fan-out.
+      if (currentFederationRepairRecord(existing, generation, peerRoot, peerManifestDigest)) return false;
+      await transaction.put(repairKey, createFederationRepairRecord({ nodeId: sender, projectId, generation, peerRoot, peerManifestDigest }));
       return true;
     });
     // WHAT: End duplicate summary handling before the first bucket storage read.
@@ -346,17 +416,16 @@ export class FederationRelayV4 extends DurableObject<Env> {
     this.assertProjectParticipation(sender, projectId);
     const buckets = canonicalFederationRepairBuckets(Array.isArray(payload.buckets) ? payload.buckets : []);
     const generation = await this.ctx.storage.get<number>(this.stateGenerationKey(projectId)) ?? 0;
-    const sessionId = (socket.deserializeAttachment() as SocketIdentity).sessionId;
     const repairKey = federationRepairRecordKey(sender, projectId);
     const admitted = await this.ctx.storage.transaction(async (transaction) => {
       const retained = await transaction.get<FederationRepairRecord>(repairKey);
-      const existing = currentFederationRepairRecord(retained, generation, sessionId)
+      const existing = currentFederationRepairRecord(retained, generation)
         ? retained
-        : createFederationRepairRecord({ nodeId: sender, sessionId, projectId, generation });
+        : createFederationRepairRecord({ nodeId: sender, projectId, generation });
       return claimFederationRepairBuckets(existing, buckets).admitted;
     });
-    // WHAT: Suppress a request whose buckets were already served in this socket session and durable generation.
-    // WHY: Repeated frames stay bounded while a replacement connection remains eligible for one recovery response.
+    // WHAT: Suppress a request whose buckets were already served for this durable node, project, and relay generation.
+    // WHY: Socket replacement must not purchase another read of an unchanged canonical bucket.
     if (admitted.length === 0) return;
     const entities: RelayEntity[] = [];
     for (const bucket of admitted) {
@@ -367,9 +436,9 @@ export class FederationRelayV4 extends DurableObject<Env> {
     await this.sendStateSummary(socket, projectId);
     await this.ctx.storage.transaction(async (transaction) => {
       const retained = await transaction.get<FederationRepairRecord>(repairKey);
-      const existing = currentFederationRepairRecord(retained, generation, sessionId)
+      const existing = currentFederationRepairRecord(retained, generation)
         ? retained
-        : createFederationRepairRecord({ nodeId: sender, sessionId, projectId, generation });
+        : createFederationRepairRecord({ nodeId: sender, projectId, generation });
       // WHAT: Claim only buckets whose entity response and terminal summary completed.
       // WHY: A failed read, encoding, send, or summary must remain retryable after reconnect.
       await transaction.put(repairKey, claimFederationRepairBuckets(existing, admitted).record);
@@ -389,6 +458,9 @@ export class FederationRelayV4 extends DurableObject<Env> {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    // WHAT: Delete all durable authority only inside an outer-admitted canary federation object.
+    // WHY: The Worker boundary already fixed and authenticated the exact harness-owned federation ID.
+    if (url.pathname === '/admin/canary-state' && request.method === 'DELETE') return this.deleteCanaryState();
     const reset = url.pathname.match(/^\/admin\/projects\/([a-zA-Z0-9_-]+)\/reset-state$/);
     if (reset && request.method === 'POST') {
       return this.resetProjectState(reset[1]);

@@ -68,7 +68,6 @@ export function createTaskContentObjectStore(input: {
       const key = canonicalTaskContentResource(input.decisionOsRoot, value);
       if (!key) return null;
       const source = sourceFile(input.decisionOsRoot, key);
-      await mkdir(root, { recursive: true });
       for (let attempt = 1; attempt <= captureAttempts; attempt += 1) {
         let sourceHandle: FileHandle;
         try {
@@ -82,6 +81,12 @@ export function createTaskContentObjectStore(input: {
         if (!before.isFile()) {
           await sourceHandle.close();
           return null;
+        }
+        try {
+          await mkdir(root, { recursive: true });
+        } catch (error) {
+          await sourceHandle.close().catch(() => undefined);
+          throw error;
         }
         const temporary = resolve(root, `.capture-${process.pid}-${randomUUID()}`);
         const output = await open(temporary, 'wx');

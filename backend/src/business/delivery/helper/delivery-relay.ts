@@ -23,6 +23,22 @@ import { runDeliveryOperationBoundary } from './run-delivery-operation-boundary.
 
 const pinnedWranglerVersion = '4.111.0';
 const productionWorkerName = 'decision-os-federation-relay';
+const canaryDevWorkerName = 'decision-os-federation-relay-dev';
+
+type RelayTargetDescriptor = {
+  workerName: string;
+  trailingArguments: readonly string[];
+};
+
+const productionRelayTarget: RelayTargetDescriptor = {
+  workerName: productionWorkerName,
+  trailingArguments: [],
+};
+
+const canaryDevRelayTarget: RelayTargetDescriptor = {
+  workerName: canaryDevWorkerName,
+  trailingArguments: ['--env', 'dev'],
+};
 
 export type DeliveryRelayRunner = (input: RunBoundedProcessInput) => Promise<BoundedProcessResult>;
 
@@ -66,6 +82,7 @@ type WranglerContext = {
   commonArguments: string[];
   environment: NodeJS.ProcessEnv;
   token: string;
+  workerName: string;
 };
 
 function sha(value: unknown, field: string): string {
@@ -87,6 +104,7 @@ function identifier(value: unknown, field: string): string {
 function wranglerContext(input: {
   releaseWorktree: string;
   environment?: NodeJS.ProcessEnv;
+  target?: RelayTargetDescriptor;
 }): WranglerContext {
   const releaseWorktree = resolve(input.releaseWorktree);
   const relayRoot = resolve(releaseWorktree, 'federation-relay');
@@ -102,6 +120,7 @@ function wranglerContext(input: {
     );
   }
   const environment = { ...(input.environment ?? process.env) };
+  const target = input.target ?? productionRelayTarget;
   const token = String(environment.CLOUDFLARE_API_TOKEN ?? '').trim();
   const accountId = String(environment.CLOUDFLARE_ACCOUNT_ID ?? '').trim();
   if (!token || !accountId) {
@@ -116,10 +135,12 @@ function wranglerContext(input: {
       '--config',
       resolve(relayRoot, 'wrangler.toml'),
       '--name',
-      productionWorkerName,
+      target.workerName,
+      ...target.trailingArguments,
     ],
     environment,
     token,
+    workerName: target.workerName,
   };
 }
 
@@ -228,17 +249,17 @@ function parseVersions(output: string): RelayVersionAuthority[] {
   });
 }
 
-export async function readRelayAuthority(input: {
+async function readRelayAuthorityForTarget(input: {
   releaseWorktree: string;
   runner?: DeliveryRelayRunner;
   environment?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
-}): Promise<{
+}, target: RelayTargetDescriptor): Promise<{
   deployment: RelayDeployment;
   deployments: RelayDeployment[];
   versions: RelayVersionAuthority[];
 }> {
-  const context = wranglerContext(input);
+  const context = wranglerContext({ ...input, target });
   const runner = input.runner ?? runBoundedProcess;
   const [deploymentResult, versionResult] = await Promise.all([
     wrangler({
@@ -266,13 +287,39 @@ export async function readRelayAuthority(input: {
   };
 }
 
-export async function readCurrentRelayDeployment(input: {
+export async function readRelayAuthority(input: {
   releaseWorktree: string;
   runner?: DeliveryRelayRunner;
   environment?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
-}): Promise<{ deployment: RelayDeployment; receipt: RelayCommandReceipt }> {
-  const context = wranglerContext(input);
+}): Promise<{
+  deployment: RelayDeployment;
+  deployments: RelayDeployment[];
+  versions: RelayVersionAuthority[];
+}> {
+  return await readRelayAuthorityForTarget(input, productionRelayTarget);
+}
+
+export async function readCanaryDevRelayAuthority(input: {
+  releaseWorktree: string;
+  runner?: DeliveryRelayRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}): Promise<{
+  deployment: RelayDeployment;
+  deployments: RelayDeployment[];
+  versions: RelayVersionAuthority[];
+}> {
+  return await readRelayAuthorityForTarget(input, canaryDevRelayTarget);
+}
+
+async function readCurrentRelayDeploymentForTarget(input: {
+  releaseWorktree: string;
+  runner?: DeliveryRelayRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}, target: RelayTargetDescriptor): Promise<{ deployment: RelayDeployment; receipt: RelayCommandReceipt }> {
+  const context = wranglerContext({ ...input, target });
   const { result, redactedArguments } = await wrangler({
     context,
     operation: 'list',
@@ -289,7 +336,7 @@ export async function readCurrentRelayDeployment(input: {
     receipt: {
       operation: 'list',
       redactedArguments,
-      workerName: productionWorkerName,
+      workerName: context.workerName,
       releaseSha: null,
       deploymentId: deployment.deploymentId,
       versionId: deployment.versionId,
@@ -297,15 +344,33 @@ export async function readCurrentRelayDeployment(input: {
   };
 }
 
-export async function uploadRelayVersion(input: {
+export async function readCurrentRelayDeployment(input: {
+  releaseWorktree: string;
+  runner?: DeliveryRelayRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}): Promise<{ deployment: RelayDeployment; receipt: RelayCommandReceipt }> {
+  return await readCurrentRelayDeploymentForTarget(input, productionRelayTarget);
+}
+
+export async function readCurrentCanaryDevRelayDeployment(input: {
+  releaseWorktree: string;
+  runner?: DeliveryRelayRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}): Promise<{ deployment: RelayDeployment; receipt: RelayCommandReceipt }> {
+  return await readCurrentRelayDeploymentForTarget(input, canaryDevRelayTarget);
+}
+
+async function uploadRelayVersionForTarget(input: {
   releaseWorktree: string;
   mainSha: string;
   runner?: DeliveryRelayRunner;
   environment?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
-}): Promise<{ versionId: string; receipt: RelayCommandReceipt }> {
+}, target: RelayTargetDescriptor): Promise<{ versionId: string; receipt: RelayCommandReceipt }> {
   const mainSha = sha(input.mainSha, 'mainSha');
-  const context = wranglerContext(input);
+  const context = wranglerContext({ ...input, target });
   const { result, redactedArguments } = await wrangler({
     context,
     operation: 'upload',
@@ -330,7 +395,7 @@ export async function uploadRelayVersion(input: {
     receipt: {
       operation: 'upload',
       redactedArguments,
-      workerName: productionWorkerName,
+      workerName: context.workerName,
       releaseSha: mainSha,
       deploymentId: null,
       versionId,
@@ -338,17 +403,37 @@ export async function uploadRelayVersion(input: {
   };
 }
 
-export async function deployRelayVersion(input: {
+export async function uploadRelayVersion(input: {
+  releaseWorktree: string;
+  mainSha: string;
+  runner?: DeliveryRelayRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}): Promise<{ versionId: string; receipt: RelayCommandReceipt }> {
+  return await uploadRelayVersionForTarget(input, productionRelayTarget);
+}
+
+export async function uploadCanaryDevRelayVersion(input: {
+  releaseWorktree: string;
+  mainSha: string;
+  runner?: DeliveryRelayRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}): Promise<{ versionId: string; receipt: RelayCommandReceipt }> {
+  return await uploadRelayVersionForTarget(input, canaryDevRelayTarget);
+}
+
+async function deployRelayVersionForTarget(input: {
   releaseWorktree: string;
   mainSha: string;
   versionId: string;
   runner?: DeliveryRelayRunner;
   environment?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
-}): Promise<RelayCommandReceipt> {
+}, target: RelayTargetDescriptor): Promise<RelayCommandReceipt> {
   const mainSha = sha(input.mainSha, 'mainSha');
   const versionId = identifier(input.versionId, 'versionId');
-  const context = wranglerContext(input);
+  const context = wranglerContext({ ...input, target });
   const { redactedArguments } = await wrangler({
     context,
     operation: 'deploy',
@@ -366,24 +451,46 @@ export async function deployRelayVersion(input: {
   return {
     operation: 'deploy',
     redactedArguments,
-    workerName: productionWorkerName,
+    workerName: context.workerName,
     releaseSha: mainSha,
     deploymentId: null,
     versionId,
   };
 }
 
-export async function rollbackRelayVersion(input: {
+export async function deployRelayVersion(input: {
+  releaseWorktree: string;
+  mainSha: string;
+  versionId: string;
+  runner?: DeliveryRelayRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}): Promise<RelayCommandReceipt> {
+  return await deployRelayVersionForTarget(input, productionRelayTarget);
+}
+
+export async function deployCanaryDevRelayVersion(input: {
+  releaseWorktree: string;
+  mainSha: string;
+  versionId: string;
+  runner?: DeliveryRelayRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}): Promise<RelayCommandReceipt> {
+  return await deployRelayVersionForTarget(input, canaryDevRelayTarget);
+}
+
+async function rollbackRelayVersionForTarget(input: {
   releaseWorktree: string;
   failedMainSha: string;
   priorVersionId: string;
   runner?: DeliveryRelayRunner;
   environment?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
-}): Promise<RelayCommandReceipt> {
+}, target: RelayTargetDescriptor): Promise<RelayCommandReceipt> {
   const failedMainSha = sha(input.failedMainSha, 'failedMainSha');
   const priorVersionId = identifier(input.priorVersionId, 'priorVersionId');
-  const context = wranglerContext(input);
+  const context = wranglerContext({ ...input, target });
   const { redactedArguments } = await wrangler({
     context,
     operation: 'rollback',
@@ -400,11 +507,33 @@ export async function rollbackRelayVersion(input: {
   return {
     operation: 'rollback',
     redactedArguments,
-    workerName: productionWorkerName,
+    workerName: context.workerName,
     releaseSha: failedMainSha,
     deploymentId: null,
     versionId: priorVersionId,
   };
+}
+
+export async function rollbackRelayVersion(input: {
+  releaseWorktree: string;
+  failedMainSha: string;
+  priorVersionId: string;
+  runner?: DeliveryRelayRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}): Promise<RelayCommandReceipt> {
+  return await rollbackRelayVersionForTarget(input, productionRelayTarget);
+}
+
+export async function rollbackCanaryDevRelayVersion(input: {
+  releaseWorktree: string;
+  failedMainSha: string;
+  priorVersionId: string;
+  runner?: DeliveryRelayRunner;
+  environment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}): Promise<RelayCommandReceipt> {
+  return await rollbackRelayVersionForTarget(input, canaryDevRelayTarget);
 }
 
 export async function verifyRelayReleaseHealth(input: {

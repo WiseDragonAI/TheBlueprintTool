@@ -24,7 +24,6 @@ import { createServerFoundationRuntime } from '../runtime/server-foundation-runt
 import { createServerProjectRuntime } from '../runtime/server-project-runtime.js';
 import { createGlobalRequestHandler } from '../http/create-global-request-handler.js';
 import { createProjectRequestHandler } from '../http/create-project-request-handler.js';
-import { availableRepositoryOriginFingerprint } from '../../project-sync/helper/repository-sync-status.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -160,7 +159,6 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
   const deliveryProjectIds = (): string[] => {
     return projectCatalog()
       .filter((project) => project.available)
-      .filter((project) => /^[a-f0-9]{64}$/.test(availableRepositoryOriginFingerprint(project.root)))
       .map((project) => project.id)
       .sort();
   };
@@ -276,6 +274,10 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
       incidentLedger.resolveScope(
         'server-runtime',
         'A supervised replacement child started and opened its HTTP listener successfully.',
+      );
+      incidentLedger.resolveScope(
+        'server-listener',
+        'The configured HTTP listener bound successfully and now owns the requested endpoint.',
       );
       federation.start();
       void runtimeIncidentReviewScheduler.run();

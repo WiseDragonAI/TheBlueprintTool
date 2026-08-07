@@ -16,6 +16,7 @@ import type { createFederationContentReplicaStore } from '../helper/federation-c
 import type { createFederationNodeConnector } from '../helper/federation-node-connector.js';
 import { createFederationTaskStateReplicator } from '../helper/federation-task-state-replicator.js';
 import type { createTaskExecutionPresentationRegistry } from '../../codex/runtime/task-execution-presentation-registry.js';
+import type { FederationStateRejection } from '../../../../../shared/federation-state-transport.js';
 
 type ExecutionState = Pick<ProjectTaskState, 'executions' | 'finalizeExecutionArtifacts'>;
 
@@ -30,6 +31,9 @@ export function createFederationStateRuntime(input: {
     entities?: readonly { entityType: string; entityId: string }[],
   ) => void;
   localTaskRuntime: ReturnType<typeof createLocalTaskRuntime>;
+  onRepairDeadline: (input: { projectId: string; from: string; peerRoot: string }) => void;
+  onTerminalRejection: (input: { projectId: string; from: string; peerRoot: string; rejected: FederationStateRejection[] }) => void;
+  pausedFederationRepairs: Iterable<[string, { context: Record<string, unknown> }]>;
   pausedTaskProjects: { has(projectId: string): boolean };
   presentations: ReturnType<typeof createTaskExecutionPresentationRegistry>;
   projectCatalogStore: ReturnType<typeof createProjectCatalogStore>;
@@ -56,6 +60,7 @@ export function createFederationStateRuntime(input: {
     context: Record<string, unknown>;
   }) => unknown;
   scheduleCodex: () => Promise<unknown>;
+  serverCloseSignal: AbortSignal;
   taskStoreForProject: (
     projectId: string,
     ownerNodeId?: string,
@@ -196,7 +201,22 @@ export function createFederationStateRuntime(input: {
         context: { projectId, from },
       });
     },
+    onTerminalRejection: input.onTerminalRejection,
+    onRepairDeadline: input.onRepairDeadline,
   });
+
+  for (const [projectId, incident] of input.pausedFederationRepairs) {
+    const values = Array.isArray(incident.context.rejected) ? incident.context.rejected as Array<Record<string, unknown>> : [];
+    const rejected = values.map((entry) => ({ key: String(entry.key ?? ''), stateHash: String(entry.stateHash ?? ''), code: String(entry.code ?? '') as FederationStateRejection['code'] }));
+    const peerRoot = String(incident.context.peerRoot ?? '');
+    // WHAT: Keep malformed or temporarily unavailable recovery evidence terminally contained after restart.
+    // WHY: A failed hydration must never reopen automatic repair work from an active durable incident.
+    if (!replicator.restorePausedProjectRepair(projectId, { peerRoot, rejected })) replicator.holdProjectRepair(projectId, peerRoot);
+  }
+  // WHAT: Settle every node-side repair deadline when the server begins closing.
+  // WHY: Timers must not outlive their owning federation runtime.
+  if (input.serverCloseSignal.aborted) replicator.close();
+  else input.serverCloseSignal.addEventListener('abort', replicator.close, { once: true });
 
   for (const [projectId, state] of input.projectStates) {
     input.localTaskRuntime.scheduleContentHeadRepair(projectId, state);

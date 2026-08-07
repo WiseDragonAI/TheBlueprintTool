@@ -3,6 +3,7 @@
  * WHY: Content observation and invalidation form one lifecycle that must be disposed together.
  */
 import type { ServerResponse } from 'node:http';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { createLedgerRevisionTracker } from '../helper/create-ledger-revision-tracker.js';
@@ -153,6 +154,9 @@ export function createProjectContentRuntime(input: {
       // WHY: Headless held resources and causal conflicts must not be activated or resolved by a filesystem scan.
       const taskState = input.taskState();
       if (change.ledgerId !== 'tasks' || !taskState) return false;
+      // WHAT: Exclude an absent mutable sidecar from startup reconciliation.
+      // WHY: A retained causal head does not make a missing workspace file an external edit.
+      if (!existsSync(change.file)) return false;
       return taskState.store.contentHeads(change.contentFile).length === 1;
     },
     onContentChange: observeCardFileChange,

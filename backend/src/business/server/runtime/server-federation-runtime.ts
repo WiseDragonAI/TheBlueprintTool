@@ -106,6 +106,27 @@ export function createServerFederationRuntime(input: {
       entities ? [...entities] : undefined,
     ),
     localTaskRuntime: executionRuntime.localTaskRuntime,
+    onRepairDeadline: ({ projectId, from, peerRoot }) => {
+      const incident = recordIncident({
+        scope: `federation-repair:${projectId}`,
+        component: 'federation-task-state-replicator',
+        operation: 'repair-deadline',
+        error: new Error(`federation_repair_deadline:${projectId}`),
+        context: { projectId, from, peerRoot, rejected: [] },
+      });
+      incidentSupervisor.pausedFederationRepairs.set(projectId, incident);
+    },
+    onTerminalRejection: ({ projectId, from, peerRoot, rejected }) => {
+      const incident = recordIncident({
+        scope: `federation-repair:${projectId}`,
+        component: 'federation-task-state-replicator',
+        operation: 'terminal-state-rejection',
+        error: new Error(`federation_terminal_state_rejection:${projectId}:${rejected.map((entry) => entry.key).join(',')}`),
+        context: { projectId, from, peerRoot, rejected },
+      });
+      incidentSupervisor.pausedFederationRepairs.set(projectId, incident);
+    },
+    pausedFederationRepairs: incidentSupervisor.pausedFederationRepairs,
     pausedTaskProjects,
     presentations: executionPresentations,
     projectCatalogStore,
@@ -115,6 +136,7 @@ export function createServerFederationRuntime(input: {
     recordBackgroundFailure,
     recordStoppedOperation,
     scheduleCodex: executionRuntime.processCoordinator.schedule,
+    serverCloseSignal: input.foundation.serverCloseAbort.signal,
     taskStoreForProject: executionRuntime.taskStoreForProject,
   });
   connections.replicator = state.replicator;

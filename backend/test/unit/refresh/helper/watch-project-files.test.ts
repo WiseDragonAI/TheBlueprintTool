@@ -158,6 +158,75 @@ test('retries one failed content publication once without reporting a recovered 
   }
 });
 
+test('contains an inaccessible startup resource without concurrent fan-out or blocking another project', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-content-watch-startup-bounded-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const firstFile = join(decisionOsRoot, 'cards', 'tasks', 'card-a.md');
+  const secondFile = join(decisionOsRoot, 'cards', 'tasks', 'card-b.md');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(decisionOsRoot, 'threads'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [
+      { id: 'card-a', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } },
+      { id: 'card-b', comment: { contentFile: '.decision-os/cards/tasks/card-b.md' } },
+    ],
+  }));
+  writeFileSync(firstFile, '# A\n');
+  writeFileSync(secondFile, '# B\n');
+  let active = 0;
+  let maximumActive = 0;
+  let attempts = 0;
+  const errors: unknown[] = [];
+  const healthyProjectRoot = mkdtempSync(join(tmpdir(), 'decision-os-content-watch-startup-healthy-'));
+  const healthyDecisionOsRoot = join(healthyProjectRoot, '.decision-os');
+  const healthyFile = join(healthyDecisionOsRoot, 'cards', 'tasks', 'healthy.md');
+  mkdirSync(join(healthyDecisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(healthyDecisionOsRoot, 'threads'), { recursive: true });
+  writeFileSync(join(healthyDecisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(healthyDecisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{ id: 'healthy', comment: { contentFile: '.decision-os/cards/tasks/healthy.md' } }],
+  }));
+  writeFileSync(healthyFile, '# Healthy\n');
+  const watcher = watchCardContentFiles({
+    decisionOsRoot,
+    reconcileOnStart: () => true,
+    onChange: async () => {
+      attempts += 1;
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+      active -= 1;
+      throw Object.assign(new Error('project root is inaccessible'), { code: 'EACCES' });
+    },
+    onError: (error) => errors.push(error),
+    auditIntervalMs: 10_000,
+  });
+  const healthyWatcher = watchCardContentFiles({
+    decisionOsRoot: healthyDecisionOsRoot,
+    reconcileOnStart: () => true,
+    onChange: () => undefined,
+    auditIntervalMs: 10_000,
+  });
+
+  try {
+    assert.equal(await watcher.ready, false);
+    assert.equal(await healthyWatcher.ready, true);
+    assert.equal(maximumActive, 1);
+    assert.equal(attempts, 2);
+    assert.equal(errors.length, 1);
+  } finally {
+    await watcher.close();
+    await healthyWatcher.close();
+    rmSync(projectRoot, { recursive: true, force: true });
+    rmSync(healthyProjectRoot, { recursive: true, force: true });
+  }
+});
+
 test('flushes one exact pending content path without publishing unrelated editor work', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-content-watch-exact-flush-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');

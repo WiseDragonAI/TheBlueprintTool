@@ -16,7 +16,7 @@ import {
   type TaskFieldOperation,
   type TaskRegisterCandidate,
 } from './model.js';
-import { clockCovers, dotKey, joinTaskRegisters } from './register-join.js';
+import { clockCovers, dotKey, joinTaskRegisters, taskRegisterDotCollisions } from './register-join.js';
 import { sha256 } from './sha256.js';
 
 const operations = new Set<TaskFieldOperation>(['set', 'add', 'remove', 'tombstone']);
@@ -214,6 +214,24 @@ export function finalizeTaskCurrentEntity(entity: Omit<TaskCurrentEntity, 'state
   finalized.stateHash = hashTaskCurrentEntity(finalized);
   assertTaskCurrentEntity(finalized);
   return finalized;
+}
+
+export type TaskEntityDotCollision = { path: string; replicaId: string; counter: number };
+
+export function taskEntityDotCollisions(left: TaskCurrentEntity, right: TaskCurrentEntity): TaskEntityDotCollision[] {
+  assertTaskCurrentEntity(left);
+  assertTaskCurrentEntity(right);
+  // WHAT: Reject collision inspection across different entity identities.
+  // WHY: Path and dot evidence is meaningful only for the exact join that failed.
+  if (left.projectId !== right.projectId || left.entityType !== right.entityType || left.entityId !== right.entityId) throw new Error('task_current_entity_identity_mismatch');
+  return [...new Set([...Object.keys(left.fields), ...Object.keys(right.fields)])].sort().flatMap((path) => {
+    const leftField = left.fields[path];
+    const rightField = right.fields[path];
+    // WHAT: Skip paths absent from either side of the rejected join.
+    // WHY: A same-dot collision requires two candidates for the same register path.
+    if (!leftField || !rightField) return [];
+    return taskRegisterDotCollisions(leftField, rightField).map((dot) => ({ path, ...dot }));
+  });
 }
 
 export function joinTaskEntities(left: TaskCurrentEntity | undefined, right: TaskCurrentEntity): TaskCurrentEntity {
