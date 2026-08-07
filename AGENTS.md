@@ -168,7 +168,7 @@ Use the fixed merge tool for a local `dev` to `main` promotion:
 
 ```bash
 cd /home/jbb/dev/EditorBP/decision-os
-node bin/decision-os-merge-dev.mjs --json
+node bin/decision-os-merge-dev.mjs fix --json
 ```
 
 When the operator has already authorized the merge, run the normal promotion
@@ -184,8 +184,8 @@ Use the read-only doctor only when merge authorization has not been given and
 the operator needs an observational admission preview:
 
 ```bash
-node bin/decision-os-merge-dev.mjs doctor
-node bin/decision-os-merge-dev.mjs doctor --json
+node bin/decision-os-merge-dev.mjs doctor fix
+node bin/decision-os-merge-dev.mjs doctor fix --json
 ```
 
 Doctor reports current branches, parent and main-child dirt, both recorded
