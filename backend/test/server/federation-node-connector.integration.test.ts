@@ -15,27 +15,34 @@ import { readRepositorySyncStatus } from '@backend/business/project-sync/helper/
 import { canonicalDecisionOsGitIgnore } from '@backend/business/server/helper/ensure-decision-os-git-repository.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import type { CodexPipelineRun } from '../../../shared/schemas/codex-pipeline-types.js';
+import { federationStateEntityBatchSize } from '../../../shared/federation-state-transport.js';
 
 type Frame = { type: string; requestId?: string; to?: string; projects?: unknown[]; path?: string; projectId?: string; stateVersion?: number; payload?: Record<string, any> };
 
-async function projectHome(name: string): Promise<string> {
+async function projectHome(name: string, extraCardCount = 0): Promise<string> {
   const home = mkdtempSync(join(tmpdir(), `decision-os-federation-${name}-`));
   const decisionOsRoot = join(home, name, '.decision-os');
+  const cards = [{
+    id: `${name}-card`,
+    title: `${name} card`,
+    labels: ['master-task'],
+    status: 'todo',
+  }, {
+    id: `${name}-headless-card`,
+    title: `${name} headless card`,
+    labels: ['note'],
+    status: 'todo',
+    comment: { contentFile: `.decision-os/cards/tasks/${name}-headless-card.md` },
+  }, ...Array.from({ length: extraCardCount }, (_value, index) => ({
+    id: `${name}-canary-${String(index).padStart(3, '0')}`,
+    title: `${name} canary ${index}`,
+    labels: ['note'],
+    status: 'todo',
+  }))];
   mkdirSync(decisionOsRoot, { recursive: true });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: `${name} Tasks`, ledgerFile: '.decision-os/tasks.json' }] }));
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
-    cards: [{
-      id: `${name}-card`,
-      title: `${name} card`,
-      labels: ['master-task'],
-      status: 'todo',
-    }, {
-      id: `${name}-headless-card`,
-      title: `${name} headless card`,
-      labels: ['note'],
-      status: 'todo',
-      comment: { contentFile: `.decision-os/cards/tasks/${name}-headless-card.md` },
-    }],
+    cards,
     annotations: [],
     relationships: [],
   }));
@@ -565,6 +572,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
   const manifests = new Map<string, unknown[]>();
   const streams = new Map<string, { requester: string; owner: string }>();
   const proxiedPaths: string[] = [];
+  const stateBatchSizes: number[] = [];
 
   relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
     const nodeId = new URL(request.url ?? '/', 'http://relay.test').pathname.split('/').at(-1)!;
@@ -581,7 +589,10 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
         for (const [targetId, target] of sockets) if (targetId !== nodeId) target.send(JSON.stringify({ version: 1, type: 'content-change' }));
         return;
       }
+      // WHAT: Persist the size of every node-originated state batch before forwarding and acknowledging it.
+      // WHY: The large-state proof must verify the actual two-node transport uses the bounded transaction contract.
       if (frame.type === 'state-entity-batch' && !frame.to) {
+        stateBatchSizes.push(Array.isArray(frame.payload?.entries) ? frame.payload.entries.length : 0);
         for (const [targetId, target] of sockets) {
           if (targetId !== nodeId) target.send(JSON.stringify({ ...frame, from: 'relay' }));
         }
@@ -644,7 +655,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
   const relayUrl = `http://127.0.0.1:${(relayHttp.address() as AddressInfo).port}`;
 
   const homeA = await projectHome('alpha');
-  const homeB = await projectHome('beta');
+  const homeB = await projectHome('beta', 448);
   federatedLibraryFixture(homeA, 'alpha');
   federatedLibraryFixture(homeB, 'beta');
   const betaRoot = join(homeB, 'beta');
@@ -1197,10 +1208,16 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     assert.equal(headlessCard.state?.status, 'degraded');
     assert.equal(headlessCard.state?.content?.status, 'missing-head');
     assert.deepEqual(headlessCard.state?.content?.candidates, []);
-    const remoteLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, { headers: remoteHeaders }).then((response) => response.json()) as { cards: Array<{ title: string }> };
-    assert.equal(remoteLedger.cards[0].title, 'changed on owner');
-    const queryRoutedLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks?replica=node-b`).then((response) => response.json()) as { cards: Array<{ title: string }> };
-    assert.equal(queryRoutedLedger.cards[0].title, 'changed on owner');
+    const remoteLedger = await waitFor(async () => {
+      const body = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, { headers: remoteHeaders }).then((response) => response.json()) as { cards: Array<{ id: string; title: string }> };
+      return body.cards.length === 450 ? body : null;
+    });
+    assert.equal(remoteLedger.cards.find((card) => card.id === 'beta-card')?.title, 'changed on owner');
+    assert.ok(remoteLedger.cards.some((card) => card.id === 'beta-canary-447'), 'the second node materializes the complete 448-card canary state');
+    assert.ok(stateBatchSizes.length >= 15, '448 additional cards cross the relay in multiple bounded transactions');
+    assert.ok(stateBatchSizes.every((size) => size <= federationStateEntityBatchSize), 'every two-node state transaction respects the shared relay ceiling');
+    const queryRoutedLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks?replica=node-b`).then((response) => response.json()) as { cards: Array<{ id: string; title: string }> };
+    assert.equal(queryRoutedLedger.cards.find((card) => card.id === 'beta-card')?.title, 'changed on owner');
     const mutation = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...remoteHeaders },

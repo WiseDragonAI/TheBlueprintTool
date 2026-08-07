@@ -4,6 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { assertFederationRepairManifest, canonicalFederationRepairBuckets } from '../../../../../shared/federation-repair-guard.js';
+import { federationMaximumStateFrameBytes, federationStateEntityBatchSize } from '../../../../../shared/federation-state-transport.js';
 import { taskCurrentEntityKey } from '../../../../../shared/task-current-state-core.js';
 import type { TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskCurrentBucket, type TaskCurrentEntity, type TaskStateDelta } from '../../task-state/helper/task-current-state-types.js';
@@ -12,8 +13,6 @@ import type { FederationStateFrame } from './federation-node-connector.js';
 type Publisher = (peerId: string, frame: Omit<FederationStateFrame, 'from'>) => boolean;
 type StateEnvelope = { key: string; stateHash: string; entity: TaskCurrentEntity };
 type PendingDelivery = { projectId: string; hashes: Map<string, string> };
-const maximumBatchEntities = 128;
-const maximumStateFrameBytes = 512 * 1024;
 const encoder = new TextEncoder();
 
 function bucketMap(values: TaskCurrentBucket[]): Map<string, TaskCurrentBucket> {
@@ -41,7 +40,9 @@ function boundedFrames(projectId: string, entities: TaskCurrentEntity[]): Array<
     const candidate = [...entries, entry];
     const deliveryId = randomUUID();
     const bytes = encoder.encode(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: taskCurrentStateVersion, projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId, entries: candidate } })).byteLength;
-    if (entries.length > 0 && (candidate.length > maximumBatchEntities || bytes > maximumStateFrameBytes)) {
+    // WHAT: Complete the current transaction before the shared count or byte ceiling is crossed.
+    // WHY: Relay persistence must acknowledge each bounded unit without exhausting its Durable Object transaction budget.
+    if (entries.length > 0 && (candidate.length > federationStateEntityBatchSize || bytes > federationMaximumStateFrameBytes)) {
       frames.push({ deliveryId: randomUUID(), entries });
       entries = [entry];
     } else {
@@ -51,7 +52,9 @@ function boundedFrames(projectId: string, entities: TaskCurrentEntity[]): Array<
   if (entries.length > 0) frames.push({ deliveryId: randomUUID(), entries });
   for (const frame of frames) {
     const bytes = encoder.encode(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: taskCurrentStateVersion, projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: frame.deliveryId, entries: frame.entries } })).byteLength;
-    if (bytes > maximumStateFrameBytes) throw new Error('state_frame_too_large');
+    // WHAT: Reject a single entity that cannot fit within the shared frame ceiling.
+    // WHY: Splitting cannot make an individually oversized entity admissible.
+    if (bytes > federationMaximumStateFrameBytes) throw new Error('state_frame_too_large');
   }
   return frames;
 }

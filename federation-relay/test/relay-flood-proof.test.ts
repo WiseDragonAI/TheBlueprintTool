@@ -14,6 +14,7 @@ import {
   taskCurrentStateVersion,
   taskStateProtocol,
 } from '../../shared/task-current-state-core';
+import { federationStateEntityBatchSize } from '../../shared/federation-state-transport';
 
 type Frame = { type: string; projectId?: string; payload?: Record<string, any>; nodes?: unknown[] };
 
@@ -194,8 +195,8 @@ describe('federation relay flood proof', () => {
     expect(encodedBytes).toBeGreaterThan(32 * 1024 * 1024);
     expect(bucketManifest).toHaveLength(256);
 
-    for (let offset = 0; offset < values.length; offset += 128) {
-      const batch = values.slice(offset, offset + 128);
+    for (let offset = 0; offset < values.length; offset += federationStateEntityBatchSize) {
+      const batch = values.slice(offset, offset + federationStateEntityBatchSize);
       const deliveryId = crypto.randomUUID();
       const acknowledged = nextFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === deliveryId, 10_000);
       writer.send(JSON.stringify({
