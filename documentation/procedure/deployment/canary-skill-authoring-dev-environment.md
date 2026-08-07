@@ -235,9 +235,9 @@
 
 ## L. Promotion Gate
 
-1. Require one clean pushed candidate where `HEAD == origin/dev`, current `origin/main` is an ancestor, all required checks pass, and candidate evidence matches that exact SHA.
-2. Require every active project-owning node to expose delivery protocol `1` and adopted supervisor evidence.
-3. The workstation bootstrap owner is `multiterm-workstation-v1`. Production promotion remains blocked until the operator provides the phone's exact node-owned supervisor record and its validated adapter exists.
+1. Require one clean pushed candidate where `HEAD == origin/dev`, the canonical release tag pair identifies the exact published main merge and dev parent, all required checks pass, and candidate evidence matches that exact SHA.
+2. Require the configured coordinator node to expose delivery protocol `1` and adopted supervisor evidence.
+3. The workstation bootstrap owner is `multiterm-workstation-v1`. Phone and other federation nodes do not participate in production promotion.
 4. Production delivery uses only:
 
    ```bash

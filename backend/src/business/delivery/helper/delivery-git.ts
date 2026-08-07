@@ -270,14 +270,18 @@ export async function verifyDeliveryCandidateGit(input: {
   if (originDevSha !== releaseSha) {
     throw new DeliveryGitError('delivery_release_ref_changed', 'The requested candidate is not the fetched origin/dev SHA.');
   }
-  await git({
-    root: repositoryRoot,
-    args: ['merge-base', '--is-ancestor', priorMainSha, releaseSha],
-    runner,
-    env,
-    signal: input.signal,
-    operation: 'candidate_verify_main_ancestry',
-  });
+  // WHAT: Run the legacy pre-publication ancestry check only without resolved tag-pair evidence.
+  // WHY: A canonical main merge's first and second parents are siblings; the tag resolver already proves their exact published relationship.
+  if (!input.priorMainSha) {
+    await git({
+      root: repositoryRoot,
+      args: ['merge-base', '--is-ancestor', priorMainSha, releaseSha],
+      runner,
+      env,
+      signal: input.signal,
+      operation: 'candidate_verify_main_ancestry',
+    });
+  }
   const worktrees = parseWorktrees(await git({
     root: repositoryRoot,
     args: ['worktree', 'list', '--porcelain'],

@@ -95,6 +95,7 @@ test('bootstrap prepares an immutable fetched release and adopts MultiTerm only 
   assert.equal(JSON.parse(readFileSync(join(fixture.decisionOsRoot, '.settings.json'), 'utf8')).deliveryCurrentPointer, join(fixture.releaseRoot, 'current'));
   const supervisor = fixture.calls.find((call) => call.command === '/fixture/multiwezterm-process')!;
   assert.deepEqual(supervisor.args.slice(0, 2), ['register', '--cwd']);
+  assert.equal(supervisor.args[supervisor.args.indexOf('--cmd') + 1], `env PORT=50150 ${join(fixture.releaseRoot, 'current', 'bin', 'decision-os-server.mjs')}`);
   assert.ok(supervisor.args.includes('50150'));
   assert.ok(supervisor.args.includes('--no-launch'));
   assert.ok(fixture.calls.some((call) => call.args.includes('fetch') && call.args.includes('main')));
