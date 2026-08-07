@@ -111,7 +111,7 @@
 4. `relayConfiguration` contains `observedAt`, SHA-256 `configurationHash`, `wranglerVersion: "4.111.0"`, `productionWorkerName`, `devWorkerName`, `productionDurableObjectNamespace`, and `devDurableObjectNamespace`.
 5. `proofs` contains exactly one fresh `passed` receipt for each name: `authoring`, `editor`, `direct-path`, `prompt-execution`, and `federation`. Every receipt contains the exact `releaseSha`, `observedAt`, and `receiptId`.
 6. `nodeEvidence` records the settings-owned `deliveryNodeId` coordinator observed during candidate proof. Unrelated federation nodes do not participate in production admission. The record contains:
-   1. `nodeId`, `observedAt`, and exact `projectIds`. Delivery project identity includes only projects with a verified repository-origin fingerprint; node-local projects remain served but do not enter federation convergence.
+   1. `nodeId`, `observedAt`, and exact `projectIds`. Delivery project identity includes every available project in the settings-owned catalog, including node-local projects without a repository-origin fingerprint. Unavailable projects remain explicit diagnostics and do not become false convergence evidence.
    2. `release` with ready health, predecessor `releaseSha`, `processStartedAt`, `deliveryProtocol: 1`, `activeReleasePointer`, and zero `activeIncidentCount`
    3. `federationPhase: "connected"`
    4. Zero `activeExecutionCount`, `pendingExecutionCount`, `pendingProcessQueueDepth`, `pausedScopeCount`, and `fatalIncidentCount`. `pausedScopeCount` includes only paused server-fatal, `delivery:*`, and `delivery-dependency:*` incidents; unrelated contained incidents remain diagnostic and do not block delivery.
