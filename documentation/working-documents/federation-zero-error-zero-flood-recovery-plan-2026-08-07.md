@@ -201,11 +201,11 @@
 ## M. Release Identity Gate
 
 1. Do not delete, move, overwrite, or silently reinterpret published `rel-0.3.2` through `rel-0.3.12` tags. Their history is required to audit the incident.
-2. Do not create another release tag until the operator supplies the one canonical release identity for this recovery. This is the only unresolved operator decision and blocks promotion, not implementation or canary proof.
-3. After the operator supplies the one bump token accepted by the canonical CLI, run the canonical merge exactly once from the primary main checkout:
+2. The operator has authorized the single `fix` bump for this recovery. Create exactly one new canonical paired release and no intermediate or corrective tags.
+3. Run the canonical merge exactly once from the primary main checkout:
 
    ```bash
-   node bin/decision-os-merge-dev.mjs <operator-approved-bump> --json
+   node bin/decision-os-merge-dev.mjs fix --json
    ```
 
 4. Treat the merge tool's JSON receipt as the authority for the main merge, paired `rel-*` and `devrel-*` tags, commit identities, and cleanliness. Do not run redundant Git inspection after success.
@@ -216,7 +216,7 @@
 
 ## N. Production Recovery And Deployment
 
-1. Require explicit operator authorization for this section because it stops the production coordinator and deletes the MOH project's relay state.
+1. Authorization is recorded by the operator's instruction to complete point 9 with a verified backup before destructive work and manifest-owned cleanup afterward. Do not widen that authorization beyond the production coordinator and exact MOH relay project named here.
 2. Freeze production reconnects and automatic restarts. Do not run the uncommitted acknowledgment-timeout retry worktree and do not reconnect the existing flood-prone coordinator during recovery.
 3. Record the exact production coordinator release, process identity, local MOH entity count, local root, manifest, dirty keys, pending-delivery keys, active incidents, relay deployment ID, and relay MOH root before mutation.
 4. Create and verify a byte-preserving backup of the authoritative local MOH epoch-4 state. Record its file count, byte count, hashes, entity count, manifest, and root.
@@ -301,10 +301,10 @@
 5. Prove the pre-patch flood and watcher failures with the bounded baseline.
 6. Prove candidate quiescence, incident recovery, scoped reset and reseed, and full huge-state synchronization on Worker and Termux relays from the identical snapshot.
 7. Merge the reviewed feature into `dev`, run the fixed integration check, push `dev`, and clean the feature worktree.
-8. Obtain the single operator-approved release bump.
+8. Use the operator-approved single `fix` release bump.
 9. Merge `dev` to `main` once with `decision-os-merge-dev` and publish its paired tags.
 10. Run the harness from an isolated checkout of that exact release tag and retain its release-bound federation receipt.
-11. Obtain explicit destructive-recovery authorization.
+11. Bind destructive recovery to the recorded point-9 authorization and exact MOH backup receipt.
 12. Freeze the coordinator, back up MOH, deploy the fixed tag, reset only MOH relay state, and reseed from local authority.
 13. Validate and recover every active incident through its owning recovery path.
 14. Complete the ten-minute zero-error and zero-flood observation gate.
