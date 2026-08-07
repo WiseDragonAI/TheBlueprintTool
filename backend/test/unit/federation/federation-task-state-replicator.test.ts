@@ -590,6 +590,57 @@ test('relay publication keeps one project batch group in flight and advertises o
   assert.equal(replicator.diagnostics().runtimeDirty.length, 0);
 });
 
+test('relay publication admits only one bounded transaction before its exact acknowledgement', async (context) => {
+  const node = fixture('decision-os-bounded-single-flight-publication-');
+  context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
+  const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', node.store]]),
+    publish: (_target, frame) => { sent.push(frame); return true; },
+  });
+  const entities: TaskCurrentEntity[] = [];
+  // WHAT: Build one delta that crosses the shared 16-entity transaction ceiling.
+  // WHY: The regression must distinguish transaction single-flight from separate live mutations.
+  for (let index = 0; index < 17; index += 1) {
+    const mutation = await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: `card-${index}`, changes: [{ path: 'title', operation: 'set', value: `Card ${index}` }] }] });
+    entities.push(...mutation.delta.entities);
+  }
+
+  replicator.publishDelta({ version: taskCurrentStateVersion, projectId: 'project-a', entities });
+
+  const firstBatch = sent.filter((frame) => frame.type === 'state-entity-batch');
+  assert.equal(firstBatch.length, 1);
+  const firstPayload = firstBatch[0].payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  assert.equal(firstPayload.entries.length, 16);
+  assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 1);
+  assert.equal(replicator.diagnostics().queuedRelayEntityCount, 1);
+
+  await replicator.handleFrame({
+    type: 'state-relay-ack',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId: firstPayload.deliveryId, accepted: firstPayload.entries },
+  });
+
+  const batches = sent.filter((frame) => frame.type === 'state-entity-batch');
+  assert.equal(batches.length, 2);
+  const secondPayload = batches[1].payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  assert.equal(secondPayload.entries.length, 1);
+  assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 1);
+  assert.equal(replicator.diagnostics().queuedRelayEntityCount, 0);
+
+  await replicator.handleFrame({
+    type: 'state-relay-ack',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId: secondPayload.deliveryId, accepted: secondPayload.entries },
+  });
+
+  assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 0);
+  assert.equal(replicator.diagnostics().runtimeDirty.length, 0);
+  assert.equal(sent.filter((frame) => frame.type === 'state-bucket-summary').length, 1);
+});
+
 test('relay entity batches acknowledge without advertising intermediate roots', async (context) => {
   const source = fixture('decision-os-single-flight-source-');
   const target = fixture('decision-os-single-flight-target-');
@@ -739,8 +790,16 @@ test('large current-state publication is split by encoded bytes as well as entit
   const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
   const replicator = createFederationTaskStateReplicator({ stores: () => new Map([['project-a', node.store]]), publish: (_target, frame) => { sent.push(frame); return true; } });
   replicator.publishDelta(node.store.activeDelta());
+  const firstBatch = sent.find((frame) => frame.type === 'state-entity-batch')!;
+  assert.equal(sent.filter((frame) => frame.type === 'state-entity-batch').length, 1);
+  const firstPayload = firstBatch.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  await replicator.handleFrame({ type: 'state-relay-ack', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, deliveryId: firstPayload.deliveryId, accepted: firstPayload.entries } });
   const batches = sent.filter((frame) => frame.type === 'state-entity-batch');
-  assert.ok(batches.length > 1);
+  assert.equal(batches.length, 2);
+  const secondPayload = batches[1].payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  await replicator.handleFrame({ type: 'state-relay-ack', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, deliveryId: secondPayload.deliveryId, accepted: secondPayload.entries } });
+  assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 0);
+  assert.equal(replicator.diagnostics().runtimeDirty.length, 0);
   for (const frame of batches) {
     const encoded = JSON.stringify({ version: 1, type: frame.type, stateVersion: taskCurrentStateVersion, projectId: frame.projectId, payload: frame.payload });
     assert.ok(Buffer.byteLength(encoded) <= federationMaximumStateFrameBytes);
