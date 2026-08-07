@@ -707,6 +707,36 @@ test('relay disconnect retires transport deliveries while preserving durable ret
   assert.equal(sent.filter((frame) => frame.type === 'state-entity-batch').length, 2);
 });
 
+test('relay delivery acknowledgement deadline retries only the still-dirty bounded transaction', async (context) => {
+  const node = fixture('decision-os-ack-deadline-retry-');
+  context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
+  const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', node.store]]),
+    publish: (_target, frame) => { sent.push(frame); return true; },
+    deliveryAckTimeoutMs: 20,
+  });
+  const mutation = await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Retry after deadline' }] }] });
+  replicator.publishDelta(mutation.delta);
+  const firstPayload = sent.find((frame) => frame.type === 'state-entity-batch')!.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 40));
+
+  const batches = sent.filter((frame) => frame.type === 'state-entity-batch');
+  assert.equal(batches.length, 2);
+  const secondPayload = batches[1].payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  assert.notEqual(secondPayload.deliveryId, firstPayload.deliveryId);
+  assert.deepEqual(secondPayload.entries, firstPayload.entries);
+  assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 1);
+  assert.equal(replicator.diagnostics().runtimeDirty.length, 1);
+
+  await replicator.handleFrame({ type: 'state-relay-ack', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, deliveryId: secondPayload.deliveryId, accepted: secondPayload.entries } });
+
+  assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 0);
+  assert.equal(replicator.diagnostics().runtimeDirty.length, 0);
+  assert.equal(sent.filter((frame) => frame.type === 'state-bucket-summary').length, 1);
+});
+
 test('duplicate entity delivery performs no second projection callback', async (context) => {
   const source = fixture('decision-os-duplicate-source-');
   const target = fixture('decision-os-duplicate-target-');

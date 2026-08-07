@@ -12,7 +12,7 @@ import type { FederationStateFrame } from './federation-node-connector.js';
 
 type Publisher = (peerId: string, frame: Omit<FederationStateFrame, 'from'>) => boolean;
 type StateEnvelope = { key: string; stateHash: string; entity: TaskCurrentEntity };
-type PendingDelivery = { projectId: string; hashes: Map<string, string> };
+type PendingDelivery = { projectId: string; hashes: Map<string, string>; entities: TaskCurrentEntity[]; deadline: ReturnType<typeof setTimeout> };
 const encoder = new TextEncoder();
 
 function bucketMap(values: TaskCurrentBucket[]): Map<string, TaskCurrentBucket> {
@@ -65,6 +65,7 @@ export function createFederationTaskStateReplicator(input: {
   publish: Publisher;
   onProjectionChange?: (input: { projectId: string; from: string; delta: TaskStateDelta }) => void;
   onProjectionError?: (input: { projectId: string; from: string; error: unknown }) => void;
+  deliveryAckTimeoutMs?: number;
 }) {
   const convergence = new Map<string, { projectId: string; converged: boolean; lastRepairAt: string; missingBuckets: string[]; root: string }>();
   const runtimeDirty = new Map<string, Map<string, TaskCurrentEntity>>();
@@ -72,6 +73,11 @@ export function createFederationTaskStateReplicator(input: {
   const queuedRelayEntities = new Map<string, Map<string, TaskCurrentEntity>>();
   const activeRepairRequests = new Map<string, string>();
   const servedRepairRequests = new Map<string, { root: string; buckets: Set<string> }>();
+  const requestedDeliveryAckTimeoutMs = Number(input.deliveryAckTimeoutMs ?? 10_000);
+  const deliveryAckTimeoutMs = Number.isFinite(requestedDeliveryAckTimeoutMs)
+    ? Math.min(60_000, Math.max(1, Math.floor(requestedDeliveryAckTimeoutMs)))
+    : 10_000;
+  let flushRelayProject: (projectId: string, store: TaskCurrentStateStore) => void;
 
   const dirtyFor = (projectId: string): Map<string, TaskCurrentEntity> => {
     const dirty = runtimeDirty.get(projectId) ?? new Map<string, TaskCurrentEntity>();
@@ -79,12 +85,11 @@ export function createFederationTaskStateReplicator(input: {
     return dirty;
   };
 
-  const publishEntities = (peerId: string, projectId: string, entities: TaskCurrentEntity[]): boolean => {
+  const publishPeerEntities = (peerId: string, projectId: string, entities: TaskCurrentEntity[]): boolean => {
     let sent = true;
     for (const frame of boundedFrames(projectId, entities)) {
       const published = input.publish(peerId, { type: 'state-entity-batch', projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: frame.deliveryId, entries: frame.entries } });
       sent = published && sent;
-      if (published && peerId === 'relay') pendingDeliveries.set(frame.deliveryId, { projectId, hashes: new Map(frame.entries.map((entry) => [entry.key, entry.stateHash])) });
     }
     return sent;
   };
@@ -98,7 +103,28 @@ export function createFederationTaskStateReplicator(input: {
     // WHAT: Retain the complete queued selection when the current bounded frame did not enter the relay socket.
     // WHY: A transport rejection must remain retryable without reconstructing state from an incomplete delivery record.
     if (!published) return false;
-    pendingDeliveries.set(frame.deliveryId, { projectId, hashes: new Map(frame.entries.map((entry) => [entry.key, entry.stateHash])) });
+    const delivery: PendingDelivery = {
+      projectId,
+      hashes: new Map(frame.entries.map((entry) => [entry.key, entry.stateHash])),
+      entities: frame.entries.map((entry) => entry.entity),
+      deadline: setTimeout(() => {
+        // WHAT: Ignore a deadline already settled by its exact acknowledgement or disconnect cleanup.
+        // WHY: A stale timer must not requeue state owned by a newer delivery identity.
+        if (pendingDeliveries.get(frame.deliveryId) !== delivery) return;
+        pendingDeliveries.delete(frame.deliveryId);
+        const dirty = runtimeDirty.get(projectId);
+        const retryable = delivery.entities.filter((entity) => dirty?.get(taskCurrentEntityKey(entity))?.stateHash === entity.stateHash);
+        // WHAT: Retain only entities that remain dirty at the acknowledgement deadline.
+        // WHY: A concurrent newer mutation or settled entity must not be replaced by stale retry state.
+        if (retryable.length > 0) enqueueRelayEntities(projectId, retryable);
+        const store = input.stores().get(projectId) ?? input.storeFor?.(projectId, 'relay');
+        // WHAT: Retry the bounded transaction only while its authoritative durable store remains available.
+        // WHY: Terminal summaries and retry frames must derive from the same project state.
+        if (store) flushRelayProject(projectId, store);
+      }, deliveryAckTimeoutMs),
+    };
+    delivery.deadline.unref?.();
+    pendingDeliveries.set(frame.deliveryId, delivery);
     const queued = queuedRelayEntities.get(projectId);
     // WHAT: Remove every entity owned by the single frame that entered the relay socket.
     // WHY: Later frames must remain queued until the relay acknowledges this transaction.
@@ -123,7 +149,7 @@ export function createFederationTaskStateReplicator(input: {
     queuedRelayEntities.set(projectId, queued);
   };
 
-  const flushRelayProject = (projectId: string, store: TaskCurrentStateStore): void => {
+  flushRelayProject = (projectId: string, store: TaskCurrentStateStore): void => {
     // WHAT: Keep the current project batch group in flight until every relay acknowledgement settles.
     // WHY: Publishing a second group before the first settles creates intermediate roots and duplicate repair rounds.
     if (hasPendingRelayDelivery(projectId)) return;
@@ -262,7 +288,7 @@ export function createFederationTaskStateReplicator(input: {
         enqueueRelayEntities(frame.projectId, entities);
         flushRelayProject(frame.projectId, store);
       } else {
-        publishEntities(frame.from, frame.projectId, entities);
+        publishPeerEntities(frame.from, frame.projectId, entities);
         advertise(frame.from, frame.projectId, store);
       }
       return;
@@ -272,6 +298,7 @@ export function createFederationTaskStateReplicator(input: {
       const deliveryId = String(payload.deliveryId ?? '');
       const delivery = pendingDeliveries.get(deliveryId);
       if (!delivery || delivery.projectId !== frame.projectId) return;
+      clearTimeout(delivery.deadline);
       const accepted = Array.isArray(payload.accepted) ? payload.accepted as Array<{ key?: string; stateHash?: string }> : [];
       const dirty = runtimeDirty.get(frame.projectId);
       for (const acknowledgement of accepted) {
@@ -295,7 +322,10 @@ export function createFederationTaskStateReplicator(input: {
     }
     // WHAT: Retire relay delivery identities when the relay socket disconnects.
     // WHY: Their acknowledgements can never arrive, while runtimeDirty retains the durable retry authority.
-    if (peerId === 'relay') pendingDeliveries.clear();
+    if (peerId === 'relay') {
+      for (const delivery of pendingDeliveries.values()) clearTimeout(delivery.deadline);
+      pendingDeliveries.clear();
+    }
   };
 
   return {
