@@ -345,9 +345,10 @@ Ctrl+D  Resize selected cards to their content and selected zones to contained c
 
 ## Iteration Worktree and Integration Policy
 
-- **Default execution boundary:** Every implementation iteration, including code, tests, documentation, configuration, and operational tooling, must use a dedicated feature branch in an isolated worktree under `<repo>/.worktrees/`, based on the current `dev` branch. Do not edit `dev` or `main` directly by default.
+- **Code execution boundary:** Every code iteration, including source, tests, configuration, build files, and operational tooling, must use a dedicated feature branch in an isolated worktree under `<repo>/.worktrees/`, based on the current `dev` branch. Do not edit `dev` or `main` directly for code by default.
+- **Documentation-only boundary:** Commit permanent planning, analysis, and procedure documents directly on `main`. A documentation-only iteration must not use the `dev` integration path, run the dev integration check, or push `dev`. Do not push a documentation-only `main` commit unless the operator explicitly requests that push.
 - **Baseline resolution:** Before editing, fetch `dev`, verify the selected baseline, inspect the target checkout and registered worktrees, and preserve all unrelated staged, tracked, untracked, runtime, and evidence state.
-- **Autonomous `dev` integration:** An agent is authorized to commit the iteration, merge its feature branch into `dev` with a merge commit, push `dev`, then remove the worktree and delete the merged feature branch without additional operator approval only after all of these gates pass:
+- **Autonomous `dev` integration:** This authorization applies only to code iterations. An agent is authorized to commit a code iteration, merge its feature branch into `dev` with a merge commit, push `dev`, then remove the worktree and delete the merged feature branch without additional operator approval only after all of these gates pass:
   1. Required focused checks and repository verification pass under the repository test policy.
   2. The complete worktree diff and changed-path inventory have been reviewed.
   3. Every changed path and hunk belongs to the current iteration.
@@ -360,7 +361,7 @@ Ctrl+D  Resize selected cards to their content and selected zones to contained c
      node bin/decision-os-dev-integration-check.mjs --feature <reviewed-feature-sha> --json
      ```
 - **Failed gate:** If a pre-merge gate fails, keep the feature branch and worktree intact, report the exact blocker, and do not merge. If the post-merge dev integration check fails, keep the local merge plus feature branch and worktree intact, report and repair the exact child publication, ancestry, or checkout blocker, rerun the check, and do not push or clean up.
-- **Mandatory successful-merge cleanup:** Push the exact checked merge SHA to `dev` only after the dev integration check succeeds. Then immediately remove the iteration worktree, delete the merged feature branch, and delete all iteration-temporary documentation and artifacts. Commit intended permanent documentation before the merge. Verify that no completed iteration worktree or feature branch remains before reporting completion.
+- **Mandatory successful-code-merge cleanup:** Push the exact checked code merge SHA to `dev` only after the dev integration check succeeds. Then immediately remove the iteration worktree, delete the merged feature branch, and delete all iteration-temporary documentation and artifacts. Commit intended permanent documentation on `main`, outside the code merge. Verify that no completed code-iteration worktree or feature branch remains before reporting completion.
 - **Dev Decision OS visibility:** In the `dev` linked worktree, set `submodule.".decision-os".ignore = all` through worktree-local Git configuration. Do not commit this setting to `.gitmodules`; it suppresses mutable child-state noise only in `dev` and preserves submodule-drift visibility in `main`.
 - **Explicit operator exceptions:** The operator may explicitly direct the current iteration to run directly on `dev`, directly on `main`, or in a dedicated worktree based on `main`. The exception applies only to that stated iteration and must never be inferred from the current checkout, a clean primary checkout, urgency, or a prior exception.
 - **Main protection:** Without an explicit operator exception, an agent must not implement on `main`, create an iteration worktree from `main`, merge an iteration into `main`, or use the primary checkout as an uncommitted handoff location.
@@ -374,7 +375,7 @@ Ctrl+D  Resize selected cards to their content and selected zones to contained c
 - The commit body must contain a `WHAT:` paragraph identifying the changed behavior, documentation, data contract, or operational boundary.
 - The commit body must contain a `WHY:` paragraph recording the incident, invariant, operator decision, or verified need that required the change.
 - After committing, verify the complete message with `git show -s --format=%B HEAD` before pushing.
-- After creating the final merge commit for completed work, push `dev` to `origin` before reporting completion.
+- After creating the final merge commit for completed code work, push `dev` to `origin` before reporting completion. This automatic push rule does not apply to documentation-only commits.
 - Never leave completed iteration worktrees, merged feature branches, or their build artifacts behind.
 - When the operator asks to push committed work, push with the Wise SSH key:
 
