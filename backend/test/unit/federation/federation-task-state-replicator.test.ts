@@ -796,7 +796,11 @@ test('one peer missing request replays a local root only once', async (context) 
   await replicator.handleFrame(request);
   await replicator.handleFrame({ ...request, payload: { stateVersion: taskCurrentStateVersion, buckets: [...(request.payload as { buckets: string[] }).buckets, ...(request.payload as { buckets: string[] }).buckets] } });
   assert.equal(sent.filter((frame) => frame.type === 'state-entity-batch').length, 1);
-  const delivery = sent.find((frame) => frame.type === 'state-entity-batch')!;
+  assert.equal(replicator.diagnostics().runtimeDirty.length, 1);
+  replicator.disconnectPeer('relay');
+  replicator.reconcileRelay();
+  assert.equal(sent.filter((frame) => frame.type === 'state-entity-batch').length, 2);
+  const delivery = sent.filter((frame) => frame.type === 'state-entity-batch').at(-1)!;
   const entries = (delivery.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> });
   await replicator.handleFrame({
     type: 'state-relay-ack',
@@ -804,5 +808,6 @@ test('one peer missing request replays a local root only once', async (context) 
     projectId: 'project-a',
     payload: { stateVersion: taskCurrentStateVersion, deliveryId: entries.deliveryId, accepted: entries.entries.map(({ key, stateHash }) => ({ key, stateHash })) },
   });
+  assert.equal(replicator.diagnostics().runtimeDirty.length, 0);
   assert.equal(sent.filter((frame) => frame.type === 'state-bucket-summary').length, 1);
 });
