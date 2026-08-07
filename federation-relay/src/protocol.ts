@@ -3,12 +3,13 @@
  * WHY: Incompatible nodes must be rejected before they participate in replicated state.
  */
 import { taskCurrentBaselineEpoch, taskCurrentStateVersion, taskStateProtocol } from '../../shared/task-current-state-core';
+import { federationMaximumStateFrameBytes } from '../../shared/federation-state-transport';
 
 export const protocolVersion = 1;
 export const stateProtocol = taskStateProtocol;
 export const stateSchema = taskCurrentStateVersion;
 export const stateBaselineEpoch = taskCurrentBaselineEpoch;
-export const maximumStateFrameBytes = 512 * 1024;
+export const maximumStateFrameBytes = federationMaximumStateFrameBytes;
 export const chunkBytes = 64 * 1024;
 export const creditWindowBytes = 1024 * 1024;
 export const maximumBodyBytes = 25 * 1024 * 1024;

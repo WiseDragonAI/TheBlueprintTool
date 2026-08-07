@@ -13,6 +13,7 @@ import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../.
 import { taskCurrentStateVersion, type TaskCurrentBucket, type TaskCurrentEntity } from '../../../src/business/task-state/helper/task-current-state-types.js';
 import { createTaskExecutionRepository } from '../../../src/business/task-state/helper/task-execution-repository.js';
 import { taskCurrentEntityKey } from '../../../../shared/task-current-state-core.js';
+import { federationMaximumStateFrameBytes, federationStateEntityBatchSize } from '../../../../shared/federation-state-transport.js';
 import { migrateTaskCurrentState } from '../../../src/business/task-state/helper/task-current-state-migration.js';
 
 type Replicator = ReturnType<typeof createFederationTaskStateReplicator>;
@@ -742,8 +743,8 @@ test('large current-state publication is split by encoded bytes as well as entit
   assert.ok(batches.length > 1);
   for (const frame of batches) {
     const encoded = JSON.stringify({ version: 1, type: frame.type, stateVersion: taskCurrentStateVersion, projectId: frame.projectId, payload: frame.payload });
-    assert.ok(Buffer.byteLength(encoded) <= 512 * 1024);
-    assert.ok(((frame.payload as { entries: unknown[] }).entries).length <= 128);
+    assert.ok(Buffer.byteLength(encoded) <= federationMaximumStateFrameBytes);
+    assert.ok(((frame.payload as { entries: unknown[] }).entries).length <= federationStateEntityBatchSize);
   }
 });
 

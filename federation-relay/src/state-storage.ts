@@ -7,9 +7,10 @@ import {
   taskCurrentBucketForEntityKey,
   taskCurrentEntityKey,
 } from '../../shared/task-current-state-core';
+import { federationStateEntityBatchSize } from '../../shared/federation-state-transport';
 import { assertRelayEntity, type RelayEntity } from './current-state';
 
-export const stateEntityBatchSize = 128;
+export const stateEntityBatchSize = federationStateEntityBatchSize;
 export type StateBucket = { bucket: string; count: number; checksum: string; entries?: Record<string, string> };
 export type StateEntry = { key: string; stateHash: string; entity: RelayEntity };
 export type StoredStateEntry = { key: string; entityKey: string; bucket: string; entity: RelayEntity };
