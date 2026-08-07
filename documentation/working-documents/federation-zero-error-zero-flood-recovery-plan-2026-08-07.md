@@ -59,7 +59,28 @@
 
 ---
 
-## E. Minimal Code Correction
+## E. Unauthorized And Unnecessary Expansion
+
+1. The authorized production task was narrow: use the existing tag-based release method to promote the already-approved `0.3.1` work from `dev` to `main`, deploy the matching Cloudflare Worker, and activate only the production coordinator.
+2. Changing `promote` to own the `dev`-to-`main` merge was outside that task. It duplicated the canonical merge tool's responsibility and mixed source integration with deployment.
+3. Creating `rel-0.3.2` through `rel-0.3.12` while correcting one failed `0.3.1` deployment was outside the requested release identity. Those tags represent reactive iterations, not eleven operator-approved fix releases.
+4. Excluding local-only projects from delivery and federation convergence was an unnecessary product-identity change. It altered which projects the system considered real instead of fixing deployment.
+5. Catching every repository-origin failure and converting it to an empty origin was an unnecessary error-semantics change. It hid broken repository inspection behind the local-only classification.
+6. Narrowing delivery health until `54` active incidents appeared as zero was an unnecessary observability change. Deployment eligibility and complete product health needed separate fields, not suppression of errors.
+7. Changing durable repair ownership to session-scoped ownership was an unnecessary federation-architecture reversal. It invalidated the cross-reconnect flood invariant and made a new socket sufficient to repeat unchanged work.
+8. Treating socket-send completion as repair completion expanded transport behavior without proving receiver application. The existing `state-converged` outcome was the required completion authority.
+9. Adding retries and acknowledgment deadlines before handling terminal same-dot rejection expanded the retry system around an irreconcilable state. No timeout can make the same causal dot accept two values.
+10. Telemetry-only release promotion after the rejection cause was already correlated expanded the release chain without restoring a working state.
+11. The resulting architecture mixed five independent concerns: Git integration, release identity, deployment, project eligibility, and federation repair. That coupling allowed a deployment failure to change critical runtime behavior.
+12. Recovery must reverse only the expansions identified in Section D and retain the valid batching, single-flight, epoch-4 compatibility, atomic Markdown synchronization, and deploy-only tag path. It must not broadly revert unrelated accepted `dev` work.
+13. Every implementation hunk must map to one of four authorized recovery outcomes: stop startup capture storms, make unchanged repair work quiescent across reconnects, expose complete health without blocking contained-error deployment, or recover the corrupt MOH relay project.
+14. A proposed change outside those four outcomes is rejected before implementation. A new persistence model, release workflow, project-eligibility rule, protocol epoch, migration, retry layer, node topology, UI redesign, and unrelated cleanup are not part of this recovery.
+15. Production promotion remains a consumer of the canonical published release tags. It performs deployment only; it never performs any operation already owned by `decision-os-merge-dev`.
+16. One reviewed implementation commit, one `dev` integration, one canonical `dev`-to-`main` merge, one operator-approved release identity, and one production deployment are the maximum mutation chain for this recovery.
+
+---
+
+## F. Minimal Code Correction
 
 1. In `project-content-runtime.ts`, admit startup reconciliation only when the exact mutable content file exists. Keep normal reconciliation for an existing changed file.
 2. In `watch-card-content-files.ts`, replace unbounded startup `Promise.all` capture fan-out with sequential bounded processing. One failed resource pauses only its owning project watcher and does not cancel unrelated projects.
@@ -78,7 +99,7 @@
 
 ---
 
-## F. Permanent Automated Proof
+## G. Permanent Automated Proof
 
 1. Add a watcher regression in the focused project-content runtime tests: one retained head plus an absent mutable sidecar produces zero capture calls, zero incidents, and ready startup.
 2. Add an inaccessible-project regression: one inaccessible root produces one contained project result, zero concurrent capture fan-out, and continued readiness for an unrelated project.
@@ -92,7 +113,7 @@
 
 ---
 
-## G. Isolated Huge-State Canary Proof
+## H. Isolated Huge-State Canary Proof
 
 1. Create Canary A from the reviewed feature worktree based on current `dev`. Do not use the persistent `dev` worktree and do not register the canary in MultiTerm.
 2. Copy the real Decision OS epoch-4 task-current state into an isolated scratch root through `TaskCurrentStateStore`; never copy production settings, credentials, caches, incidents, uploads, runtime files, or live process state.
@@ -109,7 +130,7 @@
 
 ---
 
-## H. Development Integration Gate
+## I. Development Integration Gate
 
 1. Implement the correction in one isolated feature worktree based on the exact current `dev` head.
 2. Review the complete changed-path inventory and every hunk. Exclude unrelated UI work, staged operator hunks, production state, release refs, delivery journals, and `.decision-os` child content not owned by the iteration.
@@ -121,7 +142,7 @@
 
 ---
 
-## I. Release Identity Gate
+## J. Release Identity Gate
 
 1. Do not delete, move, overwrite, or silently reinterpret published `rel-0.3.2` through `rel-0.3.12` tags. Their history is required to audit the incident.
 2. Do not create another release tag until the operator supplies the one canonical release identity for this recovery. This is the only unresolved operator decision and blocks promotion, not implementation or canary proof.
@@ -136,7 +157,7 @@
 
 ---
 
-## J. Production Recovery And Deployment
+## K. Production Recovery And Deployment
 
 1. Require explicit operator authorization for this section because it stops the production coordinator and deletes the MOH project's relay state.
 2. Freeze production reconnects and automatic restarts. Do not run the uncommitted acknowledgment-timeout retry worktree and do not reconnect the existing flood-prone coordinator during recovery.
@@ -178,7 +199,7 @@
 
 ---
 
-## K. Incident Recovery
+## L. Incident Recovery
 
 1. Do not delete, truncate, rewrite, or manually mark incident files resolved. Recovery must validate the owning durable state first.
 2. After the startup patch is active, resume each exact MOH and lys `project-watcher:<project-id>` scope through `POST /api/diagnostics/runtime/resume` with a resolution that names the validated file inventory and patch release.
@@ -199,7 +220,7 @@
 
 ---
 
-## L. Final Acceptance And Observation
+## M. Final Acceptance And Observation
 
 1. Require the coordinator and Worker to report the same approved release tag, exact main SHA, delivery protocol `1`, task-state protocol `4`, schema `4`, and production environment.
 2. Require `/api/health` to report ready with zero active incidents and zero paused scopes.
@@ -214,7 +235,7 @@
 
 ---
 
-## M. Execution Order
+## N. Execution Order
 
 1. Correct startup watcher admission and bounded processing.
 2. Correct durable repair ownership and terminal rejection handling.
@@ -231,7 +252,7 @@
 
 ---
 
-## N. Supersession Boundary
+## O. Supersession Boundary
 
 1. This document supersedes `federation-flood-two-node-canary-and-fix-plan-2026-08-04.md` as the recovery authority.
 2. The earlier document's executed canary evidence remains historical evidence, but it did not prove durable receiver application in the Worker path, did not prevent session-scoped repair eligibility, did not correct startup watcher admission, and did not recover corrupt production relay state.
