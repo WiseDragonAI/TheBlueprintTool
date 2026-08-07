@@ -455,7 +455,11 @@ async function createPipelineAndSkillDefaults(page: Page): Promise<void> {
   assert.ok(saveResponse, 'The server-owned skill save must return a response.');
   const savePayload = await saveResponse.json();
   assert.equal(saveResponse.status(), 200, JSON.stringify(savePayload));
-  await skillEditor.getByText('Saved locally; publication failed: retry synchronization.', { exact: true }).waitFor({ state: 'visible' });
+  // WHAT: Assert the completed local Git contract independently from detached federation convergence.
+  // WHY: Relay failures persist as incidents after the authoring response and do not convert local success into a failed save.
+  assert.equal(savePayload.publication?.status, 'not-applicable');
+  assert.match(String(savePayload.skill?.gitRevision?.commit ?? ''), /^[a-f0-9]{40}$/);
+  await skillEditor.getByText('Saved as a new Git revision.', { exact: true }).waitFor({ state: 'visible' });
   await skillEditor.getByRole('button', { name: 'Close', exact: true }).click();
   await skillEditor.waitFor({ state: 'hidden' });
   await skillPicker.waitFor({ state: 'visible' });
@@ -583,11 +587,11 @@ async function runCancelRestartAndFailPipeline(
       }));
       assert.fail(`Explicit pipeline widget did not reach RUNNING: ${JSON.stringify(diagnostic)}`);
     }
-    assert.equal(await inheritedWidget.locator('[data-codex-run-model]').inputValue(), 'gpt-5.4');
-    assert.equal(await inheritedWidget.locator('[data-codex-run-effort]').inputValue(), 'high');
-    assert.equal(await explicitWidget.locator('[data-codex-run-model]').inputValue(), 'gpt-5.5');
-    assert.equal(await explicitWidget.locator('[data-codex-run-effort]').inputValue(), 'low');
-    const pipelineRunId = String(await explicitWidget.getAttribute('data-pipeline-run-id'));
+    const inheritedMetadata = await pipelineWidgetMetadata(inheritedWidget);
+    const explicitMetadata = await pipelineWidgetMetadata(explicitWidget);
+    assert.deepEqual(inheritedMetadata.preference, { model: 'gpt-5.4', effort: 'high' });
+    assert.deepEqual(explicitMetadata.preference, { model: 'gpt-5.5', effort: 'low' });
+    const pipelineRunId = explicitMetadata.pipelineRunId;
     assert.ok(pipelineRunId, 'The explicit step widget must retain its pipeline run identity.');
 
     const cancelResponse = page.waitForResponse((response) => (
@@ -683,6 +687,19 @@ function pipelineWidget(page: Page, pipelineName: string, stepName: string): Loc
   // WHY: Source-card projection feeds its Codex Log, while lifecycle controls and result geometry belong to the generated card.
   return page.locator(`.card:not([data-card-id="${sourceCardId}"]) .codex-run-widget`)
     .filter({ has: page.locator('[data-codex-run-context]', { hasText: `${pipelineName} › ${stepName}` }) });
+}
+
+async function pipelineWidgetMetadata(widget: Locator): Promise<{
+  pipelineRunId: string;
+  preference: { model: string; effort: string };
+}> {
+  return widget.evaluate((element) => ({
+    pipelineRunId: (element as HTMLElement).dataset.pipelineRunId ?? '',
+    preference: {
+      model: element.querySelector<HTMLSelectElement>('[data-codex-run-model]')?.value ?? '',
+      effort: element.querySelector<HTMLSelectElement>('[data-codex-run-effort]')?.value ?? '',
+    },
+  }));
 }
 
 async function cardIdForWidget(widget: Locator): Promise<string> {
@@ -827,6 +844,9 @@ async function startDecisionOsServer(fixture: BrowserFixture): Promise<ServerHan
       CODEX_BIN: fixture.fakeCodexFile,
       CODEX_HOME: fixture.codexHome,
       DECISION_OS_FRONTEND_ROOT: resolve(repoRoot, 'frontend'),
+      // WHAT: Bind settings discovery to the temporary workspace.
+      // WHY: The parent launcher settings can connect an isolated browser fixture to live federation.
+      DECISION_OS_REPOSITORY_SETTINGS_FILE: join(fixture.workspace, '.decision-os', '.settings.json'),
       HOST: '127.0.0.1',
       PORT: String(port),
       TSX_TSCONFIG_PATH: resolve(repoRoot, 'backend/tsconfig.json'),

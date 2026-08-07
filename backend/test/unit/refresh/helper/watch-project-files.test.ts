@@ -33,6 +33,24 @@ function waitForChange(changes: ProjectFileChange[], predicate: (change: Project
   });
 }
 
+async function waitForPublicationStart(started: Promise<void>): Promise<void> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      started,
+      new Promise<never>((_resolve, reject) => {
+        // WHAT: Retain the test scope until the non-persistent watcher publishes its first event.
+        // WHY: The production watcher intentionally does not keep the server process alive.
+        timeout = setTimeout(() => reject(new Error('Timed out waiting for project publication to start.')), 2_000);
+      }),
+    ]);
+  } finally {
+    // WHAT: Clear the test-owned deadline after publication begins or the wait fails.
+    // WHY: The helper must not leave a referenced timer after its bounded wait settles.
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 test('watches state, registered ledgers, and ledgers canvas for one project', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-project-watch-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
@@ -181,7 +199,7 @@ test('close waits for an in-flight project publication to settle', async () => {
   });
 
   writeFileSync(ledgerFile, JSON.stringify({ cards: [{ id: 'changed' }] }));
-  await started;
+  await waitForPublicationStart(started);
   let closed = false;
   const closing = watcher.close().then(() => { closed = true; });
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -214,7 +232,7 @@ test('close has a finite deadline when a project publication does not settle', a
   });
 
   writeFileSync(ledgerFile, JSON.stringify({ cards: [{ id: 'changed' }] }));
-  await started;
+  await waitForPublicationStart(started);
   await watcher.close(25);
   assert.equal(errors.some((entry) => entry.operation === 'flush-project-changes'), true);
 });

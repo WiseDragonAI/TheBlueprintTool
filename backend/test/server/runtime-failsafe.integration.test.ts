@@ -1,3 +1,7 @@
+/**
+ * WHAT: Covers release health, runtime incident containment, and diagnostic availability.
+ * WHY: One failing project or background scope must preserve server health and actionable incident evidence.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -12,7 +16,14 @@ import { runtimeIncidentReviewCardId, runtimeIncidentReviewProjectId } from '@ba
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import { createTaskExecutionLaunchRequest, type TaskExecutionRouter } from '@backend/business/codex/helper/task-execution-router.js';
 
-test('normal health reports the active release identity', async () => {
+test('normal health reports the active release identity', async (context) => {
+  const previousDeliveryProtocol = process.env.DECISION_OS_DELIVERY_PROTOCOL;
+  context.after(() => {
+    // WHAT: Restore the caller's delivery-protocol environment after the release fixture.
+    // WHY: Process-wide delivery discovery must not leak the fixture protocol into later tests.
+    if (previousDeliveryProtocol === undefined) delete process.env.DECISION_OS_DELIVERY_PROTOCOL;
+    else process.env.DECISION_OS_DELIVERY_PROTOCOL = previousDeliveryProtocol;
+  });
   const home = mkdtempSync(join(tmpdir(), 'decision-os-release-health-'));
   const decisionOsRoot = join(home, '.decision-os');
   const releaseSha = 'a'.repeat(40);
@@ -35,7 +46,16 @@ test('normal health reports the active release identity', async () => {
   symlinkSync(`releases/${releaseSha}`, currentPointer);
 
   const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
-  const runtime: Record<string, unknown> = {};
+  process.env.DECISION_OS_DELIVERY_PROTOCOL = '1';
+  const runtime: Record<string, unknown> = {
+    // WHAT: Install release identity before constructing the server.
+    // WHY: Health initialization snapshots delivery settings during construction.
+    decisionOsSettings: {
+      deliveryProtocol: 1,
+      deliveryReleaseRoot: releaseRoot,
+      deliveryCurrentPointer: currentPointer,
+    },
+  };
   createHttpServer({
     action_payload: {
       port: 0,
@@ -45,11 +65,6 @@ test('normal health reports the active release identity', async () => {
     },
     runtime_state: runtime,
   });
-  runtime.decisionOsSettings = {
-    deliveryProtocol: 1,
-    deliveryReleaseRoot: releaseRoot,
-    deliveryCurrentPointer: currentPointer,
-  };
   const server = runtime.server as Server;
   await once(server, 'listening');
   try {

@@ -17,6 +17,15 @@ import { registerTaskExecutionProcess, removeTaskExecutionProcess, taskExecution
 import { createProjectTaskState } from '@backend/business/task-state/helper/project-task-state.js';
 import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
 
+function isolatedServerRuntime(initial: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ...initial,
+    // WHAT: Keep executor ownership local to the temporary test workspace.
+    // WHY: Launcher-level repository settings can name a real federation node and must not reclassify fixture executions as remote.
+    decisionOsSettings: { federationNodeId: 'local' },
+  };
+}
+
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < 10000) {
@@ -269,7 +278,7 @@ test('thread-launched run reads return chronological diagnostics without changin
   utimesSync(logPath, completedAt, completedAt);
 
   process.chdir(workspace);
-  const runtime: Record<string, unknown> = {};
+  const runtime = isolatedServerRuntime();
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -412,7 +421,7 @@ test('card skill run route returns command output containing thread markdown as 
   writeFileSync(logPath, '');
 
   process.chdir(workspace);
-  const runtime: Record<string, unknown> = {};
+  const runtime = isolatedServerRuntime();
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -493,7 +502,7 @@ test('card skill run route infers status from the latest continued JSONL segment
   utimesSync(logPath, new Date(startedAt), new Date(startedAt));
 
   process.chdir(workspace);
-  const runtime: Record<string, unknown> = {};
+  const runtime = isolatedServerRuntime();
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -752,7 +761,7 @@ test('card skill continue route excludes codex artifact notes from resumed promp
 
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = {};
+  const runtime = isolatedServerRuntime();
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -823,7 +832,7 @@ test('card skill run route measures active resumed segment from the latest persi
   utimesSync(logPath, fresh, fresh);
 
   process.chdir(workspace);
-  const runtime: Record<string, unknown> = {
+  const runtime = isolatedServerRuntime({
     codexSkillRuns: {
       [runId]: {
         id: runId,
@@ -833,7 +842,7 @@ test('card skill run route measures active resumed segment from the latest persi
         finishedAt: new Date(resumedAt - 1000).toISOString(),
       },
     },
-  };
+  });
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -977,7 +986,7 @@ test('server startup interrupts a replicated running execution whose process reg
 
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = {};
+  const runtime = isolatedServerRuntime();
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');

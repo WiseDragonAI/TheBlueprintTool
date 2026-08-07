@@ -1,3 +1,8 @@
+<!--
+WHAT: Defines owner, Git revision, recovery, editor, admission, and federation contracts for authored Decision OS content.
+WHY: Content authors and implementers need one exact boundary between immediate local persistence and asynchronous publication.
+-->
+
 ## A. Owner And Discovery Model
 
 1. **`federated-skill`:** the canonical server root returned by `resolveServerSkillContext()` owns `.skills/<name>/SKILL.md`. The skill is agent-visible and is the only authored kind eligible for the federation skill manifest.
@@ -27,7 +32,7 @@
    ```
 
 3. `contentKind` is exactly `federated-skill`, `workspace-skill`, or `pipeline-prompt`. `markdown` may replace generated initial Markdown. A workspace skill requires an available project-scoped request.
-4. HTTP `201` returns `{ok, statusCode, skill, publication}`. `skill` includes the path-free identity, `contentKind`, `executionVisibility`, `projectId`, `editable`, `readOnlyReason`, Markdown SHA-256 `revision`, `markdown`, defaults, tags, references, `gitRevision`, and initial `history`.
+4. HTTP `201` returns `{ok, statusCode, skill, publication}`. `skill` includes the path-free identity, `contentKind`, `executionVisibility`, `projectId`, `editable`, `readOnlyReason`, Markdown SHA-256 `revision`, `markdown`, defaults, tags, references, `gitRevision`, and initial `history`. The accepted local authoring response reports `publication.status: not-applicable`; federation convergence is observed asynchronously.
 5. Read the selected catalog identity with `GET /p/:projectId/api/codex/skill-library/:name`. Read the canonical server-skill owner explicitly with `GET /p/:projectId/api/codex/server-skills/:name`.
 6. Save Markdown with `PUT /p/:projectId/api/codex/skill-library/:name`; canonical server-skill saves may use `PUT /p/:projectId/api/codex/server-skills/:name`:
 
@@ -168,9 +173,9 @@
 
 1. `exportableSkills()` admits only clean committed `federated-skill` packages below the canonical server root.
 2. Workspace, prompt, user, system, plugin, imported, unavailable-store, and recovery-pending content is excluded.
-3. A successful federated-skill commit invalidates the export cache, republishes the manifest, and requests the bounded skills-first synchronization.
-4. Relay failure after local Git success does not roll back the content commit. The response reports publication `failed`, `retryable: true`, the synchronization retry path, and incident evidence with stable code `federated_skill_publication_failed`.
-5. Publication retry uses `POST /api/federation/libraries/synchronize`; it does not repeat the authored content save.
+3. After a successful federated-skill commit, the HTTP route returns the completed local authoring result, then detached publication invalidates the export cache, republishes the manifest, and requests bounded skills-first synchronization.
+4. The local response reports `publication.status: not-applicable` because it does not wait for peer convergence. A later relay failure leaves the content commit intact and persists incident evidence under the skill-scoped publication boundary with stable code `federated_skill_publication_failed`.
+5. Successful background convergence resolves the skill-scoped publication incident. Explicit synchronization uses `POST /api/federation/libraries/synchronize`; it does not repeat the authored content save.
 
 ---
 

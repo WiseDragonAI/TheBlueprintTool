@@ -168,7 +168,8 @@ export async function executeNodeMessage(input: {
         if (stderrDescriptor !== undefined) closeSync(stderrDescriptor);
         if (existsSync(promptFile)) unlinkSync(promptFile);
       }
-      child.unref();
+      // WHAT: Keep the direct child referenced until this request-scoped execution settles.
+      // WHY: The returned promise and its capacity reservation are owned by the active request.
       let settled = false;
       let forceKillTimer: NodeJS.Timeout | null = null;
       let forcedSettlementTimer: NodeJS.Timeout | null = null;
@@ -177,13 +178,13 @@ export async function executeNodeMessage(input: {
       const executionTimeout = codexExecutionTimeoutMs(input.runtime);
 
       const stop = (error: Error): void => {
+        // WHAT: Let the first terminal failure own process termination and forced-settlement timers.
+        // WHY: Concurrent abort, output, process, and deadline failures must converge on one settlement path.
         if (pendingFailure) return;
         pendingFailure = error;
         signalCodexProcessTree({ child, signal: 'SIGTERM' });
         forceKillTimer = setTimeout(() => signalCodexProcessTree({ child, signal: 'SIGKILL' }), 2_000);
-        forceKillTimer.unref?.();
         forcedSettlementTimer = setTimeout(() => { void settle(error, null); }, 5_000);
-        forcedSettlementTimer.unref?.();
       };
       const onAbort = (): void => stop(new Error('Node message execution was cancelled.'));
       input.signal?.addEventListener('abort', onAbort, { once: true });
@@ -198,11 +199,17 @@ export async function executeNodeMessage(input: {
           stop(error instanceof Error ? error : new Error(String(error)));
         }
       }, 50);
-      outputLimitTimer.unref?.();
 
       settle = async (error: Error | null, exitCode: number | null): Promise<void> => {
+        // WHAT: Ignore duplicate child error, close, deadline, and forced-settlement callbacks.
+        // WHY: Only the first terminal callback may release request-owned resources and publish a result.
         if (settled) return;
         settled = true;
+        // WHAT: Release the request-owned event-loop reference at terminal settlement.
+        // WHY: Forced settlement must not leave an unresponsive child retaining the server process.
+        child.unref();
+        // WHAT: Cancel every request-owned deadline before reading artifacts and resolving.
+        // WHY: No timer may fire into an already-settled execution scope.
         if (forceKillTimer) clearTimeout(forceKillTimer);
         if (forcedSettlementTimer) clearTimeout(forcedSettlementTimer);
         clearTimeout(executionDeadline);
@@ -250,7 +257,6 @@ export async function executeNodeMessage(input: {
         }
       };
       const executionDeadline = setTimeout(() => stop(new Error(`Node message execution exceeded ${executionTimeout}ms.`)), executionTimeout);
-      executionDeadline.unref?.();
       child.once('error', (error) => { void settle(error, null); });
       child.once('close', (code) => { void settle(null, code); });
     });

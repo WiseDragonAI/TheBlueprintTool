@@ -41,6 +41,9 @@ test('launch binds Codex stdio directly to durable files', async (context) => {
     segment: 'start',
     startLine: 0,
     onSpawn: (child) => {
+      // WHAT: Retain the intentionally detached child while this test owns terminal settlement.
+      // WHY: The production launcher must remain background-safe, while this assertion awaits its callback.
+      child.ref();
       assert.equal(child.stdin, null);
       assert.equal(child.stdout, null);
       assert.equal(child.stderr, null);

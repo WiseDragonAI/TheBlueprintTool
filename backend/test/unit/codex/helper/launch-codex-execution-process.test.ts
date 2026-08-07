@@ -80,7 +80,11 @@ test('asynchronous settlement failures are reported without becoming unhandled r
       stderrFile,
       segment: 'start',
       startLine: 0,
-      onSpawn() {},
+      onSpawn(child) {
+        // WHAT: Retain the detached child until the awaited settlement failure is observed.
+        // WHY: A pending promise alone does not keep the Node test event loop alive.
+        child.ref();
+      },
       async onSettled() { throw new Error('injected asynchronous settlement failure'); },
     });
     const observed = await failure;
@@ -117,7 +121,12 @@ test('execution deadline stops a non-terminating Codex process and reports the s
       stderrFile,
       segment: 'start',
       startLine: 0,
-      onSpawn(child) { childPid = child.pid ?? 0; },
+      onSpawn(child) {
+        // WHAT: Retain the detached timeout fixture until its settlement callback completes.
+        // WHY: A pending assertion promise does not keep the Node test event loop alive.
+        child.ref();
+        childPid = child.pid ?? 0;
+      },
       onSettled() { resolveSettlement(); },
     });
     const observed = await failure;
@@ -144,7 +153,12 @@ test('execution deadline stops a non-terminating Codex process and reports the s
       stderrFile: join(root, 'unrelated.log'),
       segment: 'start',
       startLine: 0,
-      onSpawn(child) { unrelatedPid = child.pid ?? 0; },
+      onSpawn(child) {
+        // WHAT: Retain the detached control fixture until its successful settlement callback completes.
+        // WHY: The control must remain observable beside the timed-out execution without changing production detachment.
+        child.ref();
+        unrelatedPid = child.pid ?? 0;
+      },
       onSettled() { resolveUnrelatedSettlement(); },
     });
     await unrelatedSettlement;

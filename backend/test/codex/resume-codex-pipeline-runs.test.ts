@@ -188,9 +188,19 @@ test('cancellation stops downstream work and restart preserves prior artifacts i
     rmSync(workspace, { recursive: true, force: true });
   }
 });
-test('server startup schedules the queued replicated successor without mutating completed pipeline history', async () => {
+test('server startup schedules the queued replicated successor without mutating completed pipeline history', async (context) => {
   const previousCodexBin = process.env.CODEX_BIN;
+  const previousRepositorySettingsFile = process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;
   const { workspace, decisionOsRoot, ledgerPath } = baseWorkspace('decision-os-pipeline-resume-');
+  const repositorySettingsFile = join(decisionOsRoot, '.settings.json');
+  writeFileSync(repositorySettingsFile, JSON.stringify({ federationNodeId: 'local' }));
+  process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE = repositorySettingsFile;
+  context.after(() => {
+    // WHAT: Restore the caller's settings-discovery environment after the isolated server test.
+    // WHY: Later tests must not inherit a fixture path that is removed during cleanup.
+    if (previousRepositorySettingsFile === undefined) delete process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;
+    else process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE = previousRepositorySettingsFile;
+  });
   const fakeCodex = join(workspace, 'fake-codex.mjs');
   const invocations = join(workspace, 'invocations.txt');
   skill(workspace, 'first');

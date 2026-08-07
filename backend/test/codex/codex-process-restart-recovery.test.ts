@@ -84,10 +84,20 @@ async function seedQueuedExecution(input: {
   await state.executions.transition(input.executionId, { phase: 'queued' });
 }
 
-test('server startup schedules a queued replicated execution discovered after an empty project', async () => {
+test('server startup schedules a queued replicated execution discovered after an empty project', async (context) => {
   const previousCodexBin = process.env.CODEX_BIN;
+  const previousRepositorySettingsFile = process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;
   const home = mkdtempSync(join(tmpdir(), 'decision-os-restart-queue-'));
   const masterDecisionOsRoot = createProject(home, null, 'master-project');
+  const repositorySettingsFile = join(masterDecisionOsRoot, '.settings.json');
+  writeFileSync(repositorySettingsFile, JSON.stringify({ federationNodeId: 'local' }));
+  process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE = repositorySettingsFile;
+  context.after(() => {
+    // WHAT: Restore the caller's settings-discovery environment after the isolated server test.
+    // WHY: Later tests must not inherit a fixture path that is removed during cleanup.
+    if (previousRepositorySettingsFile === undefined) delete process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;
+    else process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE = previousRepositorySettingsFile;
+  });
   createProject(join(home, 'a-empty'), null, 'empty-project');
   const queuedProject = join(home, 'b-queued');
   const executionId = 'execution-queued';

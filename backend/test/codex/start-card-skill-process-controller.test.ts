@@ -310,7 +310,13 @@ test('card skill process route creates a linked output card and launches codex',
 
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = {
+    // WHAT: Keep execution ownership inside the temporary server fixture.
+    // WHY: Process-level repository settings can otherwise route the fixture through a live federation executor.
+    decisionOsSettings: {
+      federationNodeId: 'local',
+    },
+  };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -816,7 +822,13 @@ test('thread codex process resumes a capacity-interrupted session after five sec
 
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = {
+    // WHAT: Keep execution ownership inside the temporary server fixture.
+    // WHY: Process-level repository settings can otherwise route the fixture through a live federation executor.
+    decisionOsSettings: {
+      federationNodeId: 'local',
+    },
+  };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
