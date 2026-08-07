@@ -206,3 +206,13 @@
 8. Direct owner routing uses `markdown_editor_target_not_found` with `404` and `markdown_editor_target_ambiguous` with `409`.
 9. Task-card owner errors are listed in section D. Malformed legacy route parameters and metadata-only payload fields that have no stable code remain HTTP `400` text validation responses.
 10. Production admission, delivery recovery, and rollback are owned by [Production Delivery Protocol](../../procedure/deployment/production-delivery-protocol.md). Canary evidence is owned by [Canary Skill Authoring Dev Environment](../../procedure/deployment/canary-skill-authoring-dev-environment.md).
+
+---
+
+## K. 2026-07-30 Review Reconciliation
+
+1. The implementation currently permits a `pipeline-prompt` create and save to succeed without a Git repository. That response carries `gitRevision: null`; history is empty; immutable execution admission still rejects the prompt because no clean tracked commit owns its bytes.
+2. This unversioned behavior does not satisfy the original invariant that every successful authored save creates a focused Git revision. It remains an open contract defect, not an accepted replacement for Git-backed prompt ownership.
+3. Shared skill Markdown is discovered once per project context. When several projects resolve the same canonical shared file, direct Markdown routing returns `409 markdown_editor_target_ambiguous`. Shared owner identity must be deduplicated before the direct-path contract is complete.
+4. Task-card mutation and focused Git commit currently use separate repository-lock lifetimes. A failure after authoritative `patch-card` persistence can leave confirmed card bytes without the affecting Git revision. One mutation owner must span writable admission, card persistence, byte confirmation, Git commit, and recovery persistence.
+5. The complete source-backed reconciliation, severity-ranked findings, and verification boundary are recorded in [Canary Skill Authoring Main Review](../../working-documents/canary-skill-authoring-main-review-2026-07-30.md).

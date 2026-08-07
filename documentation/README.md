@@ -33,6 +33,9 @@ The structure follows the proven workstation model used by `Senior`, `DroidFleet
 14. [Epoch-4 task assignment, execution, and content architecture](./documentation/architecture/epoch-4-task-assignment-execution-and-content.md)
 15. [Epoch-4 Workstation cutover and thread consistency postmortem](./postmortem/epoch-4-workstation-cutover-2026-07-24.md)
 16. [Restore an accidentally tombstoned Epoch-4 note](./procedure/tasks/restore-accidentally-tombstoned-note.md)
+17. [Canary skill authoring main review](./working-documents/canary-skill-authoring-main-review-2026-07-30.md)
+18. [Canary skill authoring and delivery integration postmortem](./postmortem/canary-skill-authoring-and-delivery-integration-2026-07-30.md)
+19. [Iteration closeout procedure](./procedure/implementation/iteration-closeout.md)
 
 ---
 

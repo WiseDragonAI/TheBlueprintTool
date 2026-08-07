@@ -272,3 +272,15 @@
 1. Canary cleanup removes only the `dev` application on `50151`, local dev relay on `50152`, and retained dev-only state after evidence capture.
 2. Canary cleanup never stops production `50150`, changes a production node pointer, deploys relay traffic, edits a delivery journal, and substitutes for `decision-os-delivery rollback`.
 3. Use [Canary Skill Authoring Dev Environment](./canary-skill-authoring-dev-environment.md) for dev cleanup and this runbook's rollback command for an admitted production delivery.
+
+---
+
+## O. Recovery After An Out-Of-Protocol Main Update
+
+1. A direct merge into `main` supplies Git provenance only. It supplies no candidate admission, relay activation, node release preparation, process adoption, health, federation, convergence, rollback, and final-authority proof.
+2. Do not synthesize a completed delivery journal for that merge and do not mark the live release pointer as adopted.
+3. Preserve the exact `main` merge, current delivery state, node receipts, relay deployment state, runtime incidents, and health responses as evidence.
+4. Repair every release-blocking protocol defect, bootstrap every production target to protocol `1`, and create a new reviewed candidate commit whose predecessor includes the out-of-protocol merge.
+5. Run the complete closeout gate in [Iteration Closeout Procedure](../implementation/iteration-closeout.md), then execute the normal `candidate` and `promote` commands for that new candidate.
+6. Report the prior merge as `integrated, not deployed` until a terminal delivery journal and fresh live authority prove activation of the new candidate.
+7. The causal record for the 2026-07-30 reconciliation is [Canary Skill Authoring And Delivery Integration Postmortem](../../postmortem/canary-skill-authoring-and-delivery-integration-2026-07-30.md).

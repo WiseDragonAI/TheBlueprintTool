@@ -59,5 +59,13 @@
 
 1. [HTTP server composition](./http-server-composition.md) defines the server lifecycle root, ordered request stages, capability runtime ownership, and failure-containment boundary.
 2. [Codex content authoring](./codex-content-authoring.md) defines owner-scoped skill, prompt, and Task-card Markdown APIs; direct Markdown routing; exact-byte Git recovery; cursor history; persistent CodeMirror sessions; immutable prompt snapshots; and federation publication.
-2. [Epoch-3 task state and federation](./epoch-3-task-state-and-federation.md) is the historical architecture and rollback reference for offline migration, structural entities, immutable content, durability, relay anti-entropy, derived remote stores, lazy content routing, and production diagnostics.
-3. [Epoch-4 task assignment, execution, and content](./epoch-4-task-assignment-execution-and-content.md) defines durable assignment, replicated execution, thread-note and Markdown consistency, immutable execution artifacts, in-place media references, and the recoverable node migration transaction.
+3. [Epoch-3 task state and federation](./epoch-3-task-state-and-federation.md) is the historical architecture and rollback reference for offline migration, structural entities, immutable content, durability, relay anti-entropy, derived remote stores, lazy content routing, and production diagnostics.
+4. [Epoch-4 task assignment, execution, and content](./epoch-4-task-assignment-execution-and-content.md) defines durable assignment, replicated execution, thread-note and Markdown consistency, immutable execution artifacts, in-place media references, and the recoverable node migration transaction.
+
+---
+
+## G. Review And Closeout Context
+
+1. [Canary skill authoring main review](../../working-documents/canary-skill-authoring-main-review-2026-07-30.md) compares the integrated authoring and delivery implementation with the accepted iteration contract and current live protocol state.
+2. [Canary skill authoring and delivery integration postmortem](../../postmortem/canary-skill-authoring-and-delivery-integration-2026-07-30.md) records the first incorrect closeout transition, unresolved authority boundaries, and prevention rules.
+3. [Iteration closeout](../../procedure/implementation/iteration-closeout.md) is the mandatory merge, card, documentation, verification, and deployment gate for future architecture iterations.

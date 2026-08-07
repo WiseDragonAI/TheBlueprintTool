@@ -274,3 +274,13 @@
 4. Remove the `dev` worktree only after both dev registrations are absent and candidate work is no longer required.
 5. Canary cleanup never stops production `50150`, changes production configuration, changes a production release pointer, deploys relay traffic, edits a delivery journal, deletes production state, and replaces production rollback.
 6. An admitted production delivery is reversed only with `decision-os-delivery rollback` under [Production Delivery Protocol](./production-delivery-protocol.md).
+
+---
+
+## N. Readiness Claim Boundary
+
+1. HTTP `200` and `status: "ready"` prove only that the canary process can answer its health route.
+2. A release-admitted canary must also report the exact non-empty candidate `releaseSha`, `deliveryProtocol: 1`, the expected immutable active release pointer, zero blocking incidents, zero dirty release-owned state, and the admitted relay identity.
+3. Browser evidence must be captured from that exact release SHA after merge-conflict resolution and final source integration.
+4. Focused authoring scenarios do not replace served pipeline-prompt execution, the complete suite, remote authority checks, and delivery recovery proof.
+5. Until every requirement in [Iteration Closeout Procedure](../implementation/iteration-closeout.md) passes, report the environment as `canary available; candidate not admitted`.
