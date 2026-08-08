@@ -64,6 +64,27 @@ function observeFrames(socket: WebSocket, durationMs: number): Promise<Frame[]> 
   });
 }
 
+function nextFrames(socket: WebSocket, predicate: (frame: Frame) => boolean, count: number, timeoutMs = 5_000): Promise<Frame[]> {
+  return new Promise((resolve, reject) => {
+    const frames: Frame[] = [];
+    const timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${count} relay frames; received ${frames.length}.`)), timeoutMs);
+    const listener = (event: MessageEvent) => {
+      const frame = JSON.parse(String(event.data)) as Frame;
+      // WHAT: Retain only frames owned by the requested streaming boundary.
+      // WHY: Catalog and summary traffic must not consume entity-window observations.
+      if (!predicate(frame)) return;
+      frames.push(frame);
+      // WHAT: Settle the observation at the exact requested window size.
+      // WHY: Extra frames beyond the admitted window are a flow-control failure.
+      if (frames.length !== count) return;
+      clearTimeout(timeout);
+      socket.removeEventListener('message', listener);
+      resolve(frames);
+    };
+    socket.addEventListener('message', listener);
+  });
+}
+
 function manifest(nodeLabel: string, projectIds: string[] = ['shared']) {
   return {
     version: 1,
@@ -138,7 +159,7 @@ describe('federation relay flood proof', () => {
     observer.close(1000, 'test_complete');
   });
 
-  it('serves one bucket once across duplicate requests and reconnect', async () => {
+  it('suppresses duplicate requests per connection and retries the bucket after reconnect', async () => {
     const federationId = `bucket-flood-${crypto.randomUUID()}`;
     const [writerCredential, readerCredential] = await Promise.all([
       createNode(federationId, 'writer'),
@@ -172,13 +193,171 @@ describe('federation relay flood proof', () => {
     await replacementSummary;
     const repeatedFrames = observeFrames(replacement, 250);
     replacement.send(JSON.stringify(request));
-    expect((await repeatedFrames).filter((frame) => ['state-entity-batch', 'state-bucket-summary'].includes(frame.type))).toHaveLength(0);
+    expect((await repeatedFrames).filter((frame) => frame.type === 'state-entity-batch')).toHaveLength(1);
 
     const expectedChecksum = hashTaskCurrentBucket([[key, value]]);
     expect(expectedChecksum).toMatch(/^[a-f0-9]{64}$/);
     writer.close(1000, 'test_complete');
     replacement.close(1000, 'test_complete');
   });
+
+  it('advances four acknowledged batches and reconnects with only unconfirmed entries', async () => {
+    const federationId = `ack-window-${crypto.randomUUID()}`;
+    const [writerCredential, readerCredential] = await Promise.all([
+      createNode(federationId, 'writer'),
+      createNode(federationId, 'reader'),
+    ]);
+    const writer = await connect(federationId, 'writer', writerCredential);
+    writer.send(JSON.stringify(manifest('Writer')));
+    const values = largeEntities('shared', 600);
+    for (let offset = 0; offset < values.length; offset += 128) {
+      const batch = values.slice(offset, offset + 128);
+      const deliveryId = crypto.randomUUID();
+      const acknowledged = nextFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === deliveryId);
+      writer.send(JSON.stringify({
+        version: 1,
+        type: 'state-entity-batch',
+        stateVersion: taskCurrentStateVersion,
+        projectId: 'shared',
+        payload: { stateVersion: taskCurrentStateVersion, deliveryId, entries: batch.map((value) => ({ key: taskCurrentEntityKey(value), stateHash: value.stateHash, entity: value })) },
+      }));
+      await acknowledged;
+    }
+    const relayManifest = manifestForEntities(values);
+    const relayRoot = hashTaskCurrentRoot(relayManifest);
+    const receiverRoot = hashTaskCurrentRoot([]);
+    const attemptId = `${relayRoot}:${receiverRoot}`;
+    const request = {
+      version: 1,
+      type: 'state-missing-request',
+      stateVersion: taskCurrentStateVersion,
+      projectId: 'shared',
+      payload: { stateVersion: taskCurrentStateVersion, buckets: relayManifest.map((bucket) => bucket.bucket), attemptId, relayRoot, receiverRoot },
+    };
+    const reader = await connect(federationId, 'reader', readerCredential);
+    reader.send(JSON.stringify(manifest('Reader', [])));
+    const subscribed = nextFrame(reader, (frame) => frame.type === 'state-bucket-summary' && frame.payload?.root === relayRoot);
+    reader.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion } }));
+    await subscribed;
+    const initialWindow = nextFrames(reader, (frame) => frame.type === 'state-entity-batch', 4);
+    reader.send(JSON.stringify(request));
+    const firstFour = await initialWindow;
+    const acknowledgedFirst = firstFour[0];
+    const replacementAdmission = nextFrame(reader, (frame) => frame.type === 'state-entity-batch');
+    reader.send(JSON.stringify({
+      version: 1,
+      type: 'state-relay-ack',
+      stateVersion: taskCurrentStateVersion,
+      projectId: 'shared',
+      payload: { stateVersion: taskCurrentStateVersion, attemptId, deliveryId: acknowledgedFirst.payload?.deliveryId, accepted: acknowledgedFirst.payload?.entries.map((entry: any) => ({ key: entry.key, stateHash: entry.stateHash })) },
+    }));
+    await replacementAdmission;
+    const acknowledgedKeys = new Set(acknowledgedFirst.payload?.entries.map((entry: any) => String(entry.key)) ?? []);
+    reader.close(1000, 'resume_unconfirmed');
+
+    const replacement = await connect(federationId, 'reader', readerCredential);
+    replacement.send(JSON.stringify(manifest('Reader', [])));
+    const replacementSummary = nextFrame(replacement, (frame) => frame.type === 'state-bucket-summary' && frame.payload?.root === relayRoot);
+    replacement.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion } }));
+    await replacementSummary;
+    const resumedWindow = nextFrames(replacement, (frame) => frame.type === 'state-entity-batch', 4);
+    replacement.send(JSON.stringify(request));
+    const resumed = await resumedWindow;
+    expect(resumed.flatMap((frame) => frame.payload?.entries ?? []).some((entry: any) => acknowledgedKeys.has(String(entry.key)))).toBe(false);
+    const terminalSummary = nextFrame(replacement, (frame) => frame.type === 'state-bucket-summary' && frame.payload?.root === relayRoot);
+    for (const frame of resumed) {
+      replacement.send(JSON.stringify({
+        version: 1,
+        type: 'state-relay-ack',
+        stateVersion: taskCurrentStateVersion,
+        projectId: 'shared',
+        payload: { stateVersion: taskCurrentStateVersion, attemptId, deliveryId: frame.payload?.deliveryId, accepted: frame.payload?.entries.map((entry: any) => ({ key: entry.key, stateHash: entry.stateHash })) },
+      }));
+    }
+    await terminalSummary;
+    replacement.send(JSON.stringify({ version: 1, type: 'state-converged', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion, attemptId, root: relayRoot } }));
+    expect((await observeFrames(replacement, 250)).filter((frame) => frame.type === 'response-error')).toHaveLength(0);
+    writer.close(1000, 'test_complete');
+    replacement.close(1000, 'test_complete');
+  });
+
+  it('admits a newly ready small project before refilling a large project at the global window', async () => {
+    const federationId = `fair-window-${crypto.randomUUID()}`;
+    const projectIds = ['large-a', 'large-b', 'large-c', 'large-d', 'small'];
+    const [writerCredential, readerCredential] = await Promise.all([
+      createNode(federationId, 'writer'),
+      createNode(federationId, 'reader'),
+    ]);
+    const writer = await connect(federationId, 'writer', writerCredential);
+    writer.send(JSON.stringify(manifest('Writer', projectIds)));
+    const projectValues = new Map(projectIds.map((projectId) => [projectId, largeEntities(projectId, 513)]));
+    // WHAT: Populate five normal projects with more than one four-batch project window.
+    // WHY: The fifth project can prove admission order only while the connection-wide window is full.
+    for (const [projectId, values] of projectValues) {
+      for (let offset = 0; offset < values.length; offset += 128) {
+        const batch = values.slice(offset, offset + 128);
+        const deliveryId = crypto.randomUUID();
+        const acknowledged = nextFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === deliveryId);
+        writer.send(JSON.stringify({
+          version: 1,
+          type: 'state-entity-batch',
+          stateVersion: taskCurrentStateVersion,
+          projectId,
+          payload: { stateVersion: taskCurrentStateVersion, deliveryId, entries: batch.map((value) => ({ key: taskCurrentEntityKey(value), stateHash: value.stateHash, entity: value })) },
+        }));
+        await acknowledged;
+      }
+    }
+
+    const reader = await connect(federationId, 'reader', readerCredential);
+    reader.send(JSON.stringify(manifest('Reader', [])));
+    const receiverRoot = hashTaskCurrentRoot([]);
+    const requests = new Map<string, Record<string, unknown>>();
+    // WHAT: Subscribe the receiver to each populated project and bind one request to its exact relay root.
+    // WHY: Fair scheduling cannot borrow authority across project generations.
+    for (const projectId of projectIds) {
+      const values = projectValues.get(projectId)!;
+      const bucketManifest = manifestForEntities(values);
+      const relayRoot = hashTaskCurrentRoot(bucketManifest);
+      const summary = nextFrame(reader, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === projectId && frame.payload?.root === relayRoot);
+      reader.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId, payload: { stateVersion: taskCurrentStateVersion } }));
+      await summary;
+      requests.set(projectId, {
+        version: 1,
+        type: 'state-missing-request',
+        stateVersion: taskCurrentStateVersion,
+        projectId,
+        payload: { stateVersion: taskCurrentStateVersion, buckets: bucketManifest.map((bucket) => bucket.bucket), attemptId: `${relayRoot}:${receiverRoot}`, relayRoot, receiverRoot },
+      });
+    }
+
+    const initialWindows = new Map<string, Frame[]>();
+    // WHAT: Fill all sixteen connection slots with four admitted large projects.
+    // WHY: A free slot after acknowledgement must reveal which ready project the scheduler chooses next.
+    for (const projectId of projectIds.slice(0, 4)) {
+      const window = nextFrames(reader, (frame) => frame.type === 'state-entity-batch' && frame.projectId === projectId, 4);
+      reader.send(JSON.stringify(requests.get(projectId)));
+      initialWindows.set(projectId, await window);
+    }
+    const admittedSmall = nextFrame(reader, (frame) => frame.type === 'state-entity-batch' && frame.projectId === 'small');
+    reader.send(JSON.stringify(requests.get('small')));
+    const firstLarge = initialWindows.get('large-a')![0];
+    reader.send(JSON.stringify({
+      version: 1,
+      type: 'state-relay-ack',
+      stateVersion: taskCurrentStateVersion,
+      projectId: 'large-a',
+      payload: {
+        stateVersion: taskCurrentStateVersion,
+        attemptId: (requests.get('large-a')!.payload as Record<string, unknown>).attemptId,
+        deliveryId: firstLarge.payload?.deliveryId,
+        accepted: firstLarge.payload?.entries.map((entry: any) => ({ key: entry.key, stateHash: entry.stateHash })),
+      },
+    }));
+    expect((await admittedSmall).projectId).toBe('small');
+    writer.close(1000, 'test_complete');
+    reader.close(1000, 'test_complete');
+  }, 60_000);
 
   it('synchronizes a 20,000-entity state larger than 32 MiB across every epoch-4 bucket', async () => {
     const federationId = `huge-state-${crypto.randomUUID()}`;
