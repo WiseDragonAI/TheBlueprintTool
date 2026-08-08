@@ -6,10 +6,6 @@
  * the backend resolves attachment identity to an authorized file; the client must never
  * submit an arbitrary filesystem path.
  */
-import { createAuthoredFileDiffExtension } from '../../content-authoring/helper/create-authored-file-diff-extension.js';
-import { createLedgerMarkdownPresentationExtension } from '../../content-authoring/helper/create-ledger-markdown-presentation-extension.js';
-import type { NormalizedAuthoredFileDiff } from '../../content-authoring/helper/normalize-authored-file-diff.js';
-
 type CodeMirrorModule = {
   basicSetup: unknown;
   Compartment: new () => {
@@ -20,38 +16,15 @@ type CodeMirrorModule = {
     create(input: Record<string, unknown>): unknown;
     readOnly: { of(value: boolean): unknown };
   };
-  StateEffect: { define<T>(): { of(value: T): unknown; is(effect: unknown): boolean } };
-  StateField: { define<T>(spec: Record<string, unknown>): unknown };
-  ViewPlugin: { fromClass(plugin: new (...args: never[]) => unknown): unknown };
-  Decoration: {
-    mark(spec: Record<string, unknown>): { range(from: number, to: number): unknown };
-    replace(spec: Record<string, unknown>): { range(from: number, to: number): unknown };
-    widget(spec: Record<string, unknown>): { range(position: number): unknown };
-    set(ranges: unknown[], sort?: boolean): unknown;
-  };
-  syntaxTree(state: unknown): { iterate(spec: Record<string, unknown>): void };
   Transaction: {
     addToHistory: { of(value: boolean): unknown };
   };
   EditorView: {
     new (input: Record<string, unknown>): {
-      state: {
-        doc: { length: number; toString(): string };
-        selection?: { main?: { head?: number } };
-      };
-      scrollDOM?: { scrollTop: number; scrollLeft: number };
-      hasFocus?: boolean;
+      state: { doc: { length: number; toString(): string } };
       dispatch(spec: unknown): void;
-      setState(state: unknown): void;
       focus(): void;
       destroy(): void;
-    };
-    decorations: {
-      from<T>(field: unknown, getter?: (value: T) => unknown): unknown;
-      of(value: unknown): unknown;
-    };
-    atomicRanges: {
-      from<T>(field: unknown, getter?: (value: T) => unknown): unknown;
     };
     lineWrapping: unknown;
     theme(spec: Record<string, Record<string, string>>, options?: { dark?: boolean }): unknown;
@@ -185,33 +158,9 @@ export type CodeMirrorFileEditor = {
   redo(): void;
   search(): void;
   setReadOnly(readOnly: boolean): void;
-  setAuthoredFileDiffStatus(status: AuthoredFileDiffStatus): void;
-  installAuthoredFileDiff(diff: NormalizedAuthoredFileDiff): void;
-  clearAuthoredFileDiff(identity?: string | null): void;
   replaceDocument(markdown: string, revision?: string): void;
   setIdentity(filename: string, revision?: string): void;
   destroy(): void;
-};
-
-export type AuthoredFileDiffStatus =
-  | 'idle'
-  | 'unavailable'
-  | 'no_prior_revision'
-  | 'deriving'
-  | 'available'
-  | 'timeout'
-  | 'error'
-  | 'conflict';
-
-const authoredFileDiffStatusText: Record<AuthoredFileDiffStatus, string> = {
-  idle: '',
-  unavailable: 'Git changes unavailable',
-  no_prior_revision: 'No prior Git revision',
-  deriving: 'Comparing Git revision…',
-  available: 'Git changes shown',
-  timeout: 'Git changes unavailable: comparison timed out',
-  error: 'Git changes unavailable: comparison failed',
-  conflict: 'Git changes paused: server revision changed',
 };
 
 let modulePromise: Promise<CodeMirrorModule> | null = null;
@@ -252,12 +201,6 @@ export async function mountCodeMirrorFileEditor(input: {
   const identity = document.createElement('span');
   identity.className = 'text-file-editor-identity';
   identity.textContent = input.revision ? `${input.filename} · ${input.revision.slice(0, 12)}` : input.filename;
-  const authoredDiffStatus = document.createElement('span');
-  authoredDiffStatus.className = 'authored-file-diff-status';
-  authoredDiffStatus.setAttribute('role', 'status');
-  authoredDiffStatus.setAttribute('aria-live', 'polite');
-  authoredDiffStatus.hidden = true;
-  authoredDiffStatus.dataset.status = 'idle';
   const actions = document.createElement('span');
   actions.className = 'text-file-editor-actions';
   const editorHost = document.createElement('div');
@@ -270,8 +213,6 @@ export async function mountCodeMirrorFileEditor(input: {
   let readOnly = input.readOnly;
   const wrapCompartment = new cm.Compartment();
   const readOnlyCompartment = new cm.Compartment();
-  const supportsAuthoredDiff = Boolean(cm.StateEffect && cm.StateField && cm.Decoration && cm.syntaxTree);
-  const diff = supportsAuthoredDiff ? createAuthoredFileDiffExtension(cm) : null;
   const updateDirty = (markdown: string): void => {
     const nextDirty = markdown !== savedMarkdown;
     if (nextDirty === dirty) return;
@@ -292,25 +233,18 @@ export async function mountCodeMirrorFileEditor(input: {
     cm.EditorState.readOnly.of(value),
     (cm.EditorView as unknown as { editable: { of(editable: boolean): unknown } }).editable.of(!value),
   ];
-  const editorExtensions = [
+  const state = cm.EditorState.create({
+    doc: input.markdown,
+    extensions: [
       cm.basicSetup,
       cm.markdown(),
       ...decisionOsCodeMirrorTheme(cm),
-      ...(diff ? [
-        diff.extension,
-        createLedgerMarkdownPresentationExtension(cm, diff.readAuthoredFileDiff),
-      ] : []),
       cm.keymap.of([...cm.defaultKeymap, ...cm.historyKeymap, ...cm.searchKeymap]),
       updateListener,
       readOnlyCompartment.of(editableFacet(readOnly)),
       wrapCompartment.of(cm.EditorView.lineWrapping),
-  ];
-  const createState = (doc: string, selection?: number): unknown => cm.EditorState.create({
-    doc,
-    ...(typeof selection === 'number' ? { selection: { anchor: Math.min(selection, doc.length) } } : {}),
-    extensions: editorExtensions,
+    ],
   });
-  const state = createState(input.markdown);
   view = new cm.EditorView({ state, parent: editorHost });
   const wrap = toolbarButton('Wrap lines', () => {
     if (!view) return;
@@ -330,7 +264,7 @@ export async function mountCodeMirrorFileEditor(input: {
     redo.setAttribute('aria-disabled', String(readOnly));
   };
   updateMutationControls();
-  toolbar.append(identity, authoredDiffStatus, actions);
+  toolbar.append(identity, actions);
   root.append(toolbar, editorHost);
   root.setAttribute('data-dirty', 'false');
   input.parent.replaceChildren(root);
@@ -352,41 +286,12 @@ export async function mountCodeMirrorFileEditor(input: {
       root.dataset.readOnly = String(readOnly);
       updateMutationControls();
     },
-    setAuthoredFileDiffStatus: (status) => {
-      const text = authoredFileDiffStatusText[status];
-      authoredDiffStatus.dataset.status = status;
-      authoredDiffStatus.textContent = text;
-      authoredDiffStatus.hidden = text.length === 0;
-    },
-    installAuthoredFileDiff: (authoredDiff) => {
-      if (!view || !diff || authoredDiff.document !== view.state.doc.toString()) return;
-      view.dispatch({
-        effects: diff.installAuthoredFileDiffEffect.of({
-          identity: authoredDiff.identity,
-          diff: authoredDiff,
-        }),
-        annotations: cm.Transaction.addToHistory.of(false),
-      });
-    },
-    clearAuthoredFileDiff: (diffIdentity = null) => {
-      if (!view || !diff) return;
-      view.dispatch({
-        effects: diff.clearAuthoredFileDiffEffect.of(diffIdentity),
-        annotations: cm.Transaction.addToHistory.of(false),
-      });
-    },
     replaceDocument: (markdown, revision) => {
       if (!view) return;
-      const selection = view.state.selection?.main?.head;
-      const scrollTop = view.scrollDOM?.scrollTop ?? 0;
-      const scrollLeft = view.scrollDOM?.scrollLeft ?? 0;
-      const focused = Boolean(view.hasFocus);
-      view.setState(createState(markdown, selection));
-      if (view.scrollDOM) {
-        view.scrollDOM.scrollTop = scrollTop;
-        view.scrollDOM.scrollLeft = scrollLeft;
-      }
-      if (focused) view.focus();
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: markdown },
+        annotations: cm.Transaction.addToHistory.of(false),
+      });
       savedMarkdown = markdown;
       dirty = false;
       root.classList.toggle('is-dirty', false);

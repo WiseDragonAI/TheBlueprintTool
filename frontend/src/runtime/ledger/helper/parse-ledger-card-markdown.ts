@@ -3,11 +3,11 @@
  * WHY: Card bodies and thread notes must share one block model so markdown behavior cannot drift.
  */
 import { isLedgerMarkdownTableDivider } from './is-ledger-markdown-table-divider.js';
-import { normalizeLedgerMarkdownWithSourceMap } from './normalize-ledger-markdown.js';
+import { normalizeLedgerMarkdown } from './normalize-ledger-markdown.js';
 import { parseLedgerMarkdownInline } from './parse-ledger-markdown-inline.js';
 import { parseLedgerMarkdownTableRow } from './parse-ledger-markdown-table-row.js';
 
-export type LedgerMarkdownInline = ({
+export type LedgerMarkdownInline = {
   kind: 'text' | 'strong' | 'code';
   text: string;
 } | {
@@ -20,9 +20,9 @@ export type LedgerMarkdownInline = ({
   alt: string;
   src: string;
   title: string;
-}) & { readonly from?: number; readonly to?: number };
+};
 
-export type LedgerMarkdownBlock = (
+export type LedgerMarkdownBlock =
   | { kind: 'heading'; level: number; children: LedgerMarkdownInline[] }
   | { kind: 'paragraph'; children: LedgerMarkdownInline[] }
   | { kind: 'blockquote'; blocks: LedgerMarkdownBlock[] }
@@ -33,22 +33,10 @@ export type LedgerMarkdownBlock = (
   | { kind: 'list'; ordered: boolean; start: number; items: LedgerMarkdownInline[][] }
   | { kind: 'table'; headers: LedgerMarkdownInline[][]; rows: LedgerMarkdownInline[][][] }
   | { kind: 'hr' }
-  | { kind: 'code'; language: string; text: string }
-) & { readonly from?: number; readonly to?: number };
+  | { kind: 'code'; language: string; text: string };
 
-function sourceSpan<T extends object>(value: T, from: number, to: number): T {
-  Object.defineProperties(value, {
-    from: { value: from, enumerable: false, configurable: true },
-    to: { value: to, enumerable: false, configurable: true },
-  });
-  return value;
-}
-
-function standaloneImagesFromLine(
-  line: string,
-  baseOffset: number,
-): Extract<LedgerMarkdownInline, { kind: 'image' }>[] {
-  const inline = parseLedgerMarkdownInline(line, baseOffset);
+function standaloneImagesFromLine(line: string): Extract<LedgerMarkdownInline, { kind: 'image' }>[] {
+  const inline = parseLedgerMarkdownInline(line);
   const images = inline.filter((node): node is Extract<LedgerMarkdownInline, { kind: 'image' }> => node.kind === 'image');
   if (images.length === 0) return [];
   const hasOnlyImagesAndSpacing = inline.every((node) => node.kind === 'image' || (node.kind === 'text' && node.text.trim() === ''));
@@ -99,29 +87,10 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
   let list: Extract<LedgerMarkdownBlock, { kind: 'list' }> | null = null;
   let images: Extract<LedgerMarkdownBlock, { kind: 'images' }> | null = null;
   let htmlEmbeds: Extract<LedgerMarkdownBlock, { kind: 'htmlEmbeds' }> | null = null;
-  const normalized = normalizeLedgerMarkdownWithSourceMap(markdown);
-  const lines = normalized.markdown.split('\n');
-  const lineStarts: number[] = [];
-  let nextLineStart = 0;
-  for (const line of lines) {
-    lineStarts.push(nextLineStart);
-    nextLineStart += line.length + 1;
-  }
-  const append = <T extends LedgerMarkdownBlock>(block: T, from: number, to: number): T => {
-    blocks.push(sourceSpan(block, normalized.sourceOffset(from), normalized.sourceOffset(to)));
-    return block;
-  };
-  const extend = (block: LedgerMarkdownBlock, to: number): void => {
-    Object.defineProperty(block, 'to', {
-      value: normalized.sourceOffset(to),
-      enumerable: false,
-      configurable: true,
-    });
-  };
+  const lines = normalizeLedgerMarkdown(markdown).split('\n');
 
   for (let index = 0; index < lines.length; index += 1) {
     const rawLine = lines[index];
-    const rawLineStart = lineStarts[index];
     const fence = rawLine.match(/^```([A-Za-z0-9_+#.-]*)\s*$/);
     if (fence) {
       const codeLines: string[] = [];
@@ -133,13 +102,10 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       list = null;
       images = null;
       htmlEmbeds = null;
-      const end = lineStarts[index] + lines[index].length;
-      append({ kind: 'code', language: fence[1] ?? '', text: codeLines.join('\n') }, rawLineStart, end);
+      blocks.push({ kind: 'code', language: fence[1] ?? '', text: codeLines.join('\n') });
       continue;
     }
     const line = rawLine.trim();
-    const trimmedStart = rawLineStart + rawLine.indexOf(line);
-    const trimmedEnd = trimmedStart + line.length;
     if (!line) {
       list = null;
       continue;
@@ -148,7 +114,7 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       list = null;
       images = null;
       htmlEmbeds = null;
-      append({ kind: 'hr' }, trimmedStart, trimmedEnd);
+      blocks.push({ kind: 'hr' });
       continue;
     }
     const blockquote = rawLine.match(/^\s*>\s?(.*)$/);
@@ -156,20 +122,18 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
     // WHY: Quote contents need one disclosure boundary while retaining the canonical nested block parser.
     if (blockquote) {
       const quoteLines: string[] = [];
-      let quoteEnd = trimmedEnd;
       for (; index < lines.length; index += 1) {
         const quoteLine = lines[index].match(/^\s*>\s?(.*)$/);
         // WHAT: End the quote at the first line without a quote marker.
         // WHY: Following ordinary Markdown must render outside the disclosure boundary.
         if (!quoteLine) break;
         quoteLines.push(quoteLine[1] ?? '');
-        quoteEnd = lineStarts[index] + lines[index].length;
       }
       index -= 1;
       list = null;
       images = null;
       htmlEmbeds = null;
-      append({ kind: 'blockquote', blocks: parseLedgerCardMarkdown(quoteLines.join('\n')) }, rawLineStart, quoteEnd);
+      blocks.push({ kind: 'blockquote', blocks: parseLedgerCardMarkdown(quoteLines.join('\n')) });
       continue;
     }
     const heading = line.match(/^(#{1,6})\s+(.*)$/);
@@ -177,11 +141,11 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       list = null;
       images = null;
       htmlEmbeds = null;
-      append({
+      blocks.push({
         kind: 'heading',
         level: heading[1].length,
-        children: parseLedgerMarkdownInline(heading[2], normalized.sourceOffset(trimmedStart + heading[1].length + 1))
-      }, trimmedStart, trimmedEnd);
+        children: parseLedgerMarkdownInline(heading[2])
+      });
       continue;
     }
     const headerCells = parseLedgerMarkdownTableRow(line);
@@ -203,19 +167,18 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       list = null;
       images = null;
       htmlEmbeds = null;
-      append(table, trimmedStart, lineStarts[Math.max(index, 0)] + (lines[Math.max(index, 0)]?.length ?? 0));
+      blocks.push(table);
       continue;
     }
-    const standaloneImages = standaloneImagesFromLine(line, normalized.sourceOffset(trimmedStart));
+    const standaloneImages = standaloneImagesFromLine(line);
     if (standaloneImages.length > 0) {
       list = null;
       htmlEmbeds = null;
       if (!images) {
         images = { kind: 'images', images: [] };
-        append(images, trimmedStart, trimmedEnd);
+        blocks.push(images);
       }
       images.images.push(...standaloneImages);
-      extend(images, trimmedEnd);
       continue;
     }
     const htmlEmbed = standaloneHtmlEmbedFromLine(line);
@@ -224,10 +187,9 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       images = null;
       if (!htmlEmbeds) {
         htmlEmbeds = { kind: 'htmlEmbeds', embeds: [] };
-        append(htmlEmbeds, trimmedStart, trimmedEnd);
+        blocks.push(htmlEmbeds);
       }
       htmlEmbeds.embeds.push(htmlEmbed);
-      extend(htmlEmbeds, trimmedEnd);
       continue;
     }
     const gitDiff = standaloneGitDiffFromLine(line);
@@ -235,7 +197,7 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       list = null;
       images = null;
       htmlEmbeds = null;
-      append(gitDiff, trimmedStart, trimmedEnd);
+      blocks.push(gitDiff);
       continue;
     }
     const questions = standaloneQuestionsFromLine(line);
@@ -243,7 +205,7 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       list = null;
       images = null;
       htmlEmbeds = null;
-      append(questions, trimmedStart, trimmedEnd);
+      blocks.push(questions);
       continue;
     }
     const unorderedItem = line.match(/^[-*]\s+(.*)$/);
@@ -260,23 +222,15 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
           start: ordered ? Number(orderedItem?.[1] ?? 1) : 1,
           items: []
         };
-        append(list, trimmedStart, trimmedEnd);
+        blocks.push(list);
       }
-      const itemText = ordered ? item[2] : item[1];
-      list.items.push(parseLedgerMarkdownInline(
-        itemText,
-        normalized.sourceOffset(trimmedStart + line.indexOf(itemText)),
-      ));
-      extend(list, trimmedEnd);
+      list.items.push(parseLedgerMarkdownInline(ordered ? item[2] : item[1]));
       continue;
     }
     list = null;
     images = null;
     htmlEmbeds = null;
-    append({
-      kind: 'paragraph',
-      children: parseLedgerMarkdownInline(line, normalized.sourceOffset(trimmedStart)),
-    }, trimmedStart, trimmedEnd);
+    blocks.push({ kind: 'paragraph', children: parseLedgerMarkdownInline(line) });
   }
 
   return blocks;

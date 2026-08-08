@@ -11,11 +11,8 @@ export type AuthoredFileRevisionSummary = {
 };
 
 export type AuthoredFileRevisionDetail = AuthoredFileRevisionSummary & {
-  contentRevision?: string;
   markdown: string;
-  baseMarkdown?: string;
   patch: string;
-  olderCommit?: string | null;
 };
 
 function action(label: string, onClick: () => void): HTMLButtonElement {

@@ -6,7 +6,6 @@ import { randomUUID } from 'node:crypto';
 import {
   AuthoredFileGitError,
   commitAuthoredFileRevision,
-  readCurrentAuthoredFileRevisionContent,
   sha256AuthoredBytes,
   type AuthoredGitFailurePoint,
 } from '../../content-authoring/helper/authored-file-git-revisions.js';
@@ -113,8 +112,6 @@ export async function saveLedgerCardContentController(input: {
   }
   const owner = resolveLedgerCardContentOwner(input);
   if (!owner) return { ok: false, statusCode: 404, code: 'card_content_owner_not_found', error: 'The current card content owner was not found.' };
-  const currentSnapshot = await readCurrentAuthoredFileRevisionContent({ file: owner.file, signal: input.signal })
-    .catch(() => null);
   if (owner.contentRevision !== input.expectedContentRevision) {
     return {
       ok: false,
@@ -122,7 +119,6 @@ export async function saveLedgerCardContentController(input: {
       code: 'content_revision_conflict',
       error: 'The card changed after it was loaded. Reload it and apply the edit again.',
       currentRevision: owner.contentRevision,
-      ...(currentSnapshot ? { snapshot: currentSnapshot } : {}),
     };
   }
   if (owner.markdown === input.markdown) {
@@ -191,14 +187,12 @@ export async function saveLedgerCardContentController(input: {
       signal: input.signal,
       failureAt: input.gitFailureAt,
     });
-    const snapshot = await readCurrentAuthoredFileRevisionContent({ file: confirmed.file, signal: input.signal });
     return {
       ok: true,
       statusCode: 200,
       card: changedCard,
       contentRevision,
       gitRevision,
-      snapshot,
       ...(patched.taskClock ? { taskClock: patched.taskClock } : {}),
       ...(patched.receipt ? { receipt: patched.receipt } : {}),
     };

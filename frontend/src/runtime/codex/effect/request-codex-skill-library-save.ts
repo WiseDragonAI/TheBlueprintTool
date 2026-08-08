@@ -3,15 +3,8 @@
  * WHY: The editor needs a typed conflict-aware request without sending filesystem paths.
  */
 import type { CodexEffort, CodexModel } from '../helper/codex-run-options.js';
-import {
-  decodeCodexSkillLibraryDetail,
-  type CodexSkillLibraryDetail,
-} from './load-codex-skill-library.js';
+import type { CodexSkillLibraryDetail } from './load-codex-skill-library.js';
 import { codexSkillAuthoringPath } from '../helper/codex-skill-authoring-path.js';
-import {
-  authoredFileRevisionSnapshot,
-  type AuthoredFileRevisionSnapshot,
-} from '../../content-authoring/helper/authored-file-revision-snapshot.js';
 
 export type CodexSkillLibrarySaveRequest = {
   skillName: string;
@@ -28,7 +21,6 @@ export type CodexSkillLibrarySaveResult = {
   conflict: boolean;
   skill?: CodexSkillLibraryDetail;
   currentRevision?: string;
-  snapshot?: AuthoredFileRevisionSnapshot;
   code?: string;
   recovery?: {
     authoredBytesPreserved: boolean;
@@ -60,9 +52,8 @@ export async function requestCodexSkillLibrarySave(input: CodexSkillLibrarySaveR
     ok,
     statusCode: response.status,
     conflict: response.status === 409,
-    skill: decodeCodexSkillLibraryDetail(body.skill),
+    skill: body.skill,
     currentRevision: body.currentRevision,
-    snapshot: authoredFileRevisionSnapshot(body.snapshot) ?? undefined,
     code: body.code,
     recovery: body.recovery,
     publication: body.publication,
@@ -93,9 +84,8 @@ export async function requestCodexSkillRevisionRetry(input: {
     ok,
     statusCode: response.status,
     conflict: response.status === 409,
-    skill: decodeCodexSkillLibraryDetail(body.skill),
+    skill: body.skill,
     currentRevision: body.currentRevision,
-    snapshot: authoredFileRevisionSnapshot(body.snapshot) ?? undefined,
     code: body.code,
     recovery: body.recovery,
     publication: body.publication,

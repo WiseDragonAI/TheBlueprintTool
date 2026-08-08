@@ -52,7 +52,6 @@ import { atomicCreateTextFile, atomicReplaceTextFile } from './skill-content-fil
 import {
   assertSkillFileRevisionWritable,
   commitSkillFileRevision,
-  readCurrentSkillGitRevision,
   readSkillGitHistory,
   readSkillGitHistoryPage,
   readSkillGitRevision,
@@ -61,7 +60,6 @@ import {
   type SkillGitHistoryPage,
   type SkillGitRevision,
   type SkillGitRevisionDetail,
-  type SkillGitRevisionSnapshot,
 } from './skill-git-revisions.js';
 import { serverPipelineDecisionOsRoot } from './server-pipeline-catalog.js';
 import { readProjectRegistry } from '../../server/helper/project-registry.js';
@@ -95,7 +93,6 @@ export type CodexSkillLibraryDetail = CodexSkillCatalogEntry & {
   markdown: string;
   references: CodexSkillReference[];
   history: SkillGitRevision[];
-  snapshot: SkillGitRevisionSnapshot | null;
 };
 
 export type CodexSkillReference = {
@@ -137,7 +134,6 @@ type AuthoredContentFailure = {
   field?: string;
   skillName?: string;
   currentRevision?: string;
-  snapshot?: SkillGitRevisionSnapshot | null;
   sourceClass?: CodexContentIdentity['sourceClass'];
   readOnlyReason?: string;
   conflict?: CodexContentIdentity;
@@ -305,22 +301,9 @@ function stableGitFailure(input: {
 async function gitHistory(skill: CodexSkillSummary): Promise<SkillGitRevision[]> {
   try {
     return await readSkillGitHistory(skill.skillFile);
-  } catch (error) {
-    // WHAT: Represent only a verified missing Git owner as unavailable history.
-    // WHY: Standalone canonical server skills can persist metadata before server startup creates their authored repository.
-    if (error instanceof Error && /not a git repository/i.test(error.message)) return [];
-    throw error;
+  } catch {
+    return [];
   }
-}
-
-async function currentGitSnapshot(
-  skill: CodexSkillSummary,
-  history?: readonly SkillGitRevision[],
-): Promise<SkillGitRevisionSnapshot | null> {
-  // WHY: Owners without committed history have no immutable base identity to admit into the diff editor.
-  // WHAT: Return no snapshot when the known history is empty.
-  if (history?.length === 0) return null;
-  return await readCurrentSkillGitRevision(skill.skillFile);
 }
 
 function catalogEntry(input: {
@@ -560,10 +543,7 @@ export async function readCodexSkillLibraryDetail(input: {
   const catalog = catalogFromSkills({ ...input, workspaceRoot, skills });
   const entry = catalog.skills.find((candidate) => candidate.name === input.skillName);
   if (!entry) return null;
-  // WHAT: Keep immutable history outside read-only and imported library projections.
-  // WHY: Those files have no writable authored owner and therefore no admissible editor baseline.
-  const history = !entry.editable || skillSourceClass(skill) === 'imported' ? [] : await gitHistory(skill);
-  const snapshot = await currentGitSnapshot(skill, history);
+  const history = skillSourceClass(skill) === 'imported' ? [] : await gitHistory(skill);
   return {
     ...entry,
     revision: skillRevision(markdown),
@@ -571,7 +551,6 @@ export async function readCodexSkillLibraryDetail(input: {
     references: skill.source === 'pipeline-prompt' ? [] : readCodexSkillReferences(skill.skillFile),
     gitRevision: history[0] ?? null,
     history,
-    snapshot,
   };
 }
 
@@ -1006,10 +985,7 @@ export async function saveCodexSkillLibrary(input: {
 
   const currentMarkdown = readFileSync(skill.skillFile, 'utf8');
   const currentRevision = skillRevision(currentMarkdown);
-  // WHY: A stale save must preserve the draft while returning the current immutable Git presentation.
-  // WHAT: Reject the mutation with the authoritative revision snapshot.
   if (currentRevision !== revision) {
-    const snapshot = await currentGitSnapshot(skill);
     return {
       ok: false,
       statusCode: 409,
@@ -1017,7 +993,6 @@ export async function saveCodexSkillLibrary(input: {
       error: 'The skill changed after it was loaded. Reload it and apply the edit again.',
       skillName: input.skillName,
       currentRevision,
-      snapshot,
     };
   }
   if (markdown === currentMarkdown) {
@@ -1111,22 +1086,10 @@ export async function saveCodexSkillLibrary(input: {
       failureAt: input.gitFailureAt,
     });
   } catch (error) {
-    // WHY: A locked writer can detect an owner revision change after initial admission.
-    // WHAT: Return that race as a conflict with the latest immutable snapshot.
     if (error instanceof SkillRevisionConflict) {
-      return {
-        ok: false,
-        statusCode: 409,
-        code: 'content_revision_conflict',
-        error: error.message,
-        skillName: input.skillName,
-        currentRevision: error.currentRevision,
-        snapshot: await currentGitSnapshot(skill),
-      };
+      return { ok: false, statusCode: 409, code: 'content_revision_conflict', error: error.message, skillName: input.skillName, currentRevision: error.currentRevision };
     }
     const conflict = error && typeof error === 'object' && (error as AnyRecord).code === 'revision_conflict';
-    // WHY: The generic authored writer reports the same pre-commit race through a stable error code.
-    // WHAT: Preserve it as a conflict with current server evidence.
     if (conflict) {
       return {
         ok: false,
@@ -1135,7 +1098,6 @@ export async function saveCodexSkillLibrary(input: {
         error: error instanceof Error ? error.message : 'The content changed after it was loaded.',
         skillName: input.skillName,
         currentRevision: String((error as AnyRecord).currentRevision ?? ''),
-        snapshot: await currentGitSnapshot(skill),
       };
     }
     const failure = stableGitFailure({
