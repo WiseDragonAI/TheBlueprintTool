@@ -55,7 +55,7 @@
 
 1. Routine relay-only production deployment belongs to `bin/decision-os-deploy-relay.mjs`.
 2. Invoke it from the canonical primary `main` checkout with one published annotated release tag: `node bin/decision-os-deploy-relay.mjs rel-X.Y.Z --json`.
-3. The command verifies published `main`, the published peeled tag target, tag ancestry, a clean relay tree, and exact equality of `federation-relay/` plus `shared/` with the tagged tree.
+3. The command verifies published `main`, the published peeled tag target, tag ancestry, clean relay build inputs, and exact equality of relay source, Wrangler and package manifests, plus `shared/` with the tagged tree.
 4. The command reads the current production deployment and health, uploads a Worker version tagged `rel-X.Y.Z`, sets `DECISION_OS_RELEASE_SHA` to the tag's resolved commit fingerprint, activates the version at `100%`, and verifies production `/health`.
 5. A post-activation health failure restores the recorded predecessor version and verifies the predecessor release fingerprint.
 6. The command uses pinned Wrangler `4.111.0`, fixed argument arrays, finite deadlines, cancellation, bounded output, process settlement, and token redaction.

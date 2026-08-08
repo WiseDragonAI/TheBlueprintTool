@@ -23,6 +23,14 @@ const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const relayHealthEndpoint = 'https://decision-os-federation-relay.ardaria.workers.dev/health';
 const productionWorkerName = 'decision-os-federation-relay';
 const productionNamespace = 'decision-os-federations-production';
+const relayInputPaths = [
+  'federation-relay/src',
+  'federation-relay/package.json',
+  'federation-relay/package-lock.json',
+  'federation-relay/tsconfig.json',
+  'federation-relay/wrangler.toml',
+  'shared',
+] as const;
 
 type DeployRelayCommand = { releaseTag: string; json: true };
 
@@ -164,7 +172,7 @@ async function admitReleaseTag(input: {
     throw new DeployRelayCliError('deploy_relay_tag_not_on_main', 'Release tag is not an ancestor of current main.', 2);
   }
   const changedReleasePaths = output(await git([
-    'diff', '--name-only', releaseCommit, '--', 'federation-relay', 'shared',
+    'diff', '--name-only', releaseCommit, '--', ...relayInputPaths,
   ], input.runner));
   // WHAT: Require the canonical checkout relay inputs to match the selected release tag exactly.
   // WHY: The script may be added after the tag, but deployed Worker bytes must still be tag-owned.
@@ -174,7 +182,7 @@ async function admitReleaseTag(input: {
     });
   }
   const dirtyReleasePaths = output(await git([
-    'status', '--porcelain=v1', '--untracked-files=all', '--', 'federation-relay', 'shared',
+    'status', '--porcelain=v1', '--untracked-files=all', '--', ...relayInputPaths,
   ], input.runner));
   // WHAT: Reject local relay input dirt.
   // WHY: Uncommitted bytes have no release tag authority.

@@ -223,8 +223,9 @@ node bin/decision-os-deploy-relay.mjs rel-X.Y.Z --json
 
 The release authority is the provided `rel-X.Y.Z` tag. The tool resolves that
 tag to the existing 40-character runtime compatibility fingerprint, verifies
-the tag and current `main` are published, and verifies that
-`federation-relay/` plus `shared/` match the tagged tree before mutation.
+the tag and current `main` are published, and verifies that the relay source,
+Wrangler and package manifests, plus `shared/` match the tagged tree before
+mutation.
 
 The tool deploys directly from the canonical primary `main` checkout. Do not
 create a detached release worktree, change the production node pointer, use
