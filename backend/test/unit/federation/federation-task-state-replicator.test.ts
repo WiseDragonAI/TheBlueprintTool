@@ -539,7 +539,7 @@ test('relay acknowledgements clear only matching entity hashes from the project 
   assert.equal(replicator.diagnostics().runtimeDirty[0].entityKey, payload.entries[0].key);
 });
 
-test('relay publication keeps one project batch group in flight and advertises only after settlement', async (context) => {
+test('relay publication advances a bounded project window and advertises only after settlement', async (context) => {
   const node = fixture('decision-os-single-flight-publication-');
   context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
   const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
@@ -555,7 +555,7 @@ test('relay publication keeps one project batch group in flight and advertises o
   const right = await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'right', changes: [{ path: 'title', operation: 'set', value: 'Right' }] }] });
   replicator.publishDelta(right.delta);
 
-  assert.equal(sent.filter((frame) => frame.type === 'state-entity-batch').length, 1);
+  assert.equal(sent.filter((frame) => frame.type === 'state-entity-batch').length, 2);
   assert.equal(sent.filter((frame) => frame.type === 'state-bucket-summary').length, 0);
 
   await replicator.handleFrame({
@@ -732,19 +732,23 @@ test('projection observer failure leaves the accepted causal state readable', as
 test('large current-state publication is split by encoded bytes as well as entity count', async (context) => {
   const node = fixture('decision-os-byte-bounded-');
   context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
-  for (let index = 0; index < 10; index += 1) {
+  for (let index = 0; index < 40; index += 1) {
     await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: `card-${index}`, changes: [{ path: 'title', operation: 'set', value: `${index}${'x'.repeat(59_000)}` }] }] });
   }
   const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
   const replicator = createFederationTaskStateReplicator({ stores: () => new Map([['project-a', node.store]]), publish: (_target, frame) => { sent.push(frame); return true; } });
   replicator.publishDelta(node.store.activeDelta());
-  const batches = sent.filter((frame) => frame.type === 'state-entity-batch');
-  assert.ok(batches.length > 1);
+  let batches = sent.filter((frame) => frame.type === 'state-entity-batch');
+  assert.equal(batches.length, 4);
   for (const frame of batches) {
     const encoded = JSON.stringify({ version: 1, type: frame.type, stateVersion: taskCurrentStateVersion, projectId: frame.projectId, payload: frame.payload });
     assert.ok(Buffer.byteLength(encoded) <= 512 * 1024);
     assert.ok(((frame.payload as { entries: unknown[] }).entries).length <= 128);
   }
+  const first = batches[0].payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  await replicator.handleFrame({ type: 'state-relay-ack', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, deliveryId: first.deliveryId, accepted: first.entries } });
+  batches = sent.filter((frame) => frame.type === 'state-entity-batch');
+  assert.equal(batches.length, 5);
 });
 
 test('one peer root generation emits one missing request until the remote manifest changes', async (context) => {
@@ -778,6 +782,34 @@ test('one peer root generation emits one missing request until the remote manife
   await source.store.mutate({ replicaId: 'source', changes: [{ entityType: 'card', entityId: 'second', changes: [{ path: 'title', operation: 'set', value: 'Second' }] }] });
   await replicator.handleFrame(summary());
   assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, 3);
+});
+
+test('a repair with no durable receiver progress expires only its project attempt', async (context) => {
+  const source = fixture('decision-os-repair-deadline-source-');
+  const target = fixture('decision-os-repair-deadline-target-');
+  context.after(async () => {
+    await Promise.all([source.store.flush(), target.store.flush()]);
+    [source, target].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  await source.store.mutate({ replicaId: 'source', changes: [{ entityType: 'card', entityId: 'late', changes: [{ path: 'title', operation: 'set', value: 'Late' }] }] });
+  const timeouts: Array<{ projectId: string; from: string; attemptId: string }> = [];
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', target.store]]),
+    publish: () => true,
+    noProgressTimeoutMs: 20,
+    onRepairTimeout: (timeout) => { timeouts.push(timeout); },
+  });
+  await replicator.handleFrame({
+    type: 'state-bucket-summary',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, root: source.store.rootHash(), buckets: source.store.bucketManifest() },
+  });
+  await waitFor(() => timeouts.length === 1);
+  assert.equal(timeouts[0].projectId, 'project-a');
+  assert.equal(timeouts[0].from, 'relay');
+  assert.match(timeouts[0].attemptId, /^[a-f0-9]{64}:[a-f0-9]{64}$/);
+  assert.equal(replicator.diagnostics().activeRepairCount, 0);
 });
 
 test('one peer missing request replays a local root only once', async (context) => {

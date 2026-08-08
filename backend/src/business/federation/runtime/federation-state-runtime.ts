@@ -30,7 +30,7 @@ export function createFederationStateRuntime(input: {
     entities?: readonly { entityType: string; entityId: string }[],
   ) => void;
   localTaskRuntime: ReturnType<typeof createLocalTaskRuntime>;
-  pausedTaskProjects: { has(projectId: string): boolean };
+  pausedTaskProjects: { has(projectId: string): boolean; set(projectId: string, incident: unknown): unknown };
   presentations: ReturnType<typeof createTaskExecutionPresentationRegistry>;
   projectCatalogStore: ReturnType<typeof createProjectCatalogStore>;
   projectContexts: ReturnType<typeof createProjectRuntimeRegistry>['contexts'];
@@ -48,6 +48,14 @@ export function createFederationStateRuntime(input: {
     error: unknown,
     context?: Record<string, unknown>,
   ) => void;
+  recordIncident: (incident: {
+    scope: string;
+    component: string;
+    operation: string;
+    error: unknown;
+    code?: string;
+    context?: Record<string, unknown>;
+  }) => unknown;
   recordStoppedOperation: (operation: {
     scope: string;
     component: string;
@@ -115,16 +123,31 @@ export function createFederationStateRuntime(input: {
         .filter((entity) => entity.entityType === 'resource')
         .map((entity) => entity.entityId);
       const heads = keys.flatMap((key) => store?.contentHeads(key) ?? []);
-      for (const sourceReplicaId of new Set(heads.map((head) => head.sourceReplicaId))) {
-        input.contentStore.applyManifest(sourceReplicaId, {
+      const requiredHeads = heads.filter((head) => (
+        head.type === 'card-markdown' || head.type === 'thread-markdown'
+      ));
+      const onlineProjectHolders = [...new Set(input.federation()?.remoteProjects()
+        .filter((project) => project.online && project.localProjectId === projectId)
+        .map((project) => project.ownerNodeId) ?? [])].sort();
+      const contentSources = new Set([
+        ...requiredHeads.map((head) => head.sourceReplicaId),
+        ...onlineProjectHolders,
+      ]);
+      for (const sourceNodeId of contentSources) {
+        input.contentStore.applyManifest(sourceNodeId, {
           version: 1,
           projectId,
           generatedAt: new Date().toISOString(),
           complete: false,
-          resources: heads
-            .filter((head) => head.sourceReplicaId === sourceReplicaId)
+          resources: requiredHeads
             .map(({ sourceReplicaId: _sourceReplicaId, ...head }) => head),
         });
+      }
+      for (const head of requiredHeads) {
+        const selectedSource = onlineProjectHolders.includes(head.sourceReplicaId)
+          ? head.sourceReplicaId
+          : onlineProjectHolders[0] ?? head.sourceReplicaId;
+        input.contentStore.prioritize(selectedSource, projectId, head.key);
       }
       const localProject = input.projectCatalogStore.projects()
         .find((project) => project.id === projectId && project.available);
@@ -195,6 +218,17 @@ export function createFederationStateRuntime(input: {
         error,
         context: { projectId, from },
       });
+    },
+    onRepairTimeout: ({ projectId, from, attemptId }) => {
+      const incident = input.recordIncident({
+        scope: `project-task-state:${projectId}`,
+        component: 'federation-task-state-replicator',
+        operation: 'synchronize-federated-state',
+        code: 'federation_state_no_progress',
+        error: new Error(`Federated state made no durable progress for ${projectId}.`),
+        context: { projectId, from, attemptId },
+      });
+      input.pausedTaskProjects.set(projectId, incident);
     },
   });
 

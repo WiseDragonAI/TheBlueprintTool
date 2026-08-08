@@ -13,10 +13,33 @@ export type FederationRepairRecord = {
   peerRoot: string;
   peerManifestDigest: string;
   servedBuckets: string[];
+  attemptId?: string;
+  relayRoot?: string;
+  receiverRoot?: string;
+  requestedBuckets?: string[];
+  remainingEntries?: Array<{ key: string; stateHash: string }>;
+  pendingDeliveries?: Array<{
+    deliveryId: string;
+    entries: Array<{ key: string; stateHash: string }>;
+    encodedBytes: number;
+  }>;
+  acknowledgedEntries?: Record<string, string>;
+  summarySent?: boolean;
+  completedAt?: string;
 };
 
 const canonicalBucket = /^[a-f0-9]{2}$/;
 const canonicalHash = /^[a-f0-9]{64}$/;
+
+export function assertFederationRepairAttempt(value: unknown, field: 'attemptId' | 'relayRoot' | 'receiverRoot'): string {
+  const normalized = String(value ?? '');
+  // WHAT: Admit only a bounded stable identity and canonical roots for repair continuation.
+  // WHY: Durable attempt lookup must not accept ambiguous identity or unbounded storage input.
+  if (field === 'attemptId' ? !/^[a-f0-9:]{64,193}$/.test(normalized) : !canonicalHash.test(normalized)) {
+    throw new Error('invalid_state_missing_request');
+  }
+  return normalized;
+}
 
 export function assertFederationRepairManifest(root: unknown, values: FederationRepairBucket[]): string {
   const buckets = new Set<string>();

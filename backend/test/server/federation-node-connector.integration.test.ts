@@ -29,6 +29,7 @@ async function projectHome(name: string): Promise<string> {
       title: `${name} card`,
       labels: ['master-task'],
       status: 'todo',
+      comment: { contentFile: `.decision-os/cards/tasks/${name}-card.md` },
     }, {
       id: `${name}-headless-card`,
       title: `${name} headless card`,
@@ -39,6 +40,8 @@ async function projectHome(name: string): Promise<string> {
     annotations: [],
     relationships: [],
   }));
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', `${name}-card.md`), `${name} replicated body.`);
   writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: `${name}-project` }));
   await migrateTaskCurrentState({ decisionOsRoot, projectId: `${name}-project`, nodeId: name, tasksLedgerFile: join(decisionOsRoot, 'tasks.json') });
   return home;
@@ -1161,6 +1164,21 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       return body.cards?.find((card) => card.id === 'beta-card' && card.status === 'backlog') ?? null;
     });
     assert.equal(synchronizedState.id, 'beta-card');
+    const synchronizedContent = await waitFor(async () => {
+      const response = await fetch(
+        `${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/tasks/cards/beta-card`,
+        { headers: { 'x-decision-os-replica-node': 'node-b' } },
+      );
+      // WHAT: Continue polling until the replicated card is locally readable.
+      // WHY: Structural state may converge before its independently scheduled immutable content object.
+      if (response.status !== 200) return null;
+      const body = await response.json() as {
+        comment?: { what?: string };
+        state?: { content?: { status?: string } };
+      };
+      return body.state?.content?.status === 'available' ? body : null;
+    });
+    assert.equal(synchronizedContent.comment?.what, 'beta replicated body.');
 
     const contentManifest = await fetch(`${baseB}/api/federation/content-manifest?projectId=${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}`);
     assert.equal(contentManifest.status, 200, 'content discovery remains available on its independent asynchronous lane');
@@ -1259,10 +1277,16 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const offlineCard = await waitFor(async () => {
       const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/tasks/cards/beta-card`, { headers: remoteHeaders });
       if (response.status !== 200) return null;
-      const body = await response.json() as { title?: string; state?: { status?: string } };
+      const body = await response.json() as {
+        title?: string;
+        comment?: { what?: string };
+        state?: { status?: string; content?: { status?: string } };
+      };
       return body.title === 'mutated by node-a' && body.state?.status === 'offline' ? body : null;
     });
     assert.equal(offlineCard.title, 'mutated by node-a', 'card detail remains readable from the local replica after owner disconnect');
+    assert.equal(offlineCard.comment?.what, 'beta replicated body.');
+    assert.equal(offlineCard.state?.content?.status, 'available');
     const offlineMutation = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...remoteHeaders },

@@ -22,11 +22,16 @@ import {
 import { joinRelayEntity, type RelayEntity } from './current-state';
 import { stateEntityFrames } from './state-entity-frames';
 import {
+  assertFederationRepairAttempt,
   assertFederationRepairManifest,
   canonicalFederationRepairBuckets,
+  createFederationRepairRecord,
+  federationRepairRecordKey,
+  type FederationRepairRecord,
 } from '../../shared/federation-repair-guard';
 import {
   hashTaskCurrentRoot,
+  taskCurrentBucketForEntityKey,
   taskCurrentEntityKey,
   taskCurrentStateVersion,
 } from '../../shared/task-current-state-core';
@@ -37,6 +42,7 @@ import {
   stateBucketPrefix,
   stateEntityBatchSize,
   stateEntityPrefix,
+  stateEntityStorageKey,
   summarizeBucket,
   type StateBucket,
   type StateEntry,
@@ -50,6 +56,19 @@ type Env = {
   RELAY_ENVIRONMENT: 'production' | 'dev';
   RELAY_WORKER_NAME: string;
 };
+
+type RepairWindowSession = {
+  summaries: Set<string>;
+  buckets: Map<string, Set<string>>;
+  projects: string[];
+  deliveries: Map<string, { projectId: string; encodedBytes: number }>;
+  pumping: boolean;
+};
+
+const maximumRepairBatchesPerProject = 4;
+const maximumRepairBatchesPerConnection = 16;
+const maximumRepairBytesPerConnection = 16 * 1024 * 1024;
+const repairEncoder = new TextEncoder();
 
 type SocketIdentity = { nodeId: string };
 type Stream = { requester: string; owner: string; requestCredit: number; responseCredit: number };
@@ -139,7 +158,7 @@ export default {
 export class FederationRelayV4 extends DurableObject<Env> {
   private readonly streams = new Map<string, Stream>();
   private readonly subscriptions = new Map<string, Set<string>>();
-  private readonly repairSessions = new WeakMap<WebSocket, { summaries: Set<string>; buckets: Map<string, Set<string>> }>();
+  private readonly repairSessions = new WeakMap<WebSocket, RepairWindowSession>();
   private manifests = new Map<string, ProjectManifest[]>();
   private nodeLabels = new Map<string, string>();
 
@@ -183,6 +202,101 @@ export class FederationRelayV4 extends DurableObject<Env> {
   private send(nodeId: string, frame: RelayFrame): void {
     const socket = this.socket(nodeId);
     if (socket) this.sendSocket(socket, frame);
+  }
+
+  private repairSession(socket: WebSocket): RepairWindowSession {
+    const existing = this.repairSessions.get(socket);
+    // WHAT: Reuse all connection-owned flow-control counters when the socket already has a session.
+    // WHY: Duplicate requests on one connection must share one bounded repair budget.
+    if (existing) return existing;
+    const created: RepairWindowSession = { summaries: new Set(), buckets: new Map(), projects: [], deliveries: new Map(), pumping: false };
+    this.repairSessions.set(socket, created);
+    return created;
+  }
+
+  private async repairEntries(projectId: string, buckets: string[]): Promise<Array<{ key: string; stateHash: string }>> {
+    const values: Array<{ key: string; stateHash: string }> = [];
+    for (const bucket of buckets) {
+      const page = await listAll<RelayEntity>(this.ctx.storage, stateEntityPrefix(projectId, bucket));
+      values.push(...[...page.values()].map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash })));
+    }
+    return values.sort((left, right) => left.key.localeCompare(right.key));
+  }
+
+  private async pumpRepairWindow(sender: string, socket: WebSocket): Promise<void> {
+    const session = this.repairSession(socket);
+    // WHAT: Coalesce acknowledgement and request callbacks into one connection scheduler.
+    // WHY: Concurrent callbacks must not oversubscribe the batch or byte windows.
+    if (session.pumping) return;
+    session.pumping = true;
+    try {
+      let idleProjects = 0;
+      while (session.projects.length > 0 && session.deliveries.size < maximumRepairBatchesPerConnection) {
+        const encodedInFlight = [...session.deliveries.values()].reduce((total, delivery) => total + delivery.encodedBytes, 0);
+        // WHAT: Stop admission at the connection-wide encoded-byte ceiling.
+        // WHY: A large catalog must remain bounded independently of entity count.
+        if (encodedInFlight >= maximumRepairBytesPerConnection) break;
+        const projectId = session.projects.shift()!;
+        session.projects.push(projectId);
+        const recordKey = federationRepairRecordKey(sender, projectId);
+        const record = await this.ctx.storage.get<FederationRepairRecord>(recordKey);
+        // WHAT: Remove a project whose durable repair authority no longer exists.
+        // WHY: The scheduler cannot infer work after reset or explicit completion cleanup.
+        if (!record) {
+          session.projects = session.projects.filter((candidate) => candidate !== projectId);
+          continue;
+        }
+        const pending = record.pendingDeliveries ?? [];
+        const remaining = record.remainingEntries ?? [];
+        // WHAT: Finish scheduling only after every queued and in-flight entry settles.
+        // WHY: Terminal summaries before acknowledgement can report false completion.
+        if (remaining.length === 0 && pending.length === 0) {
+          // WHAT: Persist and emit the terminal summary once for the emptied attempt.
+          // WHY: Repeated scheduler passes must not fan out unchanged convergence traffic.
+          if (!record.summarySent) {
+            record.summarySent = true;
+            await this.ctx.storage.put(recordKey, record);
+            await this.sendStateSummary(socket, projectId);
+          }
+          session.projects = session.projects.filter((candidate) => candidate !== projectId);
+          idleProjects = 0;
+          continue;
+        }
+        // WHAT: Leave this project queued when its four-batch window is full.
+        // WHY: Acknowledgement must advance the project window.
+        if (pending.length >= maximumRepairBatchesPerProject || remaining.length === 0) {
+          idleProjects += 1;
+          // WHAT: End the scheduler after one complete pass made no admission.
+          // WHY: All projects are waiting for acknowledgement and another loop would spin.
+          if (idleProjects >= session.projects.length) break;
+          continue;
+        }
+        const candidates = remaining.slice(0, stateEntityBatchSize);
+        const storageKeys = candidates.map((entry) => stateEntityStorageKey(projectId, taskCurrentBucketForEntityKey(entry.key), entry.key));
+        const stored = await this.ctx.storage.get<RelayEntity>(storageKeys);
+        const entities = storageKeys.map((key) => stored.get(key));
+        // WHAT: Reject a repair whose referenced durable entity disappeared.
+        // WHY: Sending an incomplete frame would make the attempt silently unfinishable.
+        if (entities.some((entity) => !entity)) throw new Error('missing_repair_entity');
+        const frame = stateEntityFrames(projectId, entities as RelayEntity[])[0];
+        frame.payload = { ...(frame.payload as Record<string, unknown>), attemptId: record.attemptId };
+        const payload = frame.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+        const encodedBytes = repairEncoder.encode(JSON.stringify(frame)).byteLength;
+        // WHAT: Defer this frame when another in-flight frame leaves insufficient byte credit.
+        // WHY: The connection-wide byte ceiling must hold before socket send.
+        if (encodedInFlight + encodedBytes > maximumRepairBytesPerConnection && session.deliveries.size > 0) break;
+        const sentKeys = new Set(payload.entries.map((entry) => entry.key));
+        record.remainingEntries = remaining.filter((entry) => !sentKeys.has(entry.key));
+        record.pendingDeliveries = [...pending, { deliveryId: payload.deliveryId, entries: payload.entries.map(({ key, stateHash }) => ({ key, stateHash })), encodedBytes }];
+        record.summarySent = false;
+        await this.ctx.storage.put(recordKey, record);
+        session.deliveries.set(payload.deliveryId, { projectId, encodedBytes });
+        this.sendSocket(socket, frame);
+        idleProjects = 0;
+      }
+    } finally {
+      session.pumping = false;
+    }
   }
 
   private async stateBuckets(projectId: string): Promise<StateBucket[]> {
@@ -287,8 +401,7 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const peerRoot = String(payload.root ?? '');
     const peerManifestDigest = assertFederationRepairManifest(peerRoot, remote);
     const generation = await this.ctx.storage.get<number>(this.stateGenerationKey(projectId)) ?? 0;
-    const session = this.repairSessions.get(socket) ?? { summaries: new Set<string>(), buckets: new Map<string, Set<string>>() };
-    this.repairSessions.set(socket, session);
+    const session = this.repairSession(socket);
     const summaryIdentity = `${projectId}\u0000${generation}\u0000${peerRoot}\u0000${peerManifestDigest}`;
     // WHAT: Suppress an identical summary only within the current connection.
     // WHY: Reconnect must retry work whose prior transport delivery was never durably applied.
@@ -329,22 +442,136 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
     this.assertProjectParticipation(sender, projectId);
     const buckets = canonicalFederationRepairBuckets(Array.isArray(payload.buckets) ? payload.buckets : []);
-    const session = this.repairSessions.get(socket) ?? { summaries: new Set<string>(), buckets: new Map<string, Set<string>>() };
-    this.repairSessions.set(socket, session);
-    const served = session.buckets.get(projectId) ?? new Set<string>();
-    const admitted = buckets.filter((bucket) => !served.has(bucket));
-    for (const bucket of admitted) served.add(bucket);
-    session.buckets.set(projectId, served);
-    // WHAT: Suppress duplicate buckets only within the current connection.
-    // WHY: Reconnect must retry a response that was sent but not durably applied.
-    if (admitted.length === 0) return;
-    const entities: RelayEntity[] = [];
-    for (const bucket of admitted) {
-      const page = await listAll<RelayEntity>(this.ctx.storage, stateEntityPrefix(projectId, bucket));
-      entities.push(...page.values());
+    const session = this.repairSession(socket);
+    // WHAT: Preserve bounded legacy service when optional continuation metadata is absent.
+    // WHY: Epoch-4 compatibility requires old nodes to keep synchronizing without completion claims.
+    if (!payload.attemptId || !payload.relayRoot || !payload.receiverRoot) {
+      const served = session.buckets.get(projectId) ?? new Set<string>();
+      const admitted = buckets.filter((bucket) => !served.has(bucket));
+      for (const bucket of admitted) served.add(bucket);
+      session.buckets.set(projectId, served);
+      // WHAT: Suppress a legacy request when every selected bucket was already served on this socket.
+      // WHY: Old epoch-4 requests lack durable acknowledgement authority for finer continuation.
+      if (admitted.length === 0) return;
+      const entities: RelayEntity[] = [];
+      for (const bucket of admitted) {
+        const page = await listAll<RelayEntity>(this.ctx.storage, stateEntityPrefix(projectId, bucket));
+        entities.push(...page.values());
+      }
+      this.sendStateEntities(socket, projectId, entities);
+      await this.sendStateSummary(socket, projectId);
+      return;
     }
-    this.sendStateEntities(socket, projectId, entities);
-    await this.sendStateSummary(socket, projectId);
+    const attemptId = assertFederationRepairAttempt(payload.attemptId, 'attemptId');
+    const relayRoot = assertFederationRepairAttempt(payload.relayRoot, 'relayRoot');
+    const receiverRoot = assertFederationRepairAttempt(payload.receiverRoot, 'receiverRoot');
+    const attemptSessionIdentity = `attempt:${projectId}:${attemptId}`;
+    // WHAT: Suppress an identical enhanced request within the current connection.
+    // WHY: Only socket replacement can make previously sent unacknowledged frames eligible again.
+    if (session.summaries.has(attemptSessionIdentity)) return;
+    session.summaries.add(attemptSessionIdentity);
+    const localBuckets = await this.stateBuckets(projectId);
+    const currentRelayRoot = hashTaskCurrentRoot(localBuckets);
+    // WHAT: Return the current summary when the request names a superseded relay cut.
+    // WHY: Entries from another durable root cannot complete this attempt safely.
+    if (relayRoot !== currentRelayRoot) {
+      await this.sendStateSummary(socket, projectId);
+      return;
+    }
+    const generation = await this.ctx.storage.get<number>(this.stateGenerationKey(projectId)) ?? 0;
+    const recordKey = federationRepairRecordKey(sender, projectId);
+    const retained = await this.ctx.storage.get<FederationRepairRecord>(recordKey);
+    const sameAttempt = retained?.attemptId === attemptId && retained.generation === generation && retained.relayRoot === relayRoot;
+    let record: FederationRepairRecord;
+    // WHAT: Continue acknowledged progress when reconnect names the same durable attempt.
+    // WHY: Confirmed entries must never be resent after socket replacement.
+    if (sameAttempt) {
+      const requeued = [...(retained.remainingEntries ?? []), ...(retained.pendingDeliveries ?? []).flatMap((delivery) => delivery.entries)];
+      const acknowledged = retained.acknowledgedEntries ?? {};
+      record = {
+        ...retained,
+        receiverRoot,
+        remainingEntries: [...new Map(requeued.filter((entry) => acknowledged[entry.key] !== entry.stateHash).map((entry) => [entry.key, entry])).values()],
+        pendingDeliveries: [],
+        summarySent: false,
+      };
+    } else {
+      record = {
+        ...createFederationRepairRecord({ nodeId: sender, projectId, generation, peerRoot: receiverRoot, peerManifestDigest: relayRoot }),
+        attemptId,
+        relayRoot,
+        receiverRoot,
+        requestedBuckets: buckets,
+        remainingEntries: await this.repairEntries(projectId, buckets),
+        pendingDeliveries: [],
+        acknowledgedEntries: {},
+        summarySent: false,
+      };
+    }
+    await this.ctx.storage.put(recordKey, record);
+    for (const [deliveryId, delivery] of session.deliveries) {
+      // WHAT: Retire only transport deliveries owned by the restarted project attempt.
+      // WHY: Reconnecting one project must not release another project's global byte credit.
+      if (delivery.projectId === projectId) session.deliveries.delete(deliveryId);
+    }
+    // WHAT: Add this project once to the connection round-robin scheduler.
+    // WHY: Duplicate requests must share one project window and one global budget.
+    if (!session.projects.includes(projectId)) session.projects.unshift(projectId);
+    await this.pumpRepairWindow(sender, socket);
+  }
+
+  private async acknowledgeStateDelivery(sender: string, socket: WebSocket, frame: RelayFrame): Promise<void> {
+    const projectId = String(frame.projectId ?? '');
+    const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+    this.assertProjectParticipation(sender, projectId);
+    const deliveryId = String(payload.deliveryId ?? '');
+    const attemptId = assertFederationRepairAttempt(payload.attemptId, 'attemptId');
+    const accepted = Array.isArray(payload.accepted) ? payload.accepted as Array<{ key?: string; stateHash?: string }> : [];
+    const recordKey = federationRepairRecordKey(sender, projectId);
+    const record = await this.ctx.storage.get<FederationRepairRecord>(recordKey);
+    const delivery = record?.pendingDeliveries?.find((candidate) => candidate.deliveryId === deliveryId);
+    // WHAT: Reject an acknowledgement outside the exact active attempt and delivery.
+    // WHY: Only correlated durable receiver application may advance the repair window.
+    if (!record || record.attemptId !== attemptId || !delivery) throw new Error('invalid_state_acknowledgement');
+    const acceptedMap = new Map(accepted.map((entry) => [String(entry.key ?? ''), String(entry.stateHash ?? '')]));
+    // WHAT: Require every submitted key and hash to be acknowledged exactly once.
+    // WHY: Partial acknowledgement cannot prove the omitted entries reached durable state.
+    if (acceptedMap.size !== delivery.entries.length || delivery.entries.some((entry) => acceptedMap.get(entry.key) !== entry.stateHash)) {
+      throw new Error('invalid_state_acknowledgement');
+    }
+    record.acknowledgedEntries = { ...(record.acknowledgedEntries ?? {}), ...Object.fromEntries(delivery.entries.map((entry) => [entry.key, entry.stateHash])) };
+    record.pendingDeliveries = (record.pendingDeliveries ?? []).filter((candidate) => candidate.deliveryId !== deliveryId);
+    await this.ctx.storage.put(recordKey, record);
+    const session = this.repairSession(socket);
+    session.deliveries.delete(deliveryId);
+    // WHAT: Return the acknowledged project to the round-robin queue.
+    // WHY: Each durable acknowledgement must immediately admit the next bounded batch.
+    if (!session.projects.includes(projectId)) session.projects.push(projectId);
+    await this.pumpRepairWindow(sender, socket);
+  }
+
+  private async completeStateRepair(sender: string, socket: WebSocket, frame: RelayFrame): Promise<void> {
+    const projectId = String(frame.projectId ?? '');
+    const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+    this.assertProjectParticipation(sender, projectId);
+    // WHAT: Ignore legacy convergence frames that do not claim resumable attempt authority.
+    // WHY: Old epoch-4 nodes remain compatible but cannot complete the enhanced durable attempt.
+    if (!payload.attemptId) return;
+    const attemptId = assertFederationRepairAttempt(payload.attemptId, 'attemptId');
+    const root = assertFederationRepairAttempt(payload.root, 'relayRoot');
+    const recordKey = federationRepairRecordKey(sender, projectId);
+    const record = await this.ctx.storage.get<FederationRepairRecord>(recordKey);
+    const currentRoot = hashTaskCurrentRoot(await this.stateBuckets(projectId));
+    // WHAT: Complete only an empty attempt whose receiver confirms the current relay root.
+    // WHY: Sent, pending, stale-cut, and unequal-root attempts remain retryable instead of becoming silent.
+    if (!record || record.attemptId !== attemptId || record.remainingEntries?.length || record.pendingDeliveries?.length || root !== currentRoot) {
+      throw new Error('invalid_state_convergence');
+    }
+    record.servedBuckets = [...(record.requestedBuckets ?? [])];
+    record.completedAt = new Date().toISOString();
+    await this.ctx.storage.put(recordKey, record);
+    const session = this.repairSession(socket);
+    session.projects = session.projects.filter((candidate) => candidate !== projectId);
   }
 
   private async publishCatalog(): Promise<void> {
@@ -444,8 +671,13 @@ export class FederationRelayV4 extends DurableObject<Env> {
           }
           else if (frame.type === 'state-bucket-summary') await this.reconcileStateSummary(sender, socket, frame);
           else if (frame.type === 'state-missing-request') await this.sendMissingStateEntities(sender, socket, frame);
+          // WHAT: Advance enhanced repair only from durable receiver acknowledgement.
+          // WHY: Socket delivery alone cannot release relay flow-control credit.
+          else if (frame.type === 'state-relay-ack' || frame.type === 'state-ack') await this.acknowledgeStateDelivery(sender, socket, frame);
+          // WHAT: Complete an emptied attempt only from the receiver's equal-root frame.
+          // WHY: Pending or unequal attempts must remain retryable across reconnect.
+          else if (frame.type === 'state-converged') await this.completeStateRepair(sender, socket, frame);
           else if (frame.type === 'state-summary-request') throw new Error('state_summary_request_requires_target');
-          else if (frame.type === 'state-ack' || frame.type === 'state-relay-ack' || frame.type === 'state-converged') return;
           else throw new Error('unsupported_relay_state_frame');
           return;
         }
