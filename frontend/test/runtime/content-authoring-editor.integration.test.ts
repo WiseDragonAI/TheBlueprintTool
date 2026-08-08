@@ -299,6 +299,11 @@ test('CodeMirror adapter owns Markdown, wrapping, dirty state, toolbox actions, 
     assert.equal(view.dispatches.length, 1);
     editor.focus();
     assert.equal(commands.focus, 1);
+    editor.setAuthoredFileDiffStatus('timeout');
+    const diffStatus = parent.querySelectorAll('*').find((element) => element.className === 'authored-file-diff-status');
+    assert.equal(diffStatus?.dataset.status, 'timeout');
+    assert.match(diffStatus?.textContent ?? '', /comparison timed out/);
+    assert.equal(diffStatus?.hidden, false);
     editor.destroy();
     editor.destroy();
     assert.equal(commands.destroy, 1);
@@ -417,6 +422,9 @@ test('text-file session mounts one editable view, retains draft state across sta
       redo() {},
       search() {},
       setReadOnly(readOnly: boolean) { record.readOnly = readOnly; },
+      setAuthoredFileDiffStatus() {},
+      installAuthoredFileDiff() {},
+      clearAuthoredFileDiff() {},
       replaceDocument(markdown: string) { record.markdown = markdown; input.onDirtyChange?.(false); },
       setIdentity() {},
       destroy() { record.destroyed += 1; },
@@ -466,6 +474,105 @@ test('text-file session mounts one editable view, retains draft state across sta
   } finally {
     globalThis.confirm = previousConfirm;
   }
+});
+
+test('text-file session rejects stale diff settlement, exposes timeout and conflict states, and disposes pending work once', async () => {
+  type DeferredDiff = {
+    resolve(value: { generation: number; identity: string; hunks: [] }): void;
+    reject(error: Error): void;
+  };
+  const pending: DeferredDiff[] = [];
+  const statuses: string[] = [];
+  const installed: string[] = [];
+  let cleared = 0;
+  let destroyed = 0;
+  let onChange: ((markdown: string) => void) | null = null;
+  let markdown = 'base\ncurrent\n';
+  const mountEditor = async (input: {
+    markdown: string;
+    onChange: (markdown: string) => void;
+  }) => {
+    markdown = input.markdown;
+    onChange = input.onChange;
+    return {
+      value: () => markdown,
+      isDirty: () => false,
+      markSaved: () => {},
+      focus() {},
+      undo() {},
+      redo() {},
+      search() {},
+      setReadOnly() {},
+      setAuthoredFileDiffStatus: (status: string) => { statuses.push(status); },
+      installAuthoredFileDiff: (diff: { identity: string }) => { installed.push(diff.identity); },
+      clearAuthoredFileDiff: () => { cleared += 1; },
+      replaceDocument: (nextMarkdown: string) => { markdown = nextMarkdown; },
+      setIdentity() {},
+      destroy: () => { destroyed += 1; },
+    };
+  };
+  const deriveDiff = () => new Promise((resolve, reject) => {
+    pending.push({ resolve: resolve as DeferredDiff['resolve'], reject });
+  });
+  const flush = async (): Promise<void> => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  const snapshot = {
+    contentRevision: 'a'.repeat(64),
+    commit: 'b'.repeat(40),
+    olderCommit: 'c'.repeat(40),
+    baselineAvailability: 'available',
+    baseMarkdown: 'base\nold\n',
+    markdown,
+  } as const;
+  const session = await createTextFileEditorSession({
+    parent: new TestElement('DIV') as unknown as HTMLElement,
+    filename: 'GateTest.md',
+    markdown,
+    loadedRevision: snapshot.contentRevision,
+    snapshot,
+    readOnly: false,
+    events: null,
+    mountEditor: mountEditor as never,
+    deriveDiff: deriveDiff as never,
+    diffDebounceMs: 0,
+  });
+  await flush();
+  assert.equal(pending.length, 1);
+  markdown = 'base\ncurrent edited\n';
+  onChange?.(markdown);
+  await flush();
+  assert.equal(pending.length, 2);
+  pending[1].resolve({
+    generation: 2,
+    identity: `${snapshot.commit}:${snapshot.olderCommit}:${snapshot.contentRevision}`,
+    hunks: [],
+  });
+  await flush();
+  assert.equal(installed.length, 1);
+  assert.equal(statuses.at(-1), 'available');
+  pending[0].resolve({
+    generation: 1,
+    identity: `${snapshot.commit}:${snapshot.olderCommit}:${snapshot.contentRevision}`,
+    hunks: [],
+  });
+  await flush();
+  assert.equal(installed.length, 1);
+
+  markdown = 'base\ncurrent timeout\n';
+  onChange?.(markdown);
+  await flush();
+  pending[2].reject(new DOMException('deadline', 'TimeoutError'));
+  await flush();
+  assert.equal(statuses.at(-1), 'timeout');
+
+  session.setConflictSnapshot({ ...snapshot, markdown: 'server\n' });
+  assert.equal(session.state().conflictSnapshot?.markdown, 'server\n');
+  assert.equal(statuses.at(-1), 'conflict');
+  assert.ok(cleared >= 2);
+  session.dispose();
+  session.dispose();
+  assert.equal(destroyed, 1);
 });
 
 test('generic revision browser exposes full Markdown preview and older-page navigation independently of its diff', () => {
