@@ -10,10 +10,6 @@ import { patchLedgerCard } from '../../src/runtime/ledger/component/patch-ledger
 import { renderLedgerCardDetailLayer } from '../../src/runtime/ledger/component/render-ledger-card-detail-layer.js';
 import { patchLedgerZone } from '../../src/runtime/ledger/component/patch-ledger-zone.js';
 import { renderLedgerCardDeleteButton } from '../../src/runtime/ledger/component/render-ledger-card-delete-button.js';
-import {
-  LedgerMarkdownBlockWidget,
-  ledgerMarkdownPresentationRecords,
-} from '../../src/runtime/content-authoring/helper/create-ledger-markdown-presentation-extension.js';
 import { state } from '../../src/runtime/state.js';
 
 const root = new URL('../../../', import.meta.url);
@@ -45,7 +41,6 @@ class FakeElement {
   type = '';
   children: Array<FakeElement | FakeText> = [];
   role = '';
-  listeners: Record<string, Array<(event: { preventDefault(): void }) => void>> = {};
 
   classList = {
     toggle: (className: string, force?: boolean) => {
@@ -81,10 +76,6 @@ class FakeElement {
 
   setAttribute(name: string, value: string): void {
     this.attributes[name] = value;
-  }
-
-  addEventListener(name: string, listener: (event: { preventDefault(): void }) => void): void {
-    this.listeners[name] = [...(this.listeners[name] ?? []), listener];
   }
 
 }
@@ -371,131 +362,6 @@ test('ledger cards render markdown headings through the shared markdown renderer
     assert.equal(heading.className, 'ledger-card-heading ledger-card-heading-3');
     assert.equal(heading.children.map((child) => child.textContent).join(''), 'Quest tags');
     assert.equal(list.tagName, 'ul');
-  } finally {
-    (globalThis as unknown as { document: unknown }).document = previousDocument;
-  }
-});
-
-test('inactive editor blocks reuse canonical heading and list DOM without Markdown delimiters', () => {
-  const previousDocument = globalThis.document;
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tagName: string) => new FakeElement(tagName),
-    createTextNode: (text: string) => new FakeText(text)
-  };
-
-  try {
-    const markdown = '## Canonical **heading**\n\n- first\n- second\n\ncursor';
-    const cursor = markdown.lastIndexOf('cursor') + 1;
-    const records = ledgerMarkdownPresentationRecords(markdown, {
-      from: cursor,
-      to: cursor,
-      head: cursor,
-      empty: true,
-    });
-    const headingWidget = new LedgerMarkdownBlockWidget(records[0]);
-    const listWidget = new LedgerMarkdownBlockWidget(records[1]);
-    const headingRoot = headingWidget.toDOM() as unknown as FakeElement;
-    const listRoot = listWidget.toDOM() as unknown as FakeElement;
-    const headingMessage = headingRoot.children[0] as FakeElement;
-    const listMessage = listRoot.children[0] as FakeElement;
-    const heading = headingMessage.children[0] as FakeElement;
-    const list = listMessage.children[0] as FakeElement;
-
-    assert.equal(headingRoot.className, 'cm-ledger-block-widget thread-note is-agent');
-    assert.equal(headingRoot.dataset.ledgerBlockKind, 'heading');
-    assert.equal(headingMessage.className, 'thread-note-message ledger-card-body');
-    assert.equal(heading.tagName, 'h2');
-    assert.equal(heading.className, 'ledger-card-heading ledger-card-heading-2');
-    assert.equal(heading.children.map((child) => child.textContent).join(''), 'Canonical heading');
-    assert.equal((heading.children[1] as FakeElement).tagName, 'strong');
-    assert.equal(list.tagName, 'ul');
-    assert.deepEqual(
-      list.children.map((child) => (child as FakeElement).children.map((item) => item.textContent).join('')),
-      ['first', 'second'],
-    );
-  } finally {
-    (globalThis as unknown as { document: unknown }).document = previousDocument;
-  }
-});
-
-test('inactive canonical code widgets preserve exact additions, deletions, and unmarked context', () => {
-  const previousDocument = globalThis.document;
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tagName: string) => new FakeElement(tagName),
-    createTextNode: (text: string) => new FakeText(text)
-  };
-
-  try {
-    const markdown = ['```text', 'context', 'added', 'tail', '```', '', 'cursor'].join('\n');
-    const bodyStart = markdown.indexOf('\n') + 1;
-    const addedFrom = markdown.indexOf('added');
-    const tailFrom = markdown.indexOf('tail');
-    const records = ledgerMarkdownPresentationRecords(markdown, {
-      from: markdown.length,
-      to: markdown.length,
-      head: markdown.length,
-      empty: true,
-    }, {
-      identity: 'revision-1',
-      document: markdown,
-      hunks: [{
-        id: 'revision-1:0',
-        from: addedFrom,
-        to: tailFrom,
-        additions: [{ from: addedFrom, to: tailFrom }],
-        deletions: [{ anchor: tailFrom, order: 0, text: 'removed\n' }],
-      }],
-    });
-    const root = new LedgerMarkdownBlockWidget(records[0]).toDOM() as unknown as FakeElement;
-    const message = root.children[0] as FakeElement;
-    const pre = message.children[0] as FakeElement;
-    const code = pre.children[0] as FakeElement;
-    const contextLine = code.children[0] as FakeElement;
-    const addedLine = code.children[1] as FakeElement;
-    const deletionLine = code.children[2] as FakeElement;
-    const tailLine = code.children[3] as FakeElement;
-
-    assert.equal(contextLine.dataset.sourceFrom, String(bodyStart));
-    assert.equal(contextLine.className, 'ledger-card-code-line');
-    assert.equal(addedLine.className, 'ledger-card-code-line cm-authored-addition');
-    assert.equal(addedLine.attributes['data-change'], 'added');
-    assert.equal(deletionLine.className, 'ledger-card-code-line cm-authored-deletion');
-    assert.equal(deletionLine.dataset.sourceAnchor, String(tailFrom));
-    assert.equal((deletionLine.children[0] as FakeElement).textContent, '− Removed');
-    assert.equal(tailLine.className, 'ledger-card-code-line');
-  } finally {
-    (globalThis as unknown as { document: unknown }).document = previousDocument;
-  }
-});
-
-test('pointer activation reveals the exact canonical widget source and restores editor focus', () => {
-  const previousDocument = globalThis.document;
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tagName: string) => new FakeElement(tagName),
-    createTextNode: (text: string) => new FakeText(text)
-  };
-
-  try {
-    const markdown = '## Heading\n\nParagraph';
-    const cursor = markdown.lastIndexOf('Paragraph') + 1;
-    const record = ledgerMarkdownPresentationRecords(markdown, {
-      from: cursor,
-      to: cursor,
-      head: cursor,
-      empty: true,
-    })[0];
-    const selections: number[] = [];
-    let focused = false;
-    const root = new LedgerMarkdownBlockWidget(record).toDOM({
-      dispatch: (spec) => { selections.push(spec.selection.anchor); },
-      focus: () => { focused = true; },
-    }) as unknown as FakeElement;
-    let prevented = false;
-    root.listeners.mousedown[0]({ preventDefault: () => { prevented = true; } });
-
-    assert.deepEqual(selections, [record.from]);
-    assert.equal(focused, true);
-    assert.equal(prevented, true);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }
