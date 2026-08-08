@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLedgerCardMarkdown } from '../../../../src/runtime/ledger/helper/parse-ledger-card-markdown.js';
+import { ledgerMarkdownPresentationRecords } from '../../../../src/runtime/content-authoring/helper/create-ledger-markdown-presentation-extension.js';
 
 test('parse-ledger-card-markdown parses common card description markdown', () => {
   assert.deepEqual(parseLedgerCardMarkdown('## Heading\n**Props**: `mode`\n- first\n* second\n\n---\n\n| Name | Use |\n|---|---|\n| `Health` | **Current** value |\n\n```cpp\nUSTRUCT(BlueprintType)\nstruct FCreatureState\n{\n  GENERATED_BODY()\n};\n```'), [
@@ -151,8 +152,10 @@ test('parse-ledger-card-markdown leaves unsafe questionnaire identifiers inert',
   assert.equal(parseLedgerCardMarkdown('::questions[Unsafe](questions:?id=../../outside)')[0]?.kind, 'paragraph');
 });
 
-test('parse-ledger-card-markdown groups quote lines and terminates before following Markdown', () => {
-  assert.deepEqual(parseLedgerCardMarkdown('> **First** line\n> second line\n\nAfter quote\n\n> Adjacent quote'), [
+test('parse-ledger-card-markdown groups quote lines and retains their exact outer source span', () => {
+  const markdown = '> **First** line\n> second line\n\nAfter quote\n\n> Adjacent quote';
+  const blocks = parseLedgerCardMarkdown(markdown);
+  assert.deepEqual(blocks, [
     {
       kind: 'blockquote',
       blocks: [
@@ -166,6 +169,14 @@ test('parse-ledger-card-markdown groups quote lines and terminates before follow
       blocks: [{ kind: 'paragraph', children: [{ kind: 'text', text: 'Adjacent quote' }] }],
     },
   ]);
+  assert.deepEqual(
+    blocks.map(({ from, to }) => ({ from, to })),
+    [
+      { from: 0, to: markdown.indexOf('\n\nAfter quote') },
+      { from: markdown.indexOf('After quote'), to: markdown.indexOf('After quote') + 'After quote'.length },
+      { from: markdown.lastIndexOf('> Adjacent quote'), to: markdown.length },
+    ],
+  );
 });
 
 test('parse-ledger-card-markdown preserves nested block content inside quotes', () => {
@@ -181,5 +192,129 @@ test('parse-ledger-card-markdown preserves nested block content inside quotes', 
         },
       ],
     },
+  ]);
+});
+
+test('parse-ledger-card-markdown retains original-byte spans without changing the enumerable render model', () => {
+  const markdown = '## Heading\\n\\n- first\n- **second**';
+  const blocks = parseLedgerCardMarkdown(markdown);
+  assert.deepEqual(blocks, [
+    { kind: 'heading', level: 2, children: [{ kind: 'text', text: 'Heading' }] },
+    {
+      kind: 'list',
+      ordered: false,
+      start: 1,
+      items: [
+        [{ kind: 'text', text: 'first' }],
+        [{ kind: 'strong', text: 'second' }],
+      ],
+    },
+  ]);
+  assert.deepEqual(
+    blocks.map(({ from, to }) => ({ from, to })),
+    [
+      { from: 0, to: 10 },
+      { from: 14, to: markdown.length },
+    ],
+  );
+  const list = blocks[1];
+  assert.equal(list.kind, 'list');
+  const inlineSpans = list.items.flat() as Array<{ from?: number; to?: number }>;
+  assert.deepEqual(
+    inlineSpans.map(({ from, to }) => ({ from, to })),
+    [
+      { from: 16, to: 21 },
+      { from: 24, to: 34 },
+    ],
+  );
+});
+
+test('inactive editor presentation records come from canonical blocks including Decision OS directives', () => {
+  const markdown = [
+    '## Heading',
+    '',
+    '- **exact** item',
+    '',
+    '::html[Preview](.decision-os/preview.html)',
+    '::git-diff[Review](git-diff:?repo=.&path=README.md)',
+    '::questions[Decision](questions:?id=gate)',
+    '',
+    'cursor',
+  ].join('\n');
+  const cursor = markdown.lastIndexOf('cursor') + 1;
+  const ranges = ledgerMarkdownPresentationRecords(markdown, {
+    from: cursor,
+    to: cursor,
+    head: cursor,
+    empty: true,
+  });
+  assert.deepEqual(
+    ranges.filter((range) => ['heading', 'list', 'htmlEmbeds', 'gitDiff', 'questions'].includes(range.block.kind))
+      .map(({ block, source }) => ({ kind: block.kind, source })),
+    [
+      { kind: 'heading', source: '## Heading' },
+      { kind: 'list', source: '- **exact** item' },
+      { kind: 'htmlEmbeds', source: '::html[Preview](.decision-os/preview.html)' },
+      { kind: 'gitDiff', source: '::git-diff[Review](git-diff:?repo=.&path=README.md)' },
+      { kind: 'questions', source: '::questions[Decision](questions:?id=gate)' },
+    ],
+  );
+  assert.equal(ranges.some((range) => range.source.includes('**exact**')), true);
+});
+
+test('editor presentation reveals every canonical block intersecting the main selection', () => {
+  const markdown = ['## Heading', '', '- first', '- second', '', '---', '', 'Paragraph'].join('\n');
+  const listStart = markdown.indexOf('- first');
+  const listEnd = markdown.indexOf('\n\n---');
+  const records = ledgerMarkdownPresentationRecords(markdown, {
+    from: listStart + 2,
+    to: listEnd - 1,
+    head: listEnd - 1,
+    empty: false,
+  });
+  assert.deepEqual(
+    records.map((record) => ({ kind: record.block.kind, source: record.source })),
+    [
+      { kind: 'heading', source: '## Heading' },
+      { kind: 'hr', source: '---' },
+      { kind: 'paragraph', source: 'Paragraph' },
+    ],
+  );
+});
+
+test('editor presentation retains the preceding source block for a cursor in trailing parser whitespace', () => {
+  const markdown = '## Heading\n\nParagraph\n';
+  const records = ledgerMarkdownPresentationRecords(markdown, {
+    from: markdown.length,
+    to: markdown.length,
+    head: markdown.length,
+    empty: true,
+  });
+  assert.deepEqual(
+    records.map((record) => ({ kind: record.block.kind, source: record.source })),
+    [{ kind: 'heading', source: '## Heading' }],
+  );
+});
+
+test('editor presentation chunks oversized canonical lists into exact virtualizable ranges', () => {
+  const listMarkdown = Array.from({ length: 66 }, (_, index) => `- item ${index}`).join('\n');
+  const markdown = `${listMarkdown}\n\nTrailing paragraph`;
+  const records = ledgerMarkdownPresentationRecords(markdown, {
+    from: markdown.indexOf('Trailing') + 1,
+    to: markdown.indexOf('Trailing') + 1,
+    head: markdown.indexOf('Trailing') + 1,
+    empty: true,
+  });
+
+  assert.deepEqual(records.map((record) => record.block.kind), ['list', 'list', 'list']);
+  assert.deepEqual(
+    records.map((record) => record.block.kind === 'list' ? record.block.items.length : 0),
+    [32, 32, 2],
+  );
+  assert.equal(records.map((record) => record.source).join(''), listMarkdown);
+  assert.deepEqual(records.map(({ from, to }) => ({ from, to })), [
+    { from: 0, to: markdown.indexOf('- item 32') },
+    { from: markdown.indexOf('- item 32'), to: markdown.indexOf('- item 64') },
+    { from: markdown.indexOf('- item 64'), to: listMarkdown.length },
   ]);
 });
