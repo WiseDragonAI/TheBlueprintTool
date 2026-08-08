@@ -10,12 +10,7 @@ import {
   type AuthoredFileRevisionSummary,
 } from '../component/render-authored-file-revision.js';
 import { createTextFileEditorSession, type TextFileEditorSession } from './text-file-editor-session.js';
-import {
-  loadCurrentLedgerCardRevision,
-  loadLedgerCardRevision,
-  loadLedgerCardRevisionHistory,
-} from '../effect/load-ledger-card-revision.js';
-import type { AuthoredFileRevisionSnapshot } from '../helper/authored-file-revision-snapshot.js';
+import { loadLedgerCardRevision, loadLedgerCardRevisionHistory } from '../effect/load-ledger-card-revision.js';
 import {
   loadLedgerCardContent,
   requestLedgerCardContentSave,
@@ -46,7 +41,6 @@ let message: HTMLElement | null = null;
 let actions: HTMLElement | null = null;
 let session: TextFileEditorSession | null = null;
 let card: LedgerCardContentDetail | null = null;
-let currentSnapshot: AuthoredFileRevisionSnapshot | null = null;
 let generation = 0;
 let view: 'editor' | 'history' = 'editor';
 let revisions: AuthoredFileRevisionSummary[] = [];
@@ -146,7 +140,6 @@ function finishClose(): void {
   identity = null;
   input = null;
   card = null;
-  currentSnapshot = null;
   closing?.onClosed?.();
 }
 
@@ -159,27 +152,6 @@ export function requestActiveLedgerCardEditorClose(reason: 'close' | 'escape' | 
 
 export function activeLedgerCardEditorIdentity(): Readonly<Identity> | null {
   return identity ? { ...identity } : null;
-}
-
-export async function refreshActiveLedgerCardEditor(refreshIdentity: Identity): Promise<void> {
-  if (!identity || !session || !sameIdentity(identity, refreshIdentity)) return;
-  const currentGeneration = generation;
-  const result = await loadCurrentLedgerCardRevision(refreshIdentity);
-  if (generation !== currentGeneration || !result.ok || !result.snapshot || !session) return;
-  if (result.snapshot.contentRevision === session.state().loadedRevision) return;
-  currentSnapshot = result.snapshot;
-  if (session.state().dirty) {
-    conflictRevision = result.snapshot.contentRevision;
-    session.setConflictSnapshot(result.snapshot);
-    error = 'The card changed while this draft was open. Reload the server revision to discard the draft.';
-    render();
-    return;
-  }
-  conflictRevision = '';
-  error = '';
-  notice = 'Updated to the server-confirmed revision.';
-  session.reloadAuthoritative(result.snapshot.markdown, result.snapshot.contentRevision, result.snapshot);
-  render();
 }
 
 function buildShell(): void {
@@ -273,19 +245,15 @@ async function initializeHistory(cursor: string | null = null): Promise<void> {
 
 async function reloadAuthoritative(): Promise<void> {
   if (!identity || !session) return;
-  const [result, revision] = await Promise.all([
-    loadLedgerCardContent(identity.projectId, identity.ledgerId, identity.cardId),
-    loadCurrentLedgerCardRevision(identity),
-  ]);
-  if (!result.ok || !result.card || !revision.ok || !revision.snapshot) {
-    error = result.error ?? revision.error ?? 'Could not reload the card.';
+  const result = await loadLedgerCardContent(identity.projectId, identity.ledgerId, identity.cardId);
+  if (!result.ok || !result.card) {
+    error = result.error ?? 'Could not reload the card.';
   } else {
     card = result.card;
-    currentSnapshot = revision.snapshot;
     conflictRevision = '';
     error = '';
     notice = 'Reloaded the server-confirmed revision.';
-    session.reloadAuthoritative(revision.snapshot.markdown, revision.snapshot.contentRevision, revision.snapshot);
+    session.reloadAuthoritative(ledgerCardBody(card), String(card.contentRevision ?? ''));
   }
   render();
 }
@@ -305,13 +273,11 @@ async function save(): Promise<void> {
   session.setSaving(false);
   if (result.ok && result.card && result.contentRevision) {
     card = result.card;
-    currentSnapshot = result.snapshot ?? currentSnapshot;
-    session.markSaved(ledgerCardBody(result.card), result.contentRevision, result.snapshot);
+    session.markSaved(ledgerCardBody(result.card), result.contentRevision);
     notice = 'Saved as a focused Git revision.';
     input?.onSaved?.(result.card);
   } else if (result.statusCode === 409) {
     conflictRevision = result.currentRevision ?? '';
-    session.setConflictSnapshot(result.snapshot ?? null);
     error = result.error ?? 'The card changed after it was loaded.';
   } else if (result.recovery) {
     session.setRecovery({
@@ -395,18 +361,13 @@ export async function openLedgerCardEditor(openInput: OpenInput): Promise<void> 
     if (!result.ok || !result.card) return;
     card = result.card;
   }
-  const current = await loadCurrentLedgerCardRevision(identity);
-  if (generation !== currentGeneration) return;
-  if (!current.ok || !current.snapshot) return;
-  currentSnapshot = current.snapshot;
   buildShell();
   if (!editorHost || !card) return;
   session = await createTextFileEditorSession({
     parent: editorHost,
     filename: `card-${openInput.cardId}.md`,
-    markdown: currentSnapshot.markdown,
-    loadedRevision: currentSnapshot.contentRevision,
-    snapshot: currentSnapshot,
+    markdown: ledgerCardBody(card),
+    loadedRevision: String(card.contentRevision ?? ''),
     readOnly: false,
     returnFocusTo: openInput.returnFocusTo,
     onCloseRequested: finishClose,

@@ -2,10 +2,7 @@
  * WHAT: Creates one server-owned skill-library record without accepting a filesystem path.
  * WHY: Authors choose execution visibility while the backend owns storage and Git revision creation.
  */
-import {
-  decodeCodexSkillLibraryDetail,
-  type CodexSkillLibraryDetail,
-} from './load-codex-skill-library.js';
+import type { CodexSkillLibraryDetail } from './load-codex-skill-library.js';
 import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
 
 export type CodexSkillContentKind = 'federated-skill' | 'workspace-skill' | 'pipeline-prompt';
@@ -28,10 +25,5 @@ export async function requestCodexSkillLibraryCreate(input: {
   const body = await response.json().catch(() => null) as { ok?: boolean; skill?: CodexSkillLibraryDetail; error?: string } | null;
   if (!body) return { ok: false, statusCode: response.status, error: 'Invalid response.' };
   const ok = response.ok && body.ok !== false;
-  return {
-    ok,
-    statusCode: response.status,
-    skill: decodeCodexSkillLibraryDetail(body.skill),
-    error: ok ? undefined : String(body.error ?? `Request failed (${response.status}).`),
-  };
+  return { ok, statusCode: response.status, skill: body.skill, error: ok ? undefined : String(body.error ?? `Request failed (${response.status}).`) };
 }

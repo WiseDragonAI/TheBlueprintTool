@@ -1,7 +1,3 @@
-/**
- * WHAT: Proves Codex skill-library routes, authored bytes, immutable snapshots, and Git ownership.
- * WHY: Skill editing must preserve path-free authority and expose exact diff bases without partial writes.
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -140,12 +136,6 @@ test('skill library routes save editable Markdown and defaults without exposing 
     assert.equal(detail.skill.defaultCodexEffort, null);
     assert.equal(detail.skill.favorite, false);
     assert.deepEqual(detail.skill.tags, []);
-    assert.equal(detail.skill.snapshot.contentRevision, detail.skill.revision);
-    assert.equal(detail.skill.snapshot.commit, detail.skill.gitRevision.commit);
-    assert.equal(detail.skill.snapshot.olderCommit, null);
-    assert.equal(detail.skill.snapshot.baselineAvailability, 'no_prior_revision');
-    assert.equal(detail.skill.snapshot.baseMarkdown, '');
-    assert.equal(detail.skill.snapshot.markdown, markdown('workspace-skill', 'Workspace description'));
     assert.deepEqual(detail.skill.references, [
       { name: 'guide.md', markdown: '# Guide\n\nUse the guide.\n' },
       { name: 'nested/schema.json', markdown: '```json\n{"type":"object"}\n```\n' },
@@ -171,12 +161,6 @@ test('skill library routes save editable Markdown and defaults without exposing 
     assert.equal(saved.skill.defaultCodexModel, 'gpt-5.4');
     assert.equal(saved.skill.defaultCodexEffort, 'high');
     assert.notEqual(saved.skill.revision, detail.skill.revision);
-    assert.equal(saved.skill.snapshot.contentRevision, saved.skill.revision);
-    assert.equal(saved.skill.snapshot.commit, saved.skill.gitRevision.commit);
-    assert.equal(saved.skill.snapshot.olderCommit, detail.skill.snapshot.commit);
-    assert.equal(saved.skill.snapshot.baselineAvailability, 'available');
-    assert.equal(saved.skill.snapshot.baseMarkdown, detail.skill.markdown);
-    assert.equal(saved.skill.snapshot.markdown, updatedMarkdown);
     assert.equal(readFileSync(workspaceFile, 'utf8'), updatedMarkdown);
     const historyResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill/revisions`);
     assert.equal(historyResponse.status, 200);
@@ -271,7 +255,6 @@ test('skill library routes save editable Markdown and defaults without exposing 
     assert.equal(staleResponse.status, 409);
     const stale = await staleResponse.json() as Record<string, any>;
     assert.equal(stale.currentRevision, saved.skill.revision);
-    assert.deepEqual(stale.snapshot, saved.skill.snapshot);
 
     const markdownBeforeInvalid = readFileSync(workspaceFile, 'utf8');
     const storeBeforeInvalid = readFileSync(storeFile, 'utf8');

@@ -7,10 +7,6 @@ import type {
   AuthoredFileRevisionDetail,
   AuthoredFileRevisionSummary,
 } from '../component/render-authored-file-revision.js';
-import {
-  authoredFileRevisionSnapshot,
-  type AuthoredFileRevisionSnapshot,
-} from '../helper/authored-file-revision-snapshot.js';
 
 function base(projectId: string, ledgerId: string, cardId: string): string {
   return projectScopedRequestPath(
@@ -61,27 +57,5 @@ export async function loadLedgerCardRevision(input: {
     ok,
     revision: body?.revision,
     error: ok ? undefined : String(body?.error ?? `Request failed (${response.status}).`),
-  };
-}
-
-export async function loadCurrentLedgerCardRevision(input: {
-  projectId: string;
-  ledgerId: string;
-  cardId: string;
-}): Promise<{ ok: boolean; snapshot?: AuthoredFileRevisionSnapshot; error?: string }> {
-  const response = await fetch(`${base(input.projectId, input.ledgerId, input.cardId)}/current`, { cache: 'no-store' })
-    .catch(() => undefined);
-  if (!response) return { ok: false, error: 'Request failed.' };
-  const body = await response.json().catch(() => null) as {
-    ok?: boolean;
-    revision?: unknown;
-    error?: string;
-  } | null;
-  const snapshot = authoredFileRevisionSnapshot(body?.revision);
-  const ok = Boolean(response.ok && body?.ok !== false && snapshot);
-  return {
-    ok,
-    ...(snapshot ? { snapshot } : {}),
-    error: ok ? undefined : String(body?.error ?? 'The current authored-file snapshot is invalid.'),
   };
 }

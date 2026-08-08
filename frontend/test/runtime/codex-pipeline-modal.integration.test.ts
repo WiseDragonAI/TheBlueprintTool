@@ -838,15 +838,6 @@ test('late run and save responses cannot overwrite a newly opened modal session'
 test('skill editor reconciles a conflicting draft and protected skills remain unsaveable', async () => {
   const previousFetch = globalThis.fetch;
   const editableDetail = { ...catalog[0], markdown: '---\nname: analysis\ndescription: Analyze evidence.\n---\n' };
-  const serverMarkdown = `${editableDetail.markdown}\nServer revision.`;
-  const conflictSnapshot = {
-    contentRevision: 'b'.repeat(64),
-    commit: 'c'.repeat(40),
-    olderCommit: 'd'.repeat(40),
-    baselineAvailability: 'available',
-    baseMarkdown: editableDetail.markdown,
-    markdown: serverMarkdown,
-  } as const;
   let saveRequestCount = 0;
   let savedCallbackCount = 0;
   try {
@@ -854,19 +845,14 @@ test('skill editor reconciles a conflicting draft and protected skills remain un
       assert.equal(url, '/p/project-a/api/codex/skill-library/analysis');
       if (!init) {
         const current = saveRequestCount
-          ? { ...editableDetail, markdown: serverMarkdown, revision: 'analysis-b' }
+          ? { ...editableDetail, markdown: `${editableDetail.markdown}\nServer revision.`, revision: 'analysis-b' }
           : editableDetail;
         return new Response(JSON.stringify({ ok: true, skill: current }), { status: 200 });
       }
       assert.equal(init.method, 'PUT');
       saveRequestCount += 1;
       if (saveRequestCount === 1) {
-        return new Response(JSON.stringify({
-          ok: false,
-          error: 'Conflict.',
-          currentRevision: 'analysis-b',
-          snapshot: conflictSnapshot,
-        }), { status: 409 });
+        return new Response(JSON.stringify({ ok: false, error: 'Conflict.', currentRevision: 'analysis-b' }), { status: 409 });
       }
       const body = JSON.parse(String(init.body));
       return new Response(JSON.stringify({ ok: true, skill: { ...editableDetail, ...body, revision: 'analysis-b' } }), { status: 200 });
@@ -878,11 +864,6 @@ test('skill editor reconciles a conflicting draft and protected skills remain un
     assert.match(skillLibraryEditorState.markdown, /Changed locally/);
     assert.equal(skillLibraryEditorState.conflictRevision, 'analysis-b');
     assert.equal(skillLibraryEditorState.detail?.revision, 'analysis-a');
-    assert.deepEqual(skillLibraryEditorState.conflictSnapshot, conflictSnapshot);
-    const evidence = fakeDocument.skillLibraryEditorModal.querySelector('.authored-file-conflict-evidence');
-    assert.match(evidence?.textContent ?? '', /Local draft preserved:/);
-    assert.match(evidence?.textContent ?? '', /Changed locally/);
-    assert.match(evidence?.textContent ?? '', /Server revision\./);
     await reloadSkillLibraryDraft();
     assert.match(skillLibraryEditorState.markdown, /Server revision/);
     assert.equal(skillLibraryEditorState.detail?.revision, 'analysis-b');
