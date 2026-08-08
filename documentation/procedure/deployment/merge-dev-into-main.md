@@ -46,7 +46,16 @@
 
    **WHY:** Production delivery admits only an already-published canonical main merge. The merge command itself never pushes, deploys, restarts a server, updates a remote submodule, and activates a release.
 
-8. **WHAT:** Read the `logFile` path from the success or rejection JSON.
+8. **WHAT:** Deploy the relay from the published annotated parent release tag in the canonical primary `main` checkout:
+
+   ```bash
+   cd /home/jbb/dev/EditorBP/decision-os
+   node bin/decision-os-deploy-relay.mjs rel-<version> --json
+   ```
+
+   **WHY:** The release tag is the deployment input. Its resolved commit remains only the relay health compatibility fingerprint; no detached release worktree and no canary on port `50151` participates in relay deployment.
+
+9. **WHAT:** Read the `logFile` path from the success or rejection JSON.
 
    **WHY:** Every admitted, rejected, failed, and completed invocation writes a durable local JSONL receipt.
 

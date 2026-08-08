@@ -6,6 +6,7 @@
   "bin": {
     "decision-os-dev-integration-check": "./bin/decision-os-dev-integration-check.mjs",
     "decision-os-merge-dev": "./bin/decision-os-merge-dev.mjs",
+    "decision-os-deploy-relay": "./bin/decision-os-deploy-relay.mjs",
     "decision-os-verify": "./bin/decision-os-verify.mjs",
     "decision-os-workload-status": "./bin/decision-os-workload-status.mjs",
     "decision-os-delivery": "./bin/decision-os-delivery.mjs",

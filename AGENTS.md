@@ -211,6 +211,30 @@ Every invocation writes one local JSONL receipt under
 untracked. Doctor is observational and creates no receipt. Review and clean logs according to
 [`documentation/procedure/deployment/merge-dev-into-main.md`](documentation/procedure/deployment/merge-dev-into-main.md); the tool never deletes logs automatically.
 
+### Production Relay Deployment Tool
+
+Deploy the production relay from the canonical primary `main` checkout with the
+annotated release tag created and published by `decision-os-merge-dev`:
+
+```bash
+cd /home/jbb/dev/EditorBP/decision-os
+node bin/decision-os-deploy-relay.mjs rel-X.Y.Z --json
+```
+
+The release authority is the provided `rel-X.Y.Z` tag. The tool resolves that
+tag to the existing 40-character runtime compatibility fingerprint, verifies
+the tag and current `main` are published, and verifies that
+`federation-relay/` plus `shared/` match the tagged tree before mutation.
+
+The tool deploys directly from the canonical primary `main` checkout. Do not
+create a detached release worktree, change the production node pointer, use
+port `50151`, or invoke Wrangler directly for this relay-only deployment.
+
+The tool records the active Cloudflare predecessor before upload, activates
+the tagged version at 100 percent, verifies production relay health, and
+restores the predecessor automatically when post-activation health verification
+fails.
+
 ### Server Restart Ownership
 
 - **Do not restart or stop the server unless the operator explicitly asks.**

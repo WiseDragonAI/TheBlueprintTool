@@ -1,9 +1,9 @@
 ## A. Delivery Authority
 
-1. `bin/decision-os-delivery.mjs`, published as `decision-os-delivery`, is the only end-to-end production release authority.
+1. `bin/decision-os-delivery.mjs`, published as `decision-os-delivery`, owns coordinated node delivery. Relay-only deployment from an already-published release tag belongs to `bin/decision-os-deploy-relay.mjs`.
 2. The CLI owns six fixed commands: `bootstrap-node`, `candidate`, `promote`, `status`, `resume`, and `rollback`.
 3. `promote` admits one exact pushed `origin/dev` SHA and its already-published canonical `origin/main` merge, deploys one production relay version, activates every frozen project-owning node, restarts each node through its adopted supervisor, and proves release identity plus federation convergence.
-4. Do not use the primary checkout as a release directory. Delivery creates immutable release worktrees and leaves primary checkouts, unrelated working-tree bytes, and staged operator hunks untouched.
+4. Coordinated node delivery retains its existing node preparation boundary. Relay-only deployment runs from the canonical primary `main` checkout and creates no release worktree.
 5. A production mutation is forbidden until the run journal contains the successful `admit-exact-release` receipt for the requested SHA.
 
 ---
