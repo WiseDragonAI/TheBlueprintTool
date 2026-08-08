@@ -24,10 +24,6 @@ import { stateEntityFrames } from './state-entity-frames';
 import {
   assertFederationRepairManifest,
   canonicalFederationRepairBuckets,
-  claimFederationRepairBuckets,
-  createFederationRepairRecord,
-  federationRepairRecordKey,
-  type FederationRepairRecord,
 } from '../../shared/federation-repair-guard';
 import {
   hashTaskCurrentRoot,
@@ -143,6 +139,7 @@ export default {
 export class FederationRelayV4 extends DurableObject<Env> {
   private readonly streams = new Map<string, Stream>();
   private readonly subscriptions = new Map<string, Set<string>>();
+  private readonly repairSessions = new WeakMap<WebSocket, { summaries: Set<string>; buckets: Map<string, Set<string>> }>();
   private manifests = new Map<string, ProjectManifest[]>();
   private nodeLabels = new Map<string, string>();
 
@@ -290,25 +287,14 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const peerRoot = String(payload.root ?? '');
     const peerManifestDigest = assertFederationRepairManifest(peerRoot, remote);
     const generation = await this.ctx.storage.get<number>(this.stateGenerationKey(projectId)) ?? 0;
-    const repairKey = federationRepairRecordKey(sender, projectId);
-    const admitted = await this.ctx.storage.transaction(async (transaction) => {
-      const existing = await transaction.get<FederationRepairRecord>(repairKey);
-      // WHAT: Suppress every later peer summary in the same relay-root generation.
-      // WHY: Varying peer manifests must not purchase repeated project scans.
-      if (existing?.generation === generation) return false;
-      await transaction.put(repairKey, createFederationRepairRecord({ nodeId: sender, projectId, generation, peerRoot, peerManifestDigest }));
-      return true;
-    });
-    // WHAT: End duplicate summary handling before the first bucket storage read.
-    // WHY: Durable admission is the relay's final flood-containment boundary.
-    if (!admitted) return;
-    let local: StateBucket[];
-    try {
-      local = await this.stateBuckets(projectId);
-    } catch (error) {
-      await this.ctx.storage.delete(repairKey);
-      throw error;
-    }
+    const session = this.repairSessions.get(socket) ?? { summaries: new Set<string>(), buckets: new Map<string, Set<string>>() };
+    this.repairSessions.set(socket, session);
+    const summaryIdentity = `${projectId}\u0000${generation}\u0000${peerRoot}\u0000${peerManifestDigest}`;
+    // WHAT: Suppress an identical summary only within the current connection.
+    // WHY: Reconnect must retry work whose prior transport delivery was never durably applied.
+    if (session.summaries.has(summaryIdentity)) return;
+    session.summaries.add(summaryIdentity);
+    const local = await this.stateBuckets(projectId);
     const missingFromRelay = mismatchedBuckets(local, remote);
     // WHAT: Ask once for buckets absent from the admitted relay-root generation.
     // WHY: A first valid peer summary must retain normal reverse convergence.
@@ -343,19 +329,14 @@ export class FederationRelayV4 extends DurableObject<Env> {
     const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
     this.assertProjectParticipation(sender, projectId);
     const buckets = canonicalFederationRepairBuckets(Array.isArray(payload.buckets) ? payload.buckets : []);
-    const generation = await this.ctx.storage.get<number>(this.stateGenerationKey(projectId)) ?? 0;
-    const repairKey = federationRepairRecordKey(sender, projectId);
-    const admitted = await this.ctx.storage.transaction(async (transaction) => {
-      const retained = await transaction.get<FederationRepairRecord>(repairKey);
-      const existing = retained?.generation === generation
-        ? retained
-        : createFederationRepairRecord({ nodeId: sender, projectId, generation });
-      const claimed = claimFederationRepairBuckets(existing, buckets);
-      await transaction.put(repairKey, claimed.record);
-      return claimed.admitted;
-    });
-    // WHAT: Suppress a request whose buckets were already served in this durable generation.
-    // WHY: Reconnect and repeated frames must perform zero new entity reads.
+    const session = this.repairSessions.get(socket) ?? { summaries: new Set<string>(), buckets: new Map<string, Set<string>>() };
+    this.repairSessions.set(socket, session);
+    const served = session.buckets.get(projectId) ?? new Set<string>();
+    const admitted = buckets.filter((bucket) => !served.has(bucket));
+    for (const bucket of admitted) served.add(bucket);
+    session.buckets.set(projectId, served);
+    // WHAT: Suppress duplicate buckets only within the current connection.
+    // WHY: Reconnect must retry a response that was sent but not durably applied.
     if (admitted.length === 0) return;
     const entities: RelayEntity[] = [];
     for (const bucket of admitted) {

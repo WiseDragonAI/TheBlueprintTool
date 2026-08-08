@@ -771,9 +771,13 @@ test('one peer root generation emits one missing request until the remote manife
   await replicator.handleFrame(summary());
   assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, 1);
 
-  await source.store.mutate({ replicaId: 'source', changes: [{ entityType: 'card', entityId: 'second', changes: [{ path: 'title', operation: 'set', value: 'Second' }] }] });
+  replicator.disconnectPeer('relay');
   await replicator.handleFrame(summary());
   assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, 2);
+
+  await source.store.mutate({ replicaId: 'source', changes: [{ entityType: 'card', entityId: 'second', changes: [{ path: 'title', operation: 'set', value: 'Second' }] }] });
+  await replicator.handleFrame(summary());
+  assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, 3);
 });
 
 test('one peer missing request replays a local root only once', async (context) => {
@@ -795,7 +799,10 @@ test('one peer missing request replays a local root only once', async (context) 
   await replicator.handleFrame(request);
   await replicator.handleFrame({ ...request, payload: { stateVersion: taskCurrentStateVersion, buckets: [...(request.payload as { buckets: string[] }).buckets, ...(request.payload as { buckets: string[] }).buckets] } });
   assert.equal(sent.filter((frame) => frame.type === 'state-entity-batch').length, 1);
-  const delivery = sent.find((frame) => frame.type === 'state-entity-batch')!;
+  replicator.disconnectPeer('relay');
+  await replicator.handleFrame(request);
+  assert.equal(sent.filter((frame) => frame.type === 'state-entity-batch').length, 2);
+  const delivery = sent.filter((frame) => frame.type === 'state-entity-batch').at(-1)!;
   const entries = (delivery.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> });
   await replicator.handleFrame({
     type: 'state-relay-ack',

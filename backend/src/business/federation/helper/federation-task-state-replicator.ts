@@ -272,6 +272,16 @@ export function createFederationTaskStateReplicator(input: {
       // WHY: A prior socket's terminal root cannot prove the replacement socket has synchronized.
       if (key.startsWith(`${peerId}\u0000`)) convergence.delete(key);
     }
+    for (const key of [...activeRepairRequests.keys()]) {
+      // WHAT: Forget request suppression owned by the disconnected transport.
+      // WHY: A frame sent before disconnect may not have reached durable receiver application.
+      if (key.startsWith(`${peerId}\u0000`)) activeRepairRequests.delete(key);
+    }
+    for (const key of [...servedRepairRequests.keys()]) {
+      // WHAT: Forget response suppression owned by the disconnected transport.
+      // WHY: The replacement connection must be able to recover an unacknowledged transfer.
+      if (key.startsWith(`${peerId}\u0000`)) servedRepairRequests.delete(key);
+    }
     // WHAT: Retire relay delivery identities when the relay socket disconnects.
     // WHY: Their acknowledgements can never arrive, while runtimeDirty retains the durable retry authority.
     if (peerId === 'relay') pendingDeliveries.clear();

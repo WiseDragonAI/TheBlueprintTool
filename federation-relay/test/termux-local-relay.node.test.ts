@@ -152,7 +152,7 @@ test('Termux relay exposes dev health, provisions one node, and publishes its ca
   await once(child, 'exit');
 });
 
-test('Termux relay persists served-bucket suppression across reconnect and restart', async (context) => {
+test('Termux relay suppresses duplicate requests per connection and retries after reconnect and restart', async (context) => {
   const port = await freePort();
   const directory = mkdtempSync(resolve(tmpdir(), 'decision-os-termux-flood-proof-'));
   const stateFile = resolve(directory, 'relay.json');
@@ -237,14 +237,14 @@ test('Termux relay persists served-bucket suppression across reconnect and resta
   await replacementSummary;
   const repeated = observeMatchingFrames(replacement, 250);
   replacement.send(JSON.stringify(request));
-  assert.equal((await repeated).filter((frame) => ['state-entity-batch', 'state-bucket-summary'].includes(String(frame.type))).length, 0);
+  assert.equal((await repeated).filter((frame) => frame.type === 'state-entity-batch').length, 1);
   replacement.close(1000, 'test_complete');
   await once(replacement, 'close');
   child.kill('SIGTERM');
   await once(child, 'exit');
 });
 
-test('a permanently divergent real node becomes quiescent and stays suppressed after reconnect', { timeout: 15_000 }, async (context) => {
+test('an unacknowledged real-node transfer retries once on the replacement connection', { timeout: 15_000 }, async (context) => {
   const implementationRoot = resolve(String(process.env.DECISION_OS_CANARY_IMPLEMENTATION_ROOT ?? '..'));
   const expectFlood = process.env.DECISION_OS_CANARY_EXPECT_FLOOD === '1';
   const selectedConnector = await import(pathToFileURL(resolve(implementationRoot, 'backend/src/business/federation/helper/federation-node-connector.ts')).href) as any;
@@ -360,8 +360,8 @@ test('a permanently divergent real node becomes quiescent and stays suppressed a
   connector.stop();
   connector.start();
   await new Promise((resolvePromise) => setTimeout(resolvePromise, 500));
-  assert.equal(missingRequests, 1);
-  assert.equal(droppedSentinels, 1);
+  assert.equal(missingRequests, 2);
+  assert.equal(droppedSentinels, 2);
   assert.equal((await observerFrames).filter((frame) => frame.type === 'state-bucket-summary').length, 0);
   assert.equal(replica.entity('card', 'sentinel'), null);
 });

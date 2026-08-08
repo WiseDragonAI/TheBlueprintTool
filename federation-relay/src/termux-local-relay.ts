@@ -27,9 +27,6 @@ import { stateEntityFrames } from './state-entity-frames.js';
 import {
   assertFederationRepairManifest,
   canonicalFederationRepairBuckets,
-  claimFederationRepairBuckets,
-  createFederationRepairRecord,
-  federationRepairRecordKey,
   type FederationRepairRecord,
 } from '../../shared/federation-repair-guard.js';
 import {
@@ -106,6 +103,7 @@ function readState(): StoredRelayState {
 }
 
 let state = readState();
+const repairSessions = new WeakMap<WebSocket, { summaries: Set<string>; buckets: Map<string, Set<string>> }>();
 
 function persistState(): void {
   mkdirSync(dirname(stateFile), { recursive: true });
@@ -275,12 +273,13 @@ function reconcileStateSummary(sender: Client, frame: RelayFrame): void {
   const peerManifestDigest = assertFederationRepairManifest(peerRoot, remote);
   const stored = federation(sender.federationId);
   const generation = stored.stateGenerations![projectId] ?? 0;
-  const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
-  // WHAT: Suppress every later summary from this node in the same durable root generation.
-  // WHY: A divergent peer must not repeat full in-memory scans after reconnect.
-  if (stored.stateRepairRecords![repairKey]?.generation === generation) return;
-  stored.stateRepairRecords![repairKey] = createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation, peerRoot, peerManifestDigest });
-  persistState();
+  const session = repairSessions.get(sender.socket) ?? { summaries: new Set<string>(), buckets: new Map<string, Set<string>>() };
+  repairSessions.set(sender.socket, session);
+  const summaryIdentity = `${projectId}\u0000${generation}\u0000${peerRoot}\u0000${peerManifestDigest}`;
+  // WHAT: Suppress an identical summary only within the current connection.
+  // WHY: Reconnect must retry work whose prior transport delivery was never durably applied.
+  if (session.summaries.has(summaryIdentity)) return;
+  session.summaries.add(summaryIdentity);
   const local = stateBuckets(sender.federationId, projectId);
   const missing = mismatchedBuckets(local, remote);
   // WHAT: Request relay-missing buckets once for the admitted generation.
@@ -376,20 +375,16 @@ function handleFrame(sender: Client, text: string): void {
           throw new Error('invalid_state_missing_request');
         }
         const buckets = canonicalFederationRepairBuckets(Array.isArray(payload.buckets) ? payload.buckets : []);
-        const stored = federation(sender.federationId);
-        const generation = stored.stateGenerations![projectId] ?? 0;
-        const repairKey = federationRepairRecordKey(sender.nodeId, projectId);
-        const retained = stored.stateRepairRecords![repairKey];
-        const existing = retained?.generation === generation
-          ? retained
-          : createFederationRepairRecord({ nodeId: sender.nodeId, projectId, generation });
-        const claimed = claimFederationRepairBuckets(existing, buckets);
-        stored.stateRepairRecords![repairKey] = claimed.record;
-        persistState();
-        // WHAT: End a fully repeated request before entity selection and summary generation.
-        // WHY: Durable served-bucket ownership must survive reconnects.
-        if (claimed.admitted.length === 0) return;
-        sendStateEntities(sender, projectId, new Set(claimed.admitted));
+        const session = repairSessions.get(sender.socket) ?? { summaries: new Set<string>(), buckets: new Map<string, Set<string>>() };
+        repairSessions.set(sender.socket, session);
+        const served = session.buckets.get(projectId) ?? new Set<string>();
+        const admitted = buckets.filter((bucket) => !served.has(bucket));
+        for (const bucket of admitted) served.add(bucket);
+        session.buckets.set(projectId, served);
+        // WHAT: End a fully repeated request inside the current connection.
+        // WHY: A replacement connection must retry state not durably applied by its predecessor.
+        if (admitted.length === 0) return;
+        sendStateEntities(sender, projectId, new Set(admitted));
         sendStateSummary(sender, projectId);
       } else if (frame.type === 'state-execution-observation') {
         const projectId = String(frame.projectId ?? '');
