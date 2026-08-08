@@ -258,6 +258,7 @@ test('default runtime collects fresh authenticated admission and live reconcilia
     return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   const gitCalls: string[][] = [];
+  const protectedGitlink = 'c'.repeat(40);
   let liveGit = false;
   const gitRunner = async (input: RunBoundedProcessInput) => {
     const args = input.args ?? [];
@@ -268,6 +269,9 @@ test('default runtime collects fresh authenticated admission and live reconcilia
     if (args.includes('refs/remotes/origin/dev')) return processResult(input, admittedSha);
     if (args.includes('refs/remotes/origin/main')) return processResult(input, liveGit ? mainSha : priorSha);
     if (args.includes('--format=%P')) return processResult(input, `${priorSha} ${admittedSha}`);
+    // WHAT: Return the same protected gitlink for the prior and promoted main commits.
+    // WHY: Live reconciliation now proves that the delivery merge preserved main's Decision OS state.
+    if (args.some((argument) => argument.endsWith(':.decision-os'))) return processResult(input, protectedGitlink);
     return processResult(input);
   };
   const relayCalls: string[][] = [];
@@ -309,12 +313,13 @@ test('default runtime collects fresh authenticated admission and live reconcilia
   assert.equal(candidate.releaseSha, admittedSha);
   assert.equal(existsSync(join(root, '.decision-os', 'delivery', 'runs')), false);
   assert.equal(existsSync(join(root, '.decision-os', 'delivery', 'lock')), false);
+  liveGit = true;
   const admittedRun = {
     protocol: 1,
     deliveryId: 'delivery-runtime',
     admittedSha,
     priorMainSha: priorSha,
-    mainSha: null,
+    mainSha,
     phase: 'preflight',
     status: 'running',
     createdAt: observedAt,
@@ -340,6 +345,7 @@ test('default runtime collects fresh authenticated admission and live reconcilia
     signal: new AbortController().signal,
   });
   assert.equal(preflight.priorMainSha, priorSha);
+  assert.equal(preflight.mainSha, mainSha);
   const relayPreflight = await effects!.readRelayDeployment({
     run: admittedRun,
     signal: new AbortController().signal,
@@ -375,12 +381,11 @@ test('default runtime collects fresh authenticated admission and live reconcilia
     })),
     activationOrder: ['phone', 'workstation'],
   };
-  liveGit = true;
   statusRelease = mainSha;
   const authority = await effects!.observeAuthority({ run: liveRun, signal: new AbortController().signal });
   assert.equal(authority.originDevSha, admittedSha);
   assert.equal(authority.originMainSha, mainSha);
-  assert.equal(authority.gitPromotion?.resultIdentity, mainSha);
+  assert.equal(authority.mainReleaseExact, true);
   assert.equal(authority.relay.upload?.resultIdentity, targetVersion);
   assert.equal(authority.relay.activation?.resultIdentity, targetVersion);
   assert.equal(authority.nodes.every((node) => node.activeReleaseSha === mainSha), true);

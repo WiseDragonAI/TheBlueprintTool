@@ -113,6 +113,7 @@ export function createServerFederationRuntime(input: {
     projectStates: executionRuntime.localTaskRuntime.states,
     publishExecutionChange: executionRuntime.publishExecutionChange,
     recordBackgroundFailure,
+    recordIncident,
     recordStoppedOperation,
     scheduleCodex: executionRuntime.processCoordinator.schedule,
     taskStoreForProject: executionRuntime.taskStoreForProject,

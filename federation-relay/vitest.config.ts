@@ -2,6 +2,11 @@ import { cloudflareTest } from '@cloudflare/vitest-pool-workers';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  test: {
+    exclude: ['test/**/*.node.test.ts'],
+    fileParallelism: false,
+    include: ['test/**/*.test.ts'],
+  },
   plugins: [cloudflareTest({
     main: './src/index.ts',
     wrangler: { configPath: './wrangler.toml' },

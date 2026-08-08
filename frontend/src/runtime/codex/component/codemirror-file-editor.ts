@@ -141,7 +141,8 @@ function decisionOsCodeMirrorTheme(cm: CodeMirrorModule): unknown[] {
     { tag: tags.strong, color: 'var(--text)', fontWeight: '700' },
     { tag: tags.monospace, color: 'color-mix(in srgb, var(--text), var(--accent) 24%)' },
     { tag: [tags.meta, tags.processingInstruction, tags.punctuation], color: 'var(--muted)' },
-    { tag: [tags.list, tags.quote], color: 'color-mix(in srgb, var(--muted), var(--text) 30%)' },
+    { tag: tags.list, color: 'color-mix(in srgb, var(--muted), var(--text) 30%)' },
+    { tag: tags.quote, color: 'color-mix(in srgb, var(--accent), white 38%)', fontWeight: '700' },
     { tag: tags.strikethrough, color: 'var(--muted)', textDecoration: 'line-through' },
     { tag: tags.invalid, color: 'var(--danger)', textDecoration: 'underline wavy' },
   ]));

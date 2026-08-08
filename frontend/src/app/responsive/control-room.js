@@ -57,6 +57,9 @@ export function projectMasterTask({ card, cards = [], relationships = [], execut
       cardId: String(relationship.to),
       relationshipId: String(relationship.id),
       position: Number(relationship.position),
+      // WHAT: Normalize each linked card's labels when the card supplies a label array.
+      // WHY: Master-detail presentation must identify the exact hidden label without changing canonical relationships.
+      labels: Array.isArray(linked?.labels) ? linked.labels.map(String) : [],
       status: linkedLifecycleStatus === 'done' ? 'complete' : 'waiting'
     };
   });
@@ -78,6 +81,10 @@ export function projectMasterTask({ card, cards = [], relationships = [], execut
     complete,
     nextSubtask: subtasks.find((task) => task.status !== 'complete') ?? null
   };
+}
+
+export function visibleMasterTaskSubtasks(subtasks = []) {
+  return subtasks.filter((subtask) => !subtask.labels.includes('hidden'));
 }
 
 export function compareControlRoomQueueTasks(left, right) {

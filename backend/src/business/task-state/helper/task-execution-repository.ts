@@ -296,7 +296,13 @@ export function createTaskExecutionRepository(input: {
     input.assertWritable?.();
     const current = find(executionId);
     if (!current) throw new Error(`task_execution_not_found:${executionId}`);
-    if (!transitions[current.lifecycle.phase].has(transition.phase)) {
+    const providerSessionBinding = transition.phase === current.lifecycle.phase
+      && current.lifecycle.providerSessionId === null
+      && typeof transition.providerSessionId === 'string'
+      && transition.providerSessionId.length > 0;
+    // WHAT: Permit only the same-phase mutation that binds a newly created provider session.
+    // WHY: Codex emits thread identity after the running transition while all other lifecycle changes remain explicit transitions.
+    if (!transitions[current.lifecycle.phase].has(transition.phase) && !providerSessionBinding) {
       throw new Error(`task_execution_transition_invalid:${current.lifecycle.phase}:${transition.phase}`);
     }
     if (transition.executorNodeId !== undefined && transition.executorNodeId !== current.lifecycle.executorNodeId) {
@@ -322,7 +328,7 @@ export function createTaskExecutionRepository(input: {
           : null;
     const lifecycle: TaskExecutionLifecycle = {
       phase: transition.phase,
-      phaseSince: normalizedChangedAt,
+      phaseSince: providerSessionBinding ? current.lifecycle.phaseSince : normalizedChangedAt,
       startedAt: requeued
         ? null
         : current.lifecycle.startedAt ?? (transition.phase === 'starting' || transition.phase === 'running' ? normalizedChangedAt : null),

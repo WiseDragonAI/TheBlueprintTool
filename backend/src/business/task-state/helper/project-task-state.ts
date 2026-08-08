@@ -178,10 +178,27 @@ export function createProjectTaskState(input: {
     return released;
   };
 
-  const recordContentContribution = async (taskId: string, resourceIds: string | string[]): Promise<TaskStateDelta> => {
+  const recordContentContribution = async (
+    taskId: string,
+    resourceIds: string | string[],
+    validate?: (head: TaskContentHead, body: string) => void | Promise<void>,
+  ): Promise<TaskStateDelta> => {
     const resources = [...new Set((Array.isArray(resourceIds) ? resourceIds : [resourceIds]).filter(Boolean))];
-    const heads = (await Promise.all(resources.map((resourceId) => contentObjects.capture(resourceId)))).filter((head) => head !== null);
+    const captured = await Promise.all(resources.map(async (resourceId) => ({
+      resourceId,
+      head: await contentObjects.capture(resourceId),
+    })));
+    const missing = captured.find((entry) => entry.head === null);
+    // WHAT: Reject an owned contribution when any declared resource cannot be captured.
+    // WHY: Filtering a deleted file would retain the old head while falsely acknowledging the manual change.
+    if (missing) throw new Error(`task_content_capture_failed:${missing.resourceId}`);
+    const heads = captured.map((entry) => entry.head!);
     const changedHeads = heads.filter(contentHeadNeedsCausalUpdate);
+    // WHAT: Validate the immutable captured object before advancing its causal resource head.
+    // WHY: Validation and publication must describe the same stable bytes rather than two mutable file reads.
+    if (validate) {
+      for (const head of changedHeads) await validate(head, readFileSync(contentObjects.objectFile(head.hash), 'utf8'));
+    }
     const contentDelta = changedHeads.length > 0
       ? await persistChanges(changedHeads.map((head) => ({ entityType: 'resource', entityId: head.key, changes: [{ path: 'head', operation: 'set', value: head }] })), { activationTaskId: taskId })
       : { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
@@ -223,9 +240,13 @@ export function createProjectTaskState(input: {
     });
   };
 
-  const queueContentContribution = (taskId: string, resourceIds: string | string[]): Promise<TaskStateDelta> => {
+  const queueContentContribution = (
+    taskId: string,
+    resourceIds: string | string[],
+    validate?: (head: TaskContentHead, body: string) => void | Promise<void>,
+  ): Promise<TaskStateDelta> => {
     assertWritable();
-    const operation = commandQueue.then(() => recordContentContribution(taskId, resourceIds));
+    const operation = commandQueue.then(() => recordContentContribution(taskId, resourceIds, validate));
     commandQueue = operation.then(() => undefined, () => undefined);
     return operation;
   };

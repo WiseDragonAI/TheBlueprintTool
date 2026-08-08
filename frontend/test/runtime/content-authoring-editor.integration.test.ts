@@ -268,6 +268,12 @@ test('CodeMirror adapter owns Markdown, wrapping, dirty state, toolbox actions, 
       && spec.tag.includes('url')
       && spec.textDecoration === 'underline'
     )));
+    assert.ok(highlightSpecs.some((spec) => (
+      spec.tag === 'quote'
+      && spec.color === 'color-mix(in srgb, var(--accent), white 38%)'
+      && spec.fontWeight === '700'
+    )));
+    assert.equal(highlightSpecs.some((spec) => Array.isArray(spec.tag) && spec.tag.includes('quote')), false);
     assert.equal(view?.state.doc.toString(), initial);
     assert.match(parent.textContent, /SKILL\.md · abcdef123456/);
     assert.deepEqual(parent.querySelectorAll('button').map((button) => button.textContent), ['Undo', 'Redo', 'Find', 'Wrap lines']);
@@ -708,12 +714,15 @@ test('authoring dependencies, local assets, modal geometry, and responsive entry
   assert.match(vendorScript, /codemirror-6\.0\.2\.js/);
   assert.match(readFileSync(new URL('frontend/assets/vendor/codemirror-6.0.2.LICENSE', root), 'utf8'), /MIT License/);
   assert.match(readFileSync(new URL('frontend/assets/vendor/pierre-diffs-1.2.12.LICENSE', root), 'utf8'), /Apache License/);
-  assert.match(css, /\.skill-library-editor-modal\s*\{[^}]*width:\s*min\(900px, calc\(100vw - 48px\)\);[^}]*max-width:\s*min\(900px, calc\(100vw - 48px\)\);[^}]*height:\s*95vh;/s);
+  assert.match(css, /\.skill-library-editor-modal\s*\{[^}]*width:\s*min\(900px, calc\(100vw - 48px\)\);[^}]*max-width:\s*min\(900px, calc\(100vw - 48px\)\);[^}]*height:\s*95dvh;/s);
+  assert.match(css, /@media \(min-width: 1160px\)\s*\{[^]*\.skill-library-editor-modal\s*\{[^}]*width:\s*min\(1200px, 95vw\);[^}]*min-width:\s*1100px;[^}]*max-width:\s*none;/s);
   assert.match(css, /\.codex-editor-modal \.skill-editor-tag-choice\s*\{[^}]*border:\s*1px solid color-mix\(in srgb, var\(--skill-category-color\), white 24%\);[^}]*background:\s*color-mix\(in srgb, var\(--skill-category-color\), transparent 82%\);/s);
   assert.match(css, /\.codex-editor-modal \.skill-editor-tag-choice\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--skill-category-color\);/s);
   assert.match(css, /--diffs-addition-color:\s*#38d9e8/);
   assert.match(css, /\.authored-revision-content\.is-single-column\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
-  assert.match(css, /\.skill-library-editor-body\s*\{[^}]*grid-template-rows:\s*max-content max-content minmax\(280px, 1fr\)/s);
+  assert.match(css, /\.skill-library-editor-body\s*\{[^}]*grid-template-areas:\s*"state"\s*"editor";[^}]*grid-template-rows:\s*max-content minmax\(280px, 1fr\)/s);
+  assert.match(css, /@media \(min-width: 1160px\)\s*\{[^]*\.skill-library-editor-body\s*\{[^}]*grid-template-areas:\s*"editor state";[^}]*grid-template-columns:\s*minmax\(0, 2fr\) minmax\(300px, 1fr\)/s);
+  assert.match(css, /\.skill-editor-state-panel\s*\{[^}]*grid-area:\s*state/s);
   assert.match(css, /\.skill-editor-owner-controls\s*\{[^}]*min-height:\s*max-content/s);
   assert.match(css, /--diffs-deletion-color:\s*#ff5f6d/);
   assert.match(responsiveBoot, /responsive-content-authoring-styles[^]*\/assets\/shared\/content-authoring\.css/);
@@ -724,4 +733,5 @@ test('authoring dependencies, local assets, modal geometry, and responsive entry
   assert.match(responsive, /openSkillLibraryEditor\(\{/);
   assert.match(responsive, /renderEditableSkillDocument\(\{/);
   assert.match(readFileSync(new URL('frontend/src/runtime/codex/effect/render-skill-library-editor-modal.ts', root), 'utf8'), /decorateSkillCategoryLabel\(choice, tag\)/);
+  assert.match(readFileSync(new URL('frontend/src/runtime/codex/effect/render-skill-library-editor-modal.ts', root), 'utf8'), /statePanel\.append\(metadata, controls\);\s*body\.append\(statePanel, contentPane\)/);
 });

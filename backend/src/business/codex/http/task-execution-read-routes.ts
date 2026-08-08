@@ -12,9 +12,11 @@ import {
   HTTP_ROUTE_NEXT,
   type HttpRouteOutcome,
 } from '../../server/http/http-route.js';
+import { codexExecutionStatus } from '../helper/codex-execution-status.js';
 
 export async function handleTaskExecutionReadRoutes(input: {
   presentation: (executionId: string) => Promise<{ body: string; statusCode: number }>;
+  providerSessionId?: (executionId: string) => string | null;
   queuePosition: (record: ReturnType<ProjectTaskState['executions']['find']>) => number;
   request: IncomingMessage;
   response: ServerResponse;
@@ -46,6 +48,25 @@ export async function handleTaskExecutionReadRoutes(input: {
       state: input.state,
       queuePosition: input.queuePosition,
     })));
+    return HTTP_ROUTE_HANDLED;
+  }
+
+  const statusRead = input.request.method === 'GET'
+    ? input.url.match(/^\/api\/task-executions\/([^/]+)\/codex-status$/)
+    : null;
+  if (statusRead) {
+    input.response.setHeader('cache-control', 'no-store');
+    input.response.setHeader('content-type', 'application/json');
+    const executionId = decodeRouteSegment(statusRead[1]);
+    const execution = input.state?.executions.find(executionId) ?? null;
+    // WHAT: Return one stable project-scoped not-found response.
+    // WHY: An execution from another project must not leak identity or provider usage.
+    if (!execution) {
+      input.response.statusCode = 404;
+      input.response.end(JSON.stringify({ ok: false, error: 'task_execution_not_found', executionId }));
+      return HTTP_ROUTE_HANDLED;
+    }
+    input.response.end(JSON.stringify({ ok: true, status: codexExecutionStatus({ execution, providerSessionId: input.providerSessionId?.(executionId) }) }));
     return HTTP_ROUTE_HANDLED;
   }
 

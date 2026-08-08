@@ -32,7 +32,6 @@ import {
   assertDeliveryCredentialFileIgnored,
   observeDeliveryGitAuthority,
   preflightDeliveryGit,
-  promoteDeliveryMain,
   verifyDeliveryCandidateGit,
   type DeliveryGitRunner,
 } from './delivery-git.js';
@@ -57,6 +56,7 @@ import {
 } from './delivery-coordinator.js';
 import {
   parseDeliveryNodeReceipt,
+  type DeliveryEvidenceEntry,
   type DeliveryNodeCommand,
   type DeliveryNodeReceipt,
   type DeliveryRun,
@@ -168,6 +168,7 @@ function mutationReceipt(input: {
   predecessor: string;
   resultIdentity: string;
   observedAt?: string;
+  evidence?: DeliveryEvidenceEntry[];
 }): DeliveryMutationReceipt {
   const observedAt = input.observedAt ?? new Date().toISOString();
   return {
@@ -177,6 +178,9 @@ function mutationReceipt(input: {
     predecessor: input.predecessor,
     resultIdentity: input.resultIdentity,
     observedAt,
+    // WHAT: Attach scoped evidence only when the owning mutation supplied it.
+    // WHY: Existing relay and node receipt shapes remain byte-stable.
+    ...(input.evidence ? { evidence: input.evidence } : {}),
   };
 }
 
@@ -212,7 +216,13 @@ export async function createDefaultDeliveryCliRuntime(input: {
   const now = input.now ?? (() => new Date());
   const runStore = createDeliveryRunStore({ catalogRoot });
   let bundle: CandidateBundle | null = null;
-  let observedPreflight: { priorMainSha: string; originDevSha: string; observedAt: string } | null = null;
+  let observedPreflight: {
+    priorMainSha: string;
+    originDevSha: string;
+    mainSha: string;
+    protectedGitlink: string;
+    observedAt: string;
+  } | null = null;
 
   const dispatchNode = async (
     nodeId: string,
@@ -336,18 +346,26 @@ export async function createDefaultDeliveryCliRuntime(input: {
       observedPreflight = {
         priorMainSha: result.priorMainSha,
         originDevSha: result.originDevSha,
+        mainSha: result.mainSha,
+        protectedGitlink: result.protectedGitlink,
         observedAt: now().toISOString(),
       };
       bundle = candidateBundle(catalogRoot, releaseSha);
       return {
         priorMainSha: result.priorMainSha,
         originDevSha: result.originDevSha,
+        mainSha: result.mainSha,
         receipt: mutationReceipt({
-          mutation: 'preflight-git',
+          mutation: 'admit-main-release',
           targetSha: releaseSha,
           predecessor: result.priorMainSha,
-          resultIdentity: result.originDevSha,
+          resultIdentity: result.mainSha,
           observedAt: observedPreflight.observedAt,
+          evidence: [
+            { key: 'protectedGitlink', value: result.protectedGitlink },
+            { key: 'mergeFirstParent', value: result.priorMainSha },
+            { key: 'mergeSecondParent', value: result.originDevSha },
+          ],
         }),
       };
     },
@@ -393,50 +411,6 @@ export async function createDefaultDeliveryCliRuntime(input: {
         relayConfiguration: bundle.relayConfiguration,
         nodeEvidence,
         proofs: bundle.proofs,
-      };
-    },
-    async promoteMain({ run, repositoryLock, signal }) {
-      const preflight = await preflightDeliveryGit({
-        repositoryRoot,
-        releaseSha: run.admittedSha,
-        repositoryLock,
-        settings,
-        runner: input.gitRunner,
-        signal,
-      });
-      const promotion = await promoteDeliveryMain({
-        preflight,
-        repositoryLock,
-        settings,
-        runner: input.gitRunner,
-        signal,
-        verifyCandidate: async ({ worktree, signal: candidateSignal }) => {
-          const result = await (input.processRunner ?? runBoundedProcess)({
-            command: process.execPath,
-            args: [
-              resolve(repositoryRoot, 'bin', 'decision-os-verify.mjs'),
-              '--',
-              resolve(worktree, 'backend', 'node_modules', '.bin', 'tsc'),
-              '-p',
-              resolve(worktree, 'backend', 'tsconfig.json'),
-              '--noEmit',
-            ],
-            cwd: worktree,
-            deadlineMs: 10 * 60_000,
-            signal: candidateSignal,
-            context: { component: 'delivery-coordinator', operation: 'verify-main-candidate' },
-          });
-          if (!result.ok) throw codedError('delivery_main_candidate_verification_failed', 'The reviewed main candidate did not typecheck.');
-        },
-      });
-      return {
-        mainSha: promotion.mainSha,
-        receipt: mutationReceipt({
-          mutation: 'promote-main',
-          targetSha: run.admittedSha,
-          predecessor: preflight.priorMainSha,
-          resultIdentity: promotion.mainSha,
-        }),
       };
     },
     dispatchNode: async ({ nodeId, command, signal }) => await dispatchNode(nodeId, command, signal),
@@ -584,15 +558,6 @@ export async function createDefaultDeliveryCliRuntime(input: {
         : null;
       const activeVersionId = relayAuthority?.deployment.versionId ?? '';
       const activeReleaseSha = String((relayHealth as AnyRecord).releaseSha ?? '');
-      const gitPromotion = run.mainSha && gitAuthority.exactMerge && gitAuthority.originMainSha === run.mainSha
-        ? mutationReceipt({
-            mutation: 'promote-main',
-            targetSha: run.admittedSha,
-            predecessor: run.priorMainSha,
-            resultIdentity: run.mainSha,
-            observedAt: gitAuthority.observedAt,
-          })
-        : null;
       const upload = targetVersion && run.mainSha
         ? mutationReceipt({
             mutation: 'upload-relay',
@@ -632,8 +597,8 @@ export async function createDefaultDeliveryCliRuntime(input: {
         observedAt: now().toISOString(),
         originDevSha: gitAuthority.originDevSha,
         originMainSha: gitAuthority.originMainSha,
+        mainReleaseExact: gitAuthority.exactMerge,
         topology,
-        gitPromotion,
         relay: {
           activeVersionId,
           releaseSha: activeReleaseSha,
@@ -645,8 +610,11 @@ export async function createDefaultDeliveryCliRuntime(input: {
       } satisfies DeliveryAuthoritySnapshot;
     },
     async verifyFinal({ run, authority }) {
+      // WHAT: Require the observed published main merge and every runtime authority to match the admitted release.
+      // WHY: Deployment completion cannot repair or substitute Git state owned by the merge workflow.
       if (
-        authority.originMainSha !== run.mainSha
+        !authority.mainReleaseExact
+        || authority.originMainSha !== run.mainSha
         || authority.topology.fingerprint !== run.topology.fingerprint
         || authority.nodes.some((node) => (
           node.activeReleaseSha !== run.mainSha

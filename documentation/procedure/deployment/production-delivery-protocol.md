@@ -2,7 +2,7 @@
 
 1. `bin/decision-os-delivery.mjs`, published as `decision-os-delivery`, is the only end-to-end production release authority.
 2. The CLI owns six fixed commands: `bootstrap-node`, `candidate`, `promote`, `status`, `resume`, and `rollback`.
-3. `promote` admits one exact pushed `origin/dev` SHA, creates one reviewed no-fast-forward `main` merge commit, deploys one production relay version, activates every frozen project-owning node, restarts each node through its adopted supervisor, and proves release identity plus federation convergence.
+3. `promote` admits one exact pushed `origin/dev` SHA and its already-published canonical `origin/main` merge, deploys one production relay version, activates every frozen project-owning node, restarts each node through its adopted supervisor, and proves release identity plus federation convergence.
 4. Do not use the primary checkout as a release directory. Delivery creates immutable release worktrees and leaves primary checkouts, unrelated working-tree bytes, and staged operator hunks untouched.
 5. A production mutation is forbidden until the run journal contains the successful `admit-exact-release` receipt for the requested SHA.
 
@@ -116,7 +116,7 @@
    6. `convergedProjectIds` exactly equal to the node's owned `projectIds`
 7. `promote` independently reads live production topology, freezes that target set, and collects a fresh authenticated `status` response from each frozen project-owning node. Candidate node evidence remains T53 proof evidence; it does not substitute for live admission authority.
 8. Candidate, topology, health, relay, node, and proof timestamps must be within the admission freshness window. The default maximum age is five minutes.
-9. `promote` re-fetches `origin/main` and `origin/dev`, proves the requested SHA equals `origin/dev`, proves `origin/main` ancestry, proves the release worktree is clean, rejects active Git operations, and binds the result to the candidate evidence SHA.
+9. Before `promote`, publish the exact merge and release tags created by `decision-os-merge-dev`. `promote` re-fetches `origin/main` and `origin/dev`, proves the requested SHA equals `origin/dev`, proves `origin/main` has exactly the prior main and requested dev parents in canonical order, proves the protected `.decision-os` gitlink is unchanged, proves the release worktree is clean, rejects active Git operations, and binds the result to the candidate evidence SHA.
 
 ---
 
@@ -153,7 +153,7 @@
 3. The CLI acquires the delivery lease and shared repository mutation lock, creates the journal, performs read-only Git preflight, and writes the admission receipt before production mutation.
 4. Forward execution order is fixed:
    1. Verify Cloudflare credential presence and the ignored credential-file boundary, then list and record the current production relay deployment plus exact predecessor version.
-   2. Create and verify a no-fast-forward `main` candidate in an isolated worktree, re-read `origin/main`, push the exact merge commit, and durably record its receipt.
+   2. Durably record the already-published exact `mainSha`, its canonical parents, and its protected gitlink without creating a worktree and without running `merge`, `commit`, `tag`, or `push`.
    3. Prepare the immutable `mainSha` release on every admitted node.
    4. Upload the production relay version and record its version ID.
    5. Activate the uploaded relay version at `100%` and verify release/protocol health.
@@ -161,9 +161,17 @@
    7. Activate the coordinator last.
    8. Immediately after each durable activation receipt, persist the node as `active` and append it to `activationOrder` before restart, health, catalog, federation, and convergence verification. A later verification failure therefore includes that mutated node in reverse-order compensation.
    9. Require a changed process identity, ready catalog, connected federation, exact active SHA, exact release pointer, and convergence after each node restart.
-   10. Re-read `origin/main`, verify its exact merge parents and ancestry, list Cloudflare deployments and tagged versions, read live relay health, query authenticated fresh status from every node, re-read topology and convergence, and persist `complete` only when every authority agrees.
+   10. Re-read `origin/main`, verify its exact merge parents and protected gitlink, list Cloudflare deployments and tagged versions, read live relay health, query authenticated fresh status from every node, re-read topology and convergence, and persist `complete` only when every authority agrees.
 5. Every external admission collection, relay verification, node verification, final authority read, final verification, and mutation has one durable `started` receipt before invocation and one terminal receipt before dependent progress. Pure local parsing and journal reads do not create redundant phase receipts.
 6. Retrying a phase preserves its deterministic started-receipt identity, increments the bounded attempt record, refreshes the finite deadline, and fails closed after the maximum attempt count.
+
+---
+
+## G.1 Release Tag Ownership
+
+1. The standalone `decision-os-merge-dev` workflow solely owns the main merge and annotated parent plus child `rel-*` and `devrel-*` tags.
+2. Publish the exact main merge and its tags before invoking production delivery. Production delivery never creates, moves, or pushes Git refs.
+3. Production rollback authority is the exact published `mainSha`, delivery journal, Cloudflare predecessor version, and node predecessor receipts.
 
 ---
 

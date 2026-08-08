@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
+import { TaskContentMaterializationError } from '@backend/business/federation/helper/materialize-task-mutation-inputs.js';
 
 type ContentChangeEvent = {
   contentFile: string;
@@ -45,12 +46,41 @@ async function readNextContentChange(response: Response): Promise<ContentChangeE
     }
   })();
   const deadline = new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(() => reject(new Error('Timed out waiting for card-content-change SSE.')), 3000);
+    timeout = setTimeout(() => reject(new Error(`Timed out waiting for card-content-change SSE. Frames: ${buffer}`)), 3000);
   });
   try {
     return await Promise.race([event, deadline]);
   } finally {
     if (timeout) clearTimeout(timeout);
+    reader.releaseLock();
+  }
+}
+
+async function collectContentChangesUntilAbort(response: Response): Promise<ContentChangeEvent[]> {
+  const reader = response.body?.getReader();
+  assert.ok(reader);
+  const decoder = new TextDecoder();
+  const events: ContentChangeEvent[] = [];
+  let buffer = '';
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) return events;
+      buffer += decoder.decode(chunk.value, { stream: true }).replace(/\r\n?/g, '\n');
+      for (;;) {
+        const boundary = buffer.indexOf('\n\n');
+        if (boundary < 0) break;
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const lines = frame.split('\n');
+        if (!lines.includes('event: card-content-change')) continue;
+        const data = lines.filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n');
+        events.push(JSON.parse(data) as ContentChangeEvent);
+      }
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return events;
+    throw error;
   }
 }
 
@@ -107,6 +137,45 @@ async function startContentFileServer(): Promise<{ endpoint: string; archiveEndp
     server,
     workspace,
   };
+}
+
+async function startTaskContentFileServer(): Promise<{ endpoint: string; eventsEndpoint: string; server: Server; workspace: string }> {
+  const originalCwd = process.cwd();
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-task-content-file-'));
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
+    tabs: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  writeFileSync(join(workspace, '.decision-os', 'tasks.json'), JSON.stringify({
+    cards: [], annotations: [], relationships: [], notes: {}, threadFiles: {},
+  }));
+  process.chdir(workspace);
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  process.chdir(originalCwd);
+  const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  return {
+    endpoint: `${baseUrl}/decision-os/tasks`,
+    eventsEndpoint: `${baseUrl}/api/ledger-content-events`,
+    server,
+    workspace,
+  };
+}
+
+async function restartTaskContentFileServer(workspace: string): Promise<{ endpoint: string; eventsEndpoint: string; runtime: Record<string, unknown>; server: Server }> {
+  const originalCwd = process.cwd();
+  process.chdir(workspace);
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  process.chdir(originalCwd);
+  const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  return { endpoint: `${baseUrl}/decision-os/tasks`, eventsEndpoint: `${baseUrl}/api/ledger-content-events`, runtime, server };
 }
 
 test('decision-os server orders ledger GET and mutation responses with monotonic revisions', async () => {
@@ -310,6 +379,216 @@ test('decision-os server emits card content change events for direct markdown ed
   } finally {
     controller.abort();
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('direct task Markdown edit commits before SSE and survives a fresh HTTP reload exactly', async () => {
+  const started = await startTaskContentFileServer();
+  let { endpoint, eventsEndpoint, server } = started;
+  let activeRuntime: Record<string, unknown> = {};
+  const { workspace } = started;
+  const controller = new AbortController();
+
+  try {
+    const createResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create-card', card: { id: 'card-a', title: 'Card A', x: 10, y: 20, w: 240, h: 132 } }),
+    });
+    assert.equal(createResponse.ok, true);
+    await createResponse.json();
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    ({ endpoint, eventsEndpoint, runtime: activeRuntime, server } = await restartTaskContentFileServer(workspace));
+    assert.equal((await fetch(endpoint)).ok, true);
+    assert.equal(await Promise.resolve(activeRuntime.taskContentReady), true);
+    const taskState = activeRuntime.taskExecutionState as { store: { contentHeads: (key: string) => Array<{ hash: string }> } };
+    const initialHash = taskState.store.contentHeads('.decision-os/cards/tasks/card-a.md')[0]?.hash;
+    const initialFlush = activeRuntime.flushTaskContentFile;
+    eventsEndpoint = new URL(`/p/${encodeURIComponent(String(activeRuntime.projectId))}/api/ledger-content-events`, endpoint).toString();
+    const eventsResponse = await fetch(eventsEndpoint, { signal: controller.signal });
+    assert.equal(eventsResponse.ok, true);
+    const eventPromise = readNextContentChange(eventsResponse);
+    const edited = 'Exact external task edit.\n';
+
+    writeFileSync(join(workspace, '.decision-os', 'cards', 'tasks', 'card-a.md'), edited);
+    await new Promise((resolveWait) => setTimeout(resolveWait, 1_000));
+    const observedHash = taskState.store.contentHeads('.decision-os/cards/tasks/card-a.md')[0]?.hash;
+    assert.notEqual(observedHash, initialHash, `head remained ${String(initialHash)}`);
+    assert.equal(activeRuntime.flushTaskContentFile, initialFlush, 'project content runtime was replaced');
+    const event = await eventPromise;
+    assert.equal(event.ledgerId, 'tasks');
+    assert.equal(event.contentFile, '.decision-os/cards/tasks/card-a.md');
+    const reloaded = await (await fetch(endpoint)).json() as { cards: Array<Record<string, any>> };
+    assert.equal(reloaded.cards.find((card) => card.id === 'card-a')?.comment.what, edited);
+  } finally {
+    controller.abort();
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('direct thread edit followed immediately by HTTP append preserves both notes', async () => {
+  const started = await startTaskContentFileServer();
+  let { endpoint, server } = started;
+  const { workspace } = started;
+
+  try {
+    const createResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create-card', card: { id: 'card-a', title: 'Card A', x: 10, y: 20, w: 240, h: 132 } }),
+    });
+    assert.equal(createResponse.ok, true);
+    await createResponse.json();
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    ({ endpoint, server } = await restartTaskContentFileServer(workspace));
+    const threadFile = join(workspace, '.decision-os', 'threads', 'tasks', 'thread-card-a.md');
+    const external = '# OPERATOR\n<!-- decision-os:note {"id":"note-external"} -->\n\nExternal question.\n';
+    writeFileSync(threadFile, external);
+
+    const appendResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'append-note',
+        note: { id: 'note-http', threadId: 'thread-card-a', role: 'agent', body: 'HTTP answer.' },
+      }),
+    });
+    assert.equal(appendResponse.ok, true, await appendResponse.text());
+    const finalBody = readFileSync(threadFile, 'utf8');
+    assert.match(finalBody, /External question\./);
+    assert.match(finalBody, /HTTP answer\./);
+    const threadEndpoint = new URL('/api/ledgers/tasks/threads/thread-card-a', endpoint);
+    const reloaded = await (await fetch(threadEndpoint)).json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.deepEqual(
+      reloaded.notes['thread-card-a'].map((note) => note.id),
+      ['note-external', 'note-http'],
+      finalBody,
+    );
+  } finally {
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('pre-start thread edit reconciles before the first task append', async () => {
+  const started = await startTaskContentFileServer();
+  let { endpoint, server } = started;
+  const { workspace } = started;
+
+  try {
+    const createResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create-card', card: { id: 'card-a', title: 'Card A', x: 10, y: 20, w: 240, h: 132 } }),
+    });
+    assert.equal(createResponse.ok, true);
+    await createResponse.json();
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    const threadFile = join(workspace, '.decision-os', 'threads', 'tasks', 'thread-card-a.md');
+    writeFileSync(threadFile, '# OPERATOR\n<!-- decision-os:note {"id":"note-offline"} -->\n\nOffline edit.\n');
+    ({ endpoint, server } = await restartTaskContentFileServer(workspace));
+
+    const appendResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'append-note',
+        note: { id: 'note-first-write', threadId: 'thread-card-a', role: 'agent', body: 'First online write.' },
+      }),
+    });
+    assert.equal(appendResponse.ok, true, await appendResponse.text());
+    const finalBody = readFileSync(threadFile, 'utf8');
+    assert.match(finalBody, /Offline edit\./);
+    assert.match(finalBody, /First online write\./);
+    const threadEndpoint = new URL('/api/ledgers/tasks/threads/thread-card-a', endpoint);
+    const reloaded = await (await fetch(threadEndpoint)).json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.deepEqual(reloaded.notes['thread-card-a'].map((note) => note.id), ['note-offline', 'note-first-write']);
+  } finally {
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('one canonical task HTTP mutation emits exactly one committed content event', async () => {
+  const started = await startTaskContentFileServer();
+  let { endpoint, server } = started;
+  let runtime: Record<string, unknown> = {};
+  const { workspace } = started;
+  const controller = new AbortController();
+
+  try {
+    const createResponse = await fetch(endpoint, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create-card', card: { id: 'card-a', title: 'Card A', x: 10, y: 20, w: 240, h: 132 } }),
+    });
+    assert.equal(createResponse.ok, true);
+    await createResponse.json();
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    ({ endpoint, runtime, server } = await restartTaskContentFileServer(workspace));
+    assert.equal((await fetch(endpoint)).ok, true);
+    assert.equal(await Promise.resolve(runtime.taskContentReady), true);
+    const eventsEndpoint = new URL(`/p/${encodeURIComponent(String(runtime.projectId))}/api/ledger-content-events`, endpoint);
+    const eventsResponse = await fetch(eventsEndpoint, { signal: controller.signal });
+    const collecting = collectContentChangesUntilAbort(eventsResponse);
+
+    const appendResponse = await fetch(endpoint, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'append-note', note: { id: 'note-http', threadId: 'thread-card-a', role: 'agent', body: 'One mutation.' } }),
+    });
+    assert.equal(appendResponse.ok, true, await appendResponse.text());
+    await new Promise((resolveWait) => setTimeout(resolveWait, 800));
+    controller.abort();
+    const events = await collecting;
+    assert.equal(events.length, 1);
+    assert.equal(events[0].ledgerId, 'tasks');
+    assert.equal(events[0].contentFile, '.decision-os/threads/tasks/thread-card-a.md');
+  } finally {
+    controller.abort();
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('local mismatch without an observed pending watcher edit remains a 409', async () => {
+  const started = await startTaskContentFileServer();
+  let { endpoint, server } = started;
+  let runtime: Record<string, unknown> = {};
+  let serverClosed = false;
+  const { workspace } = started;
+
+  try {
+    const createResponse = await fetch(endpoint, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create-card', card: { id: 'card-a', title: 'Card A', x: 10, y: 20, w: 240, h: 132 } }),
+    });
+    assert.equal(createResponse.ok, true);
+    await createResponse.json();
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    ({ endpoint, runtime, server } = await restartTaskContentFileServer(workspace));
+    assert.equal((await fetch(endpoint)).ok, true);
+    assert.equal(await Promise.resolve(runtime.taskContentReady), true);
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    serverClosed = true;
+    const threadFile = join(workspace, '.decision-os', 'threads', 'tasks', 'thread-card-a.md');
+    const stale = '# OPERATOR\n<!-- decision-os:note {"id":"note-stale"} -->\n\nUnobserved edit.\n';
+    writeFileSync(threadFile, stale);
+    const persist = runtime.persistTaskLedgerMutation as (mutation: Record<string, unknown>) => Promise<unknown>;
+
+    await assert.rejects(persist({
+      action: 'append-note',
+      note: { id: 'note-rejected', threadId: 'thread-card-a', role: 'agent', body: 'Must not append.' },
+    }), (error: unknown) => (
+      error instanceof TaskContentMaterializationError
+      && error.statusCode === 409
+      && error.code === 'task_content_local_mismatch'
+    ));
+    assert.equal(readFileSync(threadFile, 'utf8'), stale);
+  } finally {
+    // WHAT: Close only the server instance that the proof did not already stop to remove watcher ownership.
+    // WHY: The mismatch setup requires a settled closed watcher before invoking the retained runtime directly.
+    if (!serverClosed) await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
     rmSync(workspace, { recursive: true, force: true });
   }
 });

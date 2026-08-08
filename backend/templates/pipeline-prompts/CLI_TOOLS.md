@@ -4,7 +4,7 @@
 
 ## Continue dynamically
 
-Queue exactly one skill after the current gate execution. Decision OS runs the selected skill, then runs this gate again in a fresh context with the selected skill result available as the previous result.
+In case you are instructed to continue the execution after yours
 
 ```sh
 ledger-cli queue-skill --skill <skill-name> --model <model> --effort <effort>
@@ -35,12 +35,12 @@ ledger-cli prompt query --name <prompt-name> [--name <prompt-name>]...
 
 ```sh
 tools/map.mjs
-tools/map.mjs c [domain]
-tools/map.mjs t [domain]
-tools/map.mjs d [domain]
+tools/map.mjs c [base-directory] [depth]
+tools/map.mjs t [base-directory] [depth]
+tools/map.mjs d [base-directory] [depth]
 ```
 
-No argument prints the compact code map. A domain is an optional top-level folder.
+No argument prints the compact code map. A base directory is an optional repository-relative directory, including nested directories. Depth is an optional non-negative integer that limits expanded directory levels below the map root.
 
 ## Answer the operator
 

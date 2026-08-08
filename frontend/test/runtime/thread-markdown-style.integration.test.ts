@@ -17,3 +17,18 @@ test('thread markdown keeps inline code in the note font and accents list marker
   assert.match(css, /\.thread-note-message li::marker\s*\{[^}]*color:\s*var\(--card-code-color\);/s);
   assert.match(css, /\.thread-note-message \.ledger-card-code-block code\s*\{[^}]*font-family:\s*var\(--mono\);/s);
 });
+
+test('blockquote disclosures retain visible interaction styling across card, responsive, thread, and Codex Log surfaces', () => {
+  const cardCss = readFileSync(new URL('frontend/assets/canvas/objects.css', root), 'utf8');
+  const responsiveCss = readFileSync(new URL('frontend/assets/application.css', root), 'utf8');
+  const threadCss = readFileSync(new URL('frontend/assets/shared/thread.css', root), 'utf8');
+
+  for (const css of [cardCss, responsiveCss]) {
+    assert.match(css, /\.ledger-card-blockquote\s*\{[^}]*border-left:/s);
+    assert.match(css, /\.ledger-card-blockquote-summary:focus-visible\s*\{[^}]*outline:/s);
+    assert.match(css, /\.ledger-card-blockquote\[open\][^{]*\.ledger-card-blockquote-summary::before\s*\{[^}]*transform:\s*rotate\(90deg\)/s);
+  }
+  assert.match(threadCss, /\.thread-note-message \.ledger-card-blockquote,/);
+  assert.match(threadCss, /\.codex-log-event-body \.ledger-card-blockquote\s*\{/);
+  assert.match(threadCss, /\.codex-log-event-body \.ledger-card-blockquote-summary:focus-visible\s*\{[^}]*outline:/s);
+});

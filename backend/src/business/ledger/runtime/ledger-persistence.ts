@@ -4,6 +4,7 @@
  */
 import { writeFileSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
+import { resolve } from 'node:path';
 import type { LedgerMutation } from '../helper/apply-ledger-mutation.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '../helper/card-content-file.js';
 import { stripHydratedThreadNotes } from '../helper/thread-content-file.js';
@@ -31,6 +32,7 @@ export function createLedgerPersistence(input: {
   ) => void;
   localProject: DecisionOsProject | null;
   projectId: string;
+  publishCardContentChange: (event: AnyRecord) => void;
   publishContentChange: () => void;
   revisions: ReturnType<typeof createLedgerRevisionTracker>;
   stateForProject: (project: DecisionOsProject) => ProjectTaskState;
@@ -116,6 +118,17 @@ export function createLedgerPersistence(input: {
     if (!taskCommit) input.invalidateProject(input.projectId);
     else if (taskCommit.changed) {
       input.invalidateProject(input.projectId, taskCommit.localChanges);
+    }
+    // WHAT: Publish one committed task-content event for each canonical Markdown mutation.
+    // WHY: Its watcher echo is a head no-op, while clients still require one post-commit refresh signal.
+    if (ledgerId === 'tasks') {
+      for (const contentFile of changedContentFiles.filter((file) => file.endsWith('.md'))) {
+        input.publishCardContentChange({
+          contentFile,
+          file: resolve(input.decisionOsRoot, contentFile.replace(/^\/?\.decision-os\//, '')),
+          kind: contentFile.includes('/threads/') ? 'thread-content' : 'card-content',
+        });
+      }
     }
     if (ledgerId !== 'tasks') input.publishContentChange();
     const revision = input.revisions.advance(ledgerId);

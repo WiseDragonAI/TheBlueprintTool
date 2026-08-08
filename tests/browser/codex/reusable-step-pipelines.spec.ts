@@ -139,7 +139,7 @@ test('Process card keeps an overflowing skill catalog readable.', { timeout: 30_
   }
 });
 
-test('Skills Library keeps canonical Markdown in a bounded scroll view above persistent actions.', { timeout: 45_000 }, async () => {
+test('Skills Library splits bounded Markdown from persistent desktop controls.', { timeout: 45_000 }, async () => {
   const fixture = createFixture({ extraSkillCount: 2 });
   let server: ServerHandle | undefined;
   let browser: Browser | undefined;
@@ -223,19 +223,32 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
       const detail = document.querySelector<HTMLElement>('.process-detail');
       const scroll = document.querySelector<HTMLElement>('.skill-detail-scroll');
       const markdown = document.querySelector<HTMLElement>('.skill-markdown-section > .ledger-card-body');
+      const controls = document.querySelector<HTMLElement>('.skill-detail-controls');
       const actions = document.querySelector<HTMLElement>('.skill-detail-actions');
       const favorite = document.querySelector<HTMLElement>('.skill-favorite-toggle');
       const modalRect = modal?.getBoundingClientRect();
+      const scrollRect = scroll?.getBoundingClientRect();
+      const controlsRect = controls?.getBoundingClientRect();
       const actionsRect = actions?.getBoundingClientRect();
       const favoriteRect = favorite?.getBoundingClientRect();
       const markdownStyle = markdown ? getComputedStyle(markdown) : undefined;
       return {
+        modalWidth: modalRect?.width ?? 0,
         modalHeight: modalRect?.height ?? 0,
         detailClientHeight: detail?.clientHeight ?? 0,
         detailScrollHeight: detail?.scrollHeight ?? 0,
         documentClientHeight: scroll?.clientHeight ?? 0,
         documentScrollHeight: scroll?.scrollHeight ?? 0,
         documentOverflowY: scroll ? getComputedStyle(scroll).overflowY : '',
+        markdownIsLeftOfControls: (scrollRect?.left ?? Infinity) < (controlsRect?.left ?? -Infinity),
+        panelsDoNotOverlap: (scrollRect?.right ?? Infinity) <= (controlsRect?.left ?? -Infinity),
+        controlsInsideModal: (controlsRect?.right ?? Infinity) <= (modalRect?.right ?? -Infinity)
+          && (controlsRect?.bottom ?? Infinity) <= (modalRect?.bottom ?? -Infinity),
+        controlsOwnMetadata: controls?.contains(document.querySelector('.skill-detail-title')) === true
+          && controls?.contains(document.querySelector('.skill-detail-actions')) === true,
+        markdownPanelContainsOnlyMarkdown: [...(scroll?.children ?? [])].every((child) => (
+          child.classList.contains('skill-markdown-section') || child.classList.contains('skill-reference-map')
+        )) && scroll?.querySelector('.skill-detail-title, .skill-detail-actions, .skill-tags-field') === null,
         actionsInsideModal: (actionsRect?.bottom ?? Infinity) <= (modalRect?.bottom ?? -Infinity),
         favoriteInsideModal: (favoriteRect?.bottom ?? Infinity) <= (modalRect?.bottom ?? -Infinity),
         markdownPadding: markdownStyle?.padding ?? '',
@@ -243,15 +256,40 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
         markdownShadow: markdownStyle?.boxShadow ?? '',
       };
     });
-    assert.ok(Math.abs(geometry.modalHeight - 720) <= 2, `Expected an 80vh modal, received ${geometry.modalHeight}px.`);
+    assert.ok(Math.abs(geometry.modalWidth - 1200) <= 2, `Expected the preferred 1200px modal width, received ${geometry.modalWidth}px.`);
+    assert.ok(Math.abs(geometry.modalHeight - 855) <= 2, `Expected a 95dvh modal, received ${geometry.modalHeight}px.`);
     assert.equal(geometry.detailScrollHeight, geometry.detailClientHeight, 'The detail shell must not own document overflow.');
     assert.ok(geometry.documentScrollHeight > geometry.documentClientHeight, 'The Markdown document must own vertical scrolling.');
     assert.equal(geometry.documentOverflowY, 'auto');
+    assert.equal(geometry.markdownIsLeftOfControls, true);
+    assert.equal(geometry.panelsDoNotOverlap, true);
+    assert.equal(geometry.controlsInsideModal, true);
+    assert.equal(geometry.controlsOwnMetadata, true);
+    assert.equal(geometry.markdownPanelContainsOnlyMarkdown, true);
     assert.equal(geometry.actionsInsideModal, true);
     assert.equal(geometry.favoriteInsideModal, true);
     assert.equal(geometry.markdownPadding, '18px');
     assert.equal(geometry.markdownBackground, 'none');
     assert.equal(geometry.markdownShadow, 'none');
+
+    await page.setViewportSize({ width: 1100, height: 900 });
+    const narrowGeometry = await page.evaluate(() => {
+      const modalRect = document.querySelector<HTMLElement>('.process-modal')?.getBoundingClientRect();
+      const scrollRect = document.querySelector<HTMLElement>('.skill-detail-scroll')?.getBoundingClientRect();
+      const controlsRect = document.querySelector<HTMLElement>('.skill-detail-controls')?.getBoundingClientRect();
+      return {
+        modalLeft: modalRect?.left ?? -1,
+        modalRight: modalRect?.right ?? Infinity,
+        modalWidth: modalRect?.width ?? 0,
+        controlsBelowMarkdown: (controlsRect?.top ?? -Infinity) >= (scrollRect?.bottom ?? Infinity),
+      };
+    });
+    assert.ok(narrowGeometry.modalLeft >= 0 && narrowGeometry.modalRight <= 1100,
+      `Expected the stacked modal inside the 1100px viewport, received ${JSON.stringify(narrowGeometry)}.`);
+    assert.ok(narrowGeometry.modalWidth < 1100, 'The 1100px minimum must apply only when the split layout can fit.');
+    assert.equal(narrowGeometry.controlsBelowMarkdown, true);
+    await page.setViewportSize({ width: 1440, height: 900 });
+
     const reference = library.getByRole('button', { name: 'guide.md', exact: true });
     await reference.waitFor({ state: 'attached' });
     await reference.scrollIntoViewIfNeeded();
@@ -474,6 +512,41 @@ async function createPipelineAndSkillDefaults(page: Page): Promise<void> {
 
   const skillEditor = page.locator('.skill-library-editor-modal');
   await skillEditor.waitFor({ state: 'visible' });
+  await skillEditor.getByLabel('Default model', { exact: true }).waitFor({ state: 'visible' });
+  const editorGeometry = await skillEditor.evaluate((modal) => {
+    const modalRect = modal.getBoundingClientRect();
+    const editorRect = modal.querySelector<HTMLElement>('.skill-editor-pane')?.getBoundingClientRect();
+    const statePanel = modal.querySelector<HTMLElement>('.skill-editor-state-panel');
+    const stateRect = statePanel?.getBoundingClientRect();
+    return {
+      modalWidth: modalRect.width,
+      editorIsLeftOfState: (editorRect?.left ?? Infinity) < (stateRect?.left ?? -Infinity),
+      panelsDoNotOverlap: (editorRect?.right ?? Infinity) <= (stateRect?.left ?? -Infinity),
+      stateInsideModal: (stateRect?.right ?? Infinity) <= modalRect.right && (stateRect?.bottom ?? Infinity) <= modalRect.bottom,
+      stateOwnsMetadataAndControls: statePanel?.contains(modal.querySelector('.skill-library-metadata')) === true
+        && statePanel?.contains(modal.querySelector('.skill-editor-owner-controls')) === true,
+    };
+  });
+  assert.ok(Math.abs(editorGeometry.modalWidth - 1200) <= 2, `Expected the unified 1200px editor width, received ${editorGeometry.modalWidth}px.`);
+  assert.equal(editorGeometry.editorIsLeftOfState, true);
+  assert.equal(editorGeometry.panelsDoNotOverlap, true);
+  assert.equal(editorGeometry.stateInsideModal, true);
+  assert.equal(editorGeometry.stateOwnsMetadataAndControls, true);
+  await page.setViewportSize({ width: 1100, height: 1000 });
+  const narrowEditorGeometry = await skillEditor.evaluate((modal) => {
+    const modalRect = modal.getBoundingClientRect();
+    const editorRect = modal.querySelector<HTMLElement>('.skill-editor-pane')?.getBoundingClientRect();
+    const stateRect = modal.querySelector<HTMLElement>('.skill-editor-state-panel')?.getBoundingClientRect();
+    return {
+      modalLeft: modalRect.left,
+      modalRight: modalRect.right,
+      stateIsAboveEditor: (stateRect?.top ?? Infinity) < (editorRect?.top ?? -Infinity),
+    };
+  });
+  assert.ok(narrowEditorGeometry.modalLeft >= 0 && narrowEditorGeometry.modalRight <= 1100,
+    `Expected the stacked editor inside the 1100px viewport, received ${JSON.stringify(narrowEditorGeometry)}.`);
+  assert.equal(narrowEditorGeometry.stateIsAboveEditor, true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await skillEditor.getByLabel('Default model', { exact: true }).selectOption('gpt-5.4');
   await skillEditor.getByLabel('Default effort', { exact: true }).selectOption('high');
   const content = skillEditor.locator('.cm-content');

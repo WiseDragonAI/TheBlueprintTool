@@ -9,6 +9,7 @@ import {
   parseDeliveryNodeReceipt,
   parseDeliveryRun,
   type DeliveryExitCode,
+  type DeliveryEvidenceEntry,
   type DeliveryNodeCommand,
   type DeliveryNodeReceipt,
   type DeliveryPhase,
@@ -34,6 +35,7 @@ export type DeliveryMutationReceipt = {
   predecessor: string;
   resultIdentity: string;
   observedAt: string;
+  evidence?: DeliveryEvidenceEntry[];
 };
 
 export type DeliveryNodeAuthority = {
@@ -51,8 +53,8 @@ export type DeliveryAuthoritySnapshot = {
   observedAt: string;
   originDevSha: string;
   originMainSha: string;
+  mainReleaseExact: boolean;
   topology: FrozenDeliveryTopology;
-  gitPromotion: DeliveryMutationReceipt | null;
   relay: {
     activeVersionId: string;
     releaseSha: string;
@@ -79,17 +81,13 @@ export type DeliveryCoordinatorEffects = {
   preflightGit(input: { releaseSha: string; repositoryLock: RepositoryMutationLock; signal: AbortSignal }): Promise<{
     priorMainSha: string;
     originDevSha: string;
+    mainSha: string;
     receipt: DeliveryMutationReceipt;
   }>;
   collectAdmission(input: {
     run: DeliveryRun;
     signal: AbortSignal;
   }): Promise<DeliveryAdmissionEvidence>;
-  promoteMain(input: {
-    run: DeliveryRun;
-    repositoryLock: RepositoryMutationLock;
-    signal: AbortSignal;
-  }): Promise<{ mainSha: string; receipt: DeliveryMutationReceipt }>;
   dispatchNode(input: {
     nodeId: string;
     command: DeliveryNodeCommand;
@@ -328,6 +326,11 @@ function nodeReceipt(
 
 export function reconcileDeliveryAuthority(runValue: DeliveryRun, authority: DeliveryAuthoritySnapshot): DeliveryRun {
   const run = parseDeliveryRun(runValue);
+  // WHAT: Reject recovery when the published main commit is not the exact protected merge admitted by the run.
+  // WHY: Resume may observe Git authority but must never repair or replace it.
+  if (!authority.mainReleaseExact) {
+    throw new DeliveryCoordinatorError('delivery_main_release_invalid', 'Published main no longer matches the admitted protected merge.', run.phase);
+  }
   if (
     authority.originDevSha !== run.admittedSha
     || authority.topology.fingerprint !== run.topology.fingerprint
@@ -366,24 +369,6 @@ export function reconcileDeliveryAuthority(runValue: DeliveryRun, authority: Del
       evidence,
     }));
   };
-  const promotionStarted = receiptForOperation(run, 'promote-main')?.status === 'started';
-  // WHY: A lost Git response may leave main changed without a coordinator success receipt.
-  // WHAT: Accept the live SHA only with an exact external promotion receipt bound to this run.
-  if (!next.mainSha && promotionStarted && mutationMatches(
-    authority.gitPromotion,
-    'promote-main',
-    run.admittedSha,
-    String(run.priorMainSha ?? ''),
-  )) {
-    next.mainSha = exactSha(authority.gitPromotion.resultIdentity, 'mainSha');
-    recoverReceipt(
-      'promote-main',
-      'main-promotion',
-      mutationReceiptEvidence(authority.gitPromotion),
-      'coordinator',
-      next.mainSha,
-    );
-  }
   if (next.mainSha && authority.originMainSha !== next.mainSha) {
     throw new DeliveryCoordinatorError('delivery_main_ref_changed', 'origin/main differs from the journal main SHA.', run.phase);
   }
@@ -543,6 +528,7 @@ export function mutationReceiptEvidence(receipt: DeliveryMutationReceipt): Deliv
     { key: 'predecessor', value: receipt.predecessor },
     { key: 'resultIdentity', value: receipt.resultIdentity },
     { key: 'observedAt', value: receipt.observedAt },
+    ...(receipt.evidence ?? []),
   ];
 }
 

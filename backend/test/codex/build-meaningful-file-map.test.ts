@@ -93,42 +93,60 @@ test('injected file map cuts tests and documentation, ranks five code files per 
     assert.doesNotMatch(buildMeaningfulFileMap(workspace), /README|test\/|test-responsive|guide\.md|two\.ts|one\.ts/);
     assert.equal(runFileMapCli(['t', 'backend'], workspace), [
       '.',
-      ' backend/',
-      '  test/',
-      '   index.test.ts',
-      '  test-responsive/',
-      '   mobile.ts',
+      ' test/',
+      '  index.test.ts',
+      ' test-responsive/',
+      '  mobile.ts',
     ].join('\n'));
     assert.equal(runFileMapCli(['doc', 'backend'], workspace), [
       '.',
-      ' backend/',
-      '  README.md',
+      ' README.md',
     ].join('\n'));
     assert.equal(runFileMapCli(['d', 'docs'], workspace), [
       '.',
-      ' docs/',
-      '  data.json',
-      '  guide.md',
+      ' data.json',
+      ' guide.md',
     ].join('\n'));
     assert.equal(runFileMapCli(['c', 'backend'], workspace), [
       '.',
-      ' backend/',
-      '  src/',
-      '   index.ts',
-      '   nested/',
-      '    view.tsx',
-      '   top/',
-      '    seven.ts',
-      '    six.ts',
-      '    five.ts',
-      '    four.ts',
-      '    three.ts',
-      '    two.ts',
-      '    one.ts',
+      ' src/',
+      '  index.ts',
+      '  nested/',
+      '   view.tsx',
+      '  top/',
+      '   seven.ts',
+      '   six.ts',
+      '   five.ts',
+      '   four.ts',
+      '   three.ts',
+      '   two.ts',
+      '   one.ts',
     ].join('\n'));
-    assert.throws(() => runFileMapCli(['c', 'missing'], workspace), /unknown domain: missing/);
+    assert.equal(runFileMapCli(['c', 'backend/src', '1'], workspace), [
+      '.',
+      ' index.ts',
+      ' nested/',
+      ' top/',
+    ].join('\n'));
+    assert.equal(runFileMapCli(['c', 'backend/src', '0'], workspace), '.');
+    assert.equal(runFileMapCli(['c', 'backend/src', '2'], workspace), [
+      '.',
+      ' index.ts',
+      ' nested/',
+      '  view.tsx',
+      ' top/',
+      '  seven.ts',
+      '  six.ts',
+      '  five.ts',
+      '  four.ts',
+      '  three.ts',
+      '  two.ts',
+      '  one.ts',
+    ].join('\n'));
+    assert.throws(() => runFileMapCli(['c', 'missing'], workspace), /unknown base directory: missing/);
+    assert.throws(() => runFileMapCli(['c', 'backend', '-1'], workspace), /depth must be a non-negative integer/);
     assert.equal(runFileMapCli([], workspace), buildMeaningfulFileMap(workspace));
-    assert.throws(() => runFileMapCli(['unknown'], workspace), /usage: tools\/map\.mjs <c\|t\|d> \[domain\]/);
+    assert.throws(() => runFileMapCli(['unknown'], workspace), /usage: tools\/map\.mjs <c\|t\|d> \[base-directory\] \[depth\]/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

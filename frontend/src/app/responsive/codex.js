@@ -265,9 +265,12 @@ async function renderProcessDetail(record) {
   purpose.textContent = state.processTab === 'skills' ? record.description : (record.purpose || 'No purpose provided.');
   detail.append(title, purpose);
   if (state.processTab === 'skills') {
+    // WHAT: Recompose global skill details into explicit Markdown and controls panels.
+    // WHY: Desktop requires Markdown-only left ownership while existing metadata and mutations remain grouped on the right.
     if (state.libraryScope === 'global') {
       detail.classList.add('skill-detail-layout');
       const scroll = document.createElement('div'); scroll.className = 'skill-detail-scroll';
+      const controls = document.createElement('aside'); controls.className = 'skill-detail-controls';
       const actions = document.createElement('footer'); actions.className = 'skill-detail-actions';
       const tagsField = renderSkillTagChoices(record);
       const favorite = button(record.favorite ? '★' : '☆', 'skill-favorite-toggle', () => { void toggleGlobalSkillFavorite(record); });
@@ -277,7 +280,8 @@ async function renderProcessDetail(record) {
       edit.hidden = record.editable !== true;
       const status = document.createElement('p'); status.className = 'codex-message process-detail-message'; status.setAttribute('role', 'status');
       actions.append(tagsField, favorite, edit, status);
-      detail.append(scroll, actions);
+      controls.append(title, purpose, actions);
+      detail.replaceChildren(scroll, controls);
       setMobileCodexView(document, 'detail', viewContext);
       await hydrateGlobalSkillDetail(record, scroll, generation);
       return;
