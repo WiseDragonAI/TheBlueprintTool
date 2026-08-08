@@ -213,7 +213,7 @@
 
 ## N. Closeout Evidence
 
-1. Installed code commit on workstation and phone.
+1. Installed annotated release tag on workstation and phone.
 2. Redacted configuration presence report.
 3. Complete catalog inventory for both nodes.
 4. Relay reset responses.

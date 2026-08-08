@@ -121,7 +121,7 @@
 ## Production Rollback Procedure
 
 - **Mandatory trigger:** For any operator request involving rollback, restoration to a release tag, production ref rewind, production state restoration, or production server rollback, read and follow [`documentation/procedure/deployment/full-production-rollback.md`](documentation/procedure/deployment/full-production-rollback.md) before any mutation.
-- A rollback is not complete when only Git refs, the workstation process, and the release symlink were changed. The procedure must reach one verified release boundary across the parent repository, `.decision-os` child repository, preserved post-target work, production release worktree and pointer, MultiTerm supervisor, Cloudflare relay, durable runtime incidents and pause registries, federation connectivity, and post-restart health.
+- A rollback is not complete when only Git refs and the workstation process changed. The procedure must reach one verified release-tag boundary across the parent repository, `.decision-os` child repository, preserved post-target work, canonical primary `main` checkout, MultiTerm supervisor, Cloudflare relay, durable runtime incidents and pause registries, federation connectivity, and post-restart health.
 - Do not restart a rolled-back production node while Cloudflare still serves a relay from the rejected release line. Align and verify the relay first, then start the node.
 
 ## decision-os Server Procedure
@@ -166,7 +166,7 @@ Use the fixed merge tool for a local `dev` to `main` promotion:
 
 ```bash
 cd /home/jbb/dev/EditorBP/decision-os
-node bin/decision-os-merge-dev.mjs --json
+node bin/decision-os-merge-dev.mjs <maj|min|fix> --json
 ```
 
 When the operator has already authorized the merge, run the normal promotion
@@ -235,6 +235,25 @@ The tool records the active Cloudflare predecessor before upload, activates
 the tagged version at 100 percent, verifies production relay health, and
 restores the predecessor automatically when post-activation health verification
 fails.
+
+The complete canonical procedure and proof boundary are defined in
+[`documentation/procedure/deployment/release-tag-deployment.md`](documentation/procedure/deployment/release-tag-deployment.md).
+
+### Production Application Release Activation
+
+- The production application release authority is the published annotated
+  `rel-X.Y.Z` tag. Its workstation process runs from canonical primary `main`.
+- Do not create a detached production release worktree, use a release symlink,
+  change a release pointer, or register a launcher below
+  `~/.decision-os-production/releases/`.
+- Relay deployment does not deploy or restart the application. A production
+  restart remains a separate explicitly authorized operation through the
+  registered MultiTerm process on port `50150`.
+- Before restart, verify the registered command resolves to
+  `/home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs`.
+- Production synchronization and speed proof must use the real production
+  catalog plus two online production nodes. Port `50151` evidence cannot close
+  that proof.
 
 ### Server Restart Ownership
 

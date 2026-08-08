@@ -2,7 +2,7 @@
 
 ## A. Release Gate
 
-1. Install one reviewed Decision OS commit on the workstation and phone.
+1. Install one reviewed annotated Decision OS release tag on the workstation and phone.
 2. Verify each node's `.decision-os/.settings.json` contains its unique `federationNodeId`.
 3. Verify the configured node IDs are `workstation` and `phone`.
 4. Commit tracked ledger sidecars on each node without modifying an existing Git index.

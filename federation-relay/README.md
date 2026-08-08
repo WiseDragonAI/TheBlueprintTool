@@ -59,7 +59,7 @@
 4. The command reads the current production deployment and health, uploads a Worker version tagged `rel-X.Y.Z`, sets `DECISION_OS_RELEASE_SHA` to the tag's resolved commit fingerprint, activates the version at `100%`, and verifies production `/health`.
 5. A post-activation health failure restores the recorded predecessor version and verifies the predecessor release fingerprint.
 6. The command uses pinned Wrangler `4.111.0`, fixed argument arrays, finite deadlines, cancellation, bounded output, process settlement, and token redaction.
-7. Node activation and node rollback remain separate from relay-only deployment. The complete coordinated node workflow is [Production Delivery Protocol](../documentation/procedure/deployment/production-delivery-protocol.md).
+7. Node activation and node rollback remain separate from relay-only deployment. The canonical boundary is [Release-Tag Production Deployment](../documentation/procedure/deployment/release-tag-deployment.md).
 8. Direct `wrangler deploy`, `wrangler versions upload`, `wrangler versions deploy`, and `wrangler rollback` are recovery-only operations.
 
 ---
@@ -89,7 +89,7 @@
    ```
 
 3. The connector is disabled when any required setting is absent.
-4. Delivery protocol-1 bootstrap and supervised restart are separate node-owned operations documented in [Production Delivery Protocol](../documentation/procedure/deployment/production-delivery-protocol.md).
+4. Application activation and supervised restart are separate node-owned operations documented in [Release-Tag Production Deployment](../documentation/procedure/deployment/release-tag-deployment.md).
 
 ---
 

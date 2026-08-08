@@ -214,4 +214,4 @@
    20. `git_revision_failed` — `503` unless the contained Git owner supplied a more specific status
 8. Direct owner routing uses `markdown_editor_target_not_found` with `404` and `markdown_editor_target_ambiguous` with `409`.
 9. Task-card owner errors are listed in section D. Malformed legacy route parameters and metadata-only payload fields that have no stable code remain HTTP `400` text validation responses.
-10. Production admission, delivery recovery, and rollback are owned by [Production Delivery Protocol](../../procedure/deployment/production-delivery-protocol.md). Canary evidence is owned by [Canary Skill Authoring Dev Environment](../../procedure/deployment/canary-skill-authoring-dev-environment.md).
+10. Production merge, tag-owned relay deployment, application activation boundaries, proof, and recovery are owned by [Release-Tag Production Deployment](../../procedure/deployment/release-tag-deployment.md) and [Full Production Rollback](../../procedure/deployment/full-production-rollback.md). Development canary evidence remains owned by [Canary Skill Authoring Dev Environment](../../procedure/deployment/canary-skill-authoring-dev-environment.md).
