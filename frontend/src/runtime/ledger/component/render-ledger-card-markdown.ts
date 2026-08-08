@@ -3,15 +3,16 @@
  * WHY: Markdown display must stay canonical across the canvas and the conversation ledger.
  */
 import { appendInlineNodes } from './append-inline-nodes.js';
-import { parseLedgerCardMarkdown, type LedgerMarkdownBlock } from '../helper/parse-ledger-card-markdown.js';
+import { parseLedgerCardMarkdown } from '../helper/parse-ledger-card-markdown.js';
 import { renderLedgerCardCodeBlock } from './render-ledger-card-code-block.js';
 import { renderLedgerCardHtmlEmbeds } from './render-ledger-card-html-embeds.js';
 import { renderLedgerCardMedia, type LedgerCardImageSizes } from './render-ledger-card-media.js';
 import { renderLedgerCardTable } from './render-ledger-card-table.js';
 import { renderLedgerCardGitDiff, type GitReviewNotesChangeHandler } from './render-ledger-card-git-diff.js';
 import { renderLedgerCardQuestions, type QuestionnairesChangeHandler } from './render-ledger-card-questions.js';
+import type { LedgerMarkdownChangeProjection } from '../../content-authoring/helper/create-ledger-markdown-presentation-extension.js';
 
-type LedgerCardMarkdownOptions = {
+export type LedgerCardMarkdownOptions = {
   cardId?: string;
   questionnaireCardId?: string;
   carouselDriver?: 'internal' | 'external';
@@ -22,107 +23,127 @@ type LedgerCardMarkdownOptions = {
   onQuestionnairesChange?: QuestionnairesChangeHandler;
   gitReviewNotes?: unknown;
   onGitReviewNotesChange?: GitReviewNotesChangeHandler;
+  source?: string;
+  changeProjection?: LedgerMarkdownChangeProjection;
 };
 
-function appendLedgerMarkdownBlocks(
-  parent: HTMLElement,
-  blocks: LedgerMarkdownBlock[],
+function intersectsAddition(
   options: LedgerCardMarkdownOptions,
-): void {
-  for (const block of blocks) {
-    // WHAT: Render heading blocks with their parsed level and inline children.
-    // WHY: Headings retain semantic hierarchy inside both root Markdown and nested quotes.
-    if (block.kind === 'heading') {
-      const heading = document.createElement(`h${Math.min(6, Math.max(1, block.level))}`);
-      heading.className = `ledger-card-heading ledger-card-heading-${block.level}`;
-      appendInlineNodes(heading, block.children, options);
-      parent.appendChild(heading);
-      continue;
-    }
-    // WHAT: Render list blocks with their ordered or unordered native element.
-    // WHY: Nested quote content must preserve the same list semantics as root Markdown.
-    if (block.kind === 'list') {
-      const list = document.createElement(block.ordered ? 'ol' : 'ul');
-      // WHAT: Preserve an authored ordered-list start when it differs from the HTML default.
-      // WHY: Numbered Markdown can intentionally continue a sequence inside any rendering boundary.
-      if (block.ordered && block.start !== 1) list.setAttribute('start', String(block.start));
-      for (const item of block.items) {
-        const li = document.createElement('li');
-        appendInlineNodes(li, item, options);
-        list.appendChild(li);
-      }
-      parent.appendChild(list);
-      continue;
-    }
-    // WHAT: Delegate table blocks to the canonical table component.
-    // WHY: Table structure and scrolling behavior must remain shared across nesting levels.
-    if (block.kind === 'table') {
-      parent.appendChild(renderLedgerCardTable(block, options));
-      continue;
-    }
-    // WHAT: Delegate standalone image blocks to the canonical media component.
-    // WHY: Media sizing and interaction options must survive inside quoted content.
-    if (block.kind === 'images') {
-      parent.appendChild(renderLedgerCardMedia(block, options));
-      continue;
-    }
-    // WHAT: Delegate HTML embed directives to the authorized embed component.
-    // WHY: Quote nesting must not create a second raw-HTML rendering path.
-    if (block.kind === 'htmlEmbeds') {
-      parent.appendChild(renderLedgerCardHtmlEmbeds(block, options));
-      continue;
-    }
-    // WHAT: Delegate Git review directives to the canonical review component.
-    // WHY: Repository and review state ownership must remain outside the generic Markdown renderer.
-    if (block.kind === 'gitDiff') {
-      parent.appendChild(renderLedgerCardGitDiff(block, options));
-      continue;
-    }
-    // WHAT: Delegate questionnaire directives to the canonical questionnaire component.
-    // WHY: Questionnaire identity and change handling must remain shared inside nested Markdown.
-    if (block.kind === 'questions') {
-      parent.appendChild(renderLedgerCardQuestions(block, options));
-      continue;
-    }
-    // WHAT: Delegate fenced code blocks to the syntax-highlighted code component.
-    // WHY: Quote nesting must preserve safe code rendering and language presentation.
-    if (block.kind === 'code') {
-      parent.appendChild(renderLedgerCardCodeBlock(block));
-      continue;
-    }
-    // WHAT: Render horizontal-rule blocks as semantic separators.
-    // WHY: Quoted Markdown can contain the same structural separators as root Markdown.
-    if (block.kind === 'hr') {
-      const rule = document.createElement('hr');
-      rule.className = 'ledger-card-hr';
-      parent.appendChild(rule);
-      continue;
-    }
-    // WHAT: Render each parsed quote as a closed native disclosure with nested canonical Markdown.
-    // WHY: Every shared Markdown consumer needs keyboard-operable expansion without custom state or raw HTML.
-    if (block.kind === 'blockquote') {
-      const disclosure = document.createElement('details');
-      disclosure.className = 'ledger-card-blockquote';
-      const summary = document.createElement('summary');
-      summary.className = 'ledger-card-blockquote-summary';
-      summary.textContent = 'Quoted content';
-      const content = document.createElement('div');
-      content.className = 'ledger-card-blockquote-content';
-      appendLedgerMarkdownBlocks(content, block.blocks, options);
-      disclosure.append(summary, content);
-      parent.appendChild(disclosure);
-      continue;
-    }
-    const paragraph = document.createElement('p');
-    appendInlineNodes(paragraph, block.children, options);
-    parent.appendChild(paragraph);
+  from: number | undefined,
+  to: number | undefined,
+): boolean {
+  // WHAT: Reject semantic nodes without an exact non-empty source span.
+  // WHY: Git identity must never be inferred from rendered text.
+  if (typeof from !== 'number' || typeof to !== 'number' || to <= from) return false;
+  return options.changeProjection?.additions.some((addition) => addition.from < to && addition.to > from) ?? false;
+}
+
+function markProjectedAddition<T extends HTMLElement>(
+  element: T,
+  options: LedgerCardMarkdownOptions,
+  from: number | undefined,
+  to: number | undefined,
+): T {
+  // WHAT: Mark canonical DOM only when its exact authored range intersects an admitted addition.
+  // WHY: Unchanged context inside a multi-line canonical block must remain visually unmarked.
+  if (intersectsAddition(options, from, to)) {
+    element.classList.add('cm-authored-addition');
+    element.setAttribute('data-change', 'added');
+    element.setAttribute('aria-label', 'Added Markdown');
   }
+  return element;
+}
+
+function inlineRange(nodes: Array<{ from?: number; to?: number }>): { from?: number; to?: number } {
+  const starts = nodes.flatMap((node) => typeof node.from === 'number' ? [node.from] : []);
+  const ends = nodes.flatMap((node) => typeof node.to === 'number' ? [node.to] : []);
+  return {
+    from: starts.length > 0 ? Math.min(...starts) : undefined,
+    to: ends.length > 0 ? Math.max(...ends) : undefined,
+  };
+}
+
+export function renderLedgerMarkdownBlock(
+  block: ReturnType<typeof parseLedgerCardMarkdown>[number],
+  options: LedgerCardMarkdownOptions = {},
+): HTMLElement {
+  // WHAT: Render canonical heading blocks with their semantic heading level.
+  // WHY: Every presentation surface must preserve the shared Markdown hierarchy.
+  if (block.kind === 'heading') {
+    const heading = document.createElement(`h${Math.min(6, Math.max(1, block.level))}`);
+    heading.className = `ledger-card-heading ledger-card-heading-${block.level}`;
+    appendInlineNodes(heading, block.children, options);
+    return markProjectedAddition(heading, options, block.from, block.to);
+  }
+  // WHAT: Render canonical ordered and unordered list structures.
+  // WHY: List markers and indentation require real list DOM rather than decorated source bytes.
+  if (block.kind === 'list') {
+    const list = document.createElement(block.ordered ? 'ol' : 'ul');
+    // WHAT: Preserve a non-default authored ordered-list start.
+    // WHY: Canonical list numbering must match the exact Markdown meaning.
+    if (block.ordered && block.start !== 1) list.setAttribute('start', String(block.start));
+    for (const item of block.items) {
+      const li = document.createElement('li');
+      appendInlineNodes(li, item, options);
+      const range = inlineRange(item);
+      list.appendChild(markProjectedAddition(li, options, range.from, range.to));
+    }
+    return list;
+  }
+  // WHAT: Delegate canonical table blocks to the shared table renderer.
+  // WHY: Table structure, overflow, and cell semantics already have one owner.
+  if (block.kind === 'table') return markProjectedAddition(renderLedgerCardTable(block, options), options, block.from, block.to);
+  // WHAT: Delegate canonical media blocks to the shared media renderer.
+  // WHY: Image grouping, sizing, and carousel structure already have one owner.
+  if (block.kind === 'images') return markProjectedAddition(renderLedgerCardMedia(block, options), options, block.from, block.to);
+  // WHAT: Delegate canonical HTML directives to the shared embed renderer.
+  // WHY: Decision OS directives must not be reimplemented by the editor.
+  if (block.kind === 'htmlEmbeds') return markProjectedAddition(renderLedgerCardHtmlEmbeds(block, options), options, block.from, block.to);
+  // WHAT: Delegate canonical Git review directives to the shared Git renderer.
+  // WHY: The directive structure and bounded cleanup lifecycle already have one owner.
+  if (block.kind === 'gitDiff') return markProjectedAddition(renderLedgerCardGitDiff(block, options), options, block.from, block.to);
+  // WHAT: Delegate canonical questionnaire directives to the shared question renderer.
+  // WHY: Questionnaire structure and unavailable-state semantics already have one owner.
+  if (block.kind === 'questions') return markProjectedAddition(renderLedgerCardQuestions(block, options), options, block.from, block.to);
+  // WHAT: Delegate canonical fenced code blocks to the shared code renderer.
+  // WHY: Language labels and highlighted code structure must remain identical across surfaces.
+  if (block.kind === 'code') return renderLedgerCardCodeBlock(block, {
+    source: options.source,
+    changeProjection: options.changeProjection,
+  });
+  // WHAT: Render canonical horizontal rules as semantic rule elements.
+  // WHY: A source delimiter cannot reproduce the shared rule geometry.
+  if (block.kind === 'hr') {
+    const rule = document.createElement('hr');
+    rule.className = 'ledger-card-hr';
+    return markProjectedAddition(rule, options, block.from, block.to);
+  }
+  // WHAT: Render each canonical blockquote as a closed native disclosure containing canonical nested blocks.
+  // WHY: The restored editor projection and later blockquote interaction must share one recursive renderer.
+  if (block.kind === 'blockquote') {
+    const disclosure = document.createElement('details');
+    disclosure.className = 'ledger-card-blockquote';
+    const summary = document.createElement('summary');
+    summary.className = 'ledger-card-blockquote-summary';
+    summary.textContent = 'Quoted content';
+    const content = document.createElement('div');
+    content.className = 'ledger-card-blockquote-content';
+    for (const nested of block.blocks) content.appendChild(renderLedgerMarkdownBlock(nested, options));
+    disclosure.append(summary, content);
+    return markProjectedAddition(disclosure, options, block.from, block.to);
+  }
+  const paragraph = document.createElement('p');
+  appendInlineNodes(paragraph, block.children, options);
+  return markProjectedAddition(paragraph, options, block.from, block.to);
 }
 
 export function renderLedgerCardMarkdown(markdown: string, options: LedgerCardMarkdownOptions = {}): HTMLElement {
   const body = document.createElement('div');
   body.className = 'ledger-card-body';
-  appendLedgerMarkdownBlocks(body, parseLedgerCardMarkdown(markdown), options);
+
+  for (const block of parseLedgerCardMarkdown(markdown)) {
+    body.appendChild(renderLedgerMarkdownBlock(block, options));
+  }
 
   return body;
 }

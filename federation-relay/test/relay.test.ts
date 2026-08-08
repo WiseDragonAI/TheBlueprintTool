@@ -311,11 +311,17 @@ describe('federation relay', () => {
     writer.send(JSON.stringify(stateBatch('shared', valid)).slice(0, -12));
     await expect(interruptedResponse).resolves.toMatchObject({ type: 'response-error' });
 
-    const invalidBatch = stateBatch('shared', valid) as ReturnType<typeof stateBatch>;
+    const invalidDeliveryId = 'rejected-delivery';
+    const invalidBatch = stateBatch('shared', valid, invalidDeliveryId) as ReturnType<typeof stateBatch>;
     invalidBatch.payload.entries.push({ key: 'card\u0000wrong-id', stateHash: invalid.stateHash, entity: invalid });
     const invalidResponse = nextFrame(writer, (frame) => frame.type === 'response-error');
     writer.send(JSON.stringify(invalidBatch));
-    await expect(invalidResponse).resolves.toMatchObject({ type: 'response-error' });
+    await expect(invalidResponse).resolves.toMatchObject({
+      type: 'response-error',
+      projectId: 'shared',
+      code: 'invalid_state_entity_envelope',
+      payload: { deliveryId: invalidDeliveryId },
+    });
 
     const oversizedResponse = nextFrame(writer, (frame) => frame.type === 'response-error');
     writer.send(JSON.stringify({ ...stateBatch('shared', valid), message: 'x'.repeat(maximumStateFrameBytes) }));

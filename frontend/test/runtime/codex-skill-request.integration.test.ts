@@ -595,6 +595,14 @@ test('pipeline-card continuation preserves pending status and cancels the accept
 
 test('skill-library clients encode identity, exclude paths, and surface revision conflicts', async () => {
   const previousFetch = globalThis.fetch;
+  const snapshot = {
+    contentRevision: 'a'.repeat(64),
+    commit: 'b'.repeat(40),
+    olderCommit: null,
+    baselineAvailability: 'no_prior_revision' as const,
+    baseMarkdown: '',
+    markdown: '---\nname: workspace/skill\ndescription: Editable skill\n---\n',
+  };
   const skill = {
     name: 'workspace/skill',
     description: 'Editable skill',
@@ -606,7 +614,8 @@ test('skill-library clients encode identity, exclude paths, and surface revision
     defaultCodexEffort: 'high',
     effectiveCodexModel: 'gpt-5.5',
     effectiveCodexEffort: 'high',
-    markdown: '---\nname: workspace/skill\ndescription: Editable skill\n---\n'
+    markdown: snapshot.markdown,
+    snapshot,
   };
   let requestIndex = 0;
   try {
@@ -627,11 +636,17 @@ test('skill-library clients encode identity, exclude paths, and surface revision
       });
       assert.equal('skillName' in body, false);
       assert.equal('path' in body, false);
-      return new Response(JSON.stringify({ ok: false, error: 'Revision conflict.', currentRevision: 'revision-b' }), { status: 409 });
+      return new Response(JSON.stringify({
+        ok: false,
+        error: 'Revision conflict.',
+        currentRevision: 'revision-b',
+        snapshot: { ...snapshot, contentRevision: 'c'.repeat(64) },
+      }), { status: 409 });
     }) as typeof fetch;
 
     const detail = await loadCodexSkillLibrary(skill.name, 'project-a');
     assert.equal(detail.skill?.editable, true);
+    assert.deepEqual(detail.skill?.snapshot, snapshot);
     const save = await requestCodexSkillLibrarySave({
       skillName: skill.name,
       markdown: skill.markdown,
@@ -643,6 +658,7 @@ test('skill-library clients encode identity, exclude paths, and surface revision
     assert.equal(save.ok, false);
     assert.equal(save.conflict, true);
     assert.equal(save.currentRevision, 'revision-b');
+    assert.equal(save.snapshot?.contentRevision, 'c'.repeat(64));
   } finally {
     globalThis.fetch = previousFetch;
   }

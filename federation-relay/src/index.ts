@@ -731,8 +731,35 @@ export class FederationRelayV4 extends DurableObject<Env> {
       this.send(destination, frame);
       if (frame.type === 'response-end' || frame.type === 'response-error') this.streams.delete(frame.requestId);
     } catch (error) {
-      const code = error instanceof Error ? error.message : 'invalid_frame';
-      socket.send(JSON.stringify({ version: 1, type: 'response-error', requestId: frame?.requestId, code, message: code } satisfies RelayFrame));
+      const code = (error instanceof Error ? error.message : 'invalid_frame').slice(0, 160);
+      const payload = frame?.payload && typeof frame.payload === 'object'
+        ? frame.payload as Record<string, unknown>
+        : {};
+      const deliveryId = String(payload.deliveryId ?? '').slice(0, 160);
+      // WHAT: Record a bounded rejection event with the sender and delivery correlation available on the rejected frame.
+      // WHY: Operators need to connect a relay rejection to the exact node, project, frame, and durable delivery attempt.
+      try {
+        console.error(JSON.stringify({
+          event: 'federation-relay-frame-rejected',
+          nodeId: sender.slice(0, 160),
+          frameType: String(frame?.type ?? 'unknown').slice(0, 160),
+          projectId: String(frame?.projectId ?? '').slice(0, 160),
+          deliveryId,
+          code,
+        }));
+      } catch {
+        // WHAT: Contain diagnostic serialization and transport failures inside the rejected frame scope.
+        // WHY: A diagnostic failure must not terminate the relay session or hide the response error.
+      }
+      socket.send(JSON.stringify({
+        version: 1,
+        type: 'response-error',
+        requestId: frame?.requestId,
+        projectId: frame?.projectId,
+        code,
+        message: code,
+        payload: { deliveryId },
+      } satisfies RelayFrame));
     }
   }
 

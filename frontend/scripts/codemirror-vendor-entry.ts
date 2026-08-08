@@ -3,9 +3,9 @@
  * WHY: A narrow vendor entry keeps the pinned local browser bundle deterministic.
  */
 export { basicSetup } from 'codemirror';
-export { Compartment, EditorState, Transaction } from '@codemirror/state';
-export { EditorView, keymap } from '@codemirror/view';
-export { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+export { Compartment, EditorState, MapMode, RangeSet, StateEffect, StateField, Transaction } from '@codemirror/state';
+export { Decoration, EditorView, keymap, ViewPlugin, WidgetType } from '@codemirror/view';
+export { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
 export { markdown } from '@codemirror/lang-markdown';
 export { defaultKeymap, historyKeymap, redo, undo } from '@codemirror/commands';
 export { openSearchPanel, searchKeymap } from '@codemirror/search';
