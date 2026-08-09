@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -15,6 +16,15 @@ import { readRepositorySyncStatus } from '@backend/business/project-sync/helper/
 import { canonicalDecisionOsGitIgnore } from '@backend/business/server/helper/ensure-decision-os-git-repository.js';
 import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 import type { CodexPipelineRun } from '../../../shared/schemas/codex-pipeline-types.js';
+import { canonicalFederationRepairBuckets } from '../../../shared/federation-repair-guard.js';
+import {
+  hashTaskCurrentBucket,
+  hashTaskCurrentRoot,
+  joinTaskEntities,
+  taskCurrentBucketForEntityKey,
+  type TaskCurrentBucket,
+  type TaskCurrentEntity,
+} from '../../../shared/task-current-state-core.js';
 
 type Frame = { type: string; requestId?: string; to?: string; projects?: unknown[]; path?: string; projectId?: string; stateVersion?: number; payload?: Record<string, any> };
 
@@ -568,6 +578,87 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
   const manifests = new Map<string, unknown[]>();
   const streams = new Map<string, { requester: string; owner: string }>();
   const proxiedPaths: string[] = [];
+  const retainedState = new Map<string, Map<string, TaskCurrentEntity>>();
+  const subscriptions = new Map<string, Set<string>>();
+  const repairs = new Map<string, { projectId: string; attemptId: string; frames: Frame[]; next: number }>();
+  const stateEvents: Array<Record<string, unknown>> = [];
+  const recordStateEvent = (event: Record<string, unknown>): void => {
+    stateEvents.push(event);
+    // WHAT: Retain only the latest bounded fixture transitions.
+    // WHY: A failed integration must expose its first missing repair boundary without unbounded logs.
+    if (stateEvents.length > 200) stateEvents.shift();
+  };
+  const participates = (nodeId: string, projectId: string): boolean => (
+    (manifests.get(nodeId) ?? []).some((project) => String((project as Record<string, unknown>).id ?? '') === projectId)
+    || subscriptions.get(nodeId)?.has(projectId) === true
+  );
+  const relayManifest = (projectId: string): TaskCurrentBucket[] => {
+    const buckets = new Map<string, Array<[string, { stateHash: string }]>>();
+    for (const [key, entity] of retainedState.get(projectId) ?? []) {
+      const bucket = taskCurrentBucketForEntityKey(key);
+      const entries = buckets.get(bucket) ?? [];
+      entries.push([key, { stateHash: entity.stateHash }]);
+      buckets.set(bucket, entries);
+    }
+    return [...buckets].sort(([left], [right]) => left.localeCompare(right)).map(([bucket, entries]) => ({
+      bucket,
+      count: entries.length,
+      checksum: hashTaskCurrentBucket(entries),
+    }));
+  };
+  const sendRelaySummary = (target: WebSocket, projectId: string): void => {
+    const buckets = relayManifest(projectId);
+    recordStateEvent({ event: 'summary', projectId, root: hashTaskCurrentRoot(buckets), bucketCount: buckets.length });
+    target.send(JSON.stringify({
+      version: 1,
+      type: 'state-bucket-summary',
+      from: 'relay',
+      projectId,
+      stateVersion: 4,
+      payload: { stateVersion: 4, root: hashTaskCurrentRoot(buckets), buckets },
+    }));
+  };
+  const boundedRelayFrames = (projectId: string, entities: TaskCurrentEntity[]): Frame[] => {
+    const sessionId = randomUUID();
+    const frames: Frame[] = [];
+    for (let offset = 0; offset < entities.length; offset += 128) {
+      const entries = entities.slice(offset, offset + 128).map((entity) => ({
+        key: `${entity.entityType}\u0000${entity.entityId}`,
+        stateHash: entity.stateHash,
+        entity,
+      }));
+      frames.push({
+        type: 'state-entity-batch',
+        projectId,
+        stateVersion: 4,
+        payload: { stateVersion: 4, deliveryId: `fixture-${sessionId}-${offset}`, entries },
+      });
+    }
+    return frames;
+  };
+  const sendNextRepairFrame = (nodeId: string): void => {
+    const socket = sockets.get(nodeId);
+    // WHAT: Keep a disconnected receiver's retained relay state available for resubscription.
+    // WHY: Socket lifetime must not own the canonical project state.
+    if (!socket) return;
+    const candidates = [...repairs].filter(([key]) => key.startsWith(`${nodeId}\u0000`));
+    for (const [key, repair] of candidates) {
+      const frame = repair.frames[repair.next];
+      // WHAT: Send the terminal relay summary only after every bounded frame is acknowledged.
+      // WHY: Equal-root comparison is the durable completion authority.
+      if (!frame) {
+        repairs.delete(key);
+        sendRelaySummary(socket, repair.projectId);
+        continue;
+      }
+      socket.send(JSON.stringify({
+        ...frame,
+        from: 'relay',
+        payload: { ...frame.payload, attemptId: repair.attemptId },
+      }));
+      recordStateEvent({ event: 'delivery', nodeId, projectId: repair.projectId, attemptId: repair.attemptId, deliveryId: frame.payload?.deliveryId, entryCount: frame.payload?.entries?.length ?? 0 });
+    }
+  };
 
   relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
     const nodeId = new URL(request.url ?? '/', 'http://relay.test').pathname.split('/').at(-1)!;
@@ -585,10 +676,19 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
         return;
       }
       if (frame.type === 'state-entity-batch' && !frame.to) {
-        for (const [targetId, target] of sockets) {
-          if (targetId !== nodeId) target.send(JSON.stringify({ ...frame, from: 'relay' }));
-        }
         const entries = Array.isArray(frame.payload?.entries) ? frame.payload.entries : [];
+        const projectState = retainedState.get(String(frame.projectId)) ?? new Map<string, TaskCurrentEntity>();
+        const changed: TaskCurrentEntity[] = [];
+        for (const entry of entries) {
+          const key = String(entry.key);
+          const current = projectState.get(key);
+          const joined = joinTaskEntities(current, entry.entity as TaskCurrentEntity);
+          projectState.set(key, joined);
+          // WHAT: Forward only a durable joined entity whose canonical hash advanced.
+          // WHY: Live participants need the same incremental state accepted by the relay authority.
+          if (current?.stateHash !== joined.stateHash) changed.push(joined);
+        }
+        retainedState.set(String(frame.projectId), projectState);
         // WHAT: Acknowledge the persisted relay batch before the node advances its project publication lane.
         // WHY: The production relay owns delivery settlement; a test relay that omits it permanently blocks later state deltas.
         webSocket.send(JSON.stringify({
@@ -603,13 +703,39 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
             accepted: entries.map((entry: Record<string, unknown>) => ({ key: entry.key, stateHash: entry.stateHash })),
           },
         }));
+        for (const [targetId, target] of sockets) {
+          // WHAT: Deliver durable joined deltas only to other project participants.
+          // WHY: Manifest owners and subscribers share the production relay participation contract.
+          if (targetId === nodeId || !participates(targetId, String(frame.projectId))) continue;
+          for (const liveFrame of boundedRelayFrames(String(frame.projectId), changed)) {
+            target.send(JSON.stringify({ ...liveFrame, from: 'relay' }));
+          }
+        }
         return;
       }
       if (frame.type === 'state-bucket-summary' && !frame.to) {
-        for (const target of sockets.values()) {
-          // WHAT: Broadcast the settled relay summary to every participating test node.
-          // WHY: Receivers no longer emit per-batch summaries and use this terminal frame to close repair and drain dependent content work.
-          target.send(JSON.stringify({ ...frame, from: 'relay' }));
+        const projectId = String(frame.projectId);
+        const remoteBuckets = Array.isArray(frame.payload?.buckets) ? frame.payload.buckets : [];
+        const relayRoot = hashTaskCurrentRoot(relayManifest(projectId));
+        const remoteRoot = String(frame.payload?.root ?? '');
+        // WHAT: Request the publisher's canonical buckets when the retained relay root differs.
+        // WHY: Initial source state must enter relay authority before any subscriber can repair from it.
+        if (remoteRoot !== relayRoot && remoteBuckets.length > 0) {
+          const buckets = remoteBuckets.map((bucket: Record<string, unknown>) => String(bucket.bucket ?? ''));
+          webSocket.send(JSON.stringify({
+            version: 1,
+            type: 'state-missing-request',
+            from: 'relay',
+            projectId,
+            stateVersion: 4,
+            payload: { stateVersion: 4, buckets },
+          }));
+          recordStateEvent({ event: 'source-missing', nodeId, projectId, bucketCount: buckets.length, remoteRoot, relayRoot });
+        }
+        for (const [targetId, target] of sockets) {
+          // WHAT: Notify only nodes subscribed to this retained project.
+          // WHY: Relay-owned repair must not broadcast entity state to nonparticipants.
+          if (participates(targetId, projectId)) sendRelaySummary(target, projectId);
         }
         return;
       }
@@ -619,7 +745,60 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
         }
         return;
       }
-      if (frame.type === 'state-subscribe') return;
+      if (frame.type === 'state-subscribe') {
+        const projectId = String(frame.projectId);
+        recordStateEvent({ event: 'subscribe', nodeId, projectId });
+        const owned = subscriptions.get(nodeId) ?? new Set<string>();
+        owned.add(projectId);
+        subscriptions.set(nodeId, owned);
+        sendRelaySummary(webSocket, projectId);
+        return;
+      }
+      if (frame.type === 'state-missing-request' && !frame.to) {
+        const projectId = String(frame.projectId);
+        const requested = new Set(canonicalFederationRepairBuckets(
+          Array.isArray(frame.payload?.buckets) ? frame.payload.buckets : [],
+        ));
+        const entities = [...(retainedState.get(projectId)?.entries() ?? [])]
+          .filter(([key]) => requested.has(taskCurrentBucketForEntityKey(key)))
+          .map(([, entity]) => entity);
+        recordStateEvent({ event: 'missing', nodeId, projectId, attemptId: frame.payload?.attemptId, requested: [...requested], selected: entities.length, retained: retainedState.get(projectId)?.size ?? 0 });
+        const frames = boundedRelayFrames(projectId, entities);
+        repairs.set(`${nodeId}\u0000${projectId}`, {
+          projectId,
+          attemptId: String(frame.payload?.attemptId ?? ''),
+          frames,
+          next: 0,
+        });
+        sendNextRepairFrame(nodeId);
+        return;
+      }
+      if ((frame.type === 'state-ack' || frame.type === 'state-relay-ack') && !frame.to) {
+        const key = `${nodeId}\u0000${String(frame.projectId)}`;
+        const repair = repairs.get(key);
+        const currentFrame = repair?.frames[repair.next];
+        const accepted = new Map((Array.isArray(frame.payload?.accepted) ? frame.payload.accepted : [])
+          .map((entry: Record<string, unknown>) => [String(entry.key), String(entry.stateHash)]));
+        const currentEntries = Array.isArray(currentFrame?.payload?.entries) ? currentFrame.payload.entries : [];
+        const exactAcknowledgement = Boolean(currentFrame
+          && String(frame.payload?.deliveryId ?? '') === String(currentFrame.payload?.deliveryId ?? '')
+          && String(frame.payload?.attemptId ?? '') === repair?.attemptId
+          && accepted.size === currentEntries.length
+          && currentEntries.every((entry: Record<string, unknown>) => accepted.get(String(entry.key)) === String(entry.stateHash)));
+        recordStateEvent({ event: 'ack', nodeId, projectId: frame.projectId, attemptId: frame.payload?.attemptId, deliveryId: frame.payload?.deliveryId, accepted: accepted.size, exactAcknowledgement });
+        // WHAT: Advance only the active receiver repair after its durable acknowledgement.
+        // WHY: Socket delivery alone cannot release relay repair credit.
+        if (repair && exactAcknowledgement) {
+          repair.next += 1;
+          sendNextRepairFrame(nodeId);
+        }
+        return;
+      }
+      if (frame.type === 'state-converged' && !frame.to) {
+        recordStateEvent({ event: 'converged', nodeId, projectId: frame.projectId, root: frame.payload?.root, attemptId: frame.payload?.attemptId });
+        repairs.delete(`${nodeId}\u0000${String(frame.projectId)}`);
+        return;
+      }
       if (frame.type.startsWith('state-') && frame.to) {
         sockets.get(frame.to)?.send(JSON.stringify({ ...frame, from: nodeId }));
         return;
@@ -638,6 +817,12 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     });
     webSocket.on('close', () => {
       sockets.delete(nodeId);
+      subscriptions.delete(nodeId);
+      for (const key of [...repairs.keys()]) {
+        // WHAT: Clear only repair sessions owned by the disconnected socket.
+        // WHY: Retained relay entities and other receivers remain authoritative.
+        if (key.startsWith(`${nodeId}\u0000`)) repairs.delete(key);
+      }
       const catalog = JSON.stringify({ version: 1, type: 'catalog', nodes: [...manifests].map(([id, projects]) => ({ nodeId: id, online: sockets.has(id), projects })) });
       for (const target of sockets.values()) target.send(catalog);
     });
@@ -1115,6 +1300,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
         `Node A federation: ${JSON.stringify((runtimeA.federationNodeConnector as { status(): unknown }).status())}`,
         `Node B federation: ${JSON.stringify((runtimeB.federationNodeConnector as { status(): unknown }).status())}`,
         `Relay sockets: ${JSON.stringify([...sockets.keys()])}`,
+        `Relay state events: ${JSON.stringify(stateEvents)}`,
       ].join('\n'));
     });
     assert.deepEqual(controlRoomA.federation, { nodeCount: 2, remoteNodeCount: 1 });

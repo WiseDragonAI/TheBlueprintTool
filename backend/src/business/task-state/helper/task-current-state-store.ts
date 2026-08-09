@@ -4,7 +4,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   hashTaskCurrentBucket,
   hashTaskCurrentRoot,
@@ -12,7 +12,7 @@ import {
   taskCurrentEntityKey,
 } from '../../../../../shared/task-current-state-core.js';
 import { assertTaskCurrentEntity, finalizeTaskCurrentEntity, joinTaskClocks, joinTaskEntities } from './task-current-state-join.js';
-import { materializeTaskCurrentEntity, projectedTaskCurrentEntity } from './materialize-task-current-entity.js';
+import { canonicalizeTaskProjectionClock, materializeTaskCurrentEntity, projectedTaskCurrentEntity } from './materialize-task-current-entity.js';
 import { runBoundedTaskMaterialization } from './run-bounded-task-materialization.js';
 import { createTaskLocalPublicationState } from './task-local-publication-state.js';
 import { taskCurrentBaselineChanges } from './task-current-state-baseline.js';
@@ -34,6 +34,10 @@ import {
 } from './task-current-state-types.js';
 
 type JournalDocument = { version: typeof taskCurrentStateVersion; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string };
+const repairWalMagic = Buffer.from('DOSTSWAL');
+const repairWalHeaderBytes = repairWalMagic.length + 1 + 4 + 4 + 32;
+const repairWalCommit = 0xa5;
+const maximumRepairWalPayloadBytes = 16 * 1024 * 1024;
 type StoreOptions = {
   decisionOsRoot: string;
   projectId: string;
@@ -90,6 +94,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   let materializerError: Error | null = null;
   let localMutationTail = Promise.resolve();
   let deferBucketSummaries = false;
+  const mergeTiming = { count: 0, entities: 0, prepareMs: 0, journalMs: 0, journalEncodeMs: 0, journalOpenMs: 0, journalQueueWaitMs: 0, journalWriteMs: 0, journalFileSyncMs: 0, journalRenameMs: 0, journalDirectorySyncMs: 0, installMs: 0, resultCloneMs: 0 };
 
   const serializeLocalMutation = <Result>(operation: () => Promise<Result>): Promise<Result> => {
     const result = localMutationTail.then(operation);
@@ -119,7 +124,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     }
   };
 
-  const applyEntity = (incoming: TaskCurrentEntity, takeOwnership = false): boolean => {
+  const applyEntity = (incoming: TaskCurrentEntity, takeOwnership = false, deferProjectionClockCanonicalization = false): boolean => {
     if (incoming.projectId !== options.projectId) throw new Error('task_current_project_mismatch');
     const key = taskCurrentEntityKey(incoming);
     const current = entities.get(key);
@@ -129,6 +134,13 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       assertTaskCurrentEntity(incoming);
       joined = incoming;
     } else joined = joinTaskEntities(undefined, incoming);
+    return installJoinedEntity(joined, deferProjectionClockCanonicalization);
+  };
+
+  const installJoinedEntity = (joined: TaskCurrentEntity, deferProjectionClockCanonicalization = false): boolean => {
+    const key = taskCurrentEntityKey(joined);
+    // WHAT: Skip installation when the validated join already owns the current hash.
+    // WHY: Duplicate delivery must not create projection or persistence work.
     if (entities.get(key)?.stateHash === joined.stateHash) return false;
     entities.set(key, joined);
     updateBucket(key, joined);
@@ -137,7 +149,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
         clock[replicaId] = Math.max(clock[replicaId] ?? 0, counter);
       }
     }
-    materializeTaskCurrentEntity(projection, joined);
+    materializeTaskCurrentEntity(projection, joined, { deferClockCanonicalization: deferProjectionClockCanonicalization });
     return true;
   };
 
@@ -177,11 +189,12 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       const directory = resolve(root, 'current', entityType);
       if (!existsSync(directory)) continue;
       for (const name of readdirSync(directory).filter((value) => value.endsWith('.json')).sort()) {
-        applyEntity(JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as TaskCurrentEntity, true);
+        applyEntity(JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as TaskCurrentEntity, true, true);
       }
     }
     deferBucketSummaries = false;
     rebuildBucketSummaries();
+    canonicalizeTaskProjectionClock(projection);
   };
 
   function rootHash(): string {
@@ -238,11 +251,50 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       if (document.version !== taskCurrentStateVersion) throw new Error('unsupported_task_current_state_journal');
       const changed = document.mutation
         ? applyMutation(document.mutation)
-        : (document.delta?.entities ?? []).filter((entity) => applyEntity(entity)).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
+        : (document.delta?.entities ?? []).filter((entity) => applyEntity(entity, false, true)).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
       if (document.activateTaskId) applyActivation(document.activateTaskId);
       for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
       pendingJournals.add(file);
     }
+    for (const name of readdirSync(journalDirectory).filter((value) => value.endsWith('.wal')).sort()) {
+      const file = resolve(journalDirectory, name);
+      const bytes = readFileSync(file);
+      let offset = 0;
+      let tornTail = false;
+      while (offset < bytes.length) {
+        const remaining = bytes.length - offset;
+        // WHAT: Preserve an incomplete terminal header as an uncommitted crash tail.
+        // WHY: No ACK may rely on bytes that never reached a complete framed record.
+        if (remaining < repairWalHeaderBytes) { tornTail = true; break; }
+        const magic = bytes.subarray(offset, offset + repairWalMagic.length);
+        const version = bytes[offset + repairWalMagic.length];
+        const lengthOffset = offset + repairWalMagic.length + 1;
+        const length = bytes.readUInt32BE(lengthOffset);
+        const inverseLength = bytes.readUInt32BE(lengthOffset + 4);
+        if (!magic.equals(repairWalMagic) || version !== 1 || ((length ^ inverseLength) >>> 0) !== 0xffff_ffff
+          || length < 1 || length > maximumRepairWalPayloadBytes) throw new Error('invalid_task_current_repair_wal');
+        const recordBytes = repairWalHeaderBytes + length + 1;
+        // WHAT: Preserve an incomplete terminal payload or footer as uncommitted evidence.
+        // WHY: A crash before the commit marker and fsync cannot authorize an ACK.
+        if (remaining < recordBytes) { tornTail = true; break; }
+        const checksumOffset = lengthOffset + 8;
+        const payloadOffset = offset + repairWalHeaderBytes;
+        const payload = bytes.subarray(payloadOffset, payloadOffset + length);
+        if (bytes[payloadOffset + length] !== repairWalCommit
+          || !bytes.subarray(checksumOffset, checksumOffset + 32).equals(createHash('sha256').update(payload).digest())) throw new Error('invalid_task_current_repair_wal');
+        let document: JournalDocument;
+        try { document = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(payload)) as JournalDocument; }
+        catch { throw new Error('invalid_task_current_repair_wal'); }
+        if (document.version !== taskCurrentStateVersion || !document.delta) throw new Error('invalid_task_current_repair_wal');
+        const changed = document.delta.entities.filter((entity) => applyEntity(entity, false, true)).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
+        for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
+        offset += recordBytes;
+      }
+      // WHAT: Retain torn WAL bytes after replaying their committed prefix.
+      // WHY: Invalid or incomplete durable evidence must never be silently deleted.
+      if (!tornTail) pendingJournals.add(file);
+    }
+    canonicalizeTaskProjectionClock(projection);
   };
 
   const runMaterializer = async (): Promise<void> => {
@@ -252,8 +304,8 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       const currentJournals = [...pendingJournals];
       pendingEntities.clear(); pendingJournals.clear();
       try {
-        await runBoundedTaskMaterialization(currentEntities, async (entity) => persistence.atomicWrite(persistence.entityPath(entity), `${JSON.stringify(entity)}\n`));
-        await runBoundedTaskMaterialization(held.writes, async (taskId) => persistence.atomicWrite(publication.markerFile(taskId), `${JSON.stringify(publication.marker(taskId))}\n`));
+        await runBoundedTaskMaterialization(currentEntities, async (entity) => { await persistence.atomicWrite(persistence.entityPath(entity), `${JSON.stringify(entity)}\n`); });
+        await runBoundedTaskMaterialization(held.writes, async (taskId) => { await persistence.atomicWrite(publication.markerFile(taskId), `${JSON.stringify(publication.marker(taskId))}\n`); });
         await runBoundedTaskMaterialization(held.deletes, async (taskId) => persistence.durableRemove(publication.markerFile(taskId)));
         await runBoundedTaskMaterialization(currentJournals, persistence.durableRemove);
       } catch (error) {
@@ -275,10 +327,32 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     }).finally(() => { materializer = null; });
   };
 
+  const deferredMaterialization = new Map<string, { entities: Map<string, TaskCurrentEntity>; journals: Set<string> }>();
+  const repairWalFiles = new Map<string, string>();
+
+  const resumeMaterialization = (authority: string): void => {
+    const deferred = deferredMaterialization.get(authority);
+    // WHAT: Ignore release of an attempt that retained no deferred shard work.
+    // WHY: Replacement and timeout cleanup must remain idempotent.
+    if (!deferred) return;
+    deferredMaterialization.delete(authority);
+    repairWalFiles.delete(authority);
+    for (const [key, entity] of deferred.entities) pendingEntities.set(key, entity);
+    for (const journalFile of deferred.journals) pendingJournals.add(journalFile);
+    scheduleMaterializer();
+  };
+
   const journal = async (document: JournalDocument, id: string): Promise<string> => {
     const file = resolve(journalDirectory, `${encodeURIComponent(id)}.json`);
     try {
-      await persistence.atomicWrite(file, `${JSON.stringify(document)}\n`);
+      const encodeStartedAt = performance.now();
+      const bytes = `${JSON.stringify(document)}\n`;
+      mergeTiming.journalEncodeMs += performance.now() - encodeStartedAt;
+      const timing = await persistence.atomicWrite(file, bytes);
+      mergeTiming.journalWriteMs += timing.openWriteMs + timing.mkdirMs;
+      mergeTiming.journalFileSyncMs += timing.fileSyncMs;
+      mergeTiming.journalRenameMs += timing.renameMs;
+      mergeTiming.journalDirectorySyncMs += timing.directorySyncMs;
     } catch (error) {
       // WHAT: Notify the owning project scope before returning the durable-write failure.
       // WHY: The server must pause only that project while preserving the original persistence error.
@@ -286,6 +360,35 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       catch { /* Persistence diagnostics cannot replace the original durable-write failure. */ }
       throw error;
     }
+    return file;
+  };
+
+  const repairJournal = async (document: JournalDocument, authority: string): Promise<string> => {
+    const file = repairWalFiles.get(authority) ?? resolve(journalDirectory, `repair-${randomUUID()}.wal`);
+    repairWalFiles.set(authority, file);
+    const encodeStartedAt = performance.now();
+    const payload = Buffer.from(JSON.stringify(document), 'utf8');
+    if (payload.length < 1 || payload.length > maximumRepairWalPayloadBytes) throw new Error('task_current_repair_wal_payload_limit');
+    const header = Buffer.alloc(repairWalHeaderBytes);
+    repairWalMagic.copy(header, 0);
+    header[repairWalMagic.length] = 1;
+    const lengthOffset = repairWalMagic.length + 1;
+    header.writeUInt32BE(payload.length, lengthOffset);
+    header.writeUInt32BE((~payload.length) >>> 0, lengthOffset + 4);
+    createHash('sha256').update(payload).digest().copy(header, lengthOffset + 8);
+    const bytes = Buffer.concat([header, payload, Buffer.from([repairWalCommit])]);
+    mergeTiming.journalEncodeMs += performance.now() - encodeStartedAt;
+    let timing: Awaited<ReturnType<typeof persistence.appendDurable>>;
+    try { timing = await persistence.appendDurable(file, bytes); }
+    catch (error) {
+      repairWalFiles.delete(authority);
+      throw error;
+    }
+    mergeTiming.journalWriteMs += timing.writeMs;
+    mergeTiming.journalOpenMs += timing.openMs;
+    mergeTiming.journalQueueWaitMs += timing.queueWaitMs;
+    mergeTiming.journalFileSyncMs += timing.fileSyncMs;
+    mergeTiming.journalDirectorySyncMs += timing.directorySyncMs;
     return file;
   };
 
@@ -370,30 +473,96 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       scheduleMaterializer();
       return this.activeDelta(keys);
     },
-    async merge(delta: TaskStateDelta): Promise<{ changed: boolean; delta: TaskStateDelta }> {
+    resumeMaterialization,
+    async mergeRepairGroup(deltas: TaskStateDelta[], authority: string): Promise<{ changed: boolean; delta: TaskStateDelta; resultingStateHashes: Map<string, string> }> {
+      // WHAT: Commit one bounded enhanced-repair project window through one WAL durability barrier.
+      // WHY: Epoch-4 deliveries retain individual ACKs while identical-project frames share the receiver fsync they already arrived under.
+      if (deltas.length < 1 || deltas.some((delta) => delta.version !== taskCurrentStateVersion || delta.projectId !== options.projectId)) {
+        throw new Error('invalid_task_state_delta');
+      }
+      return this.merge({
+        version: taskCurrentStateVersion,
+        projectId: options.projectId,
+        entities: deltas.flatMap((delta) => delta.entities),
+      }, { deferMaterialization: authority });
+    },
+    async merge(delta: TaskStateDelta, mergeOptions: { deferMaterialization?: string } = {}): Promise<{ changed: boolean; delta: TaskStateDelta; resultingStateHashes: Map<string, string> }> {
+      mergeTiming.count += 1;
+      mergeTiming.entities += delta.entities.length;
       if (delta.version !== taskCurrentStateVersion || delta.projectId !== options.projectId) throw new Error('invalid_task_state_delta');
-      const joined = delta.entities.map((entity) => {
-        assertTaskCurrentEntity(entity);
-        return joinTaskEntities(entities.get(taskCurrentEntityKey(entity)), entity);
+      const prepareStartedAt = performance.now();
+      const grouped = new Map<string, TaskCurrentEntity[]>();
+      for (const entity of delta.entities) {
+        const key = taskCurrentEntityKey(entity);
+        grouped.set(key, [...(grouped.get(key) ?? []), entity]);
+      }
+      const prepared = [...grouped].map(([key, incoming]) => {
+        const current = entities.get(key);
+        const joined = incoming.reduce<TaskCurrentEntity | undefined>((value, entity) => joinTaskEntities(value, entity), current)!;
+        return { key, incoming, baseHash: current?.stateHash ?? '', joined };
       });
-      const changedPreview = joined.filter((entity) => entities.get(taskCurrentEntityKey(entity))?.stateHash !== entity.stateHash);
-      if (changedPreview.length === 0) return { changed: false, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: [] } };
-      const journalFile = await journal({ version: taskCurrentStateVersion, delta }, `remote-${randomUUID()}`);
-      const changed = delta.entities.filter((entity) => applyEntity(entity)).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
-      for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
-      pendingJournals.add(journalFile);
-      scheduleMaterializer();
-      return { changed: true, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: changed.map((entity) => structuredClone(entity)) } };
+      const changedPreview = prepared.filter(({ baseHash, joined }) => baseHash !== joined.stateHash);
+      mergeTiming.prepareMs += performance.now() - prepareStartedAt;
+      // WHAT: Return the current resulting hashes without journaling an idempotent delivery.
+      // WHY: A duplicate ACK must remain exact while producing no durable write.
+      if (changedPreview.length === 0) return {
+        changed: false,
+        delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: [] },
+        resultingStateHashes: new Map(prepared.map(({ key, joined }) => [key, joined.stateHash])),
+      };
+      const journalStartedAt = performance.now();
+      const journalFile = mergeOptions.deferMaterialization
+        ? await repairJournal({ version: taskCurrentStateVersion, delta }, mergeOptions.deferMaterialization)
+        : await journal({ version: taskCurrentStateVersion, delta }, `remote-${randomUUID()}`);
+      mergeTiming.journalMs += performance.now() - journalStartedAt;
+      const installStartedAt = performance.now();
+      const changedByKey = new Map<string, TaskCurrentEntity>();
+      for (const item of changedPreview) {
+        const currentHash = entities.get(item.key)?.stateHash ?? '';
+        // WHAT: Install the prepared validated join only while its captured base is still current.
+        // WHY: A local mutation during journal persistence must be causally joined, never overwritten.
+        if (currentHash === item.baseHash) {
+          if (installJoinedEntity(item.joined, true)) changedByKey.set(item.key, entities.get(item.key)!);
+        } else {
+          for (const incoming of item.incoming) {
+            if (applyEntity(incoming, false, true)) changedByKey.set(item.key, entities.get(item.key)!);
+          }
+        }
+      }
+      const changed = [...changedByKey.values()];
+      canonicalizeTaskProjectionClock(projection);
+      mergeTiming.installMs += performance.now() - installStartedAt;
+      // WHAT: Keep enhanced-repair shards isolated until that exact attempt settles.
+      // WHY: Ordinary local and live remote writes must remain eagerly materialized during repair.
+      if (mergeOptions.deferMaterialization) {
+        const deferred = deferredMaterialization.get(mergeOptions.deferMaterialization) ?? { entities: new Map<string, TaskCurrentEntity>(), journals: new Set<string>() };
+        for (const entity of changed) deferred.entities.set(taskCurrentEntityKey(entity), entity);
+        deferred.journals.add(journalFile);
+        deferredMaterialization.set(mergeOptions.deferMaterialization, deferred);
+      } else {
+        for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
+        pendingJournals.add(journalFile);
+        scheduleMaterializer();
+      }
+      const resultCloneStartedAt = performance.now();
+      const result = {
+        changed: changed.length > 0,
+        delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: changed.map((entity) => structuredClone(entity)) },
+        resultingStateHashes: new Map(prepared.map(({ key }) => [key, entities.get(key)?.stateHash ?? ''])),
+      };
+      mergeTiming.resultCloneMs += performance.now() - resultCloneStartedAt;
+      return result;
     },
     async flush(): Promise<void> {
+      for (const authority of [...deferredMaterialization.keys()]) resumeMaterialization(authority);
       while (materializer || pendingEntities.size > 0 || publication.hasPending() || pendingJournals.size > 0) {
         if (!materializer) scheduleMaterializer();
         await materializer;
         if (materializerError) throw materializerError;
       }
     },
-    diagnostics(): { entityCount: number; journalCount: number; currentBytes: number } {
-      return taskCurrentStateDiagnostics({ root, journalDirectory, entityCount: entities.size });
+    diagnostics(): { entityCount: number; journalCount: number; currentBytes: number; mergeTiming: typeof mergeTiming } {
+      return { ...taskCurrentStateDiagnostics({ root, journalDirectory, entityCount: entities.size }), mergeTiming: { ...mergeTiming } };
     },
   };
 }

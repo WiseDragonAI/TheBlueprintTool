@@ -45,6 +45,13 @@ function fixture(recordContentContribution: () => Promise<typeof emptyDelta>, re
     projection: () => ({ ledger }),
     store: { contentHeads: () => retainedHeads },
     recordContentContribution,
+    recordContentContributionReceipt: async () => {
+      const delta = await recordContentContribution();
+      return {
+        delta,
+        committedResourceIds: delta.entities.length > 0 ? [contentFile] : [],
+      };
+    },
   } as unknown as ProjectTaskState;
   const runtime = createProjectContentRuntime({
     activeDecisionOsRoot: decisionOsRoot,
@@ -134,6 +141,26 @@ test('unchanged startup bytes produce no revision, invalidation, or SSE mutation
   assert.equal(await setup.runtime.ready, true);
   assert.equal(calls, 1);
   assert.equal(setup.runtime.revisions.current('tasks'), 0);
+  assert.equal(setup.writes.length, 0);
+  assert.equal(setup.invalidations.length, 0);
+});
+
+test('empty watcher contribution cannot claim a concurrent canonical head transition', async (context) => {
+  const commit = deferred<typeof emptyDelta>();
+  const retainedHeads: unknown[] = [];
+  const setup = fixture(() => commit.promise, retainedHeads);
+  context.after(async () => { await setup.runtime.watcher.close(); rmSync(setup.workspace, { recursive: true, force: true }); });
+  await setup.runtime.ready;
+  retainedHeads.push({ hash: 'before' });
+  setup.writes.length = 0;
+  setup.invalidations.length = 0;
+
+  writeFileSync(setup.file, 'Canonical bytes observed by watcher.');
+  await new Promise((resolveWait) => setTimeout(resolveWait, 90));
+  retainedHeads.splice(0, retainedHeads.length, { hash: 'canonical-commit' });
+  commit.resolve(emptyDelta);
+  await setup.runtime.watcher.flush();
+
   assert.equal(setup.writes.length, 0);
   assert.equal(setup.invalidations.length, 0);
 });

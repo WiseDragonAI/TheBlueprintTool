@@ -5,7 +5,7 @@
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
@@ -23,7 +23,7 @@ import {
   type RelayFrame,
 } from './protocol.js';
 import { joinRelayEntity, type RelayEntity } from './current-state.js';
-import { stateEntityFrames } from './state-entity-frames.js';
+import { nextRepairStateEntityFrame, stateEntityFrames } from './state-entity-frames.js';
 import {
   assertFederationRepairAttempt,
   assertFederationRepairManifest,
@@ -62,6 +62,14 @@ type StoredRelayState = {
   federations: Record<string, StoredFederation>;
 };
 
+type StateEntityJournalRecord = {
+  version: 1;
+  federationId: string;
+  projectId: string;
+  generation: number;
+  entries: StateEntry[];
+};
+
 type Client = {
   federationId: string;
   nodeId: string;
@@ -88,15 +96,33 @@ const port = Number(process.env.PORT ?? 50152);
 const releaseSha = String(process.env.DECISION_OS_RELEASE_SHA ?? '');
 const stateFile = resolve(String(process.env.DECISION_OS_RELAY_STATE_FILE ?? '.wrangler/state-termux/relay.json'));
 const repairStateFile = `${stateFile}.repairs`;
+const entityJournalDirectory = `${stateFile}.entity-journal`;
 const administratorSecret = String(process.env.ADMIN_SECRET ?? '');
 const maximumFrameBytes = 1024 * 1024;
 const maximumRepairBatchesPerProject = 4;
 const maximumRepairBatchesPerConnection = 16;
 const maximumRepairBytesPerConnection = 16 * 1024 * 1024;
+const stateCheckpointDelayMs = Number(process.env.DECISION_OS_RELAY_STATE_CHECKPOINT_DELAY_MS ?? 250);
+const repairTelemetry = {
+  persistenceCount: 0,
+  persistenceBytes: 0,
+  persistenceMs: 0,
+  ackPersistenceCount: 0,
+  ackPersistenceBytes: 0,
+  ackPersistenceMs: 0,
+  outboundFrameCount: 0,
+  outboundEntityCount: 0,
+  outboundEncodedBytes: 0,
+  packingCandidateCount: 0,
+  packingMs: 0,
+};
 
 if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('invalid_termux_relay_port');
 if (!/^[a-f0-9]{40}$/.test(releaseSha)) throw new Error('invalid_termux_relay_release_sha');
 if (administratorSecret.length < 32) throw new Error('invalid_termux_relay_admin_secret');
+// WHAT: Reject an invalid local checkpoint delay before accepting durable relay traffic.
+// WHY: A non-finite timer would strand finalized entity records without a quiescent snapshot boundary.
+if (!Number.isFinite(stateCheckpointDelayMs) || stateCheckpointDelayMs < 1) throw new Error('invalid_termux_relay_checkpoint_delay');
 
 function emptyFederation(): StoredFederation {
   return { credentials: {}, manifests: {}, labels: {}, entities: {}, stateGenerations: {}, stateBroadcastGenerations: {}, stateRepairRecords: {} };
@@ -118,6 +144,60 @@ function readState(): StoredRelayState {
 }
 
 let state = readState();
+
+function syncDirectory(directory: string): void {
+  const descriptor = openSync(directory, 'r');
+  try {
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function writeDurableAtomic(file: string, body: string): void {
+  const directory = dirname(file);
+  mkdirSync(directory, { recursive: true });
+  const temporary = `${file}.tmp-${process.pid}-${randomBytes(8).toString('hex')}`;
+  const descriptor = openSync(temporary, 'wx', 0o600);
+  try {
+    writeFileSync(descriptor, body, { encoding: 'utf8' });
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+  renameSync(temporary, file);
+  syncDirectory(directory);
+}
+
+function replayStateEntityJournal(): void {
+  let names: string[];
+  try {
+    names = readdirSync(entityJournalDirectory).filter((name) => name.endsWith('.json')).sort();
+  } catch (error) {
+    // WHAT: Treat only an absent journal directory as no pending durable entity records.
+    // WHY: Invalid or unreadable journal authority must fail relay startup without rewriting evidence.
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return;
+    throw error;
+  }
+  for (const name of names) {
+    const record = JSON.parse(readFileSync(resolve(entityJournalDirectory, name), 'utf8')) as StateEntityJournalRecord;
+    // WHAT: Reject a finalized journal record outside the exact local persistence schema.
+    // WHY: Corrupt durable entity authority must never be interpreted as an empty or partial batch.
+    if (record.version !== 1 || !record.federationId || !record.projectId || !Number.isSafeInteger(record.generation) || record.generation < 0 || !Array.isArray(record.entries)) {
+      throw new Error('invalid_termux_relay_entity_journal');
+    }
+    const entries = admitStateEntries(record.projectId, record.entries);
+    state.federations[record.federationId] ??= emptyFederation();
+    const stored = state.federations[record.federationId];
+    stored.stateGenerations ??= {};
+    const project = stored.entities[record.projectId] ?? {};
+    for (const entry of entries) project[entry.entityKey] = joinRelayEntity(project[entry.entityKey], entry.entity);
+    stored.entities[record.projectId] = project;
+    stored.stateGenerations[record.projectId] = Math.max(stored.stateGenerations[record.projectId] ?? 0, record.generation);
+  }
+}
+
+replayStateEntityJournal();
 try {
   const repairs = JSON.parse(readFileSync(repairStateFile, 'utf8')) as { version: 1; federations: Record<string, Record<string, FederationRepairRecord>> };
   // WHAT: Reject an invalid repair sidecar before installing restart authority.
@@ -133,20 +213,71 @@ try {
   if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
 }
 const repairSessions = new WeakMap<WebSocket, RepairWindowSession>();
+let stateCheckpointTimer: NodeJS.Timeout | null = null;
+
+function clearStateEntityJournal(): void {
+  let names: string[];
+  try {
+    names = readdirSync(entityJournalDirectory);
+  } catch (error) {
+    // WHAT: Finish checkpoint cleanup when no journal directory exists.
+    // WHY: A relay with no admitted entity batches has no journal records to remove.
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return;
+    throw error;
+  }
+  for (const name of names) {
+    // WHAT: Remove only finalized records covered by the durable snapshot.
+    // WHY: Interrupted temporary records remain preserved as crash evidence and were never ACK authority.
+    if (name.endsWith('.json')) unlinkSync(resolve(entityJournalDirectory, name));
+  }
+  syncDirectory(entityJournalDirectory);
+}
 
 function persistState(): void {
   mkdirSync(dirname(stateFile), { recursive: true });
-  const temporary = `${stateFile}.tmp-${process.pid}`;
-  writeFileSync(temporary, `${JSON.stringify(state, (key, value) => key === 'stateRepairRecords' ? undefined : value)}\n`, { encoding: 'utf8', mode: 0o600 });
-  renameSync(temporary, stateFile);
+  writeDurableAtomic(stateFile, `${JSON.stringify(state, (key, value) => key === 'stateRepairRecords' ? undefined : value)}\n`);
+  clearStateEntityJournal();
 }
 
-function persistRepairState(): void {
+function scheduleStateCheckpoint(): void {
+  // WHAT: Replace the pending checkpoint with one quiescent snapshot boundary.
+  // WHY: A burst of durable entity records must not rewrite the growing full snapshot per ACK.
+  if (stateCheckpointTimer) clearTimeout(stateCheckpointTimer);
+  stateCheckpointTimer = setTimeout(() => {
+    stateCheckpointTimer = null;
+    try {
+      persistState();
+    } catch (error) {
+      process.stderr.write(`${String(error instanceof Error ? error.stack ?? error.message : error)}\n`);
+    }
+  }, stateCheckpointDelayMs);
+  stateCheckpointTimer.unref();
+}
+
+function persistStateEntityRecord(record: StateEntityJournalRecord): void {
+  const file = resolve(entityJournalDirectory, `${Date.now()}-${process.pid}-${randomBytes(12).toString('hex')}.json`);
+  writeDurableAtomic(file, `${JSON.stringify(record)}\n`);
+}
+
+function persistRepairState(operation = 'other'): void {
+  const startedAt = performance.now();
   mkdirSync(dirname(repairStateFile), { recursive: true });
   const temporary = `${repairStateFile}.tmp-${process.pid}`;
   const federations = Object.fromEntries(Object.entries(state.federations).map(([federationId, stored]) => [federationId, stored.stateRepairRecords ?? {}]));
-  writeFileSync(temporary, `${JSON.stringify({ version: 1, federations })}\n`, { encoding: 'utf8', mode: 0o600 });
+  const body = `${JSON.stringify({ version: 1, federations })}\n`;
+  writeFileSync(temporary, body, { encoding: 'utf8', mode: 0o600 });
   renameSync(temporary, repairStateFile);
+  const elapsedMs = performance.now() - startedAt;
+  repairTelemetry.persistenceCount += 1;
+  repairTelemetry.persistenceBytes += Buffer.byteLength(body);
+  repairTelemetry.persistenceMs += elapsedMs;
+  // WHAT: Attribute the exact persistence gate that withholds repair-window credit.
+  // WHY: Aggregate sidecar cost must be measured before replacing its durable representation.
+  if (operation === 'ack') {
+    repairTelemetry.ackPersistenceCount += 1;
+    repairTelemetry.ackPersistenceBytes += Buffer.byteLength(body);
+    repairTelemetry.ackPersistenceMs += elapsedMs;
+  }
 }
 
 function federation(federationId: string): StoredFederation {
@@ -329,25 +460,26 @@ function pumpRepairWindow(target: Client): void {
         if (idleProjects >= session.projects.length) break;
         continue;
       }
-      const candidates = remaining.slice(0, stateEntityBatchSize);
       const project = stored.entities[projectId] ?? {};
-      const entities = candidates.map((entry) => project[entry.key]);
-      // WHAT: Reject a repair whose referenced durable entity disappeared.
-      // WHY: An incomplete response cannot converge to the advertised relay root.
-      if (entities.some((entity) => !entity)) throw new Error('missing_repair_entity');
-      const frame = stateEntityFrames(projectId, entities as RelayEntity[])[0];
-      frame.payload = { ...(frame.payload as Record<string, unknown>), attemptId: record.attemptId };
+      const packingStartedAt = performance.now();
+      const packed = nextRepairStateEntityFrame(projectId, assertFederationRepairAttempt(record.attemptId, 'attemptId'), remaining, (key) => project[key]);
+      repairTelemetry.packingCandidateCount += packed.candidateCount;
+      repairTelemetry.packingMs += performance.now() - packingStartedAt;
+      const { frame } = packed;
       const payload = frame.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
-      const encodedBytes = Buffer.byteLength(JSON.stringify(frame));
+      const encodedBytes = packed.encodedBytes;
       // WHAT: Defer this frame when another frame consumes the remaining byte credit.
       // WHY: The connection-wide encoded-byte ceiling must hold before socket send.
       if (encodedInFlight + encodedBytes > maximumRepairBytesPerConnection && session.deliveries.size > 0) break;
-      const sentKeys = new Set(payload.entries.map((entry) => entry.key));
-      record.remainingEntries = remaining.filter((entry) => !sentKeys.has(entry.key));
+      record.remainingEntries = remaining.slice(packed.consumed);
       record.pendingDeliveries = [...pending, { deliveryId: payload.deliveryId, entries: payload.entries.map(({ key, stateHash }) => ({ key, stateHash })), encodedBytes }];
       record.summarySent = false;
-      persistRepairState();
+      // WHAT: Send an unacknowledged window from in-memory progress without rewriting the repair sidecar.
+      // WHY: The prior durable remaining set safely replays this frame after a crash; accepted progress is persisted at ACK.
       session.deliveries.set(payload.deliveryId, { projectId, encodedBytes });
+      repairTelemetry.outboundFrameCount += 1;
+      repairTelemetry.outboundEntityCount += payload.entries.length;
+      repairTelemetry.outboundEncodedBytes += encodedBytes;
       sendSocket(target.socket, frame);
       idleProjects = 0;
     }
@@ -368,19 +500,33 @@ function persistStateEntities(sender: Client, frame: RelayFrame): void {
   const entries = admitStateEntries(projectId, wireEntries);
   const stored = federation(sender.federationId);
   const project = stored.entities[projectId] ?? {};
+  const nextProject = { ...project };
   const changed: RelayEntity[] = [];
   const accepted: Array<{ key: string; stateHash: string }> = [];
   for (const entry of entries) {
-    const joined = joinRelayEntity(project[entry.entityKey], entry.entity);
+    const previous = nextProject[entry.entityKey];
+    const joined = joinRelayEntity(previous, entry.entity);
     accepted.push({ key: entry.entityKey, stateHash: joined.stateHash });
-    if (project[entry.entityKey]?.stateHash !== joined.stateHash) changed.push(joined);
-    project[entry.entityKey] = joined;
+    if (previous?.stateHash !== joined.stateHash) changed.push(joined);
+    nextProject[entry.entityKey] = joined;
   }
-  stored.entities[projectId] = project;
-  // WHAT: Advance the project generation only when the accepted batch changes durable relay state.
-  // WHY: Duplicate delivery must not renew any node's repair allowance.
-  if (changed.length > 0) stored.stateGenerations![projectId] = (stored.stateGenerations![projectId] ?? 0) + 1;
-  persistState();
+  const generation = (stored.stateGenerations![projectId] ?? 0) + (changed.length > 0 ? 1 : 0);
+  // WHAT: Persist the exact joined changes before installing them as acknowledged relay authority.
+  // WHY: A crash after ACK must recover this batch without rewriting the full relay snapshot per frame.
+  if (changed.length > 0) {
+    persistStateEntityRecord({
+      version: 1,
+      federationId: sender.federationId,
+      projectId,
+      generation,
+      entries: changed.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })),
+    });
+  }
+  stored.entities[projectId] = nextProject;
+  stored.stateGenerations![projectId] = generation;
+  // WHAT: Schedule a snapshot only when this delivery created durable relay state.
+  // WHY: Duplicate deliveries must not trigger full-state persistence amplification.
+  if (changed.length > 0) scheduleStateCheckpoint();
   sendSocket(sender.socket, {
     version: 1,
     type: 'state-relay-ack',
@@ -566,7 +712,7 @@ function acknowledgeStateDelivery(sender: Client, frame: RelayFrame): void {
   }
   record.acknowledgedEntries = { ...(record.acknowledgedEntries ?? {}), ...Object.fromEntries(delivery.entries.map((entry) => [entry.key, entry.stateHash])) };
   record.pendingDeliveries = (record.pendingDeliveries ?? []).filter((candidate) => candidate.deliveryId !== deliveryId);
-  persistRepairState();
+  persistRepairState('ack');
   const session = repairSession(sender.socket);
   session.deliveries.delete(deliveryId);
   // WHAT: Return the acknowledged project to the round-robin queue.
@@ -745,6 +891,7 @@ const server = createServer((request, response) => {
       workerName: 'decision-os-federation-relay-dev',
       durableObjectNamespace: 'decision-os-federations-dev',
       runtime: 'termux-node',
+      repairTelemetry,
     });
     return;
   }
@@ -786,6 +933,10 @@ server.listen(port, host, () => {
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => {
+    // WHAT: Install every finalized entity journal record into one snapshot before graceful exit.
+    // WHY: Normal shutdown should leave the backward-compatible version-1 snapshot self-contained.
+    if (stateCheckpointTimer) clearTimeout(stateCheckpointTimer);
+    persistState();
     for (const connected of clients.values()) connected.socket.close(1001, 'shutdown');
     server.close(() => process.exit(0));
   });

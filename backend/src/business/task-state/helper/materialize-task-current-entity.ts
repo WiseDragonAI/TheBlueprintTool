@@ -133,7 +133,11 @@ function candidateRecord(candidate: TaskRegisterCandidate): TaskProjectionConfli
   };
 }
 
-export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, entity: TaskCurrentEntity): void {
+export function canonicalizeTaskProjectionClock(projection: TaskCurrentProjection): void {
+  projection.clock = Object.fromEntries(Object.entries(projection.clock).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, entity: TaskCurrentEntity, options: { deferClockCanonicalization?: boolean } = {}): void {
   if (entity.entityType === 'resource') return;
   const index = indexFor(projection);
   const entityKey = `${entity.entityType}\u0000${entity.entityId}`;
@@ -143,9 +147,9 @@ export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, 
       projection.clock[replicaId] = Math.max(projection.clock[replicaId] ?? 0, counter);
     }
   }
-  // WHAT: Reinsert clock entries in replica-id order after every incremental materialization.
-  // WHY: Equal CRDT state must serialize byte-identically even when replicas receive entities in different orders.
-  projection.clock = Object.fromEntries(Object.entries(projection.clock).sort(([left], [right]) => left.localeCompare(right)));
+  // WHAT: Canonicalize immediately outside an explicit multi-entity merge boundary.
+  // WHY: Equal CRDT state remains byte-identical without repeating a growing global sort per batch entity.
+  if (!options.deferClockCanonicalization) canonicalizeTaskProjectionClock(projection);
 
   const materialized: AnyRecord = entity.entityType === 'ledger' ? projection.ledger : { id: entity.entityId };
   const entityTombstone = selectedCandidate(entity.fields.$entity?.candidates ?? []);

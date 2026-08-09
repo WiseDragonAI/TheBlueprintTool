@@ -91,29 +91,232 @@ export function createFederationTaskStateReplicator(input: {
   const pendingDeliveries = new Map<string, PendingDelivery>();
   const queuedRelayEntities = new Map<string, Map<string, TaskCurrentEntity>>();
   let relayProjectOrder: string[] = [];
-  const activeRepairRequests = new Map<string, { summaryIdentity: string; attemptId: string; timeout: NodeJS.Timeout }>();
+  const activeRepairRequests = new Map<string, { summaryIdentity: string; attemptId: string; timeout: NodeJS.Timeout; store: TaskCurrentStateStore }>();
   const servedRepairRequests = new Map<string, { root: string; buckets: Set<string> }>();
+  const deferredObservers = new Map<string, { attemptId: string; store: TaskCurrentStateStore; keys: Set<string> }>();
+  type EnhancedRepairFrame = { frame: FederationStateFrame; entries: StateEnvelope[]; attemptId: string; store: TaskCurrentStateStore; encodedBytes: number; resolve: () => void; reject: (error: unknown) => void };
+  const enhancedRepairFrames = new Map<string, EnhancedRepairFrame[]>();
+  let enhancedRepairFrameCount = 0;
+  let enhancedRepairBytes = 0;
+  let enhancedRepairDrain: Promise<void> | null = null;
+  let enhancedRepairImmediate: NodeJS.Immediate | null = null;
   const noProgressTimeoutMs = input.noProgressTimeoutMs ?? 15_000;
+  const receiverTiming = { frameCount: 0, entityCount: 0, validationMs: 0, mergeMs: 0, acknowledgementMs: 0, observerMs: 0, observerDeferredFrameCount: 0, observerFlushCount: 0, pendingObserverCount: 0, groupCommitCount: 0, groupCommitFrameCount: 0 };
+  const readyObservers: Array<{ identity: string; projectId: string; from: string; delta: TaskStateDelta }> = [];
+  const readyObserverIdentities = new Set<string>();
+  let observerDrain: NodeJS.Immediate | null = null;
+  let observerDeferralDeadline: NodeJS.Timeout | null = null;
+
+  const invokeObserver = (projectId: string, from: string, delta: TaskStateDelta): void => {
+    const observerStartedAt = performance.now();
+    try {
+      input.onProjectionChange?.({ projectId, from, delta });
+    } catch (error) {
+      // WHAT: Contain a presentation observer failure after the causal merge is durable.
+      // WHY: Projection invalidation cannot turn accepted federation state into a project outage.
+      try { input.onProjectionError?.({ projectId, from, error }); } catch {
+        // Diagnostics must not escape the contained observer failure.
+      }
+    }
+    receiverTiming.observerMs += performance.now() - observerStartedAt;
+  };
+
+  const maybeScheduleObserverDrain = (force = false): void => {
+    if ((!force && activeRepairRequests.size > 0) || readyObservers.length === 0 || observerDrain) return;
+    observerDrain = setImmediate(() => {
+      observerDrain = null;
+      // WHAT: Recheck global repair activity after yielding to queued socket work.
+      // WHY: A newly admitted attempt retains priority unless the independent deadline forced this drain.
+      if (!force && activeRepairRequests.size > 0) return;
+      const ready = readyObservers.splice(0);
+      readyObserverIdentities.clear();
+      if (observerDeferralDeadline) clearTimeout(observerDeferralDeadline);
+      observerDeferralDeadline = null;
+      for (const observer of ready) {
+        try {
+          invokeObserver(observer.projectId, observer.from, observer.delta);
+          receiverTiming.observerFlushCount += 1;
+        } finally {
+          receiverTiming.pendingObserverCount -= 1;
+        }
+      }
+      maybeScheduleObserverDrain();
+    });
+  };
+
+  const queueDeferredObserver = (repairKey: string, attemptId: string): void => {
+    const deferred = deferredObservers.get(repairKey);
+    // WHAT: Ignore stale or empty attempt releases.
+    // WHY: A prior summary must never flush a replacement repair's application work.
+    if (!deferred || deferred.attemptId !== attemptId) return;
+    deferredObservers.delete(repairKey);
+    const [from, projectId] = repairKey.split('\u0000');
+    const delta = deferred.store.activeDelta([...deferred.keys].sort());
+    const identity = `${repairKey}\u0000${attemptId}`;
+    // WHAT: Queue each settled attempt snapshot once across overlapping terminal paths.
+    // WHY: Convergence followed by disconnect must not duplicate derived effects.
+    if (readyObserverIdentities.has(identity)) return;
+    readyObserverIdentities.add(identity);
+    readyObservers.push({ identity, projectId, from, delta });
+    receiverTiming.pendingObserverCount += 1;
+    // WHAT: Bound derived-effect deferral independently from renewable repair progress.
+    // WHY: A continuously progressing large repair must not starve prior UI/content visibility forever.
+    if (!observerDeferralDeadline) {
+      observerDeferralDeadline = setTimeout(() => {
+        observerDeferralDeadline = null;
+        // WHAT: Replace an idle-gated drain with the finite forced drain.
+        // WHY: A previously queued Immediate must not suppress the liveness deadline.
+        if (observerDrain) {
+          clearImmediate(observerDrain);
+          observerDrain = null;
+        }
+        maybeScheduleObserverDrain(true);
+      }, noProgressTimeoutMs);
+      observerDeferralDeadline.unref?.();
+    }
+  };
 
   const clearActiveRepair = (repairKey: string): void => {
     const active = activeRepairRequests.get(repairKey);
     // WHAT: Clear the owned deadline before removing active repair authority.
     // WHY: A settled or disconnected attempt must not fire a stale project timeout.
-    if (active) clearTimeout(active.timeout);
+    if (active) {
+      clearTimeout(active.timeout);
+      active.store.resumeMaterialization(active.attemptId);
+    }
     activeRepairRequests.delete(repairKey);
   };
 
-  const armRepairDeadline = (repairKey: string, summaryIdentity: string, attemptId: string): void => {
-    clearActiveRepair(repairKey);
+  const armRepairDeadline = (repairKey: string, summaryIdentity: string, attemptId: string, store: TaskCurrentStateStore): void => {
+    const previous = activeRepairRequests.get(repairKey);
+    // WHAT: Replace only a superseded repair lease while renewing the current attempt in place.
+    // WHY: Progress renewal must not start shard compaction during the same active repair.
+    if (previous) {
+      clearTimeout(previous.timeout);
+      // WHAT: Release accepted partial application work only when a new attempt supersedes it.
+      // WHY: Same-attempt progress renewal must preserve coalescing and materialization deferral.
+      if (previous.attemptId !== attemptId) {
+        queueDeferredObserver(repairKey, previous.attemptId);
+        previous.store.resumeMaterialization(previous.attemptId);
+      }
+    }
     const timeout = setTimeout(() => {
       activeRepairRequests.delete(repairKey);
+      queueDeferredObserver(repairKey, attemptId);
+      store.resumeMaterialization(attemptId);
       const [from, projectId] = repairKey.split('\u0000');
       try { input.onRepairTimeout?.({ projectId, from, attemptId }); } catch {
         // Timeout diagnostics cannot escape into the timer boundary.
       }
+      maybeScheduleObserverDrain();
     }, noProgressTimeoutMs);
     timeout.unref?.();
-    activeRepairRequests.set(repairKey, { summaryIdentity, attemptId, timeout });
+    activeRepairRequests.set(repairKey, { summaryIdentity, attemptId, timeout, store });
+  };
+
+  const drainEnhancedRepairFrames = async (): Promise<void> => {
+    const groups = [...enhancedRepairFrames.entries()];
+    enhancedRepairFrames.clear();
+    enhancedRepairFrameCount = 0;
+    enhancedRepairBytes = 0;
+    await Promise.all(groups.map(async ([repairKey, frames]) => {
+      const [from, projectId] = repairKey.split('\u0000');
+      const first = frames[0];
+      const active = activeRepairRequests.get(repairKey);
+      // WHAT: Reject a queued group whose attempt authority changed before durability.
+      // WHY: Replacement and disconnect must never ACK frames under a stale repair lease.
+      if (!first || !active || active.attemptId !== first.attemptId || frames.some((candidate) => candidate.attemptId !== first.attemptId || candidate.store !== first.store)) {
+        for (const candidate of frames) candidate.resolve();
+        return;
+      }
+      try {
+        const mergeStartedAt = performance.now();
+        const result = await first.store.mergeRepairGroup(frames.map(({ entries }) => ({
+          version: taskCurrentStateVersion,
+          projectId,
+          entities: entries.map((entry) => entry.entity),
+        })), first.attemptId);
+        receiverTiming.groupCommitCount += 1;
+        receiverTiming.groupCommitFrameCount += frames.length;
+        receiverTiming.mergeMs += performance.now() - mergeStartedAt;
+        const acknowledgementStartedAt = performance.now();
+        for (const candidate of frames) {
+          const payload = candidate.frame.payload as Record<string, unknown>;
+          input.publish(from, {
+            type: 'state-relay-ack',
+            projectId,
+            payload: {
+              stateVersion: taskCurrentStateVersion,
+              deliveryId: payload.deliveryId,
+              accepted: candidate.entries.map((entry) => ({
+                key: entry.key,
+                stateHash: entry.stateHash,
+                resultingStateHash: result.resultingStateHashes.get(entry.key) ?? '',
+              })),
+              root: first.store.rootHash(),
+              attemptId: first.attemptId,
+            },
+          });
+        }
+        receiverTiming.acknowledgementMs += performance.now() - acknowledgementStartedAt;
+        const retained = activeRepairRequests.get(repairKey);
+        // WHAT: Renew progress only while the durable group still owns the active attempt.
+        // WHY: A replacement lease cannot inherit progress from an older WAL group.
+        if (retained?.attemptId === first.attemptId) armRepairDeadline(repairKey, retained.summaryIdentity, retained.attemptId, first.store);
+        // WHAT: Coalesce one durable group into the attempt-owned application observer.
+        // WHY: Individual transport frames have no derived UI authority before terminal root equality.
+        if (result.changed) {
+          const deferred = deferredObservers.get(repairKey) ?? { attemptId: first.attemptId, store: first.store, keys: new Set<string>() };
+          for (const entity of result.delta.entities) deferred.keys.add(taskCurrentEntityKey(entity));
+          deferredObservers.set(repairKey, deferred);
+          receiverTiming.observerDeferredFrameCount += frames.length;
+        }
+        for (const candidate of frames) candidate.resolve();
+      } catch (error) {
+        // WHAT: Contain one project group's validation or durability failure without ACKing it.
+        // WHY: Sibling project groups must continue while the owning store retains recovery authority.
+        try { input.onProjectionError?.({ projectId, from, error }); } catch {
+          // Diagnostics cannot replace the original contained group failure.
+        }
+        for (const candidate of frames) candidate.reject(error);
+      }
+    }));
+  };
+
+  const startEnhancedRepairDrain = (): Promise<void> => {
+    // WHAT: Reuse the active bounded drain when another barrier observes it.
+    // WHY: Summary and disconnect barriers must await one ordered receiver transaction.
+    if (enhancedRepairDrain) return enhancedRepairDrain;
+    enhancedRepairDrain = drainEnhancedRepairFrames().finally(() => {
+      enhancedRepairDrain = null;
+      // WHAT: Schedule frames that arrived while the previous bounded group was syncing.
+      // WHY: Relay window replenishment must not strand a second receiver group.
+      if (enhancedRepairFrames.size > 0) scheduleEnhancedRepairDrain();
+    });
+    return enhancedRepairDrain;
+  };
+
+  const scheduleEnhancedRepairDrain = (): void => {
+    // WHAT: Collect the relay's current bounded window for one event-loop turn.
+    // WHY: Four project frames can share one WAL fsync without adding a time-based durability delay.
+    if (enhancedRepairImmediate || enhancedRepairDrain) return;
+    enhancedRepairImmediate = setImmediate(() => {
+      enhancedRepairImmediate = null;
+      void startEnhancedRepairDrain();
+    });
+  };
+
+  const flushEnhancedRepairFrames = async (): Promise<void> => {
+    // WHAT: Cancel deferred scheduling and drain every queued group before an ordering boundary.
+    // WHY: Summary, replacement, and non-enhanced traffic must never overtake durable repair application.
+    if (enhancedRepairImmediate) {
+      clearImmediate(enhancedRepairImmediate);
+      enhancedRepairImmediate = null;
+    }
+    do {
+      if (enhancedRepairFrames.size > 0 && !enhancedRepairDrain) startEnhancedRepairDrain();
+      if (enhancedRepairDrain) await enhancedRepairDrain;
+    } while (enhancedRepairFrames.size > 0);
   };
 
   const dirtyFor = (projectId: string): Map<string, TaskCurrentEntity> => {
@@ -265,39 +468,74 @@ export function createFederationTaskStateReplicator(input: {
     const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
     if (Number(payload.stateVersion ?? taskCurrentStateVersion) !== taskCurrentStateVersion) throw new Error('incompatible_state_protocol');
 
+    // WHAT: Drain enhanced entity groups before every other state transition.
+    // WHY: Summaries, replacements, legacy traffic, and ACK processing must observe prior durable receiver order.
+    if (frame.type !== 'state-entity-batch') await flushEnhancedRepairFrames();
+
     if (frame.type === 'state-summary-request') {
       advertise(frame.from, frame.projectId, store);
       return;
     }
 
     if (frame.type === 'state-entity-batch') {
+      receiverTiming.frameCount += 1;
       const entries = Array.isArray(payload.entries) ? payload.entries as StateEnvelope[] : [];
+      receiverTiming.entityCount += entries.length;
+      const validationStartedAt = performance.now();
       for (const entry of entries) if (entry.key !== taskCurrentEntityKey(entry.entity) || entry.stateHash !== entry.entity.stateHash) throw new Error('invalid_state_entity_envelope');
-      const result = await store.merge({ version: taskCurrentStateVersion, projectId: frame.projectId, entities: entries.map((entry) => entry.entity) });
+      receiverTiming.validationMs += performance.now() - validationStartedAt;
+      const repairKey = `${frame.from}\u0000${frame.projectId}`;
+      const active = activeRepairRequests.get(repairKey);
+      const enhancedRelayRepair = frame.from === 'relay' && typeof payload.attemptId === 'string' && payload.attemptId === active?.attemptId;
+      if (enhancedRelayRepair) {
+        const encodedBytes = Buffer.byteLength(JSON.stringify(frame));
+        const retained = enhancedRepairFrames.get(repairKey) ?? [];
+        // WHAT: Admit only the epoch-4 relay window already bounded by project, connection, and bytes.
+        // WHY: Receiver group commit must not introduce capacity beyond the transport contract it optimizes.
+        if (retained.length >= maximumProjectDeliveries || enhancedRepairFrameCount >= maximumConnectionDeliveries
+          || (enhancedRepairBytes + encodedBytes > maximumConnectionDeliveryBytes && enhancedRepairFrameCount > 0)) {
+          await flushEnhancedRepairFrames();
+        }
+        const current = enhancedRepairFrames.get(repairKey) ?? [];
+        return new Promise<void>((resolveFrame, rejectFrame) => {
+          enhancedRepairFrames.set(repairKey, [...current, { frame, entries, attemptId: active!.attemptId, store, encodedBytes, resolve: resolveFrame, reject: rejectFrame }]);
+          enhancedRepairFrameCount += 1;
+          enhancedRepairBytes += encodedBytes;
+          scheduleEnhancedRepairDrain();
+        });
+      }
+      await flushEnhancedRepairFrames();
+      const mergeStartedAt = performance.now();
+      const result = await store.merge(
+        { version: taskCurrentStateVersion, projectId: frame.projectId, entities: entries.map((entry) => entry.entity) },
+        enhancedRelayRepair ? { deferMaterialization: active!.attemptId } : {},
+      );
+      receiverTiming.mergeMs += performance.now() - mergeStartedAt;
+      const acknowledgementStartedAt = performance.now();
       const accepted = entries.map((entry) => ({
         key: entry.key,
         stateHash: entry.stateHash,
-        resultingStateHash: store.entity(entry.entity.entityType, entry.entity.entityId)?.stateHash ?? '',
+        resultingStateHash: result.resultingStateHashes.get(entry.key) ?? '',
       }));
       input.publish(frame.from, {
         type: frame.from === 'relay' ? 'state-relay-ack' : 'state-ack',
         projectId: frame.projectId,
         payload: { stateVersion: taskCurrentStateVersion, deliveryId: payload.deliveryId, accepted, root: store.rootHash(), ...(payload.attemptId ? { attemptId: payload.attemptId } : {}) },
       });
-      const repairKey = `${frame.from}\u0000${frame.projectId}`;
-      const active = activeRepairRequests.get(repairKey);
+      receiverTiming.acknowledgementMs += performance.now() - acknowledgementStartedAt;
       // WHAT: Renew the finite deadline only after durable receiver application advances.
       // WHY: Socket traffic without a successful merge is not synchronization progress.
-      if (active && payload.attemptId === active.attemptId) armRepairDeadline(repairKey, active.summaryIdentity, active.attemptId);
+      if (active && payload.attemptId === active.attemptId) armRepairDeadline(repairKey, active.summaryIdentity, active.attemptId, store);
       if (result.changed) {
-        try {
-          input.onProjectionChange?.({ projectId: frame.projectId, from: frame.from, delta: result.delta });
-        } catch (error) {
-          // WHAT: Contain a presentation observer failure after the causal merge is durable.
-          // WHY: Projection invalidation cannot turn an accepted federation frame into a project-wide outage.
-          try { input.onProjectionError?.({ projectId: frame.projectId, from: frame.from, error }); } catch {
-            // Diagnostics must not escape the contained observer failure.
-          }
+        // WHAT: Coalesce derived application work only for the exact enhanced relay attempt.
+        // WHY: Intermediate repair cuts have no application authority and must not block the socket queue.
+        if (enhancedRelayRepair) {
+          const deferred = deferredObservers.get(repairKey) ?? { attemptId: active!.attemptId, store, keys: new Set<string>() };
+          for (const entity of result.delta.entities) deferred.keys.add(taskCurrentEntityKey(entity));
+          deferredObservers.set(repairKey, deferred);
+          receiverTiming.observerDeferredFrameCount += 1;
+        } else {
+          invokeObserver(frame.projectId, frame.from, result.delta);
         }
       }
       return;
@@ -316,8 +554,12 @@ export function createFederationTaskStateReplicator(input: {
       // WHY: In node-behind-relay repair the node emits convergence; it does not wait to receive it.
       if (converged) {
         const active = activeRepairRequests.get(repairKey);
-        clearActiveRepair(repairKey);
         input.publish(frame.from, { type: 'state-converged', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root, ...(active ? { attemptId: active.attemptId } : {}) } });
+        // WHAT: Schedule final derived application work after structural convergence is published.
+        // WHY: Content and UI invalidation must not delay the relay's exact-root settlement.
+        if (active) queueDeferredObserver(repairKey, active.attemptId);
+        clearActiveRepair(repairKey);
+        maybeScheduleObserverDrain();
         return;
       }
       const summaryIdentity = `${remoteRoot}\u0000${manifestDigest}`;
@@ -335,7 +577,7 @@ export function createFederationTaskStateReplicator(input: {
         });
         // WHAT: Remember only a successfully published repair request.
         // WHY: Failed transport publication must remain eligible for reconnect reconciliation.
-        if (published) armRepairDeadline(repairKey, summaryIdentity, attemptId);
+        if (published) armRepairDeadline(repairKey, summaryIdentity, attemptId, store);
       }
       return;
     }
@@ -393,7 +635,11 @@ export function createFederationTaskStateReplicator(input: {
     for (const key of [...activeRepairRequests.keys()]) {
       // WHAT: Forget request suppression owned by the disconnected transport.
       // WHY: A frame sent before disconnect may not have reached durable receiver application.
-      if (key.startsWith(`${peerId}\u0000`)) clearActiveRepair(key);
+      if (key.startsWith(`${peerId}\u0000`)) {
+        const active = activeRepairRequests.get(key);
+        if (active) queueDeferredObserver(key, active.attemptId);
+        clearActiveRepair(key);
+      }
     }
     for (const key of [...servedRepairRequests.keys()]) {
       // WHAT: Forget response suppression owned by the disconnected transport.
@@ -403,6 +649,7 @@ export function createFederationTaskStateReplicator(input: {
     // WHAT: Retire relay delivery identities when the relay socket disconnects.
     // WHY: Their acknowledgements can never arrive, while runtimeDirty retains the durable retry authority.
     if (peerId === 'relay') pendingDeliveries.clear();
+    maybeScheduleObserverDrain();
   };
 
   return {
@@ -417,6 +664,7 @@ export function createFederationTaskStateReplicator(input: {
       pendingDeliveryIds: [...pendingDeliveries.keys()],
       queuedRelayEntityCount: [...queuedRelayEntities.values()].reduce((count, entities) => count + entities.size, 0),
       activeRepairCount: activeRepairRequests.size,
+      receiverTiming: { ...receiverTiming },
     }),
   };
 }
