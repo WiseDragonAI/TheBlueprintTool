@@ -538,13 +538,14 @@ test('relay acknowledgements require an exact accepted and rejected partition be
   assert.equal(replicator.diagnostics().runtimeDirty.length, 2);
   assert.deepEqual(replicator.diagnostics().pendingDeliveryIds, [payload.deliveryId]);
 
-  await replicator.handleFrame({
+  await assert.rejects(replicator.handleFrame({
     type: 'state-relay-ack',
     from: 'relay',
     projectId: 'project-a',
     payload: {
       stateVersion: taskCurrentStateVersion,
       deliveryId: payload.deliveryId,
+      relayRoot: '2'.repeat(64),
       accepted: [payload.entries[1]],
       rejected: [{
         code: 'task_current_dot_collision',
@@ -554,10 +555,9 @@ test('relay acknowledgements require an exact accepted and rejected partition be
         collisions: [{ entityType: 'card', entityId: 'left', path: 'title', dot: { replicaId: 'desktop', counter: 1 } }],
       }],
     },
-  });
-  assert.equal(replicator.diagnostics().runtimeDirty.length, 1);
-  assert.equal(replicator.diagnostics().runtimeDirty[0].entityKey, payload.entries[0].key);
-  assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 0);
+  }), /task_current_publication_collision_archive_missing/);
+  assert.equal(replicator.diagnostics().runtimeDirty.length, 2);
+  assert.deepEqual(replicator.diagnostics().pendingDeliveryIds, [payload.deliveryId]);
 });
 
 test('relay publication advances a bounded project window and advertises only after settlement', async (context) => {
@@ -608,6 +608,58 @@ test('relay publication advances a bounded project window and advertises only af
   assert.equal(sent.filter((frame) => frame.type === 'state-bucket-summary').length, 1);
   assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 0);
   assert.equal(replicator.diagnostics().runtimeDirty.length, 0);
+});
+
+test('publication rejection adopts archived receiver evidence before settlement and suppresses its relay root after restart', async (context) => {
+  const node = fixture('decision-os-publication-adoption-');
+  const relay = fixture('decision-os-publication-adoption-relay-');
+  context.after(async () => { await Promise.all([node.store.flush(), relay.store.flush()]); [node, relay].forEach((entry) => rmSync(entry.root, { recursive: true, force: true })); });
+  const mutation = await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'collision', changes: [{ path: 'title', operation: 'set', value: 'Local' }] }] });
+  const localEntity = mutation.delta.entities[0];
+  const relayEntity = finalizeTaskCurrentEntity({
+    ...structuredClone(localEntity),
+    fields: { ...structuredClone(localEntity.fields), title: { ...structuredClone(localEntity.fields.title), candidates: [{ ...structuredClone(localEntity.fields.title.candidates[0]), value: 'Relay' }] } },
+  });
+  await node.store.mergeRepairGroup([{ attemptId: 'archive-attempt', deliveryId: 'archive-delivery', delta: { version: taskCurrentStateVersion, projectId: 'project-a', entities: [relayEntity] } }], 'archive-attempt');
+  const archived = node.store.repairCollisionEvidence('archive-attempt')[0];
+  await relay.store.merge({ version: taskCurrentStateVersion, projectId: 'project-a', entities: [relayEntity] });
+  const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const collisions: Array<{ evidence: unknown[]; relayRoot: string }> = [];
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', node.store]]),
+    publish: (_target, frame) => { sent.push(frame); return true; },
+    onRepairCollision: ({ evidence, relayRoot }) => { collisions.push({ evidence, relayRoot }); },
+  });
+  replicator.publishDelta(mutation.delta);
+  const delivery = sent.find((frame) => frame.type === 'state-entity-batch')!;
+  const payload = delivery.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  const relayRoot = relay.store.rootHash();
+  await replicator.handleFrame({
+    type: 'state-relay-ack',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: {
+      stateVersion: taskCurrentStateVersion,
+      deliveryId: payload.deliveryId,
+      relayRoot,
+      accepted: [],
+      rejected: [{ code: archived.code, key: archived.key, stateHash: localEntity.stateHash, receiverStateHash: relayEntity.stateHash, collisions: archived.collisions }],
+    },
+  });
+  assert.equal(collisions.length, 1);
+  assert.equal(collisions[0].evidence.length, 1);
+  assert.equal(collisions[0].relayRoot, relayRoot);
+  assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 0);
+  const publicationAttempt = `publication:${payload.deliveryId}`;
+  assert.equal(node.store.repairCollisionEvidence(publicationAttempt).length, 1);
+  const summary: FederationStateFrame = { type: 'state-bucket-summary', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, root: relayRoot, buckets: relay.store.bucketManifest() } };
+  const missingBefore = sent.filter((frame) => frame.type === 'state-missing-request').length;
+  await replicator.handleFrame(summary);
+  assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, missingBefore);
+  const restarted = createFederationTaskStateReplicator({ stores: () => new Map([['project-a', node.store]]), publish: (_target, frame) => { sent.push(frame); return true; } });
+  restarted.restoreTerminalRepair('project-a', 'relay', publicationAttempt, [], relayRoot);
+  await restarted.handleFrame(summary);
+  assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, missingBefore);
 });
 
 test('relay entity batches acknowledge without advertising intermediate roots', async (context) => {

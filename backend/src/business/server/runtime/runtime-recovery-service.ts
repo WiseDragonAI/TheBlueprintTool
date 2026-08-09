@@ -263,6 +263,15 @@ export function createRuntimeRecoveryService(input: {
       return [];
     }
     const ids = resolveScope(scope, resolution);
+    const downstreamScope = `project-task-state:${projectId}`;
+    const downstreamActive = input.incidentLedger.active(downstreamScope);
+    // WHAT: Resolve the derived timeout only after successor ACK, equal roots, flush, and fresh reopen all succeeded.
+    // WHY: The no-progress incident describes the same poisoned generation but must remain evidence until exact recovery proof exists.
+    if (downstreamActive.length > 0 && downstreamActive.every((incident) => incident.code === 'federation_state_no_progress')) {
+      const resolvedDownstream = input.incidentLedger.resolveScope(downstreamScope, 'Terminal federation collision recovered with exact relay convergence.');
+      ids.push(...resolvedDownstream.map((incident) => incident.id));
+      input.incidentSupervisor.pausedTaskProjects.delete(projectId);
+    }
     replicator.clearTerminalRepair(projectId);
     input.incidentSupervisor.pausedFederationRepairs.delete(projectId);
     return ids;

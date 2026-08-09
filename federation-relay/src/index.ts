@@ -401,7 +401,8 @@ export class FederationRelayV4 extends DurableObject<Env> {
       const generation = await transaction.get<number>(generationKey) ?? 0;
       await transaction.put(generationKey, generation + 1);
     });
-    this.sendSocket(socket, { version: 1, type: 'state-relay-ack', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted, rejected } });
+    const relayRoot = rejected.length > 0 ? hashTaskCurrentRoot(await this.stateBuckets(projectId)) : '';
+    this.sendSocket(socket, { version: 1, type: 'state-relay-ack', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted, rejected, ...(relayRoot ? { relayRoot } : {}) } });
     for (const target of this.activeSockets()) {
       const targetNodeId = (target.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
       if (target !== socket && changed.length > 0 && this.participatesInProject(targetNodeId, projectId)) this.sendStateEntities(target, projectId, changed);
