@@ -15,6 +15,7 @@ import { createTaskCurrentStateStore } from '../../task-state/helper/task-curren
 import type { createFederatedTaskRuntime } from '../../task-state/runtime/federated-task-runtime.js';
 import type { createLocalTaskRuntime } from '../../task-state/runtime/local-task-runtime.js';
 import { tasksLedgerForProject, type DecisionOsProject } from '../helper/project-catalog.js';
+import { hasPendingFederationRepair } from '../helper/federation-repair-recovery.js';
 import type { createRuntimeIncidentLedger } from '../helper/runtime-incident-ledger.js';
 import type { createIncidentSupervisor } from './incident-supervisor.js';
 import type { createProjectRuntimeRegistry } from './project-runtime-registry.js';
@@ -209,13 +210,16 @@ export function createRuntimeRecoveryService(input: {
     scope: string,
     resolution: string,
   ): Promise<string[]> => {
-    const paused = input.incidentSupervisor.pausedFederationRepairs.get(projectId);
+    const cachedPause = input.incidentSupervisor.pausedFederationRepairs.get(projectId);
+    const paused = input.incidentLedger.active(scope)
+      .find((incident) => incident.code === 'task_current_dot_collision') ?? cachedPause;
     const replicator = input.replicator();
     const project = input.projectById(projectId);
     const state = input.localTaskRuntime.states.get(projectId);
     // WHAT: Reject recovery outside a locally owned, durably paused collision scope.
     // WHY: A remote replica and a free-form resume request cannot create local causal authority.
     if (!paused || !replicator || !project || !state || resolution !== collisionRecoveryResolution) return [];
+    input.incidentSupervisor.pausedFederationRepairs.set(projectId, paused);
     const attemptId = String(paused.context.attemptId ?? '');
     // WHAT: Reject a collision incident that lost its stable repair-attempt identity.
     // WHY: Recovery must bind its exactly-once receipt to the durable rejected delivery evidence.
@@ -223,7 +227,7 @@ export function createRuntimeRecoveryService(input: {
     const receipt = await state.store.recoverRepairCollisionLocalAuthority(attemptId);
     const recoveryKeys = Object.keys(receipt.resultingStateHashes).sort();
     const diagnostics = replicator.diagnostics();
-    const hasPendingRecovery = diagnostics.runtimeDirty.some((entry) => entry.projectId === projectId && recoveryKeys.includes(entry.entityKey));
+    const hasPendingRecovery = hasPendingFederationRepair(diagnostics.runtimeDirty, projectId, receipt.resultingStateHashes);
     let converged = diagnostics.convergence.some((entry) => entry.peerId === 'relay' && entry.projectId === projectId && entry.converged)
       && !diagnostics.runtimeDirty.some((entry) => entry.projectId === projectId && recoveryKeys.includes(entry.entityKey));
     // WHAT: Publish the deterministic successor only when no prior recovery delivery remains pending.
@@ -248,6 +252,16 @@ export function createRuntimeRecoveryService(input: {
       const [entityType, entityId] = key.split('\u0000');
       return reopened.entity(entityType as Parameters<typeof reopened.entity>[0], entityId)?.stateHash !== receipt.resultingStateHashes[key];
     })) throw new Error(`federation_repair_reload_validation_failed:${projectId}`);
+    const currentPause = input.incidentLedger.active(scope)
+      .find((incident) => incident.code === 'task_current_dot_collision');
+    // WHAT: Retain a collision generation that replaced the recovered attempt during its bounded convergence wait.
+    // WHY: Scope-wide resolution must never clear newer durable evidence with an older recovery receipt.
+    if (!currentPause || currentPause.id !== paused.id || String(currentPause.context.attemptId ?? '') !== attemptId) {
+      // WHAT: Refresh the admission cache only when a newer durable collision remains active.
+      // WHY: An externally resolved scope has no pause authority to reinstall.
+      if (currentPause) input.incidentSupervisor.pausedFederationRepairs.set(projectId, currentPause);
+      return [];
+    }
     const ids = resolveScope(scope, resolution);
     replicator.clearTerminalRepair(projectId);
     input.incidentSupervisor.pausedFederationRepairs.delete(projectId);
