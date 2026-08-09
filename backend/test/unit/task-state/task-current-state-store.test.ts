@@ -3,7 +3,7 @@
  * WHY: A card mutation must never rewrite a project projection or retain permanent mutation files.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
@@ -24,6 +24,41 @@ test('one card mutation leaves one shard and removes its short-lived journal aft
   assert.equal(existsSync(resolve(stateRoot, 'projection.json')), false);
   assert.equal(existsSync(resolve(stateRoot, 'events')), false);
   assert.equal(existsSync(resolve(stateRoot, 'snapshots')), false);
+});
+
+test('enhanced repair keeps journal authority until its attempt releases shard materialization', async (context) => {
+  const sourceRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-deferred-source-'));
+  const targetRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-deferred-target-'));
+  context.after(() => {
+    rmSync(sourceRoot, { recursive: true, force: true });
+    rmSync(targetRoot, { recursive: true, force: true });
+  });
+  const source = createTaskCurrentStateStore({ decisionOsRoot: sourceRoot, projectId: 'project-a', initializeLedger: {} });
+  await source.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'lifecycle', operation: 'set', value: todoLifecycle }] }] });
+  await source.flush();
+  const target = createTaskCurrentStateStore({ decisionOsRoot: targetRoot, projectId: 'project-a', initializeLedger: {} });
+  await target.merge(source.activeDelta(), { deferMaterialization: 'attempt-a' });
+
+  const targetStateRoot = resolve(targetRoot, 'task-state', 'project-a');
+  assert.equal(target.rootHash(), source.rootHash());
+  assert.equal(readdirSync(resolve(targetStateRoot, 'journal')).length, 1);
+  assert.match(readdirSync(resolve(targetStateRoot, 'journal'))[0], /\.wal$/);
+  assert.equal(existsSync(resolve(targetStateRoot, 'current', 'card')), false);
+
+  const walFile = resolve(targetStateRoot, 'journal', readdirSync(resolve(targetStateRoot, 'journal'))[0]);
+  const committedBytes = readFileSync(walFile, 'utf8');
+  appendFileSync(walFile, '{"torn":');
+
+  const restarted = createTaskCurrentStateStore({ decisionOsRoot: targetRoot, projectId: 'project-a' });
+  assert.equal(restarted.rootHash(), source.rootHash());
+  assert.equal(readFileSync(walFile, 'utf8'), `${committedBytes}{"torn":`);
+  await restarted.flush();
+  assert.equal(readdirSync(resolve(targetStateRoot, 'current', 'card')).length, 1);
+  assert.equal(readdirSync(resolve(targetStateRoot, 'journal')).length, 1);
+  assert.equal(readFileSync(walFile, 'utf8'), `${committedBytes}{"torn":`);
+
+  target.resumeMaterialization('attempt-a');
+  await target.flush();
 });
 
 test('restart reconstructs projection, clock, and buckets from current shards only', async (context) => {
@@ -93,6 +128,7 @@ test('local mutations keep migration-sized project clocks out of entity register
     });
   });
   await store.merge({ version: taskCurrentStateVersion, projectId: 'project-a', entities });
+  assert.deepEqual(Object.keys(store.projection().clock), [...Object.keys(store.projection().clock)].sort());
   await store.flush();
   assert.ok(Buffer.byteLength(JSON.stringify(store.clock())) > taskCurrentEntityByteLimit);
   assert.deepEqual(store.clientClock(), {});

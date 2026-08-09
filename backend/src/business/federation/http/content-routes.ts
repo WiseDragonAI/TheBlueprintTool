@@ -74,15 +74,19 @@ export async function handleFederationContentRoutes(input: {
     input.response.end(JSON.stringify({
       stateLane: {
         ...input.replicationDiagnostics(),
-        projects: stores.map(({ projectId, ownerNodeId, store }) => ({
-          projectId,
-          ownerNodeId,
-          entityCount: store.diagnostics().entityCount,
-          journalCount: store.diagnostics().journalCount,
-          currentBytes: store.diagnostics().currentBytes,
-          conflictCount: store.projection().conflicts.length,
-          projectionVersion: store.projection().version,
-        })),
+        projects: stores.map(({ projectId, ownerNodeId, store }) => {
+          const diagnostics = store.diagnostics();
+          return {
+            projectId,
+            ownerNodeId,
+            entityCount: diagnostics.entityCount,
+            journalCount: diagnostics.journalCount,
+            currentBytes: diagnostics.currentBytes,
+            mergeTiming: diagnostics.mergeTiming,
+            conflictCount: store.projection().conflicts.length,
+            projectionVersion: store.projection().version,
+          };
+        }),
       },
       contentLane: {
         ...input.contentStatus(),

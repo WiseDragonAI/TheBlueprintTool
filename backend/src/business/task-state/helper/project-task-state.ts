@@ -37,6 +37,11 @@ export type TaskContentHeadRepairResult = {
   missing: string[];
 };
 
+export type TaskContentContributionReceipt = {
+  delta: TaskStateDelta;
+  committedResourceIds: string[];
+};
+
 function readableLedger(file: string): AnyRecord {
   if (!existsSync(file)) return { cards: [], annotations: [], relationships: [] };
   return JSON.parse(readFileSync(file, 'utf8')) as AnyRecord;
@@ -178,11 +183,11 @@ export function createProjectTaskState(input: {
     return released;
   };
 
-  const recordContentContribution = async (
+  const recordContentContributionReceipt = async (
     taskId: string,
     resourceIds: string | string[],
     validate?: (head: TaskContentHead, body: string) => void | Promise<void>,
-  ): Promise<TaskStateDelta> => {
+  ): Promise<TaskContentContributionReceipt> => {
     const resources = [...new Set((Array.isArray(resourceIds) ? resourceIds : [resourceIds]).filter(Boolean))];
     const captured = await Promise.all(resources.map(async (resourceId) => ({
       resourceId,
@@ -203,8 +208,17 @@ export function createProjectTaskState(input: {
       ? await persistChanges(changedHeads.map((head) => ({ entityType: 'resource', entityId: head.key, changes: [{ path: 'head', operation: 'set', value: head }] })), { activationTaskId: taskId })
       : { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     for (const head of changedHeads) await input.publishContent?.(head.key);
-    return mergeDeltas(input.projectId, [contentDelta, await activateTask(taskId)]);
+    return {
+      delta: mergeDeltas(input.projectId, [contentDelta, await activateTask(taskId)]),
+      committedResourceIds: changedHeads.map((head) => head.key),
+    };
   };
+
+  const recordContentContribution = async (
+    taskId: string,
+    resourceIds: string | string[],
+    validate?: (head: TaskContentHead, body: string) => void | Promise<void>,
+  ): Promise<TaskStateDelta> => (await recordContentContributionReceipt(taskId, resourceIds, validate)).delta;
 
   const finalizeExecutionArtifacts = async (executionId: string, files: {
     jsonl?: string;
@@ -247,6 +261,17 @@ export function createProjectTaskState(input: {
   ): Promise<TaskStateDelta> => {
     assertWritable();
     const operation = commandQueue.then(() => recordContentContribution(taskId, resourceIds, validate));
+    commandQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+  };
+
+  const queueContentContributionReceipt = (
+    taskId: string,
+    resourceIds: string | string[],
+    validate?: (head: TaskContentHead, body: string) => void | Promise<void>,
+  ): Promise<TaskContentContributionReceipt> => {
+    assertWritable();
+    const operation = commandQueue.then(() => recordContentContributionReceipt(taskId, resourceIds, validate));
     commandQueue = operation.then(() => undefined, () => undefined);
     return operation;
   };
@@ -519,6 +544,7 @@ export function createProjectTaskState(input: {
     repairMissingContentHeads,
     activateTask: queueTaskActivation,
     recordContentContribution: queueContentContribution,
+    recordContentContributionReceipt: queueContentContributionReceipt,
     reconcileSupersetThreadContentConflict,
     finalizeExecutionArtifacts,
     flush: store.flush,

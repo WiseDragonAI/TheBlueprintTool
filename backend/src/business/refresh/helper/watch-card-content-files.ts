@@ -44,8 +44,11 @@ export function watchCardContentFiles(input: {
     try {
       const state = statSync(file);
       return `${state.dev}:${state.ino}:${state.size}:${state.mtimeMs}`;
-    } catch {
-      return 'missing';
+    } catch (error) {
+      // WHAT: Classify only a genuinely absent path as missing content.
+      // WHY: Permission and I/O failures must enter the existing contained watcher failure path.
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return 'missing';
+      return `error:${String((error as NodeJS.ErrnoException)?.code ?? 'unknown')}`;
     }
   };
 
@@ -85,12 +88,24 @@ export function watchCardContentFiles(input: {
     });
   };
 
+  const claimObservedGeneration = (file: string, observedSignature: string): boolean => {
+    const key = resolve(file);
+    // WHAT: Admit one filesystem generation across native and audit observers.
+    // WHY: Both observers can see the same materialization before either asynchronous publication settles.
+    if (signatures.get(key) === observedSignature) return false;
+    signatures.set(key, observedSignature);
+    return true;
+  };
+
   function emitFile(file: string, kind: CardContentChange['kind']): void {
     if (closed) return;
     // WHAT: Ignore non-Markdown watcher events at the transport boundary.
     // WHY: Only externalized card and thread content participates in scoped refresh.
     if (extname(file) !== '.md') return;
-    signatures.set(resolve(file), signature(file));
+    const observedSignature = signature(file);
+    // WHAT: Claim the observed generation before entering native debounce.
+    // WHY: The recovery audit must not publish the same generation while native delivery waits.
+    if (!claimObservedGeneration(file, observedSignature)) return;
     const existingTimer = pendingEvents.get(file);
     // WHAT: Replace the pending debounce for the same file.
     // WHY: Editors often emit several filesystem notifications for one durable write.
@@ -106,7 +121,12 @@ export function watchCardContentFiles(input: {
       }
       // WHAT: Publish only an exactly owned content-file change.
       // WHY: Missing or ambiguous ownership must not refresh a guessed ledger.
-      if (change) trackPublication(change, file);
+      if (change) {
+        // WHAT: Record the filesystem generation captured at the debounce boundary.
+        // WHY: The pending path owns the latest bytes, including a newer notification missed by the native watcher.
+        signatures.set(resolve(file), signature(file));
+        trackPublication(change, file);
+      }
     };
     pendingEvents.set(file, { timer: setTimeout(deliver, 50), deliver });
   }
@@ -160,13 +180,19 @@ export function watchCardContentFiles(input: {
         if (!ownership.has(file)) signatures.delete(file);
       }
       for (const [file, change] of ownership) {
+        // WHAT: Leave a path with an active native debounce under that observer's ownership.
+        // WHY: The timer captures the latest bytes; an immediate audit publication would duplicate work and race canonical settlement.
+        if (pendingEvents.has(file)) continue;
         const next = signature(file);
-        // WHAT: Ignore owned Markdown whose stable bounded signature has not changed.
-        // WHY: The audit exists only to recover a native watcher notification that was lost.
-        if (signatures.get(file) === next) continue;
-        signatures.set(file, next);
-        // WHAT: Publish a missed owned change directly from the already delayed audit boundary.
-        // WHY: Re-entering the native debounce can indefinitely postpone recovery under repeated platform notifications.
+        // WHAT: Seed a newly owned absent resource without publishing a local contribution.
+        // WHY: Replicated ownership can arrive before its lazy Markdown object is materialized.
+        if (!signatures.has(file) && next === 'missing') {
+          signatures.set(file, next);
+          continue;
+        }
+        // WHAT: Ignore a generation already claimed by the native watcher or a prior audit.
+        // WHY: One filesystem generation owns one contribution regardless of observation source.
+        if (!claimObservedGeneration(file, next)) continue;
         trackPublication(change, file);
       }
     } catch (error) {
@@ -175,7 +201,12 @@ export function watchCardContentFiles(input: {
   }, input.auditIntervalMs ?? 500);
 
   const ready = Promise.all([...ownership.values()]
-    .filter((change) => input.reconcileOnStart?.(change) === true)
+    .filter((change) => {
+      // WHAT: Defer only a locally absent startup resource.
+      // WHY: A retained remote content head may legitimately precede lazy Markdown materialization.
+      if (signature(change.file) === 'missing') return false;
+      return input.reconcileOnStart?.(change) === true;
+    })
     .map((change) => publish(change, change.file)))
     .then((outcomes) => outcomes.every(Boolean));
 

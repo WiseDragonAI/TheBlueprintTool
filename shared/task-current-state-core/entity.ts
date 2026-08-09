@@ -40,6 +40,7 @@ const terminalExecutionPhases = new Set<string>(['succeeded', 'failed', 'cancell
 const localCardPaths = new Set(['replicationState', 'persistenceState']);
 const narrativeThreadNotePaths = new Set(['message', 'body', 'content', 'contentBytes', 'markdown']);
 const encoder = new TextEncoder();
+const stateHashMemberBytes = encoder.encode(`,${JSON.stringify('stateHash')}:${JSON.stringify('0'.repeat(64))}`).byteLength;
 
 function entityBody(entity: Omit<TaskCurrentEntity, 'stateHash'> | TaskCurrentEntity): Omit<TaskCurrentEntity, 'stateHash'> {
   const { stateHash: _stateHash, ...body } = entity as TaskCurrentEntity;
@@ -205,8 +206,11 @@ export function assertTaskCurrentEntity(entity: TaskCurrentEntity): void {
     if (paths.some((other, otherIndex) => otherIndex !== index && other.startsWith(`${path}/`))) throw new Error('overlapping_task_current_lanes');
     assertRegister(entity, path, entity.fields[path]);
   }
-  if (hashTaskCurrentEntity(entity) !== entity.stateHash) throw new Error('invalid_task_current_entity_hash');
-  if (encoder.encode(canonicalJson(entity)).byteLength > taskCurrentEntityByteLimit) throw new Error('task_current_entity_too_large');
+  const canonicalBody = canonicalJson(entityBody(entity));
+  if (sha256(canonicalBody) !== entity.stateHash) throw new Error('invalid_task_current_entity_hash');
+  // WHAT: Derive the complete canonical entity size from its already validated body encoding.
+  // WHY: State-hash admission must not recursively serialize every register and candidate a second time solely to add the fixed hash member.
+  if (encoder.encode(canonicalBody).byteLength + stateHashMemberBytes > taskCurrentEntityByteLimit) throw new Error('task_current_entity_too_large');
 }
 
 export function finalizeTaskCurrentEntity(entity: Omit<TaskCurrentEntity, 'stateHash'>): TaskCurrentEntity {
