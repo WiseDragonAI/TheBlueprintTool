@@ -220,46 +220,6 @@ The release process repeatedly proved one component boundary, promoted it, and d
 11. **Prove topology, not availability.** HTTP-ready and WebSocket-connected do not prove correct repair authority or convergence.
 12. **Release the complete causal inventory.** A known unintegrated production fix is a release blocker regardless of unrelated passing work.
 
-## 11. Prevention Controls
+## 11. Closure
 
-1. Maintain one bidirectional protocol matrix covering healthy transfer, duplicate, partial disposition, malformed ACK, collision, lost ACK, disconnect before/after durable write, restart, stale attempt, sequential collision, and legacy incident.
-2. Add one production-sized amplification-budget test that asserts peak per-PID RSS/PSS, V8 heap/external/array buffers, queued encoded bytes, WAL bytes, fsync count, observer backlog, frame count, and reconnect amplification.
-3. Add invariant telemetry and assertions:
-   - pending deliveries imply bounded encoded bytes;
-   - terminal rejected hashes never enter the automatic queue;
-   - converged means exact equal roots and no relevant dirty state;
-   - resolved pause means fresh durable reload succeeded;
-   - one relay generation emits at most one terminal broadcast.
-4. Create a single immutable release-admission receipt containing both node identities, relay SHA, fixture provenance hash, pre/post roots, abstract-state bytes, content bytes separately, elapsed phase times, peak memory, queue maxima, and incident delta.
-5. Preserve watcher tests across native event, audit, server-owned materialization, absent remote content, later content creation, canonical HTTP write, and external deletion.
-6. Keep protocol, watcher, diagnostics, deployment, and backup changes as separately admissible diffs.
-7. Replace growing incident-shape branching with one normalized durable collision record and one recovery state machine.
-8. Require every suppression cache to document its durable reconstruction authority.
-9. Add independent oracle or mutation testing for hashes, buckets, joins, and collision evidence; do not rely only on shared production helpers.
-10. Add persistence fault injection for `ENOSPC`, `EIO`, partial append, fsync, rename, directory sync, Worker transaction conflict, and crash at every ACK boundary.
-11. Add transport fault injection for drop after send/before merge, merge-before-ACK, ACK loss, duplicate ACK, stale delivery, reordered summary, and reconnect generation replacement.
-12. Keep copied-real-main state immutable and record fixture provenance. Never augment it and still call it exact.
-13. Require both persisted authorities at the same causal cut. An empty relay proves bootstrap, not conflict reconciliation.
-14. Label a synthetic causal-class fixture as synthetic; never use it as exact production-state proof.
-15. Put canary node, relay, and clients in separate process scopes with per-PID telemetry and hard owned cleanup. Never run a large proof in a shared operator session scope.
-16. Measure cold convergence from authenticated subscription/publication boundaries to exact root equality. Exclude result serialization, status-report construction, and content transfer unless specifically measuring those phases.
-17. Treat performance gates as fixture-derived limits. Never normalize a 120-second cutoff as acceptable for a few-megabyte abstract state.
-18. Block promotion if any known production-causing correction remains uncommitted, unintegrated, undeployed, or unrecovered.
-19. Keep the production incident and relay repair records until the exact causal fixture can reproduce the incident class.
-20. Track the unrelated full-suite FileHandle and worktree-path failures as test-infrastructure debt; focused replication proof does not erase them.
-
-## 12. Open Debts
-
-The production incident is fixed, but these controls are not yet fully proven as repository-wide completed work:
-
-1. Independent hash/join oracle and mutation testing.
-2. Complete transport and persistence fault matrix.
-3. Stable per-PID memory/V8 telemetry in the copied-main canary.
-4. A reproducible exact production relay-state capture method.
-5. One full end-to-end fixture composing watcher startup, real connector, persisted relay authority, two full nodes, both collision directions, lost ACK, sequential recovery, pause, legacy restart, explicit recovery, content, and reload.
-6. Resolution of the two unrelated `753/754` full-suite infrastructure failures.
-7. Explicit performance acceptance thresholds derived from repeated cold-main measurements.
-
-## 13. Operator Decision Summary
-
-The immediate production failure is closed and restart-proven. The architectural priority is now to stop treating component tests as release proof and build one immutable, production-sized, two-authority, bidirectional state-machine qualification with amplification telemetry and fault injection. Until that exists, future replication releases must state exactly which durable transition remains unexercised rather than claiming global correctness from local green tests.
+The production incident is closed and restart-proven. `rel-0.4.8` restored MOH through explicit durable recovery, resolved the terminal collision and derived no-progress scopes, reproduced the exact converged root after restart, and left no active incidents, paused scopes, dirty entities, pending deliveries, queued relay entities, active repairs, missing buckets, or content work.
