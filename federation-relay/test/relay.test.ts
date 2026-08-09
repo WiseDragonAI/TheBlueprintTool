@@ -13,6 +13,7 @@ import {
   taskCurrentStateVersion,
   taskStateProtocol,
 } from '../../shared/task-current-state-core';
+import { nextRepairStateEntityFrame, nextStateEntityFrame } from '../src/state-entity-frames';
 
 type FramePayload = {
   buckets?: Array<{ bucket?: string; count?: number; checksum?: string }>;
@@ -26,6 +27,45 @@ type FramePayload = {
 };
 type Frame = { type: string; requestId?: string; direction?: string; from?: string; stateVersion?: number; projectId?: string; payload?: FramePayload; nodes?: Array<{ nodeId: string; nodeLabel: string; online: boolean }> };
 const maximumStateFrameBytes = 512 * 1024;
+
+it('packs relay repair by wire bytes beyond the node publication count ceiling', () => {
+  const entities = Array.from({ length: 129 }, (_, index) => finalizeTaskCurrentEntity({
+    version: taskCurrentStateVersion,
+    projectId: 'project-a',
+    entityType: 'card',
+    entityId: `card-${index}`,
+    fields: {},
+  }));
+  const packed = nextStateEntityFrame('project-a', entities, {
+    maximumEntities: Number.MAX_SAFE_INTEGER,
+    payload: { attemptId: `${'a'.repeat(64)}:${'b'.repeat(64)}` },
+  });
+  expect(packed.consumed).toBe(129);
+  expect((packed.frame.payload as FramePayload).entries).toHaveLength(129);
+  expect(Buffer.byteLength(JSON.stringify(packed.frame))).toBeLessThanOrEqual(maximumStateFrameBytes);
+});
+
+it('accounts exact repair frame bytes with unicode and attempt metadata', () => {
+  const entities = Array.from({ length: 180 }, (_, index) => finalizeTaskCurrentEntity({
+    version: taskCurrentStateVersion,
+    projectId: 'project-a',
+    entityType: 'card',
+    entityId: `card-${index}`,
+    fields: {
+      title: {
+        clock: { source: index + 1 },
+        candidates: [{ dot: { replicaId: 'source', counter: index + 1 }, operation: 'set', value: `ไทย "quoted" \\ ${index}` }],
+      },
+    },
+  }));
+  const byKey = new Map(entities.map((entity) => [taskCurrentEntityKey(entity), entity]));
+  const remaining = entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash }));
+  const packed = nextRepairStateEntityFrame('project-a', `${'a'.repeat(64)}:${'b'.repeat(64)}`, remaining, (key) => byKey.get(key));
+  expect(packed.consumed).toBe(180);
+  expect(packed.candidateCount).toBe(180);
+  expect(packed.encodedBytes).toBe(Buffer.byteLength(JSON.stringify(packed.frame)));
+  expect(packed.encodedBytes).toBeLessThanOrEqual(maximumStateFrameBytes);
+});
 
 async function createNode(federationId: string, nodeId: string): Promise<string> {
   const response = await SELF.fetch(`https://relay.test/admin/federations/${federationId}/nodes/${nodeId}`, {

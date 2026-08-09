@@ -11,7 +11,28 @@ export function taskCurrentStateDiagnostics(input: { root: string; journalDirect
   for (const entityType of taskEntityTypes) {
     const directory = resolve(input.root, 'current', entityType);
     if (!existsSync(directory)) continue;
-    for (const name of readdirSync(directory)) currentBytes += statSync(resolve(directory, name)).size;
+    let names: string[];
+    try {
+      names = readdirSync(directory);
+    } catch (error) {
+      // WHAT: Treat a concurrently removed shard directory as an empty diagnostic sample.
+      // WHY: Atomic materialization may replace an empty type directory while diagnostics are reading it.
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') continue;
+      throw error;
+    }
+    for (const name of names) {
+      // WHAT: Count only canonical durable shard files.
+      // WHY: Atomic `.json.tmp-*` files are transient implementation details and can disappear before stat.
+      if (!name.endsWith('.json')) continue;
+      try {
+        currentBytes += statSync(resolve(directory, name)).size;
+      } catch (error) {
+        // WHAT: Ignore one canonical shard that disappeared during the diagnostic sample.
+        // WHY: A concurrent atomic replacement must not take the failsafe status route offline.
+        if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') continue;
+        throw error;
+      }
+    }
   }
   const journalCount = existsSync(input.journalDirectory)
     ? readdirSync(input.journalDirectory).filter((name) => name.endsWith('.json')).length

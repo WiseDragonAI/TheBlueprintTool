@@ -69,6 +69,35 @@ export function createFederationStateRuntime(input: {
     ownerNodeId?: string,
   ) => TaskCurrentStateStore | null;
 }) {
+  const prioritizeAvailableContent = (): void => {
+    const onlineByProject = new Map<string, string[]>();
+    for (const project of input.federation()?.remoteProjects().filter((candidate) => candidate.online) ?? []) {
+      const holders = onlineByProject.get(project.localProjectId) ?? [];
+      holders.push(project.ownerNodeId);
+      onlineByProject.set(project.localProjectId, [...new Set(holders)].sort());
+    }
+    for (const [projectId, holders] of onlineByProject) {
+      const store = input.taskStoreForProject(projectId, holders[0]);
+      // WHAT: Leave a catalog project without installed task state outside content scheduling.
+      // WHY: Content demand must be derived from durable resource heads, not catalog presence alone.
+      if (!store) continue;
+      const heads = store.contentHeads().filter((head) => head.type === 'card-markdown' || head.type === 'thread-markdown');
+      for (const holder of holders) {
+        input.contentStore.applyManifest(holder, {
+          version: 1,
+          projectId,
+          generatedAt: new Date().toISOString(),
+          complete: false,
+          resources: heads.map(({ sourceReplicaId: _sourceReplicaId, ...head }) => head),
+        });
+      }
+      for (const head of heads) {
+        const selected = holders.includes(head.sourceReplicaId) ? head.sourceReplicaId : holders[0];
+        input.contentStore.prioritize(selected, projectId, head.key);
+      }
+    }
+  };
+
   const reconcileMergeableTaskConflicts = (
     projectId: string,
     targets?: Array<{ entityType: TaskEntityChange['entityType']; entityId: string }>,
@@ -144,9 +173,12 @@ export function createFederationStateRuntime(input: {
         });
       }
       for (const head of requiredHeads) {
+        // WHAT: Keep retained content provenance deferred while no serving project holder is online.
+        // WHY: An offline replica identity is not executable fetch authority and must not create retrying demand.
+        if (onlineProjectHolders.length === 0) continue;
         const selectedSource = onlineProjectHolders.includes(head.sourceReplicaId)
           ? head.sourceReplicaId
-          : onlineProjectHolders[0] ?? head.sourceReplicaId;
+          : onlineProjectHolders[0];
         input.contentStore.prioritize(selectedSource, projectId, head.key);
       }
       const localProject = input.projectCatalogStore.projects()
@@ -272,5 +304,5 @@ export function createFederationStateRuntime(input: {
     },
   });
 
-  return { contentScheduler, reconcileMergeableTaskConflicts, replicator };
+  return { contentScheduler, prioritizeAvailableContent, reconcileMergeableTaskConflicts, replicator };
 }

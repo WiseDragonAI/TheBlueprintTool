@@ -6,7 +6,7 @@ import type { ServerResponse } from 'node:http';
 import type { TaskExecutionObservation } from '../../../../../shared/schemas/task-execution-types.js';
 import type { ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
-import { createFederationNodeConnector } from '../helper/federation-node-connector.js';
+import { createFederationNodeConnector, type RemoteDecisionOsProject } from '../helper/federation-node-connector.js';
 import type { createFederatedLibraryRuntime } from './federated-library-runtime.js';
 import type { createFederationStateRuntime } from './federation-state-runtime.js';
 import { createFederatedExecutionObservationHandler } from './federated-execution-observation-handler.js';
@@ -14,6 +14,10 @@ import type { createTaskExecutionPresentationRegistry } from '../../codex/runtim
 
 type AnyRecord = Record<string, unknown>;
 type ExecutionState = Pick<ProjectTaskState, 'executions' | 'finalizeExecutionArtifacts'>;
+
+export function relayRepairProjectIds(projects: Array<Pick<RemoteDecisionOsProject, 'localProjectId'>>): string[] {
+  return [...new Set(projects.map((project) => project.localProjectId).filter(Boolean))].sort();
+}
 
 export function createFederationConnectionRuntime(input: {
   catalogFile: string;
@@ -101,12 +105,11 @@ export function createFederationConnectionRuntime(input: {
       }
       input.invalidateProject();
       input.stateRuntime.replicator.reconcileRelay();
-      for (const project of connector?.remoteProjects().filter((entry) => entry.online) ?? []) {
-        input.stateRuntime.replicator.reconcileProject(
-          project.ownerNodeId,
-          project.localProjectId,
-        );
+      const projectIds = relayRepairProjectIds(connector?.remoteProjects() ?? []);
+      for (const projectId of projectIds) {
+        input.stateRuntime.replicator.reconcileProject('relay', projectId);
       }
+      input.stateRuntime.prioritizeAvailableContent();
       publishLocalExecutionPresentationSnapshots();
       if (!input.pausedBackgroundComponents.has('federated-library-sync')) {
         void input.federatedLibrary.synchronize().catch(() => undefined);
@@ -115,7 +118,21 @@ export function createFederationConnectionRuntime(input: {
     },
     onStateFrame: async (frame) => {
       try {
-        await input.stateRuntime.replicator.handleFrame(frame);
+        const operation = input.stateRuntime.replicator.handleFrame(frame);
+        // WHAT: Let correlated relay repair frames fill their existing bounded transport window.
+        // WHY: Awaiting the first frame here would prevent the receiver from sharing one WAL fsync across the group.
+        if (frame.type === 'state-entity-batch' && frame.from === 'relay'
+          && typeof (frame.payload as Record<string, unknown> | undefined)?.attemptId === 'string') {
+          void operation.catch((error: unknown) => input.recordStoppedOperation({
+            scope: `federation-state-frame:${frame.projectId}:${frame.from}`,
+            component: 'federation-task-state-replicator',
+            operation: 'handle-enhanced-state-frame',
+            error,
+            context: { projectId: frame.projectId, frameType: frame.type, from: frame.from },
+          }));
+          return;
+        }
+        await operation;
         if (!input.pausedBackgroundComponents.has('codex-process-scheduler')) {
           void input.scheduleCodex().catch((error: unknown) => {
             input.recordBackgroundFailure(
@@ -149,11 +166,9 @@ export function createFederationConnectionRuntime(input: {
     onExecutionObservation: handleExecutionObservation,
     onStateConnected: () => {
       input.stateRuntime.replicator.reconcileRelay();
-      for (const project of connector?.remoteProjects().filter((entry) => entry.online) ?? []) {
-        input.stateRuntime.replicator.reconcileProject(
-          project.ownerNodeId,
-          project.localProjectId,
-        );
+      const projectIds = relayRepairProjectIds(connector?.remoteProjects() ?? []);
+      for (const projectId of projectIds) {
+        input.stateRuntime.replicator.reconcileProject('relay', projectId);
       }
       publishLocalExecutionPresentationSnapshots();
       if (!input.pausedBackgroundComponents.has('federated-library-sync')) {

@@ -259,6 +259,80 @@ test('watcher recovery audit reprocesses a preserved edit after task ownership b
   }
 });
 
+test('startup reconciliation defers an absent owned resource and observes its later materialization once', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-content-watch-startup-absent-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const contentFile = join(decisionOsRoot, 'cards', 'tasks', 'card-a.md');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(decisionOsRoot, 'threads'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{ id: 'card-a', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } }],
+  }));
+  const changes: string[] = [];
+  const errors: unknown[] = [];
+  const watcher = watchCardContentFiles({
+    decisionOsRoot,
+    reconcileOnStart: () => true,
+    auditIntervalMs: 30,
+    onChange: (change) => { changes.push(change.file); },
+    onError: (error) => { errors.push(error); },
+  });
+
+  try {
+    assert.equal(await watcher.ready, true);
+    await new Promise((resolveWait) => setTimeout(resolveWait, 90));
+    assert.deepEqual(changes, []);
+    assert.deepEqual(errors, []);
+    writeFileSync(contentFile, '# Materialized\n');
+    const deadline = Date.now() + 2_000;
+    while (changes.length === 0 && Date.now() < deadline) await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    await new Promise((resolveWait) => setTimeout(resolveWait, 90));
+    assert.deepEqual(changes, [contentFile]);
+    assert.deepEqual(errors, []);
+    writeFileSync(contentFile, '# Second generation with distinct bytes\n');
+    while (changes.length < 2 && Date.now() < deadline + 2_000) await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    await new Promise((resolveWait) => setTimeout(resolveWait, 90));
+    assert.deepEqual(changes, [contentFile, contentFile]);
+  } finally {
+    await watcher.close();
+  }
+});
+
+test('newly projected absent content is seeded without publication until materialized', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-content-watch-projected-absent-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const contentFile = join(decisionOsRoot, 'cards', 'tasks', 'card-a.md');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(decisionOsRoot, 'threads'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [] }));
+  let projection: Record<string, unknown> = { cards: [] };
+  const changes: string[] = [];
+  const errors: unknown[] = [];
+  const watcher = watchCardContentFiles({
+    decisionOsRoot,
+    taskProjection: () => projection,
+    auditIntervalMs: 30,
+    onChange: (change) => { changes.push(change.file); },
+    onError: (error) => { errors.push(error); },
+  });
+
+  try {
+    projection = { cards: [{ id: 'card-a', comment: { contentFile: '.decision-os/cards/tasks/card-a.md' } }] };
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+    assert.deepEqual(changes, []);
+    assert.deepEqual(errors, []);
+    writeFileSync(contentFile, '# Materialized later\n');
+    const deadline = Date.now() + 2_000;
+    while (changes.length === 0 && Date.now() < deadline) await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    await new Promise((resolveWait) => setTimeout(resolveWait, 90));
+    assert.deepEqual(changes, [contentFile]);
+  } finally {
+    await watcher.close();
+  }
+});
+
 test('delete then editor rename within debounce publishes only the final replacement', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-content-watch-delete-rename-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');

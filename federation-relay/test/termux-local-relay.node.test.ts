@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { once } from 'node:events';
-import { constants, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { constants, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import test from 'node:test';
 import { WebSocket } from 'ws';
 import { stateBaselineEpoch, stateProtocol, stateSchema } from '../src/protocol.js';
+import { summarizeBucket } from '../src/state-storage.js';
 
 async function freePort(): Promise<number> {
   const server = createNetServer();
@@ -112,6 +113,19 @@ test('Termux relay exposes dev health, provisions one node, and publishes its ca
     workerName: 'decision-os-federation-relay-dev',
     durableObjectNamespace: 'decision-os-federations-dev',
     runtime: 'termux-node',
+    repairTelemetry: {
+      persistenceCount: 0,
+      persistenceBytes: 0,
+      persistenceMs: 0,
+      ackPersistenceCount: 0,
+      ackPersistenceBytes: 0,
+      ackPersistenceMs: 0,
+      outboundFrameCount: 0,
+      outboundEntityCount: 0,
+      outboundEncodedBytes: 0,
+      packingCandidateCount: 0,
+      packingMs: 0,
+    },
   });
 
   const unauthorized = await fetch(`http://127.0.0.1:${port}/admin/federations/test/nodes/phone-dev`, { method: 'POST' });
@@ -151,6 +165,100 @@ test('Termux relay exposes dev health, provisions one node, and publishes its ca
   await once(socket, 'close');
   child.kill('SIGTERM');
   await once(child, 'exit');
+});
+
+test('Termux relay replays an acknowledged entity journal after a crash before checkpoint', async (context) => {
+  const port = await freePort();
+  const directory = mkdtempSync(resolve(tmpdir(), 'decision-os-termux-entity-journal-'));
+  const stateFile = resolve(directory, 'relay.json');
+  const administratorSecret = randomBytes(32).toString('hex');
+  const releaseSha = 'f'.repeat(40);
+  const start = async (): Promise<ChildProcess> => {
+    const child = spawn(process.execPath, [
+      '--import',
+      resolve('..', 'backend', 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs'),
+      resolve('src', 'termux-local-relay.ts'),
+    ], {
+      cwd: resolve('.'),
+      env: {
+        ...process.env,
+        ADMIN_SECRET: administratorSecret,
+        DECISION_OS_RELEASE_SHA: releaseSha,
+        DECISION_OS_RELAY_STATE_CHECKPOINT_DELAY_MS: '60000',
+        DECISION_OS_RELAY_STATE_FILE: stateFile,
+        HOST: '127.0.0.1',
+        PORT: String(port),
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    await waitForRelay(child);
+    return child;
+  };
+  let child = await start();
+  context.after(() => {
+    // WHAT: Terminate only the relay process still owned by this crash-recovery test.
+    // WHY: Test settlement must not signal production or another canary process.
+    if (child.exitCode === null) child.kill('SIGKILL');
+    rmSync(directory, { recursive: true, force: true });
+  });
+  const provisioned = await fetch(`http://127.0.0.1:${port}/admin/federations/journal-proof/nodes/writer`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${administratorSecret}` },
+  });
+  assert.equal(provisioned.status, 201);
+  const credential = String((await provisioned.json() as { credential: string }).credential);
+  const connect = async (): Promise<WebSocket> => {
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/connect/journal-proof/writer`, { headers: { authorization: `Bearer ${credential}` } });
+    await once(socket, 'open');
+    return socket;
+  };
+  const writer = await connect();
+  writer.send(JSON.stringify({
+    version: 1,
+    type: 'manifest',
+    nodeLabel: 'Writer',
+    projects: [{ id: 'shared', name: 'Shared', description: '', color: '#38d9e8', ledgers: [] }],
+    stateProtocol,
+    stateSchema,
+    baselineEpoch: stateBaselineEpoch,
+  }));
+  await nextMatchingFrame(writer, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared');
+  const { finalizeTaskCurrentEntity, hashTaskCurrentRoot, taskCurrentBucketForEntityKey, taskCurrentEntityKey } = await import('../../shared/task-current-state-core.js');
+  const entity = finalizeTaskCurrentEntity({
+    version: stateSchema,
+    projectId: 'shared',
+    entityType: 'card',
+    entityId: 'journal-sentinel',
+    fields: { title: { clock: { writer: 1 }, candidates: [{ dot: { replicaId: 'writer', counter: 1 }, operation: 'set', value: 'Journal sentinel' }] } },
+  });
+  const key = taskCurrentEntityKey(entity);
+  const acknowledged = nextMatchingFrame(writer, (frame) => frame.type === 'state-relay-ack');
+  writer.send(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: stateSchema, projectId: 'shared', payload: { stateVersion: stateSchema, deliveryId: 'journal-delivery', entries: [{ key, stateHash: entity.stateHash, entity }] } }));
+  await acknowledged;
+  assert.equal(readdirSync(`${stateFile}.entity-journal`).filter((name) => name.endsWith('.json')).length, 1);
+  child.kill('SIGKILL');
+  await once(child, 'exit');
+
+  child = await start();
+  const replacement = await connect();
+  const summaryPromise = nextMatchingFrame(replacement, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared');
+  replacement.send(JSON.stringify({
+    version: 1,
+    type: 'manifest',
+    nodeLabel: 'Writer',
+    projects: [{ id: 'shared', name: 'Shared', description: '', color: '#38d9e8', ledgers: [] }],
+    stateProtocol,
+    stateSchema,
+    baselineEpoch: stateBaselineEpoch,
+  }));
+  const summary = await summaryPromise;
+  const bucket = taskCurrentBucketForEntityKey(key);
+  assert.equal(summary.payload.root, hashTaskCurrentRoot([summarizeBucket(bucket, { [key]: entity.stateHash })]));
+  replacement.close();
+  await once(replacement, 'close');
+  child.kill('SIGTERM');
+  await once(child, 'exit');
+  assert.equal(readdirSync(`${stateFile}.entity-journal`).filter((name) => name.endsWith('.json')).length, 0);
 });
 
 test('Termux relay suppresses duplicate requests per connection and retries after reconnect and restart', async (context) => {

@@ -100,8 +100,7 @@ export function createProjectContentRuntime(input: {
     if (input.serverClosing() || !project?.available) throw new Error(`task_content_project_unavailable:${input.projectId}`);
     const taskState = input.stateForProject(project);
     const contentFile = String(scoped.contentFile ?? '');
-    const beforeHeads = JSON.stringify(taskState.store.contentHeads(contentFile));
-    const delta = await taskState.recordContentContribution(
+    const receipt = await taskState.recordContentContributionReceipt(
       '',
       contentFile,
       (head, body) => {
@@ -114,13 +113,13 @@ export function createProjectContentRuntime(input: {
         if (validation.ok === false) throw new Error(`${validation.error}:${head.key}`);
       },
     );
-    const headChanged = JSON.stringify(taskState.store.contentHeads(contentFile)) !== beforeHeads;
-    const committedChange = delta.entities.length > 0 || headChanged;
-    // WHAT: Consume canonical-write echoes only when neither the operation delta nor authoritative head state changed.
-    // WHY: The delta proves this commit directly; head comparison catches a concurrent queued publication that compacted it.
-    if (!committedChange) return;
-    input.invalidateProject(input.projectId, delta.entities.length > 0
-      ? delta.entities
+    // WHAT: Consume an observation whose own serialized contribution committed no entity change.
+    // WHY: A concurrent canonical command owns its head transition and event; global head drift cannot attribute that commit to this watcher.
+    // WHAT: Consume an observation that committed no resource in its own serialized queue turn.
+    // WHY: Global head drift and replication visibility cannot attribute a local commit to this watcher operation.
+    if (!receipt.committedResourceIds.includes(contentFile)) return;
+    input.invalidateProject(input.projectId, receipt.delta.entities.length > 0
+      ? receipt.delta.entities
       : [{ entityType: 'resource', entityId: contentFile }]);
     broadcastCard(scoped);
   };
@@ -152,6 +151,8 @@ export function createProjectContentRuntime(input: {
       // WHAT: Reconcile startup bytes only for an exactly owned task resource with one retained head.
       // WHY: Headless held resources and causal conflicts must not be activated or resolved by a filesystem scan.
       const taskState = input.taskState();
+      // WHAT: Reject non-task resources and unavailable task state before startup reconciliation.
+      // WHY: Only the owning active task-state resource may authorize a local content contribution.
       if (change.ledgerId !== 'tasks' || !taskState) return false;
       return taskState.store.contentHeads(change.contentFile).length === 1;
     },
