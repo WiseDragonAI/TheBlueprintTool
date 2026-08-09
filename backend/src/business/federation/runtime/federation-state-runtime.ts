@@ -32,7 +32,7 @@ export function createFederationStateRuntime(input: {
   ) => void;
   localTaskRuntime: ReturnType<typeof createLocalTaskRuntime>;
   pausedFederationRepairs: Map<string, RuntimeIncident>;
-  pausedTaskProjects: { has(projectId: string): boolean; set(projectId: string, incident: unknown): unknown };
+  pausedTaskProjects: Map<string, RuntimeIncident>;
   presentations: ReturnType<typeof createTaskExecutionPresentationRegistry>;
   projectCatalogStore: ReturnType<typeof createProjectCatalogStore>;
   projectContexts: ReturnType<typeof createProjectRuntimeRegistry>['contexts'];
@@ -57,7 +57,7 @@ export function createFederationStateRuntime(input: {
     error: unknown;
     code?: string;
     context?: Record<string, unknown>;
-  }) => unknown;
+  }) => RuntimeIncident;
   recordStoppedOperation: (operation: {
     scope: string;
     component: string;
@@ -291,9 +291,20 @@ export function createFederationStateRuntime(input: {
     const rejected = Array.isArray(incident.context.rejected) ? incident.context.rejected : [];
     const state = input.projectStates.get(projectId) ?? input.federatedProjectStates.get(projectId);
     const retained = state?.store.repairCollisionEvidence(attemptId) ?? [];
+    const downstreamAttempt = String(input.pausedTaskProjects.get(projectId)?.context.attemptId ?? '');
+    const downstreamParts = /^([a-f0-9]{64}):([a-f0-9]{64})$/.exec(downstreamAttempt);
+    // WHAT: Reuse a legacy timeout's relay root only when its receiver half equals the current durable store root.
+    // WHY: An unrelated or stale no-progress attempt must not become collision suppression authority.
+    const downstreamRelayRoot = downstreamParts && state?.store.rootHash() === downstreamParts[2] ? downstreamParts[1] : '';
+    const retainedRelayRoot = String(incident.context.relayRoot ?? '') || (/^[a-f0-9]{64}$/.test(downstreamRelayRoot) ? downstreamRelayRoot : '');
     // WHAT: Restore automatic-repair suppression only from matching durable store evidence.
     // WHY: A malformed incident must remain visibly paused without granting transient recovery authority.
-    if (attemptId && retained.length > 0) replicator.restoreTerminalRepair(projectId, from, attemptId, rejected, String(incident.context.relayRoot ?? ''));
+    if (attemptId && (retained.length > 0 || (attemptId.startsWith('publication:') && rejected.length > 0))) {
+      try { replicator.restoreTerminalRepair(projectId, from, attemptId, rejected, retainedRelayRoot); } catch {
+        // WHAT: Keep malformed legacy incident context paused without installing transient suppression authority.
+        // WHY: Startup containment must not reinterpret invalid wire evidence or stop unrelated projects.
+      }
+    }
   }
 
   for (const [projectId, state] of input.projectStates) {

@@ -3,6 +3,8 @@
  * WHY: Recovery must install valid state and durable incident resolution before reopening admission.
  */
 import { resolve } from 'node:path';
+import { normalizeFederationStateRejection } from '../../../../../shared/federation-state-transport.js';
+import type { TaskEntityType } from '../../../../../shared/task-current-state-core.js';
 import { recoverTaskExecutions } from '../../codex/helper/recover-task-executions.js';
 import type { createCodexProcessCoordinator } from '../../codex/runtime/codex-process-coordinator.js';
 import type { createFederationContentScheduler } from '../../federation/helper/federation-content-scheduler.js';
@@ -211,7 +213,7 @@ export function createRuntimeRecoveryService(input: {
     resolution: string,
   ): Promise<string[]> => {
     const cachedPause = input.incidentSupervisor.pausedFederationRepairs.get(projectId);
-    const paused = input.incidentLedger.active(scope)
+    let paused = input.incidentLedger.active(scope)
       .find((incident) => incident.code === 'task_current_dot_collision') ?? cachedPause;
     const replicator = input.replicator();
     const project = input.projectById(projectId);
@@ -224,6 +226,56 @@ export function createRuntimeRecoveryService(input: {
     // WHAT: Reject a collision incident that lost its stable repair-attempt identity.
     // WHY: Recovery must bind its exactly-once receipt to the durable rejected delivery evidence.
     if (!attemptId) return [];
+    let retainedEvidence = state.store.repairCollisionEvidence(attemptId);
+    let adoptedLegacyEvidence = false;
+    // WHAT: Adopt a legacy publication incident into the current durable evidence contract only during the explicit authority action.
+    // WHY: Pre-patch incidents retained exact hashes and dots but could not bind their already archived receiver entity to the publication attempt.
+    if (retainedEvidence.length === 0 && attemptId.startsWith('publication:')) {
+      const deliveryId = String(paused.context.deliveryId ?? '');
+      const rejected = Array.isArray(paused.context.rejected)
+        ? paused.context.rejected.map(normalizeFederationStateRejection)
+        : [];
+      // WHAT: Reject missing, mismatched, or empty legacy delivery coordinates before archive adoption.
+      // WHY: The operator action must remain bound to the exact rejected publication identity.
+      if (!deliveryId || attemptId !== `publication:${deliveryId}` || rejected.length < 1) return [];
+      const submittedEntities = rejected.map((rejection) => {
+        const separator = rejection.key.indexOf('\u0000');
+        // WHAT: Reject an entity key that cannot identify one current local submission.
+        // WHY: Recovery cannot infer entity identity from malformed retained context.
+        if (separator < 1) throw new Error('invalid_task_current_publication_collision_evidence');
+        const entity = state.store.entity(rejection.key.slice(0, separator) as TaskEntityType, rejection.key.slice(separator + 1));
+        // WHAT: Require the current local entity to remain byte-identical to the legacy submitted hash.
+        // WHY: A later mutation requires a new operator decision instead of stale evidence adoption.
+        if (!entity || entity.stateHash !== rejection.stateHash) throw new Error('task_current_publication_collision_receiver_changed');
+        return entity;
+      });
+      retainedEvidence = await state.store.adoptPublicationCollisionEvidence({ attemptId, deliveryId, rejected, submittedEntities });
+      adoptedLegacyEvidence = true;
+    }
+    // WHAT: Keep the legacy scope paused when neither current nor adopted durable evidence authorizes recovery.
+    // WHY: Explicit resolution cannot proceed from incident strings alone.
+    if (retainedEvidence.length < 1) return [];
+    // WHAT: Upgrade the original collision incident under its exact fingerprint after legacy evidence becomes durable.
+    // WHY: Restart and generation guards must observe relay-root and evidence-key authority before creating the successor.
+    if (adoptedLegacyEvidence) {
+      const downstreamAttempt = String(input.incidentLedger.active(`project-task-state:${projectId}`)
+        .find((incident) => incident.code === 'federation_state_no_progress')?.context.attemptId ?? '');
+      const downstreamParts = /^([a-f0-9]{64}):([a-f0-9]{64})$/.exec(downstreamAttempt);
+      const relayRoot = String(paused.context.relayRoot ?? '') || (downstreamParts && downstreamParts[2] === state.store.rootHash() ? downstreamParts[1] : '');
+      paused = input.incidentSupervisor.recordIncident({
+        scope,
+        component: 'federation-task-state-replicator',
+        operation: 'terminal-state-collision',
+        code: 'task_current_dot_collision',
+        error: new Error(`task_current_dot_collision:${projectId}`),
+        context: {
+          ...paused.context,
+          ...(relayRoot ? { relayRoot } : {}),
+          evidenceKeys: retainedEvidence.map((entry) => `${entry.deliveryId}\u0000${entry.key}`).sort(),
+        },
+      });
+      input.incidentSupervisor.pausedFederationRepairs.set(projectId, paused);
+    }
     const receipt = await state.store.recoverRepairCollisionLocalAuthority(attemptId);
     const recoveryKeys = Object.keys(receipt.resultingStateHashes).sort();
     const diagnostics = replicator.diagnostics();
