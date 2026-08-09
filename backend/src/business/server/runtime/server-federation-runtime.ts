@@ -106,6 +106,7 @@ export function createServerFederationRuntime(input: {
       entities ? [...entities] : undefined,
     ),
     localTaskRuntime: executionRuntime.localTaskRuntime,
+    pausedFederationRepairs: incidentSupervisor.pausedFederationRepairs,
     pausedTaskProjects,
     presentations: executionPresentations,
     projectCatalogStore,

@@ -20,7 +20,8 @@ type FramePayload = {
   data?: string;
   deliveryId?: string;
   entries?: Array<{ key: string; stateHash: string; entity: unknown }>;
-  accepted?: Array<{ key: string; stateHash: string }>;
+  accepted?: Array<{ key: string; stateHash: string; resultingStateHash?: string }>;
+  rejected?: Array<{ key: string; stateHash: string; receiverStateHash: string; code: string; collisions: unknown[] }>;
   root?: string;
   executionId?: string;
   observation?: unknown;
@@ -296,6 +297,50 @@ describe('federation relay', () => {
     nodeB.close(1000, 'test_complete');
   });
 
+  it('acknowledges the submitted hash separately from the joined relay hash', async () => {
+    const federationId = `relay-ack-join-${crypto.randomUUID()}`;
+    const credential = await createNode(federationId, 'writer');
+    const writer = await connect(federationId, 'writer', credential);
+    writer.send(JSON.stringify(manifest('Writer')));
+    const retained = finalizeTaskCurrentEntity({
+      version: taskCurrentStateVersion,
+      projectId: 'shared',
+      entityType: 'card',
+      entityId: 'concurrent-card',
+      fields: { title: { clock: { relay: 1 }, candidates: [{ dot: { replicaId: 'relay', counter: 1 }, operation: 'set', value: 'Relay value' }] } },
+    });
+    const seeded = nextFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === 'seed-concurrent');
+    writer.send(JSON.stringify(stateBatch('shared', retained, 'seed-concurrent')));
+    await seeded;
+    const submitted = finalizeTaskCurrentEntity({
+      version: taskCurrentStateVersion,
+      projectId: 'shared',
+      entityType: 'card',
+      entityId: 'concurrent-card',
+      fields: { title: { clock: { node: 1 }, candidates: [{ dot: { replicaId: 'node', counter: 1 }, operation: 'set', value: 'Node value' }] } },
+    });
+    const joined = finalizeTaskCurrentEntity({
+      version: taskCurrentStateVersion,
+      projectId: 'shared',
+      entityType: 'card',
+      entityId: 'concurrent-card',
+      fields: { title: { clock: { node: 1, relay: 1 }, candidates: [
+        { dot: { replicaId: 'node', counter: 1 }, operation: 'set', value: 'Node value' },
+        { dot: { replicaId: 'relay', counter: 1 }, operation: 'set', value: 'Relay value' },
+      ] } },
+    });
+    expect(joined.stateHash).not.toBe(submitted.stateHash);
+    expect(joined.stateHash).not.toBe(retained.stateHash);
+    const acknowledged = nextFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === 'join-concurrent');
+    writer.send(JSON.stringify(stateBatch('shared', submitted, 'join-concurrent')));
+    await expect(acknowledged).resolves.toMatchObject({ payload: { accepted: [{
+      key: taskCurrentEntityKey(submitted),
+      stateHash: submitted.stateHash,
+      resultingStateHash: joined.stateHash,
+    }] } });
+    writer.close(1000, 'test_complete');
+  });
+
   it('byte-bounds relay replay frames as well as node publication frames', async () => {
     const federationId = `relay-byte-bound-${crypto.randomUUID()}`;
     const [writerCredential, readerCredential] = await Promise.all([
@@ -371,6 +416,45 @@ describe('federation relay', () => {
     writer.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: taskCurrentStateVersion, projectId: 'shared', payload: { stateVersion: taskCurrentStateVersion } }));
     await expect(emptySummary).resolves.toMatchObject({ payload: { buckets: [] } });
     writer.close(1000, 'test_complete');
+  });
+
+  it('accepts healthy publication entries while durably rejecting a same-dot collision', async () => {
+    const federationId = `relay-mixed-collision-${crypto.randomUUID()}`;
+    const [writerCredential, readerCredential] = await Promise.all([
+      createNode(federationId, 'writer'),
+      createNode(federationId, 'reader'),
+    ]);
+    const writer = await connect(federationId, 'writer', writerCredential);
+    const reader = await connect(federationId, 'reader', readerCredential);
+    writer.send(JSON.stringify(manifest('Writer')));
+    reader.send(JSON.stringify(manifest('Reader')));
+    const retained = currentEntity('shared', 'collision-card', 'todo');
+    const seeded = nextFrame(writer, (frame) => frame.type === 'state-relay-ack');
+    writer.send(JSON.stringify(stateBatch('shared', retained, 'seed-collision')));
+    await seeded;
+
+    const conflicting = currentEntity('shared', 'collision-card', 'done');
+    const healthy = currentEntity('shared', 'healthy-card', 'todo');
+    const mixed = stateBatch('shared', conflicting, 'mixed-collision');
+    mixed.payload.entries.push({ key: taskCurrentEntityKey(healthy), stateHash: healthy.stateHash, entity: healthy });
+    const acknowledgement = nextFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === 'mixed-collision');
+    const forwarded = nextFrame(reader, (frame) => frame.type === 'state-entity-batch' && frame.payload?.entries?.some((entry) => entry.key === taskCurrentEntityKey(healthy)) === true);
+    writer.send(JSON.stringify(mixed));
+    await expect(acknowledgement).resolves.toMatchObject({
+      payload: {
+        accepted: [{ key: taskCurrentEntityKey(healthy), stateHash: healthy.stateHash }],
+        rejected: [{
+          key: taskCurrentEntityKey(conflicting),
+          stateHash: conflicting.stateHash,
+          receiverStateHash: retained.stateHash,
+          code: 'task_current_dot_collision',
+          collisions: [{ entityType: 'card', entityId: 'collision-card', path: 'lifecycle', dot: { replicaId: 'node-a', counter: 1 } }],
+        }],
+      },
+    });
+    await expect(forwarded).resolves.toMatchObject({ payload: { entries: [{ key: taskCurrentEntityKey(healthy) }] } });
+    writer.close(1000, 'test_complete');
+    reader.close(1000, 'test_complete');
   });
 
   it('rejects incompatible manifests before state participation', async () => {

@@ -3,6 +3,7 @@
  * WHY: Nodes and relays must make identical duplicate-work decisions without changing the wire protocol.
  */
 import { hashTaskCurrentRoot } from './task-current-state-core.js';
+import type { FederationStateRejection } from './federation-state-transport.js';
 
 export type FederationRepairBucket = { bucket: string; count: number; checksum: string };
 export type FederationRepairRecord = {
@@ -24,6 +25,7 @@ export type FederationRepairRecord = {
     encodedBytes: number;
   }>;
   acknowledgedEntries?: Record<string, string>;
+  rejectedEntries?: Record<string, FederationStateRejection>;
   summarySent?: boolean;
   completedAt?: string;
 };
