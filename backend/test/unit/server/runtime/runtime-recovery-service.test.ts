@@ -48,7 +48,7 @@ async function legacyFixture(prefix: string, retainReceiver = true) {
   return { root, projectId, store, localEntity, remoteEntity, collision };
 }
 
-function recoveryHarness(fixture: Awaited<ReturnType<typeof legacyFixture>>, collision = fixture.collision) {
+function recoveryHarness(fixture: Awaited<ReturnType<typeof legacyFixture>>, collision = fixture.collision, options: { stateInstalled?: boolean; openFailure?: Error; staleDownstreamCache?: boolean; resolutionFailure?: boolean } = {}) {
   const incidentLedger = createRuntimeIncidentLedger({ decisionOsRoot: fixture.root });
   const incidentSupervisor = createIncidentSupervisor({ incidentLedger });
   const scope = `federation-repair:${fixture.projectId}`;
@@ -65,6 +65,9 @@ function recoveryHarness(fixture: Awaited<ReturnType<typeof legacyFixture>>, col
     context: { projectId: fixture.projectId, from: 'relay', attemptId: noProgressAttempt },
   });
   incidentSupervisor.pausedTaskProjects.set(fixture.projectId, noProgress);
+  // WHAT: Resolve only the durable timeout while retaining its stale in-memory cache for the regression fixture.
+  // WHY: Successful collision recovery must remove stale admission state even when no downstream ledger incident remains.
+  if (options.staleDownstreamCache) incidentLedger.resolveScope(`project-task-state:${fixture.projectId}`, 'Pre-resolved fixture timeout.');
   const paused = incidentLedger.record({
     scope,
     component: 'federation-task-state-replicator',
@@ -74,7 +77,24 @@ function recoveryHarness(fixture: Awaited<ReturnType<typeof legacyFixture>>, col
     context: { projectId: fixture.projectId, from: 'relay', attemptId, deliveryId, rejected: [collision], evidenceKeys: [] },
   });
   incidentSupervisor.pausedFederationRepairs.set(fixture.projectId, paused);
+  // WHAT: Inject a downstream resolution persistence failure only for the requested regression fixture.
+  // WHY: Recovery must clean application state and restore pause authority after a failed diagnostic write.
+  if (options.resolutionFailure) {
+    const resolveScope = incidentLedger.resolveScope.bind(incidentLedger);
+    incidentLedger.resolveScope = (targetScope: string, targetResolution = '') => {
+      // WHAT: Fail only the captured project-state resolution while preserving ordinary collision resolution behavior.
+      // WHY: The test must reach replacement installation before exercising rollback containment.
+      if (targetScope === `project-task-state:${fixture.projectId}`) return [];
+      return resolveScope(targetScope, targetResolution);
+    };
+  }
   const publications: Array<{ keys: string[]; root: string; incidentContext: Record<string, unknown> }> = [];
+  const states = new Map<string, { store: Store }>();
+  // WHAT: Install the fixture eagerly only for the existing recovery-path tests.
+  // WHY: The paused-store regression must begin with no normal runtime admission authority.
+  if (options.stateInstalled !== false) states.set(fixture.projectId, { store: fixture.store });
+  let openedState: { store: Store } | null = null;
+  let openCount = 0;
   let converged = false;
   const replicator = {
     diagnostics: () => ({
@@ -82,6 +102,9 @@ function recoveryHarness(fixture: Awaited<ReturnType<typeof legacyFixture>>, col
       runtimeDirty: [],
     }),
     publishRecoveryDelta: (delta: { entities: Array<{ entityType: string; entityId: string }> }, store: Store) => {
+      // WHAT: Keep a temporary recovery store outside normal admission until convergence and reload proof.
+      // WHY: A paused project must not reopen application traffic merely because its successor was published.
+      if (options.stateInstalled === false) assert.equal(states.has(fixture.projectId), false);
       publications.push({
         keys: delta.entities.map((entity) => `${entity.entityType}\u0000${entity.entityId}`),
         root: store.rootHash(),
@@ -91,6 +114,7 @@ function recoveryHarness(fixture: Awaited<ReturnType<typeof legacyFixture>>, col
     },
     restoreTerminalRepair: () => undefined,
     clearTerminalRepair: () => undefined,
+    reconcileProject: () => undefined,
   };
   const project = { id: fixture.projectId, name: 'Project A', relativePath: '.', root: fixture.root, decisionOsRoot: fixture.root, description: '', color: '#38d9e8', ledgers: [], available: true, diagnostic: '' };
   const input = {
@@ -105,15 +129,25 @@ function recoveryHarness(fixture: Awaited<ReturnType<typeof legacyFixture>>, col
     initializePipelineCatalog: () => undefined,
     invalidateProject: () => undefined,
     localNodeId: () => 'workstation',
-    localTaskRuntime: { states: new Map([[fixture.projectId, { store: fixture.store }]]) },
+    localTaskRuntime: {
+      states,
+      openStateForProject: () => {
+        openCount += 1;
+        // WHAT: Inject an exact durable reopen failure before returning recovery authority.
+        // WHY: Failed validation must leave the paused project uninstalled and unpublished.
+        if (options.openFailure) throw options.openFailure;
+        openedState = { store: createTaskCurrentStateStore({ decisionOsRoot: fixture.root, projectId: fixture.projectId }) };
+        return openedState;
+      },
+    },
     migrationAdmissionFile: resolve(fixture.root, 'migration-admission.json'),
     migrateProjectPipelines: () => undefined,
     projectById: (projectId: string) => projectId === fixture.projectId ? project : null,
-    projectRuntimeRegistry: { contexts: new Map(), dispose: () => undefined },
+    projectRuntimeRegistry: { contexts: new Map(), dispose: () => undefined, tryContext: () => ({ runtime: {} }) },
     projectSyncRuntime: {},
     replicator: () => replicator,
   } as unknown as Parameters<typeof createRuntimeRecoveryService>[0];
-  return { attemptId, incidentLedger, incidentSupervisor, publications, recovery: createRuntimeRecoveryService(input), scope };
+  return { attemptId, incidentLedger, incidentSupervisor, openedState: () => openedState, openCount: () => openCount, publications, recovery: createRuntimeRecoveryService(input), scope, states };
 }
 
 test('explicit recovery upgrades one legacy publication incident from retained WAL evidence and settles both pauses', async (context) => {
@@ -171,4 +205,60 @@ test('legacy publication recovery rejects malformed collision coordinates before
   assert.equal(harness.incidentLedger.active(harness.scope).length, 1);
   assert.deepEqual(fixture.store.repairCollisionEvidence(harness.attemptId), []);
   assert.deepEqual(harness.publications, []);
+});
+
+test('explicit collision recovery keeps a reopened paused store private until convergence then installs it', async (context) => {
+  const fixture = await legacyFixture('decision-os-paused-publication-store-');
+  context.after(() => rmSync(fixture.root, { recursive: true, force: true }));
+  const harness = recoveryHarness(fixture, fixture.collision, { stateInstalled: false });
+  assert.equal(harness.states.has(fixture.projectId), false);
+
+  const result = await harness.recovery.resume(harness.scope, 'reconcile-local-authority');
+
+  assert.equal(result.ok, true);
+  assert.equal(harness.openCount(), 1);
+  assert.equal(harness.publications.length, 1);
+  const installed = harness.states.get(fixture.projectId);
+  assert.ok(installed);
+  assert.equal(installed, harness.openedState());
+  assert.equal(installed.store.rootHash(), harness.publications[0].root);
+  assert.equal(harness.incidentLedger.active(harness.scope).length, 0);
+  assert.equal(harness.incidentLedger.active(`project-task-state:${fixture.projectId}`).length, 0);
+});
+
+test('paused collision recovery installs no state when exact durable reopen fails', async (context) => {
+  const fixture = await legacyFixture('decision-os-paused-publication-open-failure-');
+  context.after(() => rmSync(fixture.root, { recursive: true, force: true }));
+  const harness = recoveryHarness(fixture, fixture.collision, { stateInstalled: false, openFailure: new Error('invalid_task_current_state_shard') });
+
+  const result = await harness.recovery.resume(harness.scope, 'reconcile-local-authority');
+
+  assert.equal(result.ok, false);
+  assert.equal(harness.openCount(), 1);
+  assert.equal(harness.states.has(fixture.projectId), false);
+  assert.equal(harness.publications.length, 1);
+  assert.equal(harness.incidentLedger.active(harness.scope).length, 2);
+  assert.equal(harness.incidentLedger.active(harness.scope).some((incident) => incident.code === 'federation_repair_runtime_restore_failed'), true);
+  assert.equal(harness.incidentLedger.active(`project-task-state:${fixture.projectId}`).length, 1);
+});
+
+test('successful collision recovery clears a stale task-project pause cache with no active downstream incident', async (context) => {
+  const fixture = await legacyFixture('decision-os-paused-publication-stale-cache-');
+  context.after(() => rmSync(fixture.root, { recursive: true, force: true }));
+  const harness = recoveryHarness(fixture, fixture.collision, { stateInstalled: false, staleDownstreamCache: true });
+  const result = await harness.recovery.resume(harness.scope, 'reconcile-local-authority');
+  assert.equal(result.ok, true);
+  assert.equal(harness.incidentSupervisor.pausedTaskProjects.has(fixture.projectId), false);
+});
+
+test('downstream resolution persistence failure removes replacement state and restores both pauses', async (context) => {
+  const fixture = await legacyFixture('decision-os-paused-publication-resolution-failure-');
+  context.after(() => rmSync(fixture.root, { recursive: true, force: true }));
+  const harness = recoveryHarness(fixture, fixture.collision, { stateInstalled: false, resolutionFailure: true });
+  const result = await harness.recovery.resume(harness.scope, 'reconcile-local-authority');
+  assert.equal(result.ok, false);
+  assert.equal(harness.states.has(fixture.projectId), false);
+  assert.equal(harness.incidentLedger.active(harness.scope).some((incident) => incident.code === 'task_current_dot_collision'), true);
+  assert.equal(harness.incidentLedger.active(harness.scope).some((incident) => incident.code === 'federation_repair_runtime_restore_failed'), true);
+  assert.equal(harness.incidentSupervisor.pausedTaskProjects.has(fixture.projectId), true);
 });
