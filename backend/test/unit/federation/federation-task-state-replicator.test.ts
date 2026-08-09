@@ -12,7 +12,7 @@ import type { FederationStateFrame } from '../../../src/business/federation/help
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskCurrentBucket, type TaskCurrentEntity } from '../../../src/business/task-state/helper/task-current-state-types.js';
 import { createTaskExecutionRepository } from '../../../src/business/task-state/helper/task-execution-repository.js';
-import { taskCurrentEntityKey } from '../../../../shared/task-current-state-core.js';
+import { finalizeTaskCurrentEntity, taskCurrentEntityKey } from '../../../../shared/task-current-state-core.js';
 import { migrateTaskCurrentState } from '../../../src/business/task-state/helper/task-current-state-migration.js';
 
 type Replicator = ReturnType<typeof createFederationTaskStateReplicator>;
@@ -521,7 +521,7 @@ test('blank remote-only node reaches the durable relay root while every owner is
   assert.equal((requester.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].title, 'Durable relay card');
 });
 
-test('relay acknowledgements clear only matching entity hashes from the project dirty map', async (context) => {
+test('relay acknowledgements require an exact accepted and rejected partition before settlement', async (context) => {
   const node = fixture('decision-os-ack-correlation-');
   context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
   const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
@@ -534,9 +534,30 @@ test('relay acknowledgements clear only matching entity hashes from the project 
   replicator.publishDelta({ version: taskCurrentStateVersion, projectId: 'project-a', entities: [...left.delta.entities, ...right.delta.entities] });
   const delivery = sent.find((frame) => frame.type === 'state-entity-batch')!;
   const payload = delivery.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
-  await replicator.handleFrame({ type: 'state-relay-ack', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, deliveryId: payload.deliveryId, accepted: payload.entries.map((entry, index) => ({ key: entry.key, stateHash: index === 0 ? '0'.repeat(64) : entry.stateHash })) } });
+  await assert.rejects(replicator.handleFrame({ type: 'state-relay-ack', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, deliveryId: payload.deliveryId, accepted: payload.entries.map((entry, index) => ({ key: entry.key, stateHash: index === 0 ? '0'.repeat(64) : entry.stateHash })) } }), /invalid_state_acknowledgement/);
+  assert.equal(replicator.diagnostics().runtimeDirty.length, 2);
+  assert.deepEqual(replicator.diagnostics().pendingDeliveryIds, [payload.deliveryId]);
+
+  await replicator.handleFrame({
+    type: 'state-relay-ack',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: {
+      stateVersion: taskCurrentStateVersion,
+      deliveryId: payload.deliveryId,
+      accepted: [payload.entries[1]],
+      rejected: [{
+        code: 'task_current_dot_collision',
+        key: payload.entries[0].key,
+        stateHash: payload.entries[0].stateHash,
+        receiverStateHash: '1'.repeat(64),
+        collisions: [{ entityType: 'card', entityId: 'left', path: 'title', dot: { replicaId: 'desktop', counter: 1 } }],
+      }],
+    },
+  });
   assert.equal(replicator.diagnostics().runtimeDirty.length, 1);
   assert.equal(replicator.diagnostics().runtimeDirty[0].entityKey, payload.entries[0].key);
+  assert.equal(replicator.diagnostics().pendingDeliveryIds.length, 0);
 });
 
 test('relay publication advances a bounded project window and advertises only after settlement', async (context) => {
@@ -835,6 +856,111 @@ test('enhanced receiver shares one project WAL commit across the bounded relay w
   assert.equal(sent.filter((frame) => frame.type === 'state-relay-ack').length, 4);
   assert.equal(replicator.diagnostics().receiverTiming.groupCommitCount, 1);
   assert.equal(replicator.diagnostics().receiverTiming.groupCommitFrameCount, 4);
+});
+
+test('enhanced repair durably partitions healthy state from a terminal collision without timing out or replaying the same summary', async (context) => {
+  const source = fixture('decision-os-repair-collision-source-');
+  const target = fixture('decision-os-repair-collision-target-');
+  context.after(async () => {
+    await Promise.all([source.store.flush(), target.store.flush()]);
+    [source, target].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  const local = await target.store.mutate({ replicaId: 'workstation', changes: [{ entityType: 'card', entityId: 'collision-card', changes: [{ path: 'title', operation: 'set', value: 'Local' }] }] });
+  await target.store.flush();
+  const localEntity = local.delta.entities[0];
+  const remoteCollision = finalizeTaskCurrentEntity({
+    version: taskCurrentStateVersion,
+    projectId: 'project-a',
+    entityType: 'card',
+    entityId: 'collision-card',
+    fields: { ...structuredClone(localEntity.fields), title: { ...structuredClone(localEntity.fields.title), candidates: [{ ...structuredClone(localEntity.fields.title.candidates[0]), value: 'Remote' }] } },
+  });
+  const healthy = finalizeTaskCurrentEntity({
+    version: taskCurrentStateVersion,
+    projectId: 'project-a',
+    entityType: 'card',
+    entityId: 'healthy-card',
+    fields: {
+      '$entity': { clock: { relay: 1 }, candidates: [{ dot: { replicaId: 'relay', counter: 1 }, operation: 'set', value: true }] },
+      title: { clock: { relay: 1 }, candidates: [{ dot: { replicaId: 'relay', counter: 1 }, operation: 'set', value: 'Healthy' }] },
+    },
+  });
+  await source.store.merge({ version: taskCurrentStateVersion, projectId: 'project-a', entities: [healthy, remoteCollision] });
+  await source.store.flush();
+  const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const collisions: Array<{ attemptId: string; deliveryId: string; rejected: unknown[]; evidence: unknown[] }> = [];
+  const timeouts: string[] = [];
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', target.store]]),
+    publish: (_peer, frame) => { sent.push(frame); return true; },
+    noProgressTimeoutMs: 1_000,
+    onRepairCollision: ({ attemptId, deliveryId, rejected, evidence }) => { collisions.push({ attemptId, deliveryId, rejected, evidence }); },
+    onRepairTimeout: ({ attemptId }) => { timeouts.push(attemptId); },
+  });
+  const summary: FederationStateFrame = {
+    type: 'state-bucket-summary',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, root: source.store.rootHash(), buckets: source.store.bucketManifest() },
+  };
+  await replicator.handleFrame(summary);
+  const request = sent.find((frame) => frame.type === 'state-missing-request')!;
+  const attemptId = String((request.payload as { attemptId: string }).attemptId);
+  await replicator.handleFrame({
+    type: 'state-entity-batch',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: {
+      stateVersion: taskCurrentStateVersion,
+      deliveryId: 'mixed-delivery',
+      attemptId,
+      entries: [healthy, remoteCollision].map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })),
+    },
+  });
+
+  const acknowledgement = sent.find((frame) => frame.type === 'state-relay-ack')!;
+  const disposition = acknowledgement.payload as { accepted: Array<{ key: string }>; rejected: Array<{ key: string }> };
+  assert.deepEqual(disposition.accepted.map(({ key }) => key), ['card\u0000healthy-card']);
+  assert.deepEqual(disposition.rejected.map(({ key }) => key), ['card\u0000collision-card']);
+  assert.equal(collisions.length, 1);
+  assert.equal(collisions[0].attemptId, attemptId);
+  assert.equal(collisions[0].deliveryId, 'mixed-delivery');
+  assert.equal(collisions[0].evidence.length, 1);
+  assert.equal(target.store.projectedEntity('card', 'healthy-card')?.title, 'Healthy');
+  assert.equal(target.store.projectedEntity('card', 'collision-card')?.title, 'Local');
+  assert.equal(replicator.diagnostics().activeRepairCount, 0);
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 1_100));
+  assert.deepEqual(timeouts, []);
+
+  const evidenceCountBeforeReplay = target.store.repairCollisionEvidence(attemptId).length;
+  await replicator.handleFrame({
+    type: 'state-entity-batch',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: {
+      stateVersion: taskCurrentStateVersion,
+      deliveryId: 'mixed-delivery',
+      attemptId,
+      entries: [healthy, remoteCollision].map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })),
+    },
+  });
+  const replayAcknowledgements = sent.filter((frame) => frame.type === 'state-relay-ack');
+  assert.equal(replayAcknowledgements.length, 2);
+  assert.deepEqual(replayAcknowledgements[1].payload, replayAcknowledgements[0].payload);
+  assert.equal(target.store.repairCollisionEvidence(attemptId).length, evidenceCountBeforeReplay);
+
+  await replicator.handleFrame(summary);
+  assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, 1);
+  const restartedStore = createTaskCurrentStateStore({ decisionOsRoot: target.root, projectId: 'project-a' });
+  assert.equal(restartedStore.repairCollisionEvidence(attemptId).length, 1);
+  const restartedSent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const restartedReplicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', restartedStore]]),
+    publish: (_peer, frame) => { restartedSent.push(frame); return true; },
+  });
+  restartedReplicator.restoreTerminalRepair('project-a', 'relay', attemptId);
+  await restartedReplicator.handleFrame(summary);
+  assert.equal(restartedSent.filter((frame) => frame.type === 'state-missing-request').length, 0);
 });
 
 test('enhanced relay repair coalesces final projection observation after exact convergence', async (context) => {

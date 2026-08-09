@@ -27,6 +27,9 @@ export type {
   TaskExecutionResult,
   TaskFieldOperation,
   TaskRegisterCandidate,
+  TaskRepairCollisionEvidence,
+  TaskRepairCollisionRejection,
+  TaskRepairCollisionRecoveryReceipt,
 } from '../../../../../shared/task-current-state-core.js';
 
 import type {

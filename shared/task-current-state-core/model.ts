@@ -29,6 +29,41 @@ export type TaskCurrentEntity = {
 };
 export type TaskCurrentBucket = { bucket: string; count: number; checksum: string };
 
+export type TaskCurrentDotCollision = {
+  entityType: TaskEntityType;
+  entityId: string;
+  path: string;
+  dot: TaskDot;
+};
+
+export type TaskRepairCollisionRejection = {
+  code: 'task_current_dot_collision';
+  key: string;
+  stateHash: string;
+  receiverStateHash: string;
+  collisions: TaskCurrentDotCollision[];
+};
+
+export type TaskRepairCollisionEvidence = TaskRepairCollisionRejection & {
+  version: typeof taskCurrentStateVersion;
+  projectId: string;
+  attemptId: string;
+  deliveryId: string;
+  recordedAt: string;
+  localEntity: TaskCurrentEntity;
+  remoteEntity: TaskCurrentEntity;
+};
+
+export type TaskRepairCollisionRecoveryReceipt = {
+  version: typeof taskCurrentStateVersion;
+  projectId: string;
+  attemptId: string;
+  evidenceHash: string;
+  replicaId: string;
+  batchId: string;
+  resultingStateHashes: Record<string, string>;
+};
+
 export type TaskAssignment = {
   nodeId: string;
   changedAt: string;

@@ -11,6 +11,7 @@ import type { createFederationNodeConnector } from '../../federation/helper/fede
 import type { createFederatedLibraryRuntime } from '../../federation/runtime/federated-library-runtime.js';
 import type { createProjectSyncRuntime } from '../../project-sync/runtime/project-sync-runtime.js';
 import { recoverProjectTaskCurrentState } from '../../task-state/helper/recover-project-task-current-state.js';
+import { createTaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import type { createFederatedTaskRuntime } from '../../task-state/runtime/federated-task-runtime.js';
 import type { createLocalTaskRuntime } from '../../task-state/runtime/local-task-runtime.js';
 import { tasksLedgerForProject, type DecisionOsProject } from '../helper/project-catalog.js';
@@ -20,6 +21,8 @@ import type { createProjectRuntimeRegistry } from './project-runtime-registry.js
 import { resumeBackgroundRuntime } from './resume-background-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
+const collisionRecoveryResolution = 'reconcile-local-authority';
+const collisionRecoveryDeadlineMs = 15_000;
 
 export function createRuntimeRecoveryService(input: {
   codexCoordinator: ReturnType<typeof createCodexProcessCoordinator>;
@@ -201,6 +204,56 @@ export function createRuntimeRecoveryService(input: {
     }
   };
 
+  const resumeFederationRepair = async (
+    projectId: string,
+    scope: string,
+    resolution: string,
+  ): Promise<string[]> => {
+    const paused = input.incidentSupervisor.pausedFederationRepairs.get(projectId);
+    const replicator = input.replicator();
+    const project = input.projectById(projectId);
+    const state = input.localTaskRuntime.states.get(projectId);
+    // WHAT: Reject recovery outside a locally owned, durably paused collision scope.
+    // WHY: A remote replica and a free-form resume request cannot create local causal authority.
+    if (!paused || !replicator || !project || !state || resolution !== collisionRecoveryResolution) return [];
+    const attemptId = String(paused.context.attemptId ?? '');
+    // WHAT: Reject a collision incident that lost its stable repair-attempt identity.
+    // WHY: Recovery must bind its exactly-once receipt to the durable rejected delivery evidence.
+    if (!attemptId) return [];
+    const receipt = await state.store.recoverRepairCollisionLocalAuthority(attemptId);
+    const recoveryKeys = Object.keys(receipt.resultingStateHashes).sort();
+    const diagnostics = replicator.diagnostics();
+    const hasPendingRecovery = diagnostics.runtimeDirty.some((entry) => entry.projectId === projectId && recoveryKeys.includes(entry.entityKey));
+    let converged = diagnostics.convergence.some((entry) => entry.peerId === 'relay' && entry.projectId === projectId && entry.converged)
+      && !diagnostics.runtimeDirty.some((entry) => entry.projectId === projectId && recoveryKeys.includes(entry.entityKey));
+    // WHAT: Publish the deterministic successor only when no prior recovery delivery remains pending.
+    // WHY: Restart may need one retry, while repeated operator requests must not flood the same durable hash.
+    if (!converged && !hasPendingRecovery) replicator.publishRecoveryDelta(state.store.activeDelta(recoveryKeys), state.store);
+    const recoveryDeadline = Date.now() + collisionRecoveryDeadlineMs;
+    while (!converged && Date.now() < recoveryDeadline) {
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
+      const current = replicator.diagnostics();
+      converged = current.convergence.some((entry) => entry.peerId === 'relay' && entry.projectId === projectId && entry.converged)
+        && !current.runtimeDirty.some((entry) => entry.projectId === projectId && recoveryKeys.includes(entry.entityKey));
+    }
+    // WHAT: Retain the pause when the bounded recovery request does not reach exact relay equality.
+    // WHY: A committed local successor alone cannot authorize incident resolution.
+    if (!converged) return [];
+    await state.store.flush();
+    const reopened = createTaskCurrentStateStore({ decisionOsRoot: project.decisionOsRoot, projectId });
+    await reopened.flush();
+    // WHAT: Reject completion when a fresh durable reload does not reproduce the converged root and successor hashes.
+    // WHY: In-memory equality cannot authorize incident resolution after a persistence failure.
+    if (reopened.rootHash() !== state.store.rootHash() || recoveryKeys.some((key) => {
+      const [entityType, entityId] = key.split('\u0000');
+      return reopened.entity(entityType as Parameters<typeof reopened.entity>[0], entityId)?.stateHash !== receipt.resultingStateHashes[key];
+    })) throw new Error(`federation_repair_reload_validation_failed:${projectId}`);
+    const ids = resolveScope(scope, resolution);
+    replicator.clearTerminalRepair(projectId);
+    input.incidentSupervisor.pausedFederationRepairs.delete(projectId);
+    return ids;
+  };
+
   const resumeProjectContext = (
     projectId: string,
     scope: string,
@@ -249,6 +302,12 @@ export function createRuntimeRecoveryService(input: {
     } else if (scope.startsWith('federated-task-state:')) {
       resolvedIncidentIds = resumeFederatedProject(
         scope.slice('federated-task-state:'.length),
+        scope,
+        resolution,
+      );
+    } else if (scope.startsWith('federation-repair:')) {
+      resolvedIncidentIds = await resumeFederationRepair(
+        scope.slice('federation-repair:'.length),
         scope,
         resolution,
       );

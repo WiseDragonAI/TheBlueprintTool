@@ -2,12 +2,13 @@
  * WHAT: Persists epoch-4 causal state through journals, independent shards, and local publication markers.
  * WHY: Local success must follow journal durability while replicated hashes contain only joinable domain state.
  */
-import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   hashTaskCurrentBucket,
   hashTaskCurrentRoot,
+  taskCurrentDotCollisionCoordinates,
   taskCurrentBucketForEntityKey,
   taskCurrentEntityKey,
 } from '../../../../../shared/task-current-state-core.js';
@@ -30,10 +31,16 @@ import {
   type TaskCurrentProjection,
   type TaskEntityChange,
   type TaskMutationBatch,
+  type TaskRepairCollisionEvidence,
+  type TaskRepairCollisionRejection,
+  type TaskRepairCollisionRecoveryReceipt,
   type TaskStateDelta,
 } from './task-current-state-types.js';
 
-type JournalDocument = { version: typeof taskCurrentStateVersion; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string };
+type JournalDocument = { version: typeof taskCurrentStateVersion; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string; repairCollisions?: TaskRepairCollisionEvidence[]; repairRecovery?: TaskRepairCollisionRecoveryReceipt };
+type RepairDelivery = { attemptId: string; deliveryId: string; delta: TaskStateDelta };
+type RepairAcceptedEntry = { key: string; stateHash: string; receiverStateHash: string; changed: boolean };
+type RepairDeliveryResult = { attemptId: string; deliveryId: string; accepted: RepairAcceptedEntry[]; rejected: TaskRepairCollisionRejection[] };
 const repairWalMagic = Buffer.from('DOSTSWAL');
 const repairWalHeaderBytes = repairWalMagic.length + 1 + 4 + 4 + 32;
 const repairWalCommit = 0xa5;
@@ -46,6 +53,71 @@ type StoreOptions = {
   deferFormat?: boolean;
   onPersistenceError?: (error: Error) => void;
 };
+
+function assertRepairCollisionEvidence(evidence: TaskRepairCollisionEvidence): void {
+  if (evidence.version !== taskCurrentStateVersion || evidence.code !== 'task_current_dot_collision'
+    || !evidence.projectId || !evidence.attemptId || !evidence.deliveryId || !Number.isFinite(Date.parse(evidence.recordedAt))
+    || !/^[a-f0-9]{64}$/.test(evidence.stateHash) || !/^[a-f0-9]{64}$/.test(evidence.receiverStateHash)) {
+    throw new Error('invalid_task_current_repair_collision_evidence');
+  }
+  assertTaskCurrentEntity(evidence.localEntity);
+  assertTaskCurrentEntity(evidence.remoteEntity);
+  if (evidence.key !== taskCurrentEntityKey(evidence.remoteEntity)
+    || evidence.key !== taskCurrentEntityKey(evidence.localEntity)
+    || evidence.stateHash !== evidence.remoteEntity.stateHash
+    || evidence.receiverStateHash !== evidence.localEntity.stateHash
+    || evidence.projectId !== evidence.localEntity.projectId
+    || evidence.projectId !== evidence.remoteEntity.projectId
+    || evidence.collisions.length < 1) throw new Error('invalid_task_current_repair_collision_evidence');
+  const normalized = [...evidence.collisions].sort((left, right) => `${left.entityType}\u0000${left.entityId}\u0000${left.path}\u0000${left.dot.replicaId}\u0000${left.dot.counter}`
+    .localeCompare(`${right.entityType}\u0000${right.entityId}\u0000${right.path}\u0000${right.dot.replicaId}\u0000${right.dot.counter}`));
+  if (JSON.stringify(normalized) !== JSON.stringify(evidence.collisions)) throw new Error('invalid_task_current_repair_collision_evidence');
+}
+
+function assertRepairRecoveryReceipt(receipt: TaskRepairCollisionRecoveryReceipt): void {
+  if (receipt.version !== taskCurrentStateVersion || !receipt.projectId || !receipt.attemptId
+    || !/^[a-f0-9]{64}$/.test(receipt.evidenceHash) || !receipt.replicaId || !receipt.batchId
+    || Object.values(receipt.resultingStateHashes).some((hash) => !/^[a-f0-9]{64}$/.test(hash))) {
+    throw new Error('invalid_task_current_repair_recovery_receipt');
+  }
+}
+
+async function validateRetainedExecutionArtifacts(objectRoot: string, value: unknown): Promise<void> {
+  // WHAT: Reject a non-object artifacts candidate before granting local recovery authority.
+  // WHY: Collision recovery may reassert only the exact execution artifact manifest already admitted by epoch 4.
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('task_current_repair_artifacts_invalid');
+  const artifacts = value as Record<string, unknown>;
+  for (const kind of ['jsonl', 'stderr', 'telemetry', 'result']) {
+    const candidate = artifacts[kind];
+    // WHAT: Accept an explicitly absent optional artifact without filesystem work.
+    // WHY: Epoch-4 execution manifests represent unavailable optional artifacts as null.
+    if (candidate === null) continue;
+    // WHAT: Reject a malformed retained artifact head before resolving its immutable object path.
+    // WHY: Operator recovery cannot transform incomplete metadata into local authority.
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) throw new Error(`task_current_repair_artifact_invalid:${kind}`);
+    const head = candidate as Record<string, unknown>;
+    const hash = String(head.hash ?? '');
+    const expectedBytes = Number(head.bytes ?? -1);
+    // WHAT: Reject noncanonical object coordinates before reading project storage.
+    // WHY: The recovery gate must remain confined to the project's hash-addressed object namespace.
+    if (!/^[a-f0-9]{64}$/.test(hash) || !Number.isSafeInteger(expectedBytes) || expectedBytes < 0) throw new Error(`task_current_repair_artifact_invalid:${kind}`);
+    const file = resolve(objectRoot, hash.slice(0, 2), hash);
+    const digest = createHash('sha256');
+    let observedBytes = 0;
+    try {
+      for await (const chunk of createReadStream(file, { highWaterMark: 256 * 1024 })) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        digest.update(buffer);
+        observedBytes += buffer.byteLength;
+      }
+    } catch {
+      throw new Error(`task_current_repair_artifact_missing:${kind}:${hash}`);
+    }
+    // WHAT: Reject a retained object whose bytes no longer match the selected local manifest.
+    // WHY: A causally dominant successor must not authorize missing or changed execution evidence.
+    if (observedBytes !== expectedBytes || digest.digest('hex') !== hash) throw new Error(`task_current_repair_artifact_mismatch:${kind}:${hash}`);
+  }
+}
 
 function emptyProjection(projectId: string): TaskCurrentProjection {
   return { version: taskCurrentStateVersion, projectId, ledger: { cards: [], annotations: [], relationships: [] }, conflicts: [], clock: {} };
@@ -88,17 +160,19 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   const projection = emptyProjection(options.projectId);
   const pendingEntities = new Map<string, TaskCurrentEntity>();
   const pendingJournals = new Set<string>();
+  const retainedCollisionEvidence = new Map<string, TaskRepairCollisionEvidence>();
+  const collisionRecoveryReceipts = new Map<string, TaskRepairCollisionRecoveryReceipt>();
   const persistence = createTaskCurrentStatePersistence(root);
   let clock: TaskCausalClock = {};
   let materializer: Promise<void> | null = null;
   let materializerError: Error | null = null;
-  let localMutationTail = Promise.resolve();
+  let transitionTail = Promise.resolve();
   let deferBucketSummaries = false;
   const mergeTiming = { count: 0, entities: 0, prepareMs: 0, journalMs: 0, journalEncodeMs: 0, journalOpenMs: 0, journalQueueWaitMs: 0, journalWriteMs: 0, journalFileSyncMs: 0, journalRenameMs: 0, journalDirectorySyncMs: 0, installMs: 0, resultCloneMs: 0 };
 
-  const serializeLocalMutation = <Result>(operation: () => Promise<Result>): Promise<Result> => {
-    const result = localMutationTail.then(operation);
-    localMutationTail = result.then(() => undefined, () => undefined);
+  const serializeTransition = <Result>(operation: () => Promise<Result>): Promise<Result> => {
+    const result = transitionTail.then(operation);
+    transitionTail = result.then(() => undefined, () => undefined);
     return result;
   };
 
@@ -249,18 +323,29 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       const file = resolve(journalDirectory, name);
       const document = JSON.parse(readFileSync(file, 'utf8')) as JournalDocument;
       if (document.version !== taskCurrentStateVersion) throw new Error('unsupported_task_current_state_journal');
+      // WHAT: Retain collision-bearing journals after replaying their independently accepted delta.
+      // WHY: Restart must preserve complete local and remote evidence until explicit recovery validates it.
+      if (document.repairCollisions) document.repairCollisions.forEach((evidence) => {
+        assertRepairCollisionEvidence(evidence);
+        retainedCollisionEvidence.set(`${evidence.attemptId}\u0000${evidence.deliveryId}\u0000${evidence.key}`, evidence);
+      });
+      if (document.repairRecovery) {
+        assertRepairRecoveryReceipt(document.repairRecovery);
+        collisionRecoveryReceipts.set(document.repairRecovery.attemptId, document.repairRecovery);
+      }
       const changed = document.mutation
         ? applyMutation(document.mutation)
         : (document.delta?.entities ?? []).filter((entity) => applyEntity(entity, false, true)).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
       if (document.activateTaskId) applyActivation(document.activateTaskId);
       for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
-      pendingJournals.add(file);
+      if (!document.repairCollisions && !document.repairRecovery) pendingJournals.add(file);
     }
     for (const name of readdirSync(journalDirectory).filter((value) => value.endsWith('.wal')).sort()) {
       const file = resolve(journalDirectory, name);
       const bytes = readFileSync(file);
       let offset = 0;
       let tornTail = false;
+      let containsCollision = false;
       while (offset < bytes.length) {
         const remaining = bytes.length - offset;
         // WHAT: Preserve an incomplete terminal header as an uncommitted crash tail.
@@ -285,14 +370,23 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
         let document: JournalDocument;
         try { document = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(payload)) as JournalDocument; }
         catch { throw new Error('invalid_task_current_repair_wal'); }
-        if (document.version !== taskCurrentStateVersion || !document.delta) throw new Error('invalid_task_current_repair_wal');
-        const changed = document.delta.entities.filter((entity) => applyEntity(entity, false, true)).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
+        if (document.version !== taskCurrentStateVersion || (!document.delta && !document.repairCollisions)) throw new Error('invalid_task_current_repair_wal');
+        if (document.repairCollisions) {
+          containsCollision = true;
+          document.repairCollisions.forEach((evidence) => {
+            assertRepairCollisionEvidence(evidence);
+            retainedCollisionEvidence.set(`${evidence.attemptId}\u0000${evidence.deliveryId}\u0000${evidence.key}`, evidence);
+          });
+        }
+        const changed = (document.delta?.entities ?? []).filter((entity) => applyEntity(entity, false, true)).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
         for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
         offset += recordBytes;
       }
       // WHAT: Retain torn WAL bytes after replaying their committed prefix.
       // WHY: Invalid or incomplete durable evidence must never be silently deleted.
-      if (!tornTail) pendingJournals.add(file);
+      if (!tornTail) {
+        if (!containsCollision) pendingJournals.add(file);
+      }
     }
     canonicalizeTaskProjectionClock(projection);
   };
@@ -442,7 +536,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       });
     },
     mutate(input: { replicaId: string; changes: TaskEntityChange[]; activationTaskId?: string; replication?: 'active' | 'held'; emittedAt?: string }): Promise<{ batch: TaskMutationBatch; delta: TaskStateDelta }> {
-      return serializeLocalMutation(async () => {
+      return serializeTransition(async () => {
         const counter = (clock[input.replicaId] ?? 0) + 1;
         const batch: TaskMutationBatch = {
           version: taskCurrentStateVersion,
@@ -464,29 +558,220 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
         return { batch, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: changed.filter((entity) => !publication.isHeld(taskCurrentEntityKey(entity))).map((entity) => structuredClone(entity)) } };
       });
     },
-    async activate(taskId: string): Promise<TaskStateDelta> {
-      const keys = publication.keysForTask(taskId);
-      if (keys.length === 0) return { version: taskCurrentStateVersion, projectId: options.projectId, entities: [] };
-      const journalFile = await journal({ version: taskCurrentStateVersion, activateTaskId: taskId }, `activate-${taskId}-${randomUUID()}`);
-      applyActivation(taskId);
-      pendingJournals.add(journalFile);
-      scheduleMaterializer();
-      return this.activeDelta(keys);
+    activate(taskId: string): Promise<TaskStateDelta> {
+      return serializeTransition(async () => {
+        const keys = publication.keysForTask(taskId);
+        // WHAT: Return an empty activation when the task owns no held entities.
+        // WHY: An idempotent activation must not create a journal.
+        if (keys.length === 0) return { version: taskCurrentStateVersion, projectId: options.projectId, entities: [] };
+        const journalFile = await journal({ version: taskCurrentStateVersion, activateTaskId: taskId }, `activate-${taskId}-${randomUUID()}`);
+        applyActivation(taskId);
+        pendingJournals.add(journalFile);
+        scheduleMaterializer();
+        return this.activeDelta(keys);
+      });
     },
     resumeMaterialization,
-    async mergeRepairGroup(deltas: TaskStateDelta[], authority: string): Promise<{ changed: boolean; delta: TaskStateDelta; resultingStateHashes: Map<string, string> }> {
-      // WHAT: Commit one bounded enhanced-repair project window through one WAL durability barrier.
-      // WHY: Epoch-4 deliveries retain individual ACKs while identical-project frames share the receiver fsync they already arrived under.
-      if (deltas.length < 1 || deltas.some((delta) => delta.version !== taskCurrentStateVersion || delta.projectId !== options.projectId)) {
-        throw new Error('invalid_task_state_delta');
-      }
-      return this.merge({
-        version: taskCurrentStateVersion,
-        projectId: options.projectId,
-        entities: deltas.flatMap((delta) => delta.entities),
-      }, { deferMaterialization: authority });
+    mergeRepairGroup(deliveries: RepairDelivery[], authority: string): Promise<{ deliveries: RepairDeliveryResult[]; delta: TaskStateDelta }> {
+      return serializeTransition(async () => {
+        // WHAT: Reject an empty, cross-attempt, or cross-project repair group before evaluating entity joins.
+        // WHY: One WAL authority may cover only one bounded project attempt.
+        if (deliveries.length < 1 || !authority || deliveries.some(({ attemptId, deliveryId, delta }) => !attemptId || attemptId !== authority || !deliveryId
+          || delta.version !== taskCurrentStateVersion || delta.projectId !== options.projectId)) throw new Error('invalid_task_state_repair_group');
+        const preview = new Map(entities);
+        const accepted = new Map<RepairDelivery, TaskCurrentEntity[]>();
+        const rejected: Array<{ delivery: RepairDelivery; evidence: TaskRepairCollisionEvidence }> = [];
+        for (const delivery of deliveries) {
+          const acceptedEntities: TaskCurrentEntity[] = [];
+          for (const remoteEntity of delivery.delta.entities) {
+            const key = taskCurrentEntityKey(remoteEntity);
+            const localEntity = preview.get(key);
+            try {
+              preview.set(key, joinTaskEntities(localEntity, remoteEntity));
+              acceptedEntities.push(remoteEntity);
+            }
+            catch (error) {
+              const collisions = taskCurrentDotCollisionCoordinates(error);
+              // WHAT: Propagate non-collision join failures without turning them into terminal repair evidence.
+              // WHY: Schema, identity, and hash failures remain protocol errors owned by their existing containment boundary.
+              if (!localEntity || collisions.length < 1) throw error;
+              rejected.push({ delivery, evidence: {
+                version: taskCurrentStateVersion,
+                projectId: options.projectId,
+                attemptId: delivery.attemptId,
+                deliveryId: delivery.deliveryId,
+                recordedAt: new Date().toISOString(),
+                code: 'task_current_dot_collision',
+                key,
+                stateHash: remoteEntity.stateHash,
+                receiverStateHash: localEntity.stateHash,
+                collisions: collisions.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+                localEntity: structuredClone(localEntity),
+                remoteEntity: structuredClone(remoteEntity),
+              } });
+            }
+          }
+          accepted.set(delivery, acceptedEntities);
+        }
+        const acceptedDelta: TaskStateDelta = {
+          version: taskCurrentStateVersion,
+          projectId: options.projectId,
+          entities: [...accepted.values()].flat(),
+        };
+        const changedKeys = new Set<string>();
+        for (const entity of acceptedDelta.entities) {
+          const key = taskCurrentEntityKey(entity);
+          const joined = preview.get(key);
+          // WHAT: Record only accepted entities whose final group join changes receiver state.
+          // WHY: Duplicate deliveries need exact ACK hashes without redundant materialization work.
+          if (joined && joined.stateHash !== entities.get(key)?.stateHash) changedKeys.add(key);
+        }
+        // WHAT: Skip the WAL only when every accepted delivery is idempotent and no collision evidence exists.
+        // WHY: A terminal rejection must be durable before it is returned even when no healthy shard changes.
+        if (changedKeys.size > 0 || rejected.length > 0) {
+          const document: JournalDocument = {
+            version: taskCurrentStateVersion,
+            ...(changedKeys.size > 0 ? { delta: acceptedDelta } : {}),
+            ...(rejected.length > 0 ? { repairCollisions: rejected.map(({ evidence }) => evidence) } : {}),
+          };
+          const journalFile = await repairJournal(document, authority);
+          // WHAT: Seal a collision-bearing WAL after its bounded group record reaches durability.
+          // WHY: Retained evidence must not leave an open descriptor after its repair attempt settles.
+          if (rejected.length > 0) await persistence.sealAppend(journalFile);
+          for (const key of changedKeys) installJoinedEntity(preview.get(key)!, true);
+          canonicalizeTaskProjectionClock(projection);
+          const deferred = deferredMaterialization.get(authority) ?? { entities: new Map<string, TaskCurrentEntity>(), journals: new Set<string>() };
+          for (const key of changedKeys) deferred.entities.set(key, entities.get(key)!);
+          // WHAT: Retain a collision-bearing WAL instead of scheduling its deletion after shard materialization.
+          // WHY: Complete local and remote evidence must survive restart until an explicit recovery validates it.
+          if (rejected.length < 1) deferred.journals.add(journalFile);
+          deferredMaterialization.set(authority, deferred);
+          for (const { evidence } of rejected) retainedCollisionEvidence.set(`${evidence.attemptId}\u0000${evidence.deliveryId}\u0000${evidence.key}`, evidence);
+        }
+        const results: RepairDeliveryResult[] = deliveries.map((delivery) => {
+          const acceptedResults = (accepted.get(delivery) ?? []).map((entity): RepairAcceptedEntry => {
+            const key = taskCurrentEntityKey(entity);
+            return { key, stateHash: entity.stateHash, receiverStateHash: entities.get(key)?.stateHash ?? '', changed: changedKeys.has(key) };
+          });
+          const rejectedResults = rejected.filter((candidate) => candidate.delivery === delivery).map(({ evidence }) => {
+            const { localEntity: _localEntity, remoteEntity: _remoteEntity, version: _version, projectId: _projectId, attemptId: _attemptId, deliveryId: _deliveryId, recordedAt: _recordedAt, ...wire } = evidence;
+            return wire;
+          });
+          return { attemptId: delivery.attemptId, deliveryId: delivery.deliveryId, accepted: acceptedResults, rejected: rejectedResults };
+        });
+        return { deliveries: results, delta: { ...acceptedDelta, entities: [...changedKeys].map((key) => structuredClone(entities.get(key)!)) } };
+      });
     },
-    async merge(delta: TaskStateDelta, mergeOptions: { deferMaterialization?: string } = {}): Promise<{ changed: boolean; delta: TaskStateDelta; resultingStateHashes: Map<string, string> }> {
+    recoverRepairCollisionLocalAuthority(attemptId: string): Promise<TaskRepairCollisionRecoveryReceipt> {
+      return serializeTransition(async () => {
+        const existing = collisionRecoveryReceipts.get(attemptId);
+        const evidence = [...retainedCollisionEvidence.values()]
+          .filter((candidate) => candidate.attemptId === attemptId)
+          .sort((left, right) => `${left.deliveryId}\u0000${left.key}`.localeCompare(`${right.deliveryId}\u0000${right.key}`));
+        // WHAT: Reject recovery without retained collision evidence for the exact attempt.
+        // WHY: Local authority cannot manufacture a successor without both submitted and receiver states.
+        if (!attemptId || evidence.length < 1) throw new Error('task_current_repair_collision_evidence_missing');
+        // WHAT: Validate retained artifact objects and resulting entity hashes before reusing a recovery receipt.
+        // WHY: Retry and restart must create no second successor while still proving that its selected authority remains durable.
+        if (existing) {
+          for (const item of evidence) {
+            assertRepairCollisionEvidence(item);
+            for (const collision of item.collisions) {
+              const candidate = item.localEntity.fields[collision.path]?.candidates
+                .find(({ dot }) => dot.replicaId === collision.dot.replicaId && dot.counter === collision.dot.counter);
+              // WHAT: Reject a retained receipt whose source candidate no longer exists in its archived entity.
+              // WHY: Exactly-once recovery remains authoritative only for the originally selected local value.
+              if (!candidate) throw new Error('task_current_repair_collision_local_candidate_missing');
+              // WHAT: Revalidate immutable execution artifacts on every recovery completion attempt.
+              // WHY: Incident resolution must detect objects removed after the successor was committed.
+              if (collision.entityType === 'execution' && collision.path === 'artifacts' && Object.hasOwn(candidate, 'value')) {
+                await validateRetainedExecutionArtifacts(resolve(root, 'objects'), candidate.value);
+              }
+            }
+          }
+          // WHAT: Reject a receipt when any current entity differs from its committed deterministic successor.
+          // WHY: A later local change requires a fresh operator decision instead of silently resolving stale evidence.
+          if (Object.entries(existing.resultingStateHashes).some(([key, stateHash]) => entities.get(key)?.stateHash !== stateHash)) {
+            throw new Error('task_current_repair_recovery_successor_changed');
+          }
+          return structuredClone(existing);
+        }
+        for (const item of evidence) {
+          assertRepairCollisionEvidence(item);
+          const current = entities.get(item.key);
+          // WHAT: Reject recovery when receiver state moved beyond the retained local entity.
+          // WHY: A stale operator action must never overwrite a later causal transition.
+          if (!current || current.stateHash !== item.receiverStateHash) throw new Error('task_current_repair_collision_receiver_changed');
+          let recomputed: ReturnType<typeof taskCurrentDotCollisionCoordinates> = [];
+          try { joinTaskEntities(current, item.remoteEntity); }
+          catch (error) { recomputed = taskCurrentDotCollisionCoordinates(error); }
+          // WHAT: Reject evidence whose collision no longer reproduces from its complete entities.
+          // WHY: Recovery authority depends on verified causal coordinates, not a retained error string alone.
+          if (JSON.stringify(recomputed) !== JSON.stringify(item.collisions)) throw new Error('task_current_repair_collision_not_reproducible');
+        }
+        const evidenceHash = createHash('sha256').update(JSON.stringify(evidence)).digest('hex');
+        const replicaId = `collision-recovery-${evidenceHash.slice(0, 32)}`;
+        const changesByEntity = new Map<string, TaskEntityChange>();
+        for (const item of evidence) {
+          for (const collision of item.collisions) {
+            const register = item.localEntity.fields[collision.path];
+            const candidate = register?.candidates.find(({ dot }) => dot.replicaId === collision.dot.replicaId && dot.counter === collision.dot.counter);
+            // WHAT: Reject evidence whose local entity lacks the exact colliding candidate.
+            // WHY: The recovery mutation must reassert the verified local operation and value without reinterpretation.
+            if (!candidate) throw new Error('task_current_repair_collision_local_candidate_missing');
+            // WHAT: Validate every selected execution artifact object before constructing recovery authority.
+            // WHY: A local label alone cannot prove that the selected artifact manifest still owns its immutable bytes.
+            if (collision.entityType === 'execution' && collision.path === 'artifacts' && Object.hasOwn(candidate, 'value')) {
+              await validateRetainedExecutionArtifacts(resolve(root, 'objects'), candidate.value);
+            }
+            const key = `${collision.entityType}\u0000${collision.entityId}`;
+            const change = changesByEntity.get(key) ?? { entityType: collision.entityType, entityId: collision.entityId, changes: [] };
+            // WHAT: Add each collided lane once when repeated deliveries retained the same poisoned entity.
+            // WHY: One deterministic mutation should dominate duplicate collision evidence without duplicate fields.
+            if (!change.changes.some(({ path }) => path === collision.path)) change.changes.push({
+              path: collision.path,
+              operation: candidate.operation,
+              ...(Object.hasOwn(candidate, 'value') ? { value: structuredClone(candidate.value) } : {}),
+            });
+            changesByEntity.set(key, change);
+          }
+        }
+        const changes = [...changesByEntity.values()].sort((left, right) => `${left.entityType}\u0000${left.entityId}`.localeCompare(`${right.entityType}\u0000${right.entityId}`));
+        const counter = (clock[replicaId] ?? 0) + 1;
+        const batch: TaskMutationBatch = {
+          version: taskCurrentStateVersion,
+          batchId: `collision-recovery-${evidenceHash}`,
+          projectId: options.projectId,
+          replicaId,
+          emittedAt: new Date(0).toISOString(),
+          dot: { replicaId, counter },
+          context: mutationContext(changes),
+          changes: structuredClone(changes),
+          activationTaskId: '',
+          replication: 'active',
+        };
+        const resultingStateHashes: Record<string, string> = {};
+        for (const change of changes.flatMap(mutationLanes)) {
+          const key = `${change.entityType}\u0000${change.entityId}`;
+          resultingStateHashes[key] = joinTaskEntities(entities.get(key), registerEntity(batch, change, entities.get(key))).stateHash;
+        }
+        const receipt: TaskRepairCollisionRecoveryReceipt = { version: taskCurrentStateVersion, projectId: options.projectId, attemptId, evidenceHash, replicaId, batchId: batch.batchId, resultingStateHashes };
+        await journal({ version: taskCurrentStateVersion, mutation: batch, repairRecovery: receipt }, batch.batchId);
+        const changed = applyMutation(batch);
+        for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
+        collisionRecoveryReceipts.set(attemptId, receipt);
+        scheduleMaterializer();
+        return structuredClone(receipt);
+      });
+    },
+    repairCollisionEvidence(attemptId = ''): TaskRepairCollisionEvidence[] {
+      return [...retainedCollisionEvidence.values()]
+        .filter((evidence) => !attemptId || evidence.attemptId === attemptId)
+        .sort((left, right) => `${left.attemptId}\u0000${left.deliveryId}\u0000${left.key}`.localeCompare(`${right.attemptId}\u0000${right.deliveryId}\u0000${right.key}`))
+        .map((evidence) => structuredClone(evidence));
+    },
+    merge(delta: TaskStateDelta, mergeOptions: { deferMaterialization?: string } = {}): Promise<{ changed: boolean; delta: TaskStateDelta; resultingStateHashes: Map<string, string> }> {
+      return serializeTransition(async () => {
       mergeTiming.count += 1;
       mergeTiming.entities += delta.entities.length;
       if (delta.version !== taskCurrentStateVersion || delta.projectId !== options.projectId) throw new Error('invalid_task_state_delta');
@@ -552,6 +837,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       };
       mergeTiming.resultCloneMs += performance.now() - resultCloneStartedAt;
       return result;
+      });
     },
     async flush(): Promise<void> {
       for (const authority of [...deferredMaterialization.keys()]) resumeMaterialization(authority);
