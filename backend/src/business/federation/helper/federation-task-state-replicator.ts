@@ -97,6 +97,8 @@ export function createFederationTaskStateReplicator(input: {
   const activeRepairRequests = new Map<string, { summaryIdentity: string; attemptId: string; timeout: NodeJS.Timeout; store: TaskCurrentStateStore }>();
   const terminalRepairAttempts = new Map<string, string>();
   const terminalPublicationHashes = new Map<string, Map<string, string>>();
+  const terminalPublicationProjects = new Set<string>();
+  const recoveryStores = new Map<string, TaskCurrentStateStore>();
   const servedRepairRequests = new Map<string, { root: string; buckets: Set<string> }>();
   const deferredObservers = new Map<string, { attemptId: string; store: TaskCurrentStateStore; keys: Set<string> }>();
   type EnhancedRepairFrame = { frame: FederationStateFrame; entries: StateEnvelope[]; attemptId: string; store: TaskCurrentStateStore; encodedBytes: number; resolve: () => void; reject: (error: unknown) => void };
@@ -380,7 +382,7 @@ export function createFederationTaskStateReplicator(input: {
       if (encodedInFlight >= maximumConnectionDeliveryBytes) break;
       const projectId = relayProjectOrder.shift()!;
       relayProjectOrder.push(projectId);
-      const store = input.stores().get(projectId) ?? input.storeFor?.(projectId, 'relay');
+      const store = recoveryStores.get(projectId) ?? input.stores().get(projectId) ?? input.storeFor?.(projectId, 'relay');
       // WHAT: Keep queued state dormant while its durable project store is unavailable.
       // WHY: A terminal root must come from the same authority as the entities.
       if (!store) {
@@ -493,7 +495,11 @@ export function createFederationTaskStateReplicator(input: {
 
   const handleFrame = async (frame: FederationStateFrame): Promise<void> => {
     if (!frame.from) return;
-    const store = input.stores().get(frame.projectId) ?? input.storeFor?.(frame.projectId, frame.from);
+    // WHAT: Grant the explicit recovery store only to the relay ACK and summary needed for completion proof.
+    // WHY: A paused project must not admit entity delivery, missing requests, or unrelated peer traffic through recovery authority.
+    const recoveryFrame = frame.from === 'relay' && (frame.type === 'state-relay-ack' || frame.type === 'state-bucket-summary');
+    const store = (recoveryFrame ? recoveryStores.get(frame.projectId) : undefined)
+      ?? input.stores().get(frame.projectId) ?? input.storeFor?.(frame.projectId, frame.from);
     if (!store) return;
     const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
     if (Number(payload.stateVersion ?? taskCurrentStateVersion) !== taskCurrentStateVersion) throw new Error('incompatible_state_protocol');
@@ -638,6 +644,9 @@ export function createFederationTaskStateReplicator(input: {
       // WHAT: Suppress automatic repair for the relay root generation terminated by durable collision evidence.
       // WHY: Healthy entries can change the receiver root after a mixed ACK, while the poisoned relay cut remains unchanged.
       if (terminalRepairAttempts.get(repairKey) === summaryIdentity) return;
+      // WHAT: Suppress pull repair for a legacy publication collision whose incident predates relay-root evidence.
+      // WHY: Explicit local-authority recovery must replace the poisoned publication without opening a redundant timeout-producing pull.
+      if (frame.from === 'relay' && terminalPublicationProjects.has(frame.projectId)) return;
       // WHAT: Suppress an identical summary while its root generation remains unresolved.
       // WHY: Repeating the same missing request cannot make a permanently divergent peer progress.
       if (activeRepairRequests.get(repairKey)?.summaryIdentity === summaryIdentity) return;
@@ -779,6 +788,7 @@ export function createFederationTaskStateReplicator(input: {
     // WHY: A paused project still needs one authorized mutation to reach relay acknowledgement and root equality.
     publishRecoveryDelta: (delta: TaskStateDelta, store: TaskCurrentStateStore): void => {
       if (delta.entities.length === 0) return;
+      recoveryStores.set(delta.projectId, store);
       const dirty = dirtyFor(delta.projectId);
       for (const entity of delta.entities) {
         const key = taskCurrentEntityKey(entity);
@@ -806,11 +816,14 @@ export function createFederationTaskStateReplicator(input: {
           blocked.set(rejection.key, rejection.stateHash);
         }
         terminalPublicationHashes.set(projectId, blocked);
+        terminalPublicationProjects.add(projectId);
       }
     },
     clearTerminalRepair: (projectId: string, from = 'relay'): void => {
       terminalRepairAttempts.delete(`${from}\u0000${projectId}`);
       terminalPublicationHashes.delete(projectId);
+      terminalPublicationProjects.delete(projectId);
+      recoveryStores.delete(projectId);
     },
     diagnostics: () => ({
       convergence: [...convergence].map(([key, value]) => ({ peerId: key.split('\u0000')[0], ...value })),

@@ -660,6 +660,28 @@ test('publication rejection adopts archived receiver evidence before settlement 
   restarted.restoreTerminalRepair('project-a', 'relay', publicationAttempt, [], relayRoot);
   await restarted.handleFrame(summary);
   assert.equal(sent.filter((frame) => frame.type === 'state-missing-request').length, missingBefore);
+  const legacySent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const legacy = createFederationTaskStateReplicator({ stores: () => new Map([['project-a', node.store]]), publish: (_target, frame) => { legacySent.push(frame); return true; } });
+  legacy.restoreTerminalRepair('project-a', 'relay', publicationAttempt, [{ code: archived.code, key: archived.key, stateHash: localEntity.stateHash, receiverStateHash: relayEntity.stateHash, collisions: archived.collisions }]);
+  await legacy.handleFrame(summary);
+  assert.equal(legacySent.filter((frame) => frame.type === 'state-missing-request').length, 0);
+});
+
+test('explicit recovery store admits only relay acknowledgement and summary while normal project stores stay paused', async (context) => {
+  const node = fixture('decision-os-recovery-store-override-');
+  context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });
+  const mutation = await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'recovery', changes: [{ path: 'title', operation: 'set', value: 'Recovered' }] }] });
+  const sent: Array<Omit<FederationStateFrame, 'from'>> = [];
+  const replicator = createFederationTaskStateReplicator({ stores: () => new Map(), storeFor: () => null, publish: (_target, frame) => { sent.push(frame); return true; } });
+  replicator.publishRecoveryDelta(mutation.delta, node.store);
+  const delivery = sent.find((frame) => frame.type === 'state-entity-batch')!;
+  const payload = delivery.payload as { deliveryId: string; entries: Array<{ key: string; stateHash: string }> };
+  await replicator.handleFrame({ type: 'state-entity-batch', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, deliveryId: 'unrelated', entries: payload.entries } });
+  assert.equal(sent.filter((frame) => frame.type === 'state-relay-ack').length, 0);
+  await replicator.handleFrame({ type: 'state-relay-ack', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, deliveryId: payload.deliveryId, accepted: payload.entries } });
+  assert.equal(replicator.diagnostics().runtimeDirty.length, 0);
+  await replicator.handleFrame({ type: 'state-bucket-summary', from: 'relay', projectId: 'project-a', payload: { stateVersion: taskCurrentStateVersion, root: node.store.rootHash(), buckets: node.store.bucketManifest() } });
+  assert.equal(sent.filter((frame) => frame.type === 'state-converged').length, 1);
 });
 
 test('relay entity batches acknowledge without advertising intermediate roots', async (context) => {
