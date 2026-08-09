@@ -546,7 +546,7 @@ function persistStateEntities(sender: Client, frame: RelayFrame): void {
     from: 'relay',
     projectId,
     stateVersion: taskCurrentStateVersion,
-    payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted, rejected },
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted, rejected, ...(rejected.length > 0 ? { relayRoot: hashTaskCurrentRoot(stateBuckets(sender.federationId, projectId)) } : {}) },
   });
   for (const target of activeClients(sender.federationId)) {
     if (target.nodeId === sender.nodeId || !participates(target.federationId, target.nodeId, projectId)) continue;

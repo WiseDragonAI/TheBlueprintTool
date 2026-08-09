@@ -264,7 +264,7 @@ export function createFederationStateRuntime(input: {
       });
       input.pausedTaskProjects.set(projectId, incident);
     },
-    onRepairCollision: ({ projectId, from, attemptId, deliveryId, rejected, evidence }) => {
+    onRepairCollision: ({ projectId, from, attemptId, deliveryId, relayRoot, rejected, evidence }) => {
       const incident = input.recordIncident({
         scope: `federation-repair:${projectId}`,
         component: 'federation-task-state-replicator',
@@ -276,6 +276,7 @@ export function createFederationStateRuntime(input: {
           from,
           attemptId,
           deliveryId,
+          relayRoot,
           rejected,
           evidenceKeys: evidence.map((entry) => `${entry.deliveryId}\u0000${entry.key}`).sort(),
         },
@@ -292,7 +293,7 @@ export function createFederationStateRuntime(input: {
     const retained = state?.store.repairCollisionEvidence(attemptId) ?? [];
     // WHAT: Restore automatic-repair suppression only from matching durable store evidence.
     // WHY: A malformed incident must remain visibly paused without granting transient recovery authority.
-    if (attemptId && (retained.length > 0 || attemptId.startsWith('publication:'))) replicator.restoreTerminalRepair(projectId, from, attemptId, rejected);
+    if (attemptId && retained.length > 0) replicator.restoreTerminalRepair(projectId, from, attemptId, rejected, String(incident.context.relayRoot ?? ''));
   }
 
   for (const [projectId, state] of input.projectStates) {

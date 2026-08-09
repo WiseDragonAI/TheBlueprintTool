@@ -116,6 +116,39 @@ test('repair group durably accepts healthy delivery and retains complete collisi
   assert.equal(recoveredRestart.clock()[receipt.replicaId], 1);
 });
 
+test('publication collision adopts exact retained receiver bytes and recovers through the deterministic successor', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-publication-collision-'));
+  const receiverRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-publication-archive-source-'));
+  context.after(() => { rmSync(root, { recursive: true, force: true }); rmSync(receiverRoot, { recursive: true, force: true }); });
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
+  const local = await store.mutate({ replicaId: 'workstation', changes: [{ entityType: 'card', entityId: 'collision-card', changes: [{ path: 'title', operation: 'set', value: 'Local' }] }] });
+  const localEntity = local.delta.entities[0];
+  const remoteEntity = finalizeTaskCurrentEntity({
+    ...structuredClone(localEntity),
+    fields: { ...structuredClone(localEntity.fields), title: { ...structuredClone(localEntity.fields.title), candidates: [{ ...structuredClone(localEntity.fields.title.candidates[0]), value: 'Remote' }] } },
+  });
+  const receiver = createTaskCurrentStateStore({ decisionOsRoot: receiverRoot, projectId: 'project-a', initializeLedger: {} });
+  await receiver.merge({ version: taskCurrentStateVersion, projectId: 'project-a', entities: [remoteEntity] });
+  await store.mergeRepairGroup([{ attemptId: 'prior-repair', deliveryId: 'prior-delivery', delta: receiver.activeDelta() }], 'prior-repair');
+  const rejection = store.repairCollisionEvidence('prior-repair')[0];
+  const adopted = await store.adoptPublicationCollisionEvidence({
+    attemptId: 'publication:delivery-a',
+    deliveryId: 'delivery-a',
+    rejected: [{ code: rejection.code, key: rejection.key, stateHash: localEntity.stateHash, receiverStateHash: remoteEntity.stateHash, collisions: rejection.collisions }],
+    submittedEntities: [localEntity],
+  });
+  assert.equal(adopted.length, 1);
+  assert.equal(adopted[0].direction, 'publication');
+  assert.equal(adopted[0].localEntity.stateHash, localEntity.stateHash);
+  assert.equal(adopted[0].remoteEntity.stateHash, remoteEntity.stateHash);
+  const receipt = await store.recoverRepairCollisionLocalAuthority('publication:delivery-a');
+  assert.equal(Object.keys(receipt.resultingStateHashes)[0], 'card\u0000collision-card');
+  await store.flush();
+  const restarted = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' });
+  assert.deepEqual(restarted.repairCollisionEvidence('publication:delivery-a'), adopted);
+  assert.deepEqual(await restarted.recoverRepairCollisionLocalAuthority('publication:delivery-a'), receipt);
+});
+
 test('restart reconstructs projection, clock, and buckets from current shards only', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-restart-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));
