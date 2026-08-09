@@ -61,6 +61,61 @@ test('enhanced repair keeps journal authority until its attempt releases shard m
   await target.flush();
 });
 
+test('repair group durably accepts healthy delivery and retains complete collision evidence', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-collision-target-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
+  const local = await store.mutate({ replicaId: 'workstation', changes: [{ entityType: 'card', entityId: 'collision-card', changes: [{ path: 'title', operation: 'set', value: 'Local' }] }] });
+  await store.flush();
+  const localEntity = local.delta.entities[0];
+  const remoteCollision = finalizeTaskCurrentEntity({
+    version: taskCurrentStateVersion,
+    projectId: 'project-a',
+    entityType: localEntity.entityType,
+    entityId: localEntity.entityId,
+    fields: { ...structuredClone(localEntity.fields), title: { ...structuredClone(localEntity.fields.title), candidates: [{ ...structuredClone(localEntity.fields.title.candidates[0]), value: 'Remote' }] } },
+  });
+  const healthy = finalizeTaskCurrentEntity({
+    version: taskCurrentStateVersion,
+    projectId: 'project-a',
+    entityType: 'card',
+    entityId: 'healthy-card',
+    fields: {
+      '$entity': { clock: { relay: 1 }, candidates: [{ dot: { replicaId: 'relay', counter: 1 }, operation: 'set', value: true }] },
+      title: { clock: { relay: 1 }, candidates: [{ dot: { replicaId: 'relay', counter: 1 }, operation: 'set', value: 'Healthy' }] },
+    },
+  });
+  const result = await store.mergeRepairGroup([
+    { attemptId: 'attempt-a', deliveryId: 'mixed-delivery', delta: { version: taskCurrentStateVersion, projectId: 'project-a', entities: [healthy, remoteCollision] } },
+  ], 'attempt-a');
+
+  assert.deepEqual(result.deliveries[0].accepted.map((entry) => entry.key), ['card\u0000healthy-card']);
+  assert.equal(result.deliveries[0].rejected.length, 1);
+  assert.equal(store.projectedEntity('card', 'healthy-card')?.title, 'Healthy');
+  assert.equal(store.projectedEntity('card', 'collision-card')?.title, 'Local');
+  const evidence = store.repairCollisionEvidence('attempt-a');
+  assert.equal(evidence.length, 1);
+  assert.equal(evidence[0].localEntity.stateHash, localEntity.stateHash);
+  assert.equal(evidence[0].remoteEntity.stateHash, remoteCollision.stateHash);
+  assert.deepEqual(evidence[0].collisions, [{ entityType: 'card', entityId: 'collision-card', path: 'title', dot: { replicaId: 'workstation', counter: 1 } }]);
+  store.resumeMaterialization('attempt-a');
+  await store.flush();
+  const journalDirectory = resolve(root, 'task-state', 'project-a', 'journal');
+  assert.equal(readdirSync(journalDirectory).filter((name) => name.endsWith('.wal')).length, 1);
+
+  const restarted = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' });
+  assert.equal(restarted.projectedEntity('card', 'healthy-card')?.title, 'Healthy');
+  assert.equal(restarted.projectedEntity('card', 'collision-card')?.title, 'Local');
+  assert.deepEqual(restarted.repairCollisionEvidence('attempt-a'), evidence);
+  const receipt = await restarted.recoverRepairCollisionLocalAuthority('attempt-a');
+  assert.equal(restarted.projectedEntity('card', 'collision-card')?.title, 'Local');
+  assert.equal(restarted.clock()[receipt.replicaId], 1);
+  await restarted.flush();
+  const recoveredRestart = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' });
+  assert.deepEqual(await recoveredRestart.recoverRepairCollisionLocalAuthority('attempt-a'), receipt);
+  assert.equal(recoveredRestart.clock()[receipt.replicaId], 1);
+});
+
 test('restart reconstructs projection, clock, and buckets from current shards only', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-restart-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));

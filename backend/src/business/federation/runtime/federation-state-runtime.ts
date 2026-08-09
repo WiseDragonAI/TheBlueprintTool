@@ -16,6 +16,7 @@ import type { createFederationContentReplicaStore } from '../helper/federation-c
 import type { createFederationNodeConnector } from '../helper/federation-node-connector.js';
 import { createFederationTaskStateReplicator } from '../helper/federation-task-state-replicator.js';
 import type { createTaskExecutionPresentationRegistry } from '../../codex/runtime/task-execution-presentation-registry.js';
+import type { RuntimeIncident } from '../../server/helper/runtime-incident-ledger.js';
 
 type ExecutionState = Pick<ProjectTaskState, 'executions' | 'finalizeExecutionArtifacts'>;
 
@@ -30,6 +31,7 @@ export function createFederationStateRuntime(input: {
     entities?: readonly { entityType: string; entityId: string }[],
   ) => void;
   localTaskRuntime: ReturnType<typeof createLocalTaskRuntime>;
+  pausedFederationRepairs: Map<string, RuntimeIncident>;
   pausedTaskProjects: { has(projectId: string): boolean; set(projectId: string, incident: unknown): unknown };
   presentations: ReturnType<typeof createTaskExecutionPresentationRegistry>;
   projectCatalogStore: ReturnType<typeof createProjectCatalogStore>;
@@ -262,7 +264,36 @@ export function createFederationStateRuntime(input: {
       });
       input.pausedTaskProjects.set(projectId, incident);
     },
+    onRepairCollision: ({ projectId, from, attemptId, deliveryId, rejected, evidence }) => {
+      const incident = input.recordIncident({
+        scope: `federation-repair:${projectId}`,
+        component: 'federation-task-state-replicator',
+        operation: 'terminal-state-collision',
+        code: 'task_current_dot_collision',
+        error: new Error(`task_current_dot_collision:${projectId}`),
+        context: {
+          projectId,
+          from,
+          attemptId,
+          deliveryId,
+          rejected,
+          evidenceKeys: evidence.map((entry) => `${entry.deliveryId}\u0000${entry.key}`).sort(),
+        },
+      }) as RuntimeIncident;
+      input.pausedFederationRepairs.set(projectId, incident);
+    },
   });
+
+  for (const [projectId, incident] of input.pausedFederationRepairs) {
+    const attemptId = String(incident.context.attemptId ?? '');
+    const from = String(incident.context.from ?? 'relay');
+    const rejected = Array.isArray(incident.context.rejected) ? incident.context.rejected : [];
+    const state = input.projectStates.get(projectId) ?? input.federatedProjectStates.get(projectId);
+    const retained = state?.store.repairCollisionEvidence(attemptId) ?? [];
+    // WHAT: Restore automatic-repair suppression only from matching durable store evidence.
+    // WHY: A malformed incident must remain visibly paused without granting transient recovery authority.
+    if (attemptId && (retained.length > 0 || attemptId.startsWith('publication:'))) replicator.restoreTerminalRepair(projectId, from, attemptId, rejected);
+  }
 
   for (const [projectId, state] of input.projectStates) {
     input.localTaskRuntime.scheduleContentHeadRepair(projectId, state);

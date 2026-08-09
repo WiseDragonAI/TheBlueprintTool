@@ -261,7 +261,83 @@ test('Termux relay replays an acknowledged entity journal after a crash before c
   assert.equal(readdirSync(`${stateFile}.entity-journal`).filter((name) => name.endsWith('.json')).length, 0);
 });
 
-test('Termux relay suppresses duplicate requests per connection and retries after reconnect and restart', async (context) => {
+test('Termux relay acknowledges the submitted hash separately from the joined relay hash', async (context) => {
+  const port = await freePort();
+  const directory = mkdtempSync(resolve(tmpdir(), 'decision-os-termux-ack-join-'));
+  const administratorSecret = randomBytes(32).toString('hex');
+  const child = spawn(process.execPath, [
+    '--import',
+    resolve('..', 'backend', 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs'),
+    resolve('src', 'termux-local-relay.ts'),
+  ], {
+    cwd: resolve('.'),
+    env: { ...process.env, ADMIN_SECRET: administratorSecret, DECISION_OS_RELEASE_SHA: 'c'.repeat(40), DECISION_OS_RELAY_STATE_FILE: resolve(directory, 'relay.json'), HOST: '127.0.0.1', PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  context.after(() => {
+    // WHAT: Terminate only the relay child and scratch state owned by this test.
+    // WHY: ACK-correlation proof must not leave a canary process or durable fixture behind.
+    if (child.exitCode === null) child.kill('SIGTERM');
+    rmSync(directory, { recursive: true, force: true });
+  });
+  await waitForRelay(child);
+  const provisioned = await fetch(`http://127.0.0.1:${port}/admin/federations/ack-join/nodes/writer`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${administratorSecret}` },
+  });
+  assert.equal(provisioned.status, 201);
+  const credential = String((await provisioned.json() as { credential: string }).credential);
+  const writer = new WebSocket(`ws://127.0.0.1:${port}/connect/ack-join/writer`, { headers: { authorization: `Bearer ${credential}` } });
+  await once(writer, 'open');
+  writer.send(JSON.stringify({
+    version: 1,
+    type: 'manifest',
+    nodeLabel: 'Writer',
+    projects: [{ id: 'shared', name: 'Shared', description: '', color: '#38d9e8', ledgers: [] }],
+    stateProtocol,
+    stateSchema,
+    baselineEpoch: stateBaselineEpoch,
+  }));
+  const { finalizeTaskCurrentEntity, taskCurrentEntityKey } = await import('../../shared/task-current-state-core.js');
+  const retained = finalizeTaskCurrentEntity({
+    version: stateSchema,
+    projectId: 'shared',
+    entityType: 'card',
+    entityId: 'concurrent-card',
+    fields: { title: { clock: { relay: 1 }, candidates: [{ dot: { replicaId: 'relay', counter: 1 }, operation: 'set', value: 'Relay value' }] } },
+  });
+  const key = taskCurrentEntityKey(retained);
+  const seeded = nextMatchingFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === 'seed-concurrent');
+  writer.send(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: stateSchema, projectId: 'shared', payload: { stateVersion: stateSchema, deliveryId: 'seed-concurrent', entries: [{ key, stateHash: retained.stateHash, entity: retained }] } }));
+  await seeded;
+  const submitted = finalizeTaskCurrentEntity({
+    version: stateSchema,
+    projectId: 'shared',
+    entityType: 'card',
+    entityId: 'concurrent-card',
+    fields: { title: { clock: { node: 1 }, candidates: [{ dot: { replicaId: 'node', counter: 1 }, operation: 'set', value: 'Node value' }] } },
+  });
+  const joined = finalizeTaskCurrentEntity({
+    version: stateSchema,
+    projectId: 'shared',
+    entityType: 'card',
+    entityId: 'concurrent-card',
+    fields: { title: { clock: { node: 1, relay: 1 }, candidates: [
+      { dot: { replicaId: 'node', counter: 1 }, operation: 'set', value: 'Node value' },
+      { dot: { replicaId: 'relay', counter: 1 }, operation: 'set', value: 'Relay value' },
+    ] } },
+  });
+  assert.notEqual(joined.stateHash, submitted.stateHash);
+  assert.notEqual(joined.stateHash, retained.stateHash);
+  const acknowledged = nextMatchingFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === 'join-concurrent');
+  writer.send(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: stateSchema, projectId: 'shared', payload: { stateVersion: stateSchema, deliveryId: 'join-concurrent', entries: [{ key, stateHash: submitted.stateHash, entity: submitted }] } }));
+  const acknowledgement = await acknowledged;
+  assert.deepEqual(acknowledgement.payload.accepted, [{ key, stateHash: submitted.stateHash, resultingStateHash: joined.stateHash }]);
+  writer.close(1000, 'test_complete');
+  await once(writer, 'close');
+});
+
+test('Termux relay persists terminal repair rejection and never resends its exact blocked hash after restart', async (context) => {
   const port = await freePort();
   const directory = mkdtempSync(resolve(tmpdir(), 'decision-os-termux-flood-proof-'));
   const stateFile = resolve(directory, 'relay.json');
@@ -360,11 +436,23 @@ test('Termux relay suppresses duplicate requests per connection and retries afte
       stateVersion: stateSchema,
       attemptId,
       deliveryId: retriedBatch.payload.deliveryId,
-      accepted: retriedBatch.payload.entries.map((entry: Record<string, unknown>) => ({ key: entry.key, stateHash: entry.stateHash })),
+      accepted: [],
+      rejected: retriedBatch.payload.entries.map((entry: Record<string, unknown>) => ({
+        key: entry.key,
+        stateHash: entry.stateHash,
+        receiverStateHash: 'c'.repeat(64),
+        code: 'task_current_dot_collision',
+        collisions: [{ entityType: 'card', entityId: 'sentinel', path: 'title', dot: { replicaId: 'writer', counter: 1 } }],
+      })),
     },
   }));
-  await terminalSummary;
-  replacement.send(JSON.stringify({ version: 1, type: 'state-converged', stateVersion: stateSchema, projectId: 'shared', payload: { stateVersion: stateSchema, attemptId, root: relayRoot } }));
+  assert.deepEqual((await terminalSummary).payload.rejected, [{
+    key,
+    stateHash: value.stateHash,
+    receiverStateHash: 'c'.repeat(64),
+    code: 'task_current_dot_collision',
+    collisions: [{ entityType: 'card', entityId: 'sentinel', path: 'title', dot: { replicaId: 'writer', counter: 1 } }],
+  }]);
   replacement.close(1000, 'test_complete');
   await once(replacement, 'close');
   child.kill('SIGTERM');
@@ -376,9 +464,11 @@ test('Termux relay suppresses duplicate requests per connection and retries afte
   const completedSummary = nextMatchingFrame(completed, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared');
   completed.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: stateSchema, projectId: 'shared', payload: { stateVersion: stateSchema } }));
   await completedSummary;
+  const retainedTerminal = nextMatchingFrame(completed, (frame) => frame.type === 'state-bucket-summary' && Array.isArray(frame.payload?.rejected));
   const afterCompletion = observeMatchingFrames(completed, 250);
   completed.send(JSON.stringify(request));
   assert.equal((await afterCompletion).filter((frame) => frame.type === 'state-entity-batch').length, 0);
+  assert.equal((await retainedTerminal).payload.rejected[0].stateHash, value.stateHash);
   completed.close(1000, 'test_complete');
   await once(completed, 'close');
   child.kill('SIGTERM');

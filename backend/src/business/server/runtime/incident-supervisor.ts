@@ -31,6 +31,7 @@ export function createIncidentSupervisor(input: {
   const pausedBackgroundComponents = new Set<string>();
   const pausedProjectWatchers = new Set<string>();
   const pausedProjectRuntimes = new Set<string>();
+  const pausedFederationRepairs = new Map<string, RuntimeIncident>();
   const taskProjectsPendingFrameIncidentRevalidation = new Map<string, RuntimeIncident>();
   let fatalExitScheduled = false;
 
@@ -68,6 +69,11 @@ export function createIncidentSupervisor(input: {
     }
     if (incident.scope.startsWith('project-runtime:')) {
       pausedProjectRuntimes.add(incident.scope.slice('project-runtime:'.length));
+    }
+    // WHAT: Restore a terminal federation repair without removing the project's local runtime.
+    // WHY: Collision containment must survive restart while unrelated project behavior remains available.
+    if (incident.scope.startsWith('federation-repair:')) {
+      pausedFederationRepairs.set(incident.scope.slice('federation-repair:'.length), incident);
     }
   }
 
@@ -161,6 +167,7 @@ export function createIncidentSupervisor(input: {
     pauseTaskProject,
     pausedBackgroundComponents,
     pausedFederatedTaskProjects,
+    pausedFederationRepairs,
     pausedProjectRuntimes,
     pausedProjectWatchers,
     pausedTaskProjects,
@@ -175,6 +182,7 @@ export function createIncidentSupervisor(input: {
       ...[...pausedBackgroundComponents].map((component) => `background:${component}`),
       ...[...pausedProjectWatchers].map((projectId) => `project-watcher:${projectId}`),
       ...[...pausedProjectRuntimes].map((projectId) => `project-runtime:${projectId}`),
+      ...[...pausedFederationRepairs.keys()].map((projectId) => `federation-repair:${projectId}`),
       ...(fatalExitScheduled ? ['server-runtime'] : []),
     ],
   };

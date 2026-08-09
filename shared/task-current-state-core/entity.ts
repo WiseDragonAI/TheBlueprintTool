@@ -15,6 +15,7 @@ import {
   type TaskExecutionLifecycle,
   type TaskFieldOperation,
   type TaskRegisterCandidate,
+  type TaskCurrentDotCollision,
 } from './model.js';
 import { clockCovers, dotKey, joinTaskRegisters } from './register-join.js';
 import { sha256 } from './sha256.js';
@@ -240,4 +241,22 @@ export function joinTaskEntities(left: TaskCurrentEntity | undefined, right: Tas
     }
   }
   return finalizeTaskCurrentEntity({ version: taskCurrentStateVersion, projectId: left.projectId, entityType: left.entityType, entityId: left.entityId, fields });
+}
+
+export function taskCurrentDotCollisionCoordinates(error: unknown): TaskCurrentDotCollision[] {
+  const message = error instanceof Error ? error.message : String(error);
+  const match = /^task_current_dot_collision:([^:]+):([^:]+):([^:]+):([^:]+):(\d+)$/.exec(message);
+  // WHAT: Return no coordinates when the failure is not the complete entity-level collision code.
+  // WHY: Callers must never classify an unrelated join failure as recoverable collision evidence.
+  if (!match) return [];
+  const counter = Number(match[5]);
+  // WHAT: Return no coordinates when an externally constructed message carries an invalid counter.
+  // WHY: Retained evidence must satisfy the epoch-4 dot contract before it becomes durable authority.
+  if (!Number.isSafeInteger(counter) || counter < 1) return [];
+  return [{
+    entityType: match[1] as TaskCurrentEntity['entityType'],
+    entityId: decodeURIComponent(match[2]),
+    path: decodeURIComponent(match[3]),
+    dot: { replicaId: decodeURIComponent(match[4]), counter },
+  }];
 }

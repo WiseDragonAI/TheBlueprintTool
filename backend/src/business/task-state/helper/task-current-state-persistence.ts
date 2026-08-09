@@ -136,5 +136,5 @@ export function createTaskCurrentStatePersistence(root: string) {
       throw error;
     }
   };
-  return { entityPath, atomicWrite, atomicWriteSync, appendDurable, durableRemove };
+  return { entityPath, atomicWrite, atomicWriteSync, appendDurable, durableRemove, sealAppend: closeAppend };
 }

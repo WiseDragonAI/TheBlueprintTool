@@ -32,9 +32,11 @@ import {
   federationRepairRecordKey,
   type FederationRepairRecord,
 } from '../../shared/federation-repair-guard.js';
+import { normalizeFederationStateRejection, type FederationStateRejection } from '../../shared/federation-state-transport.js';
 import {
   hashTaskCurrentRoot,
   taskCurrentBucketForEntityKey,
+  taskCurrentDotCollisionCoordinates,
   taskCurrentEntityKey,
   taskCurrentStateVersion,
 } from '../../shared/task-current-state-core.js';
@@ -374,7 +376,7 @@ function stateBuckets(federationId: string, projectId: string): StateBucket[] {
     .map(([bucket, entries]) => summarizeBucket(bucket, entries));
 }
 
-function sendStateSummary(target: Client, projectId: string): void {
+function sendStateSummary(target: Client, projectId: string, rejected: FederationStateRejection[] = []): void {
   const buckets = stateBuckets(target.federationId, projectId);
   sendSocket(target.socket, {
     version: 1,
@@ -382,7 +384,7 @@ function sendStateSummary(target: Client, projectId: string): void {
     from: 'relay',
     projectId,
     stateVersion: taskCurrentStateVersion,
-    payload: { stateVersion: taskCurrentStateVersion, root: hashTaskCurrentRoot(buckets), buckets },
+    payload: { stateVersion: taskCurrentStateVersion, root: hashTaskCurrentRoot(buckets), buckets, ...(rejected.length > 0 ? { rejected } : {}) },
   });
 }
 
@@ -445,7 +447,7 @@ function pumpRepairWindow(target: Client): void {
         if (!record.summarySent) {
           record.summarySent = true;
           persistRepairState();
-          sendStateSummary(target, projectId);
+          sendStateSummary(target, projectId, Object.values(record.rejectedEntries ?? {}));
         }
         session.projects = session.projects.filter((candidate) => candidate !== projectId);
         idleProjects = 0;
@@ -502,11 +504,22 @@ function persistStateEntities(sender: Client, frame: RelayFrame): void {
   const project = stored.entities[projectId] ?? {};
   const nextProject = { ...project };
   const changed: RelayEntity[] = [];
-  const accepted: Array<{ key: string; stateHash: string }> = [];
+  const accepted: Array<{ key: string; stateHash: string; resultingStateHash: string }> = [];
+  const rejected: FederationStateRejection[] = [];
   for (const entry of entries) {
     const previous = nextProject[entry.entityKey];
-    const joined = joinRelayEntity(previous, entry.entity);
-    accepted.push({ key: entry.entityKey, stateHash: joined.stateHash });
+    let joined: RelayEntity;
+    try {
+      joined = joinRelayEntity(previous, entry.entity);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // WHAT: Convert only a causal-dot collision into terminal entity evidence.
+      // WHY: Other join failures remain batch-level faults instead of being hidden as recoverable conflicts.
+      if (!message.startsWith('task_current_dot_collision:')) throw error;
+      rejected.push(normalizeFederationStateRejection({ key: entry.entityKey, stateHash: entry.entity.stateHash, receiverStateHash: previous?.stateHash ?? '', code: 'task_current_dot_collision', collisions: taskCurrentDotCollisionCoordinates(error) }));
+      continue;
+    }
+    accepted.push({ key: entry.entityKey, stateHash: entry.entity.stateHash, resultingStateHash: joined.stateHash });
     if (previous?.stateHash !== joined.stateHash) changed.push(joined);
     nextProject[entry.entityKey] = joined;
   }
@@ -533,7 +546,7 @@ function persistStateEntities(sender: Client, frame: RelayFrame): void {
     from: 'relay',
     projectId,
     stateVersion: taskCurrentStateVersion,
-    payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted },
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted, rejected },
   });
   for (const target of activeClients(sender.federationId)) {
     if (target.nodeId === sender.nodeId || !participates(target.federationId, target.nodeId, projectId)) continue;
@@ -655,10 +668,11 @@ function startStateRepair(sender: Client, frame: RelayFrame): void {
   if (sameAttempt) {
     const requeued = [...(retained.remainingEntries ?? []), ...(retained.pendingDeliveries ?? []).flatMap((delivery) => delivery.entries)];
     const acknowledged = retained.acknowledgedEntries ?? {};
+    const rejected = retained.rejectedEntries ?? {};
     record = {
       ...retained,
       receiverRoot,
-      remainingEntries: [...new Map(requeued.filter((entry) => acknowledged[entry.key] !== entry.stateHash).map((entry) => [entry.key, entry])).values()],
+      remainingEntries: [...new Map(requeued.filter((entry) => acknowledged[entry.key] !== entry.stateHash && rejected[entry.key]?.stateHash !== entry.stateHash).map((entry) => [entry.key, entry])).values()],
       pendingDeliveries: [],
       summarySent: false,
     };
@@ -672,6 +686,7 @@ function startStateRepair(sender: Client, frame: RelayFrame): void {
       remainingEntries: repairEntries(sender, projectId, buckets),
       pendingDeliveries: [],
       acknowledgedEntries: {},
+      rejectedEntries: {},
       summarySent: false,
     };
   }
@@ -697,6 +712,7 @@ function acknowledgeStateDelivery(sender: Client, frame: RelayFrame): void {
   const deliveryId = String(payload.deliveryId ?? '');
   const attemptId = assertFederationRepairAttempt(payload.attemptId, 'attemptId');
   const accepted = Array.isArray(payload.accepted) ? payload.accepted as Array<{ key?: string; stateHash?: string }> : [];
+  const rejected = Array.isArray(payload.rejected) ? payload.rejected.map(normalizeFederationStateRejection) : [];
   const stored = federation(sender.federationId);
   const recordKey = federationRepairRecordKey(sender.nodeId, projectId);
   const record = stored.stateRepairRecords![recordKey];
@@ -705,12 +721,21 @@ function acknowledgeStateDelivery(sender: Client, frame: RelayFrame): void {
   // WHY: Only correlated durable application may advance the streaming window.
   if (!record || record.attemptId !== attemptId || !delivery) throw new Error('invalid_state_acknowledgement');
   const acceptedMap = new Map(accepted.map((entry) => [String(entry.key ?? ''), String(entry.stateHash ?? '')]));
-  // WHAT: Require each submitted key and hash to be acknowledged exactly once.
-  // WHY: Partial acknowledgement cannot prove omitted entries reached durable state.
-  if (acceptedMap.size !== delivery.entries.length || delivery.entries.some((entry) => acceptedMap.get(entry.key) !== entry.stateHash)) {
+  const rejectedMap = new Map(rejected.map((entry) => [String(entry.key ?? ''), entry]));
+  const exactRejected = (entry: { key: string; stateHash: string }) => {
+    const candidate = rejectedMap.get(entry.key);
+    return candidate?.stateHash === entry.stateHash;
+  };
+  // WHAT: Require accepted and rejected entries to form one exact disjoint delivery partition.
+  // WHY: Credit may advance only after every submitted key and hash has durable receiver disposition evidence.
+  if (accepted.length !== acceptedMap.size || rejected.length !== rejectedMap.size
+    || acceptedMap.size + rejectedMap.size !== delivery.entries.length
+    || accepted.some((entry) => rejectedMap.has(String(entry.key ?? '')))
+    || delivery.entries.some((entry) => acceptedMap.get(entry.key) !== entry.stateHash && !exactRejected(entry))) {
     throw new Error('invalid_state_acknowledgement');
   }
-  record.acknowledgedEntries = { ...(record.acknowledgedEntries ?? {}), ...Object.fromEntries(delivery.entries.map((entry) => [entry.key, entry.stateHash])) };
+  record.acknowledgedEntries = { ...(record.acknowledgedEntries ?? {}), ...Object.fromEntries(accepted.map((entry) => [String(entry.key), String(entry.stateHash)])) };
+  record.rejectedEntries = { ...(record.rejectedEntries ?? {}), ...Object.fromEntries(rejected.map((entry) => [entry.key, entry])) };
   record.pendingDeliveries = (record.pendingDeliveries ?? []).filter((candidate) => candidate.deliveryId !== deliveryId);
   persistRepairState('ack');
   const session = repairSession(sender.socket);

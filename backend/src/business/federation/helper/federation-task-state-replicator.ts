@@ -4,8 +4,10 @@
  */
 import { randomUUID } from 'node:crypto';
 import { assertFederationRepairManifest, canonicalFederationRepairBuckets } from '../../../../../shared/federation-repair-guard.js';
-import { taskCurrentEntityKey } from '../../../../../shared/task-current-state-core.js';
+import { normalizeFederationStateRejection } from '../../../../../shared/federation-state-transport.js';
+import { joinTaskEntities, taskCurrentEntityKey } from '../../../../../shared/task-current-state-core.js';
 import type { TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
+import type { TaskRepairCollisionEvidence, TaskRepairCollisionRejection } from '../../task-state/helper/task-current-state-types.js';
 import { taskCurrentStateVersion, type TaskCurrentBucket, type TaskCurrentEntity, type TaskStateDelta } from '../../task-state/helper/task-current-state-types.js';
 import type { FederationStateFrame } from './federation-node-connector.js';
 
@@ -84,6 +86,7 @@ export function createFederationTaskStateReplicator(input: {
   onProjectionChange?: (input: { projectId: string; from: string; delta: TaskStateDelta }) => void;
   onProjectionError?: (input: { projectId: string; from: string; error: unknown }) => void;
   onRepairTimeout?: (input: { projectId: string; from: string; attemptId: string }) => void;
+  onRepairCollision?: (input: { projectId: string; from: string; attemptId: string; deliveryId: string; rejected: TaskRepairCollisionRejection[]; evidence: TaskRepairCollisionEvidence[] }) => void;
   noProgressTimeoutMs?: number;
 }) {
   const convergence = new Map<string, { projectId: string; converged: boolean; lastRepairAt: string; missingBuckets: string[]; root: string }>();
@@ -92,6 +95,8 @@ export function createFederationTaskStateReplicator(input: {
   const queuedRelayEntities = new Map<string, Map<string, TaskCurrentEntity>>();
   let relayProjectOrder: string[] = [];
   const activeRepairRequests = new Map<string, { summaryIdentity: string; attemptId: string; timeout: NodeJS.Timeout; store: TaskCurrentStateStore }>();
+  const terminalRepairAttempts = new Map<string, string>();
+  const terminalPublicationHashes = new Map<string, Map<string, string>>();
   const servedRepairRequests = new Map<string, { root: string; buckets: Set<string> }>();
   const deferredObservers = new Map<string, { attemptId: string; store: TaskCurrentStateStore; keys: Set<string> }>();
   type EnhancedRepairFrame = { frame: FederationStateFrame; entries: StateEnvelope[]; attemptId: string; store: TaskCurrentStateStore; encodedBytes: number; resolve: () => void; reject: (error: unknown) => void };
@@ -231,45 +236,58 @@ export function createFederationTaskStateReplicator(input: {
       }
       try {
         const mergeStartedAt = performance.now();
-        const result = await first.store.mergeRepairGroup(frames.map(({ entries }) => ({
-          version: taskCurrentStateVersion,
-          projectId,
-          entities: entries.map((entry) => entry.entity),
+        const result = await first.store.mergeRepairGroup(frames.map(({ frame, entries, attemptId }) => ({
+          attemptId,
+          deliveryId: String((frame.payload as Record<string, unknown>).deliveryId ?? ''),
+          delta: { version: taskCurrentStateVersion, projectId, entities: entries.map((entry) => entry.entity) },
         })), first.attemptId);
         receiverTiming.groupCommitCount += 1;
         receiverTiming.groupCommitFrameCount += frames.length;
         receiverTiming.mergeMs += performance.now() - mergeStartedAt;
         const acknowledgementStartedAt = performance.now();
-        for (const candidate of frames) {
+        for (const [index, candidate] of frames.entries()) {
           const payload = candidate.frame.payload as Record<string, unknown>;
+          const deliveryResult = result.deliveries[index];
           input.publish(from, {
             type: 'state-relay-ack',
             projectId,
             payload: {
               stateVersion: taskCurrentStateVersion,
               deliveryId: payload.deliveryId,
-              accepted: candidate.entries.map((entry) => ({
-                key: entry.key,
-                stateHash: entry.stateHash,
-                resultingStateHash: result.resultingStateHashes.get(entry.key) ?? '',
-              })),
+              accepted: deliveryResult.accepted.map((entry) => ({ key: entry.key, stateHash: entry.stateHash, resultingStateHash: entry.receiverStateHash })),
+              rejected: deliveryResult.rejected,
               root: first.store.rootHash(),
               attemptId: first.attemptId,
             },
           });
+          // WHAT: Convert a durable mixed-delivery collision into an immediate terminal repair signal.
+          // WHY: The owning project must pause from exact evidence instead of expiring as generic no-progress.
+          if (deliveryResult.rejected.length > 0) {
+            terminalRepairAttempts.set(repairKey, active.summaryIdentity);
+            try { input.onRepairCollision?.({ projectId, from, attemptId: first.attemptId, deliveryId: deliveryResult.deliveryId, rejected: deliveryResult.rejected, evidence: first.store.repairCollisionEvidence(first.attemptId) }); } catch {
+              // Collision diagnostics cannot invalidate the already durable ACK partition.
+            }
+          }
         }
         receiverTiming.acknowledgementMs += performance.now() - acknowledgementStartedAt;
         const retained = activeRepairRequests.get(repairKey);
         // WHAT: Renew progress only while the durable group still owns the active attempt.
         // WHY: A replacement lease cannot inherit progress from an older WAL group.
-        if (retained?.attemptId === first.attemptId) armRepairDeadline(repairKey, retained.summaryIdentity, retained.attemptId, first.store);
+        if (retained?.attemptId === first.attemptId && terminalRepairAttempts.get(repairKey) !== retained.summaryIdentity) armRepairDeadline(repairKey, retained.summaryIdentity, retained.attemptId, first.store);
         // WHAT: Coalesce one durable group into the attempt-owned application observer.
         // WHY: Individual transport frames have no derived UI authority before terminal root equality.
-        if (result.changed) {
+        if (result.delta.entities.length > 0) {
           const deferred = deferredObservers.get(repairKey) ?? { attemptId: first.attemptId, store: first.store, keys: new Set<string>() };
           for (const entity of result.delta.entities) deferred.keys.add(taskCurrentEntityKey(entity));
           deferredObservers.set(repairKey, deferred);
           receiverTiming.observerDeferredFrameCount += frames.length;
+        }
+        // WHAT: Settle the receiver lease after durable collision evidence and healthy observer capture.
+        // WHY: A terminal attempt must neither time out nor discard healthy entities accepted beside the rejection.
+        if (terminalRepairAttempts.get(repairKey) === active.summaryIdentity) {
+          queueDeferredObserver(repairKey, first.attemptId);
+          clearActiveRepair(repairKey);
+          maybeScheduleObserverDrain();
         }
         for (const candidate of frames) candidate.resolve();
       } catch (error) {
@@ -422,7 +440,15 @@ export function createFederationTaskStateReplicator(input: {
   const publishDelta = (delta: TaskStateDelta): void => {
     if (delta.entities.length === 0) return;
     const dirty = dirtyFor(delta.projectId);
-    for (const entity of delta.entities) dirty.set(taskCurrentEntityKey(entity), entity);
+    for (const entity of delta.entities) {
+      const key = taskCurrentEntityKey(entity);
+      dirty.set(key, entity);
+      const blocked = terminalPublicationHashes.get(delta.projectId);
+      // WHAT: Release a terminal publication block only when a fresh local successor changes the rejected hash.
+      // WHY: The poisoned hash must stay suppressed across reconnect while explicit recovery remains publishable.
+      if (blocked?.get(key) && blocked.get(key) !== entity.stateHash) blocked.delete(key);
+      if (blocked?.size === 0) terminalPublicationHashes.delete(delta.projectId);
+    }
     enqueueRelayEntities(delta.projectId, delta.entities);
     const store = input.stores().get(delta.projectId) ?? input.storeFor?.(delta.projectId, 'relay');
     // WHAT: Start the queued project group only when its local durable store remains available.
@@ -436,7 +462,10 @@ export function createFederationTaskStateReplicator(input: {
       const dirty = runtimeDirty.get(projectId);
       // WHAT: Requeue every unacknowledged durable entity when relay connectivity returns.
       // WHY: Disconnect cleanup removes transport deliveries while durable dirty state remains authoritative.
-      if (dirty?.size) enqueueRelayEntities(projectId, [...dirty.values()]);
+      if (dirty?.size) {
+        const blocked = terminalPublicationHashes.get(projectId);
+        enqueueRelayEntities(projectId, [...dirty.entries()].filter(([key, entity]) => blocked?.get(key) !== entity.stateHash).map(([, entity]) => entity));
+      }
       // WHAT: Retain an unchanged local project in the reconnect comparison schedule.
       // WHY: Equal durable state still requires one terminal summary exchange.
       if (!relayProjectOrder.includes(projectId)) relayProjectOrder.unshift(projectId);
@@ -449,7 +478,8 @@ export function createFederationTaskStateReplicator(input: {
       // WHAT: Keep a dirty remote-project mutation queued when its replica store is unavailable.
       // WHY: A terminal summary cannot be derived without the durable project store.
       if (!store) continue;
-      enqueueRelayEntities(projectId, [...dirty.values()]);
+      const blocked = terminalPublicationHashes.get(projectId);
+      enqueueRelayEntities(projectId, [...dirty.entries()].filter(([key, entity]) => blocked?.get(key) !== entity.stateHash).map(([, entity]) => entity));
       // WHAT: Retain the recovered remote project once in the publication schedule.
       // WHY: Its durable dirty state must share the global reconnect window.
       if (!relayProjectOrder.includes(projectId)) relayProjectOrder.unshift(projectId);
@@ -486,6 +516,46 @@ export function createFederationTaskStateReplicator(input: {
       receiverTiming.validationMs += performance.now() - validationStartedAt;
       const repairKey = `${frame.from}\u0000${frame.projectId}`;
       const active = activeRepairRequests.get(repairKey);
+      const retainedCollisionEvidence = frame.from === 'relay' && typeof payload.attemptId === 'string' && typeof payload.deliveryId === 'string'
+        ? store.repairCollisionEvidence(payload.attemptId).filter((evidence) => evidence.deliveryId === payload.deliveryId)
+        : [];
+      // WHAT: Reproduce the durable mixed disposition when the relay retries a collision delivery after losing its ACK.
+      // WHY: Clearing the active repair must not turn the same enhanced delivery into an ordinary all-or-nothing merge on reconnect.
+      if (!active && retainedCollisionEvidence.length > 0) {
+        const rejectedByKey = new Map(retainedCollisionEvidence.map((evidence) => [evidence.key, evidence]));
+        const accepted: Array<{ key: string; stateHash: string; resultingStateHash: string }> = [];
+        const rejected: ReturnType<typeof normalizeFederationStateRejection>[] = [];
+        for (const entry of entries) {
+          const evidence = rejectedByKey.get(entry.key);
+          // WHAT: Re-emit only collision evidence bound to the exact submitted entity hash.
+          // WHY: A changed delivery cannot inherit a terminal disposition from older durable bytes.
+          if (evidence) {
+            if (evidence.stateHash !== entry.stateHash || evidence.remoteEntity.stateHash !== entry.entity.stateHash) throw new Error('invalid_terminal_repair_replay');
+            rejected.push(normalizeFederationStateRejection({
+              code: evidence.code,
+              collisions: evidence.collisions,
+              key: evidence.key,
+              receiverStateHash: evidence.receiverStateHash,
+              stateHash: evidence.stateHash,
+            }));
+            continue;
+          }
+          const current = store.entity(entry.entity.entityType, entry.entity.entityId);
+          // WHAT: Accept a replayed healthy entry only when the current durable entity already incorporates it.
+          // WHY: Lost-ACK replay must never acknowledge state that was not installed before the terminal collision settled.
+          if (!current || joinTaskEntities(current, entry.entity).stateHash !== current.stateHash) throw new Error('invalid_terminal_repair_replay');
+          accepted.push({ key: entry.key, stateHash: entry.stateHash, resultingStateHash: current.stateHash });
+        }
+        // WHAT: Require every retained collision coordinate to appear in the replayed delivery.
+        // WHY: Partial replay cannot silently discard terminal evidence from the original durable partition.
+        if (rejected.length !== retainedCollisionEvidence.length) throw new Error('invalid_terminal_repair_replay');
+        input.publish('relay', {
+          type: 'state-relay-ack',
+          projectId: frame.projectId,
+          payload: { stateVersion: taskCurrentStateVersion, deliveryId: payload.deliveryId, attemptId: payload.attemptId, accepted, rejected, root: store.rootHash() },
+        });
+        return;
+      }
       const enhancedRelayRepair = frame.from === 'relay' && typeof payload.attemptId === 'string' && payload.attemptId === active?.attemptId;
       if (enhancedRelayRepair) {
         const encodedBytes = Buffer.byteLength(JSON.stringify(frame));
@@ -559,15 +629,19 @@ export function createFederationTaskStateReplicator(input: {
         // WHY: Content and UI invalidation must not delay the relay's exact-root settlement.
         if (active) queueDeferredObserver(repairKey, active.attemptId);
         clearActiveRepair(repairKey);
+        terminalRepairAttempts.delete(repairKey);
         maybeScheduleObserverDrain();
         return;
       }
-      const summaryIdentity = `${remoteRoot}\u0000${manifestDigest}`;
+      const summaryIdentity = remoteRoot;
       const attemptId = `${remoteRoot}:${root}`;
+      // WHAT: Suppress automatic repair for the relay root generation terminated by durable collision evidence.
+      // WHY: Healthy entries can change the receiver root after a mixed ACK, while the poisoned relay cut remains unchanged.
+      if (terminalRepairAttempts.get(repairKey) === summaryIdentity) return;
       // WHAT: Suppress an identical summary while its root generation remains unresolved.
       // WHY: Repeating the same missing request cannot make a permanently divergent peer progress.
       if (activeRepairRequests.get(repairKey)?.summaryIdentity === summaryIdentity) return;
-      // WHAT: Admit one missing request for a newly observed peer root and manifest.
+      // WHAT: Admit one missing request for a newly observed peer root generation.
       // WHY: A changed peer state must remain eligible for normal epoch-4 convergence.
       if (missing.length > 0) {
         const published = input.publish(frame.from, {
@@ -612,11 +686,42 @@ export function createFederationTaskStateReplicator(input: {
       const delivery = pendingDeliveries.get(deliveryId);
       if (!delivery || delivery.projectId !== frame.projectId) return;
       const accepted = Array.isArray(payload.accepted) ? payload.accepted as Array<{ key?: string; stateHash?: string }> : [];
+      const rejected = Array.isArray(payload.rejected) ? payload.rejected.map(normalizeFederationStateRejection) : [];
+      const disposition = new Map<string, string>();
+      for (const acknowledgement of accepted) {
+        const key = String(acknowledgement.key ?? '');
+        const stateHash = String(acknowledgement.stateHash ?? '');
+        // WHAT: Reject duplicate, unknown, and hash-mismatched accepted dispositions.
+        // WHY: Delivery credit may be released only by an exact result for every submitted entity.
+        if (disposition.has(key) || delivery.hashes.get(key) !== stateHash) throw new Error('invalid_state_acknowledgement');
+        disposition.set(key, stateHash);
+      }
+      for (const rejection of rejected) {
+        // WHAT: Reject duplicate, unknown, and hash-mismatched terminal dispositions.
+        // WHY: A malformed collision result must retain the complete pending delivery for retry and diagnosis.
+        if (disposition.has(rejection.key) || delivery.hashes.get(rejection.key) !== rejection.stateHash) throw new Error('invalid_state_acknowledgement');
+        disposition.set(rejection.key, rejection.stateHash);
+      }
+      // WHAT: Require accepted and rejected results to cover the submitted delivery exactly once.
+      // WHY: Partial settlement would silently discard unconfirmed causal state.
+      if (disposition.size !== delivery.hashes.size) throw new Error('invalid_state_acknowledgement');
       const dirty = runtimeDirty.get(frame.projectId);
       for (const acknowledgement of accepted) {
         const key = String(acknowledgement.key ?? '');
         const stateHash = String(acknowledgement.stateHash ?? '');
         if (delivery.hashes.get(key) === stateHash && dirty?.get(key)?.stateHash === stateHash) dirty.delete(key);
+      }
+      // WHAT: Retain a relay publication collision as terminal project repair evidence.
+      // WHY: Reconnect must not automatically flood an entity that the relay durably rejected.
+      if (rejected.length > 0) {
+        const attemptId = `publication:${deliveryId}`;
+        terminalRepairAttempts.set(`relay\u0000${frame.projectId}`, attemptId);
+        const blocked = terminalPublicationHashes.get(frame.projectId) ?? new Map<string, string>();
+        for (const rejection of rejected) blocked.set(rejection.key, rejection.stateHash);
+        terminalPublicationHashes.set(frame.projectId, blocked);
+        try { input.onRepairCollision?.({ projectId: frame.projectId, from: 'relay', attemptId, deliveryId, rejected, evidence: [] }); } catch {
+          // Collision diagnostics cannot invalidate the relay's durable mixed disposition.
+        }
       }
       pendingDeliveries.delete(deliveryId);
       if (dirty?.size === 0) runtimeDirty.delete(frame.projectId);
@@ -658,6 +763,43 @@ export function createFederationTaskStateReplicator(input: {
     reconcileProject,
     handleFrame,
     disconnectPeer,
+    // WHAT: Publish an explicit collision-recovery successor through the normal bounded relay lane.
+    // WHY: A paused project still needs one authorized mutation to reach relay acknowledgement and root equality.
+    publishRecoveryDelta: (delta: TaskStateDelta, store: TaskCurrentStateStore): void => {
+      if (delta.entities.length === 0) return;
+      const dirty = dirtyFor(delta.projectId);
+      for (const entity of delta.entities) {
+        const key = taskCurrentEntityKey(entity);
+        dirty.set(key, entity);
+        const blocked = terminalPublicationHashes.get(delta.projectId);
+        // WHAT: Remove a stale publication block when explicit recovery creates a different causal hash.
+        // WHY: Only the rejected hash is terminal; its validated successor must enter the normal relay lane.
+        if (blocked?.get(key) !== entity.stateHash) blocked?.delete(key);
+        if (blocked?.size === 0) terminalPublicationHashes.delete(delta.projectId);
+      }
+      enqueueRelayEntities(delta.projectId, delta.entities);
+      flushRelayProject(delta.projectId, store);
+    },
+    restoreTerminalRepair: (projectId: string, from: string, attemptId: string, rejections: unknown[] = []): void => {
+      const relayRoot = attemptId.split(':', 1)[0] ?? '';
+      // WHAT: Restore the terminal relay generation from the relay root embedded in the durable attempt identity.
+      // WHY: The receiver root changes after healthy entries merge, while the unchanged relay root remains the stable poisoned generation authority across restart.
+      if (/^[a-f0-9]{64}$/.test(relayRoot)) terminalRepairAttempts.set(`${from}\u0000${projectId}`, relayRoot);
+      // WHAT: Restore rejected publication hashes from the persisted incident context.
+      // WHY: Reconnect must not republish the same terminal node-to-relay collision after process restart.
+      if (attemptId.startsWith('publication:') && rejections.length > 0) {
+        const blocked = new Map<string, string>();
+        for (const value of rejections) {
+          const rejection = normalizeFederationStateRejection(value);
+          blocked.set(rejection.key, rejection.stateHash);
+        }
+        terminalPublicationHashes.set(projectId, blocked);
+      }
+    },
+    clearTerminalRepair: (projectId: string, from = 'relay'): void => {
+      terminalRepairAttempts.delete(`${from}\u0000${projectId}`);
+      terminalPublicationHashes.delete(projectId);
+    },
     diagnostics: () => ({
       convergence: [...convergence].map(([key, value]) => ({ peerId: key.split('\u0000')[0], ...value })),
       runtimeDirty: [...runtimeDirty].flatMap(([projectId, entities]) => [...entities].map(([entityKey, entity]) => ({ projectId, entityKey, stateHash: entity.stateHash }))),
