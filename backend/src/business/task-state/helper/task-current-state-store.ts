@@ -60,12 +60,18 @@ function assertRepairCollisionEvidence(evidence: TaskRepairCollisionEvidence): v
     || !/^[a-f0-9]{64}$/.test(evidence.stateHash) || !/^[a-f0-9]{64}$/.test(evidence.receiverStateHash)) {
     throw new Error('invalid_task_current_repair_collision_evidence');
   }
+  // WHAT: Reject persisted collision directions outside the legacy receiver lane and the additive publication lane.
+  // WHY: Corrupt durable evidence must fail closed instead of inheriting the legacy hash orientation.
+  if (evidence.direction !== undefined && evidence.direction !== 'publication') {
+    throw new Error('invalid_task_current_repair_collision_evidence');
+  }
   assertTaskCurrentEntity(evidence.localEntity);
   assertTaskCurrentEntity(evidence.remoteEntity);
   if (evidence.key !== taskCurrentEntityKey(evidence.remoteEntity)
     || evidence.key !== taskCurrentEntityKey(evidence.localEntity)
-    || evidence.stateHash !== evidence.remoteEntity.stateHash
-    || evidence.receiverStateHash !== evidence.localEntity.stateHash
+    || (evidence.direction === 'publication'
+      ? evidence.stateHash !== evidence.localEntity.stateHash || evidence.receiverStateHash !== evidence.remoteEntity.stateHash
+      : evidence.stateHash !== evidence.remoteEntity.stateHash || evidence.receiverStateHash !== evidence.localEntity.stateHash)
     || evidence.projectId !== evidence.localEntity.projectId
     || evidence.projectId !== evidence.remoteEntity.projectId
     || evidence.collisions.length < 1) throw new Error('invalid_task_current_repair_collision_evidence');
@@ -572,6 +578,47 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       });
     },
     resumeMaterialization,
+    adoptPublicationCollisionEvidence(input: { attemptId: string; deliveryId: string; rejected: TaskRepairCollisionRejection[]; submittedEntities: TaskCurrentEntity[] }): Promise<TaskRepairCollisionEvidence[]> {
+      return serializeTransition(async () => {
+        const submitted = new Map(input.submittedEntities.map((entity) => [taskCurrentEntityKey(entity), entity]));
+        // WHAT: Reject incomplete or duplicate publication evidence before searching the retained collision archive.
+        // WHY: Recovery authority requires one exact submitted entity for every relay rejection.
+        if (!input.attemptId || !input.deliveryId || input.rejected.length < 1
+          || submitted.size !== input.submittedEntities.length || input.rejected.length !== submitted.size) throw new Error('invalid_task_current_publication_collision_evidence');
+        const evidence = input.rejected.map((rejection): TaskRepairCollisionEvidence => {
+          const localEntity = submitted.get(rejection.key);
+          const remoteEntity = [...retainedCollisionEvidence.values()]
+            .flatMap((candidate) => [candidate.localEntity, candidate.remoteEntity])
+            .find((candidate) => taskCurrentEntityKey(candidate) === rejection.key && candidate.stateHash === rejection.receiverStateHash);
+          // WHAT: Bind the current submitted entity to an exact complete receiver entity already retained durably.
+          // WHY: A hash-only relay ACK may recover only when the receiver bytes are independently present in the local archive.
+          if (!localEntity || !remoteEntity || entities.get(rejection.key)?.stateHash !== rejection.stateHash
+            || localEntity.stateHash !== rejection.stateHash) throw new Error('task_current_publication_collision_archive_missing');
+          const item: TaskRepairCollisionEvidence = {
+            ...rejection,
+            version: taskCurrentStateVersion,
+            projectId: options.projectId,
+            attemptId: input.attemptId,
+            deliveryId: input.deliveryId,
+            recordedAt: new Date().toISOString(),
+            localEntity: structuredClone(localEntity),
+            remoteEntity: structuredClone(remoteEntity),
+            direction: 'publication',
+          };
+          assertRepairCollisionEvidence(item);
+          let collisions: ReturnType<typeof taskCurrentDotCollisionCoordinates> = [];
+          try { joinTaskEntities(localEntity, remoteEntity); } catch (error) { collisions = taskCurrentDotCollisionCoordinates(error); }
+          // WHAT: Require the complete entities to reproduce the relay's exact collision coordinates.
+          // WHY: A forged or stale rejection must not become recovery authority.
+          if (JSON.stringify(collisions) !== JSON.stringify(rejection.collisions)) throw new Error('invalid_task_current_publication_collision_evidence');
+          return item;
+        });
+        const journalFile = await repairJournal({ version: taskCurrentStateVersion, repairCollisions: evidence }, input.attemptId);
+        await persistence.sealAppend(journalFile);
+        for (const item of evidence) retainedCollisionEvidence.set(`${item.attemptId}\u0000${item.deliveryId}\u0000${item.key}`, item);
+        return evidence.map((item) => structuredClone(item));
+      });
+    },
     mergeRepairGroup(deliveries: RepairDelivery[], authority: string): Promise<{ deliveries: RepairDeliveryResult[]; delta: TaskStateDelta }> {
       return serializeTransition(async () => {
         // WHAT: Reject an empty, cross-attempt, or cross-project repair group before evaluating entity joins.
@@ -701,7 +748,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
           const current = entities.get(item.key);
           // WHAT: Reject recovery when receiver state moved beyond the retained local entity.
           // WHY: A stale operator action must never overwrite a later causal transition.
-          if (!current || current.stateHash !== item.receiverStateHash) throw new Error('task_current_repair_collision_receiver_changed');
+          if (!current || current.stateHash !== (item.direction === 'publication' ? item.stateHash : item.receiverStateHash)) throw new Error('task_current_repair_collision_receiver_changed');
           let recomputed: ReturnType<typeof taskCurrentDotCollisionCoordinates> = [];
           try { joinTaskEntities(current, item.remoteEntity); }
           catch (error) { recomputed = taskCurrentDotCollisionCoordinates(error); }

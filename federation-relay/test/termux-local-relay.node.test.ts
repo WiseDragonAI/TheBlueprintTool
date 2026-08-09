@@ -298,7 +298,7 @@ test('Termux relay acknowledges the submitted hash separately from the joined re
     stateSchema,
     baselineEpoch: stateBaselineEpoch,
   }));
-  const { finalizeTaskCurrentEntity, taskCurrentEntityKey } = await import('../../shared/task-current-state-core.js');
+  const { finalizeTaskCurrentEntity, hashTaskCurrentRoot, taskCurrentBucketForEntityKey, taskCurrentEntityKey } = await import('../../shared/task-current-state-core.js');
   const retained = finalizeTaskCurrentEntity({
     version: stateSchema,
     projectId: 'shared',
@@ -333,6 +333,41 @@ test('Termux relay acknowledges the submitted hash separately from the joined re
   writer.send(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: stateSchema, projectId: 'shared', payload: { stateVersion: stateSchema, deliveryId: 'join-concurrent', entries: [{ key, stateHash: submitted.stateHash, entity: submitted }] } }));
   const acknowledgement = await acknowledged;
   assert.deepEqual(acknowledgement.payload.accepted, [{ key, stateHash: submitted.stateHash, resultingStateHash: joined.stateHash }]);
+  const retainedCollision = finalizeTaskCurrentEntity({
+    version: stateSchema,
+    projectId: 'shared',
+    entityType: 'card',
+    entityId: 'collision-card',
+    fields: { title: { clock: { migration: 1 }, candidates: [{ dot: { replicaId: 'migration', counter: 1 }, operation: 'set', value: 'Relay retained' }] } },
+  });
+  const collisionKey = taskCurrentEntityKey(retainedCollision);
+  const collisionSeeded = nextMatchingFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === 'seed-collision');
+  writer.send(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: stateSchema, projectId: 'shared', payload: { stateVersion: stateSchema, deliveryId: 'seed-collision', entries: [{ key: collisionKey, stateHash: retainedCollision.stateHash, entity: retainedCollision }] } }));
+  await collisionSeeded;
+  const submittedCollision = finalizeTaskCurrentEntity({
+    version: stateSchema,
+    projectId: 'shared',
+    entityType: 'card',
+    entityId: 'collision-card',
+    fields: { title: { clock: { migration: 1 }, candidates: [{ dot: { replicaId: 'migration', counter: 1 }, operation: 'set', value: 'Node submitted' }] } },
+  });
+  const collisionAcknowledged = nextMatchingFrame(writer, (frame) => frame.type === 'state-relay-ack' && frame.payload?.deliveryId === 'reject-collision');
+  writer.send(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: stateSchema, projectId: 'shared', payload: { stateVersion: stateSchema, deliveryId: 'reject-collision', entries: [{ key: collisionKey, stateHash: submittedCollision.stateHash, entity: submittedCollision }] } }));
+  const collisionAcknowledgement = await collisionAcknowledged;
+  assert.deepEqual(collisionAcknowledgement.payload.rejected, [{
+    key: collisionKey,
+    stateHash: submittedCollision.stateHash,
+    receiverStateHash: retainedCollision.stateHash,
+    code: 'task_current_dot_collision',
+    collisions: [{ entityType: 'card', entityId: 'collision-card', path: 'title', dot: { replicaId: 'migration', counter: 1 } }],
+  }]);
+  const entities = [[key, joined], [collisionKey, retainedCollision]] as const;
+  const buckets = new Map<string, Record<string, string>>();
+  for (const [entityKey, entity] of entities) {
+    const bucket = taskCurrentBucketForEntityKey(entityKey);
+    buckets.set(bucket, { ...(buckets.get(bucket) ?? {}), [entityKey]: entity.stateHash });
+  }
+  assert.equal(collisionAcknowledgement.payload.relayRoot, hashTaskCurrentRoot([...buckets].map(([bucket, values]) => summarizeBucket(bucket, values))));
   writer.close(1000, 'test_complete');
   await once(writer, 'close');
 });

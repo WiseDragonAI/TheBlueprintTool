@@ -13,7 +13,7 @@ import type { FederationStateFrame } from './federation-node-connector.js';
 
 type Publisher = (peerId: string, frame: Omit<FederationStateFrame, 'from'>) => boolean;
 type StateEnvelope = { key: string; stateHash: string; entity: TaskCurrentEntity };
-type PendingDelivery = { projectId: string; hashes: Map<string, string>; encodedBytes: number };
+type PendingDelivery = { projectId: string; hashes: Map<string, string>; entities: Map<string, TaskCurrentEntity>; encodedBytes: number };
 const maximumBatchEntities = 128;
 const maximumStateFrameBytes = 512 * 1024;
 const maximumProjectDeliveries = 4;
@@ -86,7 +86,7 @@ export function createFederationTaskStateReplicator(input: {
   onProjectionChange?: (input: { projectId: string; from: string; delta: TaskStateDelta }) => void;
   onProjectionError?: (input: { projectId: string; from: string; error: unknown }) => void;
   onRepairTimeout?: (input: { projectId: string; from: string; attemptId: string }) => void;
-  onRepairCollision?: (input: { projectId: string; from: string; attemptId: string; deliveryId: string; rejected: TaskRepairCollisionRejection[]; evidence: TaskRepairCollisionEvidence[] }) => void;
+  onRepairCollision?: (input: { projectId: string; from: string; attemptId: string; deliveryId: string; relayRoot: string; rejected: TaskRepairCollisionRejection[]; evidence: TaskRepairCollisionEvidence[] }) => void;
   noProgressTimeoutMs?: number;
 }) {
   const convergence = new Map<string, { projectId: string; converged: boolean; lastRepairAt: string; missingBuckets: string[]; root: string }>();
@@ -264,7 +264,7 @@ export function createFederationTaskStateReplicator(input: {
           // WHY: The owning project must pause from exact evidence instead of expiring as generic no-progress.
           if (deliveryResult.rejected.length > 0) {
             terminalRepairAttempts.set(repairKey, active.summaryIdentity);
-            try { input.onRepairCollision?.({ projectId, from, attemptId: first.attemptId, deliveryId: deliveryResult.deliveryId, rejected: deliveryResult.rejected, evidence: first.store.repairCollisionEvidence(first.attemptId) }); } catch {
+            try { input.onRepairCollision?.({ projectId, from, attemptId: first.attemptId, deliveryId: deliveryResult.deliveryId, relayRoot: first.attemptId.split(':')[0] ?? '', rejected: deliveryResult.rejected, evidence: first.store.repairCollisionEvidence(first.attemptId) }); } catch {
               // Collision diagnostics cannot invalidate the already durable ACK partition.
             }
           }
@@ -352,7 +352,7 @@ export function createFederationTaskStateReplicator(input: {
       // WHY: Direct repair and rejected publication do not own relay acknowledgement state.
       if (published && peerId === 'relay') {
         const encodedBytes = encoder.encode(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: taskCurrentStateVersion, projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: frame.deliveryId, entries: frame.entries } })).byteLength;
-        pendingDeliveries.set(frame.deliveryId, { projectId, hashes: new Map(frame.entries.map((entry) => [entry.key, entry.stateHash])), encodedBytes });
+        pendingDeliveries.set(frame.deliveryId, { projectId, hashes: new Map(frame.entries.map((entry) => [entry.key, entry.stateHash])), entities: new Map(frame.entries.map((entry) => [entry.key, structuredClone(entry.entity)])), encodedBytes });
       }
     }
     return sent;
@@ -425,7 +425,7 @@ export function createFederationTaskStateReplicator(input: {
         break;
       }
       for (const entry of frame.entries) queued.delete(entry.key);
-      pendingDeliveries.set(frame.deliveryId, { projectId, hashes: new Map(frame.entries.map((entry) => [entry.key, entry.stateHash])), encodedBytes });
+      pendingDeliveries.set(frame.deliveryId, { projectId, hashes: new Map(frame.entries.map((entry) => [entry.key, entry.stateHash])), entities: new Map(frame.entries.map((entry) => [entry.key, structuredClone(entry.entity)])), encodedBytes });
       idleProjects = 0;
     }
   };
@@ -687,6 +687,7 @@ export function createFederationTaskStateReplicator(input: {
       if (!delivery || delivery.projectId !== frame.projectId) return;
       const accepted = Array.isArray(payload.accepted) ? payload.accepted as Array<{ key?: string; stateHash?: string }> : [];
       const rejected = Array.isArray(payload.rejected) ? payload.rejected.map(normalizeFederationStateRejection) : [];
+      const relayRoot = String(payload.relayRoot ?? '');
       const disposition = new Map<string, string>();
       for (const acknowledgement of accepted) {
         const key = String(acknowledgement.key ?? '');
@@ -705,6 +706,18 @@ export function createFederationTaskStateReplicator(input: {
       // WHAT: Require accepted and rejected results to cover the submitted delivery exactly once.
       // WHY: Partial settlement would silently discard unconfirmed causal state.
       if (disposition.size !== delivery.hashes.size) throw new Error('invalid_state_acknowledgement');
+      // WHAT: Require the exact post-transaction relay root for every rejected publication.
+      // WHY: Terminal suppression must bind to the relay generation that produced the collision.
+      if (rejected.length > 0 && !/^[a-f0-9]{64}$/.test(relayRoot)) throw new Error('invalid_state_acknowledgement');
+      const attemptId = rejected.length > 0 ? `publication:${deliveryId}` : '';
+      const collisionRecords = rejected.length > 0
+        ? await store.adoptPublicationCollisionEvidence({
+          attemptId,
+          deliveryId,
+          rejected,
+          submittedEntities: rejected.map((entry) => delivery.entities.get(entry.key)!),
+        })
+        : [];
       const dirty = runtimeDirty.get(frame.projectId);
       for (const acknowledgement of accepted) {
         const key = String(acknowledgement.key ?? '');
@@ -714,12 +727,11 @@ export function createFederationTaskStateReplicator(input: {
       // WHAT: Retain a relay publication collision as terminal project repair evidence.
       // WHY: Reconnect must not automatically flood an entity that the relay durably rejected.
       if (rejected.length > 0) {
-        const attemptId = `publication:${deliveryId}`;
-        terminalRepairAttempts.set(`relay\u0000${frame.projectId}`, attemptId);
+        terminalRepairAttempts.set(`relay\u0000${frame.projectId}`, relayRoot);
         const blocked = terminalPublicationHashes.get(frame.projectId) ?? new Map<string, string>();
         for (const rejection of rejected) blocked.set(rejection.key, rejection.stateHash);
         terminalPublicationHashes.set(frame.projectId, blocked);
-        try { input.onRepairCollision?.({ projectId: frame.projectId, from: 'relay', attemptId, deliveryId, rejected, evidence: [] }); } catch {
+        try { input.onRepairCollision?.({ projectId: frame.projectId, from: 'relay', attemptId, deliveryId, relayRoot, rejected, evidence: collisionRecords }); } catch {
           // Collision diagnostics cannot invalidate the relay's durable mixed disposition.
         }
       }
@@ -780,8 +792,8 @@ export function createFederationTaskStateReplicator(input: {
       enqueueRelayEntities(delta.projectId, delta.entities);
       flushRelayProject(delta.projectId, store);
     },
-    restoreTerminalRepair: (projectId: string, from: string, attemptId: string, rejections: unknown[] = []): void => {
-      const relayRoot = attemptId.split(':', 1)[0] ?? '';
+    restoreTerminalRepair: (projectId: string, from: string, attemptId: string, rejections: unknown[] = [], retainedRelayRoot = ''): void => {
+      const relayRoot = retainedRelayRoot || (attemptId.split(':', 1)[0] ?? '');
       // WHAT: Restore the terminal relay generation from the relay root embedded in the durable attempt identity.
       // WHY: The receiver root changes after healthy entries merge, while the unchanged relay root remains the stable poisoned generation authority across restart.
       if (/^[a-f0-9]{64}$/.test(relayRoot)) terminalRepairAttempts.set(`${from}\u0000${projectId}`, relayRoot);

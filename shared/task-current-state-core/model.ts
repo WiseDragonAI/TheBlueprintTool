@@ -52,6 +52,7 @@ export type TaskRepairCollisionEvidence = TaskRepairCollisionRejection & {
   recordedAt: string;
   localEntity: TaskCurrentEntity;
   remoteEntity: TaskCurrentEntity;
+  direction?: 'publication';
 };
 
 export type TaskRepairCollisionRecoveryReceipt = {

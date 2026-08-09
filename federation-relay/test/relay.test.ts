@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   finalizeTaskCurrentEntity,
   hashTaskCurrentBucket,
+  hashTaskCurrentRoot,
   taskCurrentBucketForEntityKey,
   taskCurrentBaselineEpoch,
   taskCurrentEntityKey,
@@ -22,6 +23,7 @@ type FramePayload = {
   entries?: Array<{ key: string; stateHash: string; entity: unknown }>;
   accepted?: Array<{ key: string; stateHash: string; resultingStateHash?: string }>;
   rejected?: Array<{ key: string; stateHash: string; receiverStateHash: string; code: string; collisions: unknown[] }>;
+  relayRoot?: string;
   root?: string;
   executionId?: string;
   observation?: unknown;
@@ -452,6 +454,19 @@ describe('federation relay', () => {
         }],
       },
     });
+    const collisionAck = await acknowledgement;
+    const retainedKey = taskCurrentEntityKey(retained);
+    const healthyKey = taskCurrentEntityKey(healthy);
+    const entitiesByBucket = new Map<string, Array<[string, typeof retained]>>();
+    for (const [key, entity] of [[retainedKey, retained], [healthyKey, healthy]] as const) {
+      const bucket = taskCurrentBucketForEntityKey(key);
+      entitiesByBucket.set(bucket, [...(entitiesByBucket.get(bucket) ?? []), [key, entity]]);
+    }
+    expect(collisionAck.payload?.relayRoot).toBe(hashTaskCurrentRoot([...entitiesByBucket].map(([bucket, entities]) => ({
+      bucket,
+      count: entities.length,
+      checksum: hashTaskCurrentBucket(entities),
+    }))));
     await expect(forwarded).resolves.toMatchObject({ payload: { entries: [{ key: taskCurrentEntityKey(healthy) }] } });
     writer.close(1000, 'test_complete');
     reader.close(1000, 'test_complete');
