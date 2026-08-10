@@ -505,9 +505,10 @@ test('generic revision browser exposes full Markdown preview and older-page navi
   }
 });
 
-test('clicking an editable skill filename activates the editor and read-only files stay inert', () => {
+test('skill documents expose exact Markdown copying while only editable filenames activate the editor', async () => {
   const previousDocument = globalThis.document;
   let edits = 0;
+  const copied: string[] = [];
   try {
     (globalThis as unknown as { document: unknown }).document = testDocument;
     const rendered = renderEditableSkillDocument({
@@ -520,11 +521,18 @@ test('clicking an editable skill filename activates the editor and read-only fil
         return body as unknown as HTMLElement;
       },
       onEdit: () => { edits += 1; },
+      copyMarkdown: async (markdown) => { copied.push(markdown); },
     }) as unknown as TestElement;
     const activation = buttonByText(rendered, 'SKILL.md');
     assert.equal(activation.getAttribute('aria-label'), 'Edit SKILL.md');
     activation.click();
     assert.equal(edits, 1);
+    const copy = buttonByText(rendered, 'Copy');
+    assert.equal(copy.getAttribute('aria-label'), 'Copy SKILL.md Markdown');
+    copy.click();
+    await new Promise<void>((resolve) => { setImmediate(resolve); });
+    assert.deepEqual(copied, ['Instructions']);
+    assert.equal(copy.textContent, 'Copied');
 
     const protectedFile = renderEditableSkillDocument({
       filename: 'SKILL.md',
@@ -537,9 +545,30 @@ test('clicking an editable skill filename activates the editor and read-only fil
         return body as unknown as HTMLElement;
       },
       onEdit: () => { edits += 1; },
+      copyMarkdown: async (markdown) => { copied.push(markdown); },
     }) as unknown as TestElement;
-    assert.equal(protectedFile.querySelectorAll('button').length, 0);
-    assert.equal(protectedFile.children[0].title, 'Managed by Codex.');
+    assert.equal(protectedFile.querySelectorAll('button').length, 1);
+    assert.equal(protectedFile.children[0].children[0].title, 'Managed by Codex.');
+    buttonByText(protectedFile, 'Copy').click();
+    await new Promise<void>((resolve) => { setImmediate(resolve); });
+    assert.deepEqual(copied, ['Instructions', 'Protected']);
+
+    const failedCopy = renderEditableSkillDocument({
+      filename: 'prompt.md',
+      markdown: '# Prompt',
+      editable: false,
+      renderMarkdown: (markdown) => {
+        const body = testDocument.createElement('div');
+        body.textContent = markdown;
+        return body as unknown as HTMLElement;
+      },
+      onEdit: () => { edits += 1; },
+      copyMarkdown: async () => { throw new Error('Clipboard denied'); },
+    }) as unknown as TestElement;
+    const rejectedCopy = buttonByText(failedCopy, 'Copy');
+    rejectedCopy.click();
+    await new Promise<void>((resolve) => { setImmediate(resolve); });
+    assert.equal(rejectedCopy.textContent, 'Copy failed');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }
