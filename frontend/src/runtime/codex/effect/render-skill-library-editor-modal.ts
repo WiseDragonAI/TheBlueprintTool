@@ -10,6 +10,7 @@ import {
   type TextFileEditorSession,
 } from '../../content-authoring/controller/text-file-editor-session.js';
 import { renderSkillRevisionDiff } from '../component/render-skill-revision-diff.js';
+import { createSkillWorkspace } from '../component/create-skill-workspace.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../helper/codex-run-options.js';
 import { decorateSkillCategoryLabel } from '../helper/skill-library-presentation.js';
 import { loadCodexSkillLibrary, type CodexSkillLibraryDetail } from './load-codex-skill-library.js';
@@ -100,12 +101,14 @@ type ModalShell = {
   subtitle: HTMLElement;
   metadata: HTMLElement;
   controls: HTMLElement;
+  mobileTools: HTMLElement;
   contentPane: HTMLElement;
   timelineNavigation: HTMLElement;
   editorHost: HTMLElement;
   historyPane: HTMLElement;
   message: HTMLElement;
   actions: HTMLElement;
+  quickActions: HTMLElement;
 };
 
 let generation = 0;
@@ -214,6 +217,7 @@ function finishClose(): void {
   returnFocusTo = null;
   disposeSession();
   skillLibraryEditorModal?.close?.();
+  skillLibraryEditorModal?.classList?.remove?.('codex-app-screen');
   shell = null;
   if (!sessionReturnsFocus && focus?.isConnected) focus.focus();
   onClosed?.();
@@ -223,7 +227,7 @@ function buildShell(): ModalShell | null {
   if (!skillLibraryEditorModal) return null;
   skillLibraryEditorModal.setAttribute('tabindex', '-1');
   const head = document.createElement('header');
-  head.className = 'codex-modal-head';
+  head.className = 'codex-modal-head flex items-center justify-between gap-4 px-4 py-3 md:px-6';
   const copy = document.createElement('div');
   const kicker = document.createElement('p');
   kicker.className = 'kicker';
@@ -234,18 +238,28 @@ function buildShell(): ModalShell | null {
   copy.append(kicker, title, subtitle);
   const close = button('×', closeSkillLibraryEditor, 'plain-close');
   close.setAttribute('aria-label', 'Close skill editor');
-  head.append(copy, close);
-
-  const body = document.createElement('section');
-  body.className = 'skill-library-editor-body';
-  const statePanel = document.createElement('aside');
-  statePanel.className = 'skill-editor-state-panel';
-  statePanel.setAttribute('aria-label', 'Skill state and controls');
+  const workspace = createSkillWorkspace({
+    mode: 'edit',
+    railTitle: 'Skill controls',
+    menuLabel: 'Skill details and editor tools',
+    closeLabel: 'Close skill controls',
+    rootClassName: 'skill-library-editor-body min-h-0 lg:grid lg:grid-cols-3',
+    contentClassName: 'codex-field skill-markdown-field skill-editor-pane min-h-0 min-w-0 lg:col-span-2',
+    railClassName: 'skill-editor-state-panel min-w-0 lg:col-span-1',
+    onRailOpenChange: (open) => skillLibraryEditorModal?.classList?.toggle?.('show-mobile-settings', open),
+  });
+  const menu = workspace.menu;
+  menu.classList.add('skill-editor-mobile-menu');
+  head.append(copy, menu, close);
+  const body = workspace.root;
+  const statePanel = workspace.rail;
+  const statePanelBody = workspace.railBody;
   const metadata = document.createElement('section');
   const controls = document.createElement('section');
   controls.className = 'skill-editor-owner-controls';
-  const contentPane = document.createElement('section');
-  contentPane.className = 'codex-field skill-markdown-field skill-editor-pane';
+  const mobileTools = document.createElement('section');
+  mobileTools.className = 'skill-editor-mobile-tools';
+  const contentPane = workspace.content;
   const timelineNavigation = document.createElement('nav');
   timelineNavigation.className = 'skill-revision-navigation skill-editor-timeline-navigation';
   const editorHost = document.createElement('div');
@@ -253,23 +267,44 @@ function buildShell(): ModalShell | null {
   const historyPane = document.createElement('section');
   historyPane.className = 'skill-history-pane';
   historyPane.setAttribute('aria-label', 'Git revision history');
-  contentPane.append(timelineNavigation, editorHost, historyPane);
-  statePanel.append(metadata, controls);
-  body.append(statePanel, contentPane);
+  contentPane.append(editorHost, historyPane);
+  statePanelBody.append(metadata, timelineNavigation, controls, mobileTools);
 
   const footer = document.createElement('footer');
-  footer.className = 'codex-modal-actions';
+  footer.className = 'codex-modal-actions flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6';
   const message = document.createElement('p');
   message.setAttribute('role', 'status');
   const actions = document.createElement('div');
   actions.className = 'skill-editor-footer-actions';
-  footer.append(message, actions);
+  workspace.railFooter.append(message, actions);
+  const quickActions = document.createElement('div');
+  quickActions.className = 'skill-editor-footer-actions';
+  footer.classList.add('skill-editor-quick-actions');
+  footer.append(quickActions);
   skillLibraryEditorModal.replaceChildren(head, body, footer);
-  return { kicker, title, subtitle, metadata, controls, contentPane, timelineNavigation, editorHost, historyPane, message, actions };
+  return { kicker, title, subtitle, metadata, controls, mobileTools, contentPane, timelineNavigation, editorHost, historyPane, message, actions, quickActions };
+}
+
+function moveEditorToolsIntoMobileDrawer(): void {
+  if (!shell || !globalThis.matchMedia?.('(max-width: 767px)').matches) return;
+  const actions = shell.editorHost.querySelector<HTMLElement>('.text-file-editor-actions')
+    ?? shell.mobileTools.querySelector<HTMLElement>('.text-file-editor-actions');
+  if (!actions) return;
+  const title = document.createElement('h3');
+  title.textContent = 'Editor tools';
+  shell.mobileTools.replaceChildren(title, actions);
 }
 
 function showModal(): void {
-  if (!skillLibraryEditorModal?.open) skillLibraryEditorModal?.showModal?.();
+  if (!skillLibraryEditorModal?.open) {
+    if (globalThis.location?.pathname?.startsWith?.('/skills')) {
+      skillLibraryEditorModal?.classList?.add?.('codex-app-screen');
+      skillLibraryEditorModal?.show?.();
+    } else {
+      skillLibraryEditorModal?.classList?.remove?.('codex-app-screen');
+      skillLibraryEditorModal?.showModal?.();
+    }
+  }
 }
 
 function renderCreationControls(target: HTMLElement): void {
@@ -325,10 +360,12 @@ function renderCreationControls(target: HTMLElement): void {
     });
     form.append(field('Workspace project', project));
   }
-  const visibility = document.createElement('p');
-  visibility.className = 'codex-inline-warning';
-  visibility.textContent = 'Pipeline-only prompts stay outside agent discovery and are injected only by a selected pipeline.';
-  form.append(visibility);
+  if (skillLibraryEditorState.contentKind === 'pipeline-prompt') {
+    const visibility = document.createElement('p');
+    visibility.className = 'codex-inline-warning';
+    visibility.textContent = 'Pipeline-only prompts stay outside agent discovery and are injected only by a selected pipeline.';
+    form.append(visibility);
+  }
   target.replaceChildren(form);
 }
 
@@ -519,6 +556,8 @@ function selectSkillDraft(): void {
 
 function syncShell(): void {
   if (!shell) return;
+  skillLibraryEditorModal?.classList?.toggle?.('is-creating-content', skillLibraryEditorState.mode === 'create');
+  skillLibraryEditorModal?.classList?.toggle?.('is-editing-content', skillLibraryEditorState.mode === 'edit');
   shell.kicker.textContent = skillLibraryEditorState.mode === 'create' ? 'New authored content' : 'Skill library';
   shell.title.textContent = skillLibraryEditorState.mode === 'create'
     ? 'Create authored content'
@@ -529,12 +568,19 @@ function syncShell(): void {
   shell.metadata.replaceChildren();
   shell.controls.replaceChildren();
   shell.actions.replaceChildren();
+  shell.quickActions.replaceChildren();
+  const appendPrimaryAction = (label: string, action: () => void, disabled: boolean): void => {
+    for (const target of [shell?.actions, shell?.quickActions]) {
+      if (!target) continue;
+      const primary = button(label, action, 'primary-action');
+      primary.disabled = disabled;
+      target.append(primary);
+    }
+  };
 
   if (skillLibraryEditorState.mode === 'create') {
     renderCreationControls(shell.controls);
-    const create = button(skillLibraryEditorState.saving ? 'Creating…' : 'Create', () => { void createSkillLibraryDraft(); }, 'primary-action');
-    create.disabled = skillLibraryEditorState.saving;
-    shell.actions.append(create);
+    appendPrimaryAction(skillLibraryEditorState.saving ? 'Creating…' : 'Create', () => { void createSkillLibraryDraft(); }, skillLibraryEditorState.saving);
   } else if (skillLibraryEditorState.loading) {
     const loading = document.createElement('p');
     loading.className = 'codex-empty-state';
@@ -557,18 +603,16 @@ function syncShell(): void {
     favorite.disabled = skillLibraryEditorState.favoriteSaving || skillLibraryEditorState.saving;
     const reload = button('Reload authoritative', () => { void reloadSkillLibraryDraft(); });
     reload.disabled = skillLibraryEditorState.loading || skillLibraryEditorState.saving;
-    shell.actions.append(favorite, reload);
+    const secondaryActions = document.createElement('div');
+    secondaryActions.className = 'skill-editor-secondary-actions';
+    secondaryActions.append(favorite, reload);
+    shell.controls.append(secondaryActions);
     if (skillLibraryEditorState.recovery && skillLibraryEditorState.selectedRevisionIndex < 0) {
-      const retry = button('Retry Git revision', () => { void retrySkillLibraryRevision(); }, 'primary-action');
-      retry.disabled = skillLibraryEditorState.saving;
-      shell.actions.append(retry);
+      appendPrimaryAction('Retry Git revision', () => { void retrySkillLibraryRevision(); }, skillLibraryEditorState.saving);
     } else if (skillLibraryEditorState.selectedRevisionIndex < 0) {
-      const save = button(skillLibraryEditorState.saving ? 'Saving…' : 'Save new revision', () => { void saveSkillLibraryDraft(); }, 'primary-action');
-      save.disabled = !detail.editable || skillLibraryEditorState.saving;
-      shell.actions.append(save);
+      appendPrimaryAction(skillLibraryEditorState.saving ? 'Saving…' : 'Save new revision', () => { void saveSkillLibraryDraft(); }, !detail.editable || skillLibraryEditorState.saving);
     }
   }
-  shell.actions.append(button('Close', closeSkillLibraryEditor));
   const hasEditableDetail = skillLibraryEditorState.mode === 'edit' && Boolean(skillLibraryEditorState.detail);
   shell.timelineNavigation.hidden = !hasEditableDetail;
   shell.editorHost.hidden = hasEditableDetail && skillLibraryEditorState.selectedRevisionIndex >= 0;
@@ -619,6 +663,7 @@ function ensureSession(): void {
     }
     session = mounted;
     session.setRecovery(skillLibraryEditorState.recovery);
+    moveEditorToolsIntoMobileDrawer();
     syncShell();
   }).catch((error) => {
     sessionMounting = false;
@@ -639,6 +684,7 @@ function startSession(input: Partial<SkillLibraryEditorState>): void {
   generation += 1;
   disposeSession();
   shell = null;
+  skillLibraryEditorModal?.classList?.remove?.('show-mobile-settings');
   resetState(input);
   renderSkillLibraryEditorModal();
   showModal();

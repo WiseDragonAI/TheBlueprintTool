@@ -9,7 +9,7 @@ import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/per
 import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { upsertResponsiveRouteCard } from './upsert-responsive-route-card.js';
-import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
+import { initializeMobileCodex, openMobileCodexLibrary, openMobileSkillRoute, setMobileCodexContext } from './codex.js';
 import { compareControlRoomQueueTasks, executionPresentation, parentMasterTask, projectMasterTask, visibleMasterTaskSubtasks, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
@@ -3204,22 +3204,25 @@ async function loadRoute({ retainView = false } = {}) {
       await renderRuntimeStatusRoute(owner);
       return;
     }
-    if (owner.route.pathname === '/pipelines' || owner.route.pathname === '/skills') {
+    if (owner.route.pathname === '/pipelines' || owner.route.pathname === '/skills' || owner.route.pathname.startsWith('/skills/')) {
       state.resourceProjectId = '';
       setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
       renderLedgerLinks();
       setView('empty-view');
-      openMobileCodexLibrary(owner.route.pathname.slice(1));
+      const skillRoute = owner.route.pathname === '/skills' || owner.route.pathname.startsWith('/skills/');
+      await openMobileCodexLibrary(skillRoute ? 'skills' : 'pipelines');
       const query = new URLSearchParams(owner.route.search);
       const skillName = query.get('name')?.trim();
       if (owner.route.pathname === '/skills' && query.get('editor') === 'skill' && skillName) {
         // WHAT: Keep deep-link editor loading inside the active route waterfall.
         // WHY: The route owner must render a terminal failure instead of detaching a rejected modal load.
-        await openSkillLibraryEditor({
-          skillName,
-          requestProjectId: query.get('projectId')?.trim() || '',
-          onClosed: () => removeEditorQuery('skill'),
-        });
+        history.replaceState(history.state, '', `/skills/${encodeURIComponent(skillName)}/edit`);
+        await openMobileSkillRoute(skillName, 'edit');
+      } else if (skillRoute && owner.route.pathname !== '/skills') {
+        const segments = owner.route.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+        const mode = segments.at(-1) === 'edit' ? 'edit' : segments[1] === 'new' ? 'new' : 'view';
+        const routedSkillName = mode === 'new' ? '' : segments[1];
+        await openMobileSkillRoute(routedSkillName, mode);
       }
       return;
     }

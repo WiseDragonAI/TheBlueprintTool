@@ -756,6 +756,10 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .skill-category-filter { --skill-category-color: var(--accent); flex: 0 0 auto; min-height: 34px; padding: 5px 12px; border: 1px solid color-mix(in srgb, var(--skill-category-color), white 24%); border-radius: 9px; color: white; background: var(--skill-category-color); box-shadow: inset 0 1px 0 #ffffff2e, 0 3px 10px color-mix(in srgb, var(--skill-category-color), transparent 65%); font-size: 13px; font-weight: 800; }
 .skill-category-filter[aria-pressed="false"] { color: color-mix(in srgb, var(--skill-category-color), white 38%); background: color-mix(in srgb, var(--skill-category-color), transparent 78%); }
 .codex-filter-clear { justify-self: start; min-height: 36px; padding: 0 10px; color: var(--accent); background: transparent; }
+.codex-mobile-filter-toggle { display: none; }
+.codex-library-filter-panel { display: contents; }
+.codex-library-filter-panel > header,
+.codex-library-filter-backdrop { display: none; }
 .codex-list { display: grid; gap: 10px; }
 .process-library { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
 .codex-list-card { --skill-category-color: var(--accent); position: relative; flex: 0 0 auto; overflow: hidden; border: 1px solid var(--line); border-radius: 2px; background: rgba(255,255,255,.025); box-shadow: none; transition: border-color var(--motion-fast) ease, background-color var(--motion-fast) ease; }
@@ -767,6 +771,9 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
   .codex-list-card:has(.codex-list-item:hover) { border-color: color-mix(in srgb, var(--skill-category-color), var(--line) 45%); background: color-mix(in srgb, var(--skill-category-color), transparent 96%); }
 }
 .codex-list-item span, .codex-list-item small, .codex-message { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.skill-workspace-backdrop { display: none; }
+.skill-workspace-menu { display: none; }
+.skill-workspace-rail-header { display: none; }
 .skill-result-heading { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
 .codex-list-item .skill-result-name { overflow-wrap: anywhere; color: color-mix(in srgb, var(--skill-category-color), white 34%); font-size: 16px; line-height: 1.25; }
 .codex-list-item .skill-favorite-star { flex: 0 0 auto; color: #fbbf24; font-size: 20px; line-height: 1; text-shadow: 0 0 9px #fbbf2466; }
@@ -818,6 +825,586 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .skill-detail-edit { justify-self: start; }
 .codex-modal button:focus-visible, .codex-modal input:focus-visible, .codex-modal textarea:focus-visible, .codex-modal select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 body:has(.codex-modal[open]) { overflow: hidden; }
+
+/* Route-owned Codex workspace. Tailwind utilities establish the responsive primitives;
+ * these rules bind them to the Decision OS shell and existing visual tokens. */
+.codex-app-screen {
+  position: fixed;
+  inset: 64px 0 0;
+  z-index: 30;
+  width: 100vw !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: calc(100dvh - 64px) !important;
+  max-height: none !important;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: var(--panel-deep);
+}
+.codex-app-screen::backdrop { display: none; }
+.codex-app-screen[open] { display: grid; animation: none; }
+.codex-app-screen .codex-sheet { gap: 0; padding: 0; overflow: hidden; }
+.codex-app-screen .codex-sheet > header {
+  flex: 0 0 auto;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 64px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-deep);
+}
+.codex-app-screen.process-modal .codex-sheet > header {
+  grid-template-columns: minmax(0, 1fr) auto 44px;
+}
+.codex-app-screen.process-modal .codex-sheet > header > .process-close {
+  grid-column: 3;
+  grid-row: 1;
+}
+.codex-app-screen.process-modal .codex-sheet > header > div:not(.codex-header-actions) {
+  grid-column: 1;
+  grid-row: 1;
+}
+.codex-app-screen.process-modal .codex-sheet > header > .codex-header-actions {
+  grid-column: 2;
+  grid-row: 1;
+}
+.codex-app-screen .codex-tabs,
+.codex-app-screen .codex-library-controls,
+.codex-app-screen .codex-message { flex: 0 0 auto; }
+.codex-app-screen .codex-header-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; }
+.codex-app-screen.process-modal:has(.process-detail:not([hidden])) .codex-header-actions { display: none; }
+.codex-app-screen.skill-library-route .codex-header-actions { display: none !important; }
+.codex-app-screen.skill-library-route .codex-tabs { display: none; }
+.codex-app-screen .codex-library-controls { padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.codex-app-screen .codex-message { min-height: 34px; margin: 0; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.codex-app-screen .codex-message:empty { display: none; }
+.codex-app-screen .process-library,
+.codex-app-screen .pipeline-library { flex: 1 1 0; min-height: 0; padding: 14px 16px; overflow-y: auto; }
+.codex-app-screen .process-detail { min-height: 0; padding: 16px; overflow-y: auto; }
+.codex-app-screen .process-detail.skill-detail-layout { padding: 0; overflow: hidden; }
+.codex-app-screen .process-detail.skill-detail-layout { display: flex; flex-direction: column; overflow-y: auto; }
+.codex-app-screen .skill-detail-scroll { flex: 0 0 auto; min-height: 0; padding: 16px; overflow: visible; }
+.codex-app-screen .skill-detail-controls { flex: 0 0 auto; padding: 16px; border-top: 1px solid var(--line); background: var(--panel); }
+.codex-app-screen.pipeline-editor-modal { overflow: hidden; }
+.codex-app-screen .pipeline-editor-form { flex: 1 1 auto; min-height: 0; height: 100%; overflow-y: auto; }
+.codex-app-screen .pipeline-editor-form > header { position: sticky; top: 0; z-index: 2; }
+.codex-app-screen .pipeline-editor-form > .codex-field,
+.codex-app-screen .pipeline-editor-form > .pipeline-add-step { width: calc(100% - 32px); max-width: 1024px; margin-inline: auto; }
+.codex-app-screen .pipeline-editor-form > .codex-field { margin-top: 14px; }
+.codex-app-screen .pipeline-steps { width: 100%; max-width: 1024px; margin-inline: auto; padding: 16px; }
+.codex-app-screen.skill-picker-modal .codex-sheet { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.codex-app-screen .skill-picker-controls { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.codex-app-screen .skill-picker-list { padding: 14px 16px; }
+.codex-app-screen .skill-picker-actions { position: sticky; bottom: 0; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); background: var(--panel-deep); }
+
+/* Phone screens use one compact app bar and reserve the viewport for the work.
+ * Desktop descriptions and duplicated utility actions remain available above 768px. */
+@media (max-width: 767px) {
+  .codex-app-screen.skill-library-route .codex-tabs { display: none; }
+  .codex-app-screen .codex-sheet > header {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 6px 12px;
+  }
+  .codex-app-screen .codex-sheet > header .eyebrow,
+  .codex-app-screen .codex-sheet > header .kicker,
+  .codex-app-screen .codex-sheet > header .codex-modal-subtitle { display: none; }
+  .codex-app-screen .codex-sheet > header h2,
+  .codex-app-screen .codex-modal-head h2 {
+    overflow: hidden;
+    font-size: 18px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .codex-app-screen .codex-back,
+  .codex-app-screen .plain-close { width: 44px; min-width: 44px; height: 44px; padding: 0; }
+  .codex-app-screen .codex-header-actions {
+    grid-column: 3;
+    display: flex;
+    gap: 8px;
+  }
+  .codex-app-screen.process-modal .codex-sheet > header {
+    grid-template-columns: minmax(0, 1fr) auto 44px;
+  }
+  .codex-app-screen.process-modal .codex-sheet > header > .process-close { grid-column: 3; }
+  .codex-app-screen.process-modal .codex-sheet > header > .codex-header-actions { grid-column: 2; }
+  .codex-app-screen .codex-header-actions .process-resynchronize,
+  .codex-app-screen .codex-header-actions .pipelines-resynchronize {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+  .codex-app-screen .codex-header-actions .process-resynchronize::before,
+  .codex-app-screen .codex-header-actions .pipelines-resynchronize::before { content: '↻'; font-size: 19px; }
+  .codex-app-screen .codex-header-actions :where(.primary-button, .primary-action) {
+    min-height: 40px;
+    padding-inline: 13px;
+    white-space: nowrap;
+  }
+  .codex-app-screen .codex-tabs { min-height: 42px; }
+  .codex-app-screen .codex-tabs button { min-height: 42px; padding-block: 6px; }
+  .codex-app-screen .codex-library-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .codex-app-screen .codex-library-search { grid-column: 1; }
+  .codex-app-screen .codex-mobile-filter-toggle {
+    display: grid;
+    grid-column: 2;
+    place-items: center;
+    min-width: 76px;
+    min-height: 42px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    color: var(--text);
+    background: var(--panel-strong);
+    font-size: 13px;
+  }
+  .codex-app-screen.skill-library-route .codex-library-controls {
+    height: 0;
+    min-height: 0;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+  }
+  .codex-app-screen.skill-library-route .codex-mobile-filter-toggle {
+    position: fixed;
+    top: 71px;
+    right: 64px;
+    z-index: 47;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+  .codex-app-screen.skill-library-route .codex-mobile-filter-toggle::before { content: '⋮'; font-size: 24px; }
+  .codex-app-screen.skill-library-route .codex-library-controls.mobile-filters-open .codex-mobile-filter-toggle { display: none; }
+  .codex-app-screen.skill-library-route .codex-header-actions { display: none; }
+  .codex-app-screen .codex-mobile-filter-toggle[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+  .codex-app-screen .codex-library-search { min-height: 42px; }
+  .codex-app-screen .codex-filter-row { display: none; gap: 6px; }
+  .codex-app-screen .skill-category-filter,
+  .codex-app-screen .project-filter-chip { min-height: 32px; padding: 4px 10px; }
+  .codex-app-screen .codex-filter-clear { display: none; }
+  .codex-app-screen .codex-library-control-actions { display: none; }
+  .codex-app-screen .codex-library-filter-panel {
+    position: fixed;
+    inset: 65px 0 0 auto;
+    z-index: 46;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: min(86vw, 340px);
+    padding: 16px;
+    overflow-y: auto;
+    border-left: 1px solid var(--line);
+    background: var(--panel-deep);
+    box-shadow: -18px 0 40px rgba(0,0,0,.5);
+    transform: translateX(105%);
+    transition: transform 180ms var(--ease-out);
+  }
+  .codex-app-screen .codex-library-filter-panel > header { display: flex; align-items: center; justify-content: space-between; }
+  .codex-app-screen .codex-library-filter-panel > header h3 { margin: 0; font-size: 18px; }
+  .codex-app-screen .codex-library-filter-panel .codex-filter-row:not([hidden]) { display: flex; flex-wrap: wrap; overflow: visible; }
+  .codex-app-screen .codex-library-controls.mobile-filters-open .codex-library-filter-panel { transform: translateX(0); }
+  .codex-app-screen .codex-library-filter-backdrop {
+    position: fixed;
+    inset: 65px 0 0;
+    z-index: 45;
+    display: none;
+    width: 100%;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(0,0,0,.58);
+    box-shadow: none;
+  }
+  .codex-app-screen .codex-library-controls.mobile-filters-open .codex-library-filter-backdrop { display: block; }
+  .codex-app-screen .codex-library-controls.mobile-filters-open .codex-library-control-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+  .codex-app-screen .codex-library-controls.mobile-filters-open .codex-library-create { grid-column: 1 / -1; }
+  .codex-app-screen .codex-library-controls.mobile-filters-open .codex-filter-clear { display: inline-flex; }
+  .codex-app-screen .codex-library-controls.mobile-filters-open .codex-library-synchronize { display: inline-flex; }
+  .codex-app-screen .codex-message:empty { display: none; }
+  .codex-app-screen .codex-message:not(:empty) { min-height: 0; padding: 7px 12px; }
+  .codex-app-screen .process-library,
+  .codex-app-screen .pipeline-library { padding: 10px 12px max(16px, env(safe-area-inset-bottom)); }
+  .codex-app-screen.skill-library-route .process-library { gap: 0; padding: 0 12px max(16px, env(safe-area-inset-bottom)); }
+  .codex-app-screen.skill-library-route .process-library .codex-list-card {
+    border-width: 0 0 1px;
+    border-radius: 0;
+    background: transparent;
+  }
+  .codex-app-screen .codex-list { gap: 8px; }
+  .codex-app-screen .codex-list-item { padding: 11px 12px 11px 15px; }
+  .codex-app-screen .skill-result-description {
+    display: -webkit-box;
+    overflow: hidden;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+  .codex-app-screen .process-result-metadata {
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .codex-app-screen .process-detail.skill-detail-layout { padding-bottom: env(safe-area-inset-bottom); }
+  .codex-app-screen .skill-detail-scroll,
+  .codex-app-screen .skill-detail-controls { padding: 12px; }
+  .codex-app-screen .process-detail.skill-detail-layout .skill-detail-controls { order: -1; height: 0; padding: 0; border: 0; }
+  .codex-app-screen .skill-detail-controls > .skill-detail-title { font-size: 18px; }
+  .codex-app-screen .skill-detail-controls > .skill-detail-title { display: none; }
+  .codex-app-screen .skill-detail-controls > p:not(.codex-message) {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .codex-app-screen .skill-workspace-view .skill-workspace-rail-body > p:not(.codex-message) {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+  .codex-app-screen .skill-workspace-view .skill-workspace-rail-body .skill-tag-choices { flex-wrap: wrap; overflow: visible; }
+  .codex-app-screen .skill-detail-workspace .skill-markdown-section > :is(h4, .skill-document-edit):first-child { display: none; }
+  .codex-app-screen .skill-detail-workspace .skill-markdown-section { gap: 0; }
+  .codex-app-screen .skill-detail-actions {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  .codex-app-screen .skill-detail-actions .skill-detail-edit {
+    position: fixed;
+    top: 71px;
+    right: 64px;
+    z-index: 42;
+    width: auto;
+    min-height: 44px;
+  }
+  .codex-app-screen .skill-workspace-view .skill-detail-actions .skill-detail-edit {
+    position: static;
+    width: 100%;
+    min-height: 44px;
+  }
+  .codex-app-screen .skill-detail-actions .skill-viewer-settings { position: static; }
+  .codex-app-screen .skill-workspace-view .skill-workspace-menu {
+    position: fixed;
+    top: 71px;
+    right: 64px;
+    z-index: 47;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    font-size: 24px;
+  }
+  .codex-app-screen .skill-workspace-view.is-control-rail-open .skill-workspace-menu { display: none; }
+  .codex-app-screen .skill-viewer-settings summary {
+    position: fixed;
+    top: 71px;
+    right: 12px;
+    z-index: 47;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 1px solid var(--line);
+    color: var(--accent);
+    font-size: 24px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .codex-app-screen .skill-viewer-panel-backdrop {
+    position: fixed;
+    inset: 65px 0 0;
+    z-index: 45;
+    display: none;
+    width: 100%;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(0,0,0,.58);
+    box-shadow: none;
+  }
+  .codex-app-screen .skill-viewer-settings[open] .skill-viewer-panel-backdrop { display: block; }
+  .codex-app-screen .skill-viewer-settings[open] > summary { display: none; }
+  .codex-app-screen .skill-viewer-settings-panel {
+    position: fixed;
+    inset: 65px 0 0 auto;
+    z-index: 46;
+    width: min(86vw, 340px);
+    padding: 16px;
+    overflow-y: auto;
+    border-left: 1px solid var(--line);
+    background: var(--panel-deep);
+    box-shadow: -18px 0 40px rgba(0,0,0,.55);
+    transform: translateX(105%);
+    transition: transform 180ms var(--ease-out);
+  }
+  .codex-app-screen .skill-viewer-settings[open] .skill-viewer-settings-panel { transform: translateX(0); }
+  .codex-app-screen .skill-viewer-settings-panel > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .codex-app-screen .skill-viewer-settings-panel > header h3 { margin: 0; font-size: 18px; }
+  .codex-app-screen .skill-viewer-settings-panel > p { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .codex-app-screen .skill-viewer-settings[open] .skill-tag-choices { flex-wrap: wrap; }
+  .codex-app-screen .skill-detail-actions .process-detail-message { display: none; }
+  .codex-app-screen .skill-detail-actions .skill-tag-choices { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .codex-app-screen .pipeline-editor-form > header { position: sticky; top: 0; z-index: 3; }
+  .codex-app-screen .pipeline-editor-form > .codex-field,
+  .codex-app-screen .pipeline-editor-form > .pipeline-add-step { width: calc(100% - 24px); }
+  .codex-app-screen .pipeline-editor-form > .codex-field { margin-top: 10px; }
+  .codex-app-screen .pipeline-editor-form > .codex-field textarea { min-height: 68px; }
+  .codex-app-screen .pipeline-steps { padding: 12px; }
+  .codex-app-screen .pipeline-add-step {
+    position: sticky;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 2;
+    margin-block: 4px 12px;
+    background: var(--panel-deep);
+    box-shadow: 0 -10px 22px var(--panel-deep);
+  }
+  /* Shared off-canvas primitive for library, viewer, and editor controls. */
+  .codex-app-screen .codex-side-panel {
+    position: fixed !important;
+    inset: 65px 0 0 auto !important;
+    z-index: 46 !important;
+    display: flex !important;
+    flex-direction: column;
+    width: min(calc(100vw - 32px), 360px) !important;
+    height: calc(100dvh - 65px) !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border-left: 1px solid var(--line) !important;
+    background: var(--panel-deep) !important;
+    transform: translate3d(105%, 0, 0) !important;
+    transition: transform 180ms cubic-bezier(.22, 1, .36, 1) !important;
+  }
+  .codex-app-screen .codex-side-panel-backdrop {
+    position: fixed !important;
+    inset: 65px 0 0 !important;
+    z-index: 45 !important;
+    display: block !important;
+    width: 100% !important;
+    height: calc(100dvh - 65px) !important;
+    opacity: 0;
+    pointer-events: none;
+    border: 0 !important;
+    background: rgba(0, 0, 0, .62) !important;
+    transition: opacity 180ms ease-out !important;
+  }
+  .codex-app-screen .skill-workspace.is-control-rail-open .codex-side-panel {
+    transform: translate3d(0, 0, 0) !important;
+  }
+  .codex-app-screen .skill-workspace.is-control-rail-open .codex-side-panel-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .codex-app-screen .skill-workspace-rail-header {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 56px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-deep);
+  }
+  .codex-app-screen .skill-workspace-rail-header h3 { margin: 0; font-size: 18px; }
+  .codex-app-screen .skill-workspace-rail-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 24px;
+    min-height: 0;
+    padding: 16px 16px 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .codex-app-screen .skill-workspace-rail-footer {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: var(--panel-deep);
+  }
+  .codex-app-screen .skill-workspace-rail-footer:empty { display: none; }
+  .codex-app-screen .skill-workspace-rail-footer :where(button, .primary-action) { width: 100%; min-height: 44px; }
+  .codex-app-screen .skill-workspace-rail-body :where(.skill-category-filter, .skill-editor-tag-choice) {
+    min-height: 44px;
+    box-shadow: none;
+  }
+  .codex-app-screen .codex-library-controls.mobile-filters-open .codex-side-panel,
+  .codex-app-screen .skill-viewer-settings[open] .codex-side-panel,
+  .skill-library-editor-modal.codex-app-screen.show-mobile-settings .codex-side-panel {
+    transform: translate3d(0, 0, 0) !important;
+  }
+  .codex-app-screen .codex-library-controls.mobile-filters-open .codex-side-panel-backdrop,
+  .codex-app-screen .skill-viewer-settings[open] .codex-side-panel-backdrop,
+  .skill-library-editor-modal.codex-app-screen.show-mobile-settings .codex-side-panel-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .codex-app-screen .codex-side-panel,
+  .codex-app-screen .codex-side-panel-backdrop { transition-duration: 0ms !important; }
+}
+
+@media (min-width: 768px) {
+  .codex-app-screen .skill-viewer-settings > summary { display: none; }
+  .codex-app-screen .skill-viewer-settings-panel > header { display: none; }
+  .codex-app-screen { left: 250px; width: calc(100vw - 250px) !important; }
+  .codex-app-screen .codex-sheet > header { padding-inline: 24px; }
+  .codex-app-screen .codex-sheet > header { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .codex-app-screen.process-modal .codex-sheet > header { grid-template-columns: minmax(0, 1fr) auto 44px; }
+  .codex-app-screen .codex-header-actions,
+  .codex-app-screen.process-modal:has(.process-detail:not([hidden])) .codex-header-actions { grid-column: auto; display: flex; }
+  .codex-app-screen .codex-library-controls { grid-template-columns: minmax(240px, .8fr) minmax(0, 1fr) auto; gap: 12px; padding-inline: 24px; }
+  .codex-app-screen .codex-message { padding-inline: 24px; }
+  .codex-app-screen .process-library,
+  .codex-app-screen .pipeline-library,
+  .codex-app-screen .skill-picker-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: max-content; align-content: start; gap: 12px; padding: 18px 24px; }
+  .codex-app-screen .codex-list-card { min-height: max-content; }
+
+  /* Desktop Skill surfaces share one content column and one secondary-control rail. */
+  .codex-app-screen.skill-library-route .codex-sheet {
+    display: grid;
+    grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) 340px;
+  }
+  .codex-app-screen.skill-library-route .codex-sheet > header {
+    position: absolute;
+    inset: 0 0 auto auto;
+    z-index: 8;
+    right: 20px;
+    width: 44px;
+    min-height: 64px;
+    padding: 10px 0;
+    border: 0;
+    background: transparent;
+    pointer-events: none;
+  }
+  .codex-app-screen.skill-library-route .codex-sheet > header > :not(.process-close) { display: none; }
+  .codex-app-screen.skill-library-route .codex-sheet > header .process-close { pointer-events: auto; }
+  .codex-app-screen.skill-library-route .codex-sheet > header .process-close {
+    position: fixed;
+    top: 10px;
+    right: 80px;
+  }
+  .codex-app-screen.skill-library-route .codex-message { grid-column: 1; grid-row: 1; }
+  .codex-app-screen.skill-library-route .process-detail:not([hidden]) {
+    grid-column: 1 / -1;
+    grid-row: 1 / 3;
+  }
+  .codex-app-screen.skill-library-route .process-library {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0 24px 24px;
+  }
+  .codex-app-screen.skill-library-route .codex-library-controls {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-content: start;
+    min-height: 0;
+    padding: 18px 20px;
+    overflow-y: auto;
+    border-bottom: 0;
+    border-left: 1px solid var(--line);
+    background: var(--panel);
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .codex-app-screen.skill-library-route .codex-library-controls > * { grid-column: 1; }
+  .codex-app-screen.skill-library-route .codex-header-actions .process-resynchronize { display: none; }
+  .codex-app-screen.skill-library-route .codex-library-filter-panel {
+    display: grid;
+    gap: 16px;
+  }
+  .codex-app-screen.skill-library-route .codex-library-filter-panel .skill-workspace-rail-body { display: grid; gap: 16px; padding: 0; overflow: visible; }
+  .codex-app-screen.skill-library-route .codex-library-filter-panel .skill-workspace-rail-footer { padding: 0; border: 0; }
+  .codex-app-screen.skill-library-route .codex-library-filter-panel .codex-filter-row {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .codex-app-screen.skill-library-route .codex-library-control-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .codex-app-screen.skill-library-route .codex-list-card {
+    border-width: 0 0 1px;
+    border-radius: 0;
+    background: transparent;
+  }
+  .codex-app-screen.skill-library-route .codex-list-card::before { width: 2px; }
+  .codex-app-screen.skill-library-route .codex-list-item { padding-block: 15px; }
+  .codex-app-screen .skill-detail-workspace .skill-detail-title { display: none; }
+  .codex-app-screen .skill-detail-workspace .skill-markdown-section > :is(h4, .skill-document-edit):first-child { display: none; }
+  .codex-app-screen .skill-detail-workspace .skill-markdown-section { gap: 0; }
+  .codex-app-screen .skill-detail-workspace .skill-detail-actions {
+    order: -1;
+    padding-top: 0;
+    padding-bottom: 14px;
+    border-top: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .codex-app-screen .skill-detail-workspace .skill-detail-actions .skill-detail-edit { width: 100%; }
+  .codex-app-screen .skill-detail-workspace .skill-detail-controls > p:not(.codex-message) {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+  }
+}
+@media (min-width: 1100px) {
+  .codex-app-screen .process-library,
+  .codex-app-screen .pipeline-library,
+  .codex-app-screen .skill-picker-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .codex-app-screen .process-detail.skill-detail-layout { grid-template: minmax(0, 1fr) / minmax(0, 1fr) 340px; }
+  .codex-app-screen .process-detail.skill-detail-layout { display: grid; overflow: hidden; }
+  .codex-app-screen .process-detail.skill-detail-layout:has(.skill-detail-workspace) { grid-template-columns: minmax(0, 1fr); }
+  .codex-app-screen .skill-detail-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; overflow: hidden; }
+  .codex-app-screen .skill-detail-workspace .skill-detail-controls { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+  .codex-app-screen .skill-detail-workspace .skill-workspace-rail-body { display: flex; flex: 1 1 auto; flex-direction: column; gap: 16px; min-height: 0; padding: 16px 16px 24px; overflow-y: auto; }
+  .codex-app-screen .skill-detail-workspace .skill-workspace-rail-footer { flex: 0 0 auto; padding: 12px 16px 16px; border-top: 1px solid var(--line); }
+  .codex-app-screen .skill-detail-scroll { min-height: 0; overflow-y: auto; }
+  .codex-app-screen .skill-detail-controls { min-height: 0; overflow-y: auto; border-top: 0; border-left: 1px solid var(--line); }
+  .codex-app-screen .pipeline-step { grid-template-columns: minmax(0, 1fr) minmax(280px, .72fr); }
+}
 .overview-ledger, .zone-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; min-height: 86px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); background: var(--panel); text-align: left; text-decoration: none; cursor: pointer; }
 .overview-ledger:active, .zone-row:active { background: var(--panel-strong); }
 .overview-ledger h2, .zone-row h2 { margin: 0; font-size: 17px; }

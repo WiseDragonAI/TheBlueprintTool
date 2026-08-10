@@ -64,6 +64,7 @@ export function serveStaticApplication(input: {
     || input.requestPath === '/done'
     || input.requestPath === '/pipelines'
     || input.requestPath === '/skills'
+    || /^\/skills\/[^/]+(?:\/edit)?$/.test(input.requestPath)
     || input.requestPath === '/status'
     || input.requestPath === '/settings';
   const isScopedAppRoute = Boolean(input.projectScope?.scopedPath.startsWith('/ledgers'));
