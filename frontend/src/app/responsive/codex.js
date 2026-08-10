@@ -152,6 +152,7 @@ function renderSkillDocument(skill, record) {
     readOnlyReason: record.readOnlyReason,
     renderMarkdown: renderLedgerCardMarkdown,
     onEdit: () => editGlobalSkill(record),
+    copyMarkdown: (markdown) => navigator.clipboard.writeText(markdown),
   });
 }
 function renderSkillReferences(references) {
