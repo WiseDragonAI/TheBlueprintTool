@@ -3,6 +3,7 @@
  * WHY: The complete processing workflow must be shared by mobile and desktop routes.
  */
 import { telemetry } from '/src/runtime/telemetry/effect/telemetry.js';
+import { createSkillWorkspace } from '/src/runtime/codex/component/create-skill-workspace.js';
 
 const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
@@ -10,10 +11,29 @@ const PIPELINE_ADMISSION_TIMEOUT_MS = 30_000;
 const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], pipelineContent: [], skillDetails: new Map(), selectedReference: '', availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '', pickerQuery: '', pickerProjectFilter: 'All', pickerTagFilter: 'All', pickerSelectedSkillName: '', pickerInsertionIndex: 0, pickerSynchronizing: false };
 let processDetailGeneration = 0;
 let processActionGeneration = 0;
+let globalLibrariesLoaded = false;
 const el = (selector) => document.querySelector(selector);
 const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const message = (selector, text, bad = false) => { const node = el(selector); node.textContent = text; node.classList.toggle('error', bad); };
 const setBusy = (node, busy) => { node.disabled = busy; if (busy) node.setAttribute('aria-busy', 'true'); else node.removeAttribute('aria-busy'); };
+function showCodexScreen(selector) {
+  const screen = el(selector);
+  screen.classList.add('codex-app-screen');
+  if (!screen.open) screen.show();
+}
+function closeCodexScreen(selector) {
+  const screen = el(selector);
+  if (screen.open) screen.close();
+  screen.classList.remove('codex-app-screen');
+}
+function leaveCodexScreen() {
+  history.pushState({}, '', '/');
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+function navigateSkillRoute(path, replace = false) {
+  history[replace ? 'replaceState' : 'pushState']({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
 async function jsonRequest(url, options, projectId = state.projectId) {
   const response = await fetch(projectScopedRequestPath(url, projectId), options).catch(() => null);
   if (!response) throw new Error('Request failed.');
@@ -70,6 +90,7 @@ async function loadGlobalLibraries() {
   } else {
     failedSlices.push('pipelines');
   }
+  globalLibrariesLoaded = failedSlices.length < 2;
   return { issues, failedProjects: 0, failedSlices };
 }
 function failedLibrarySlicesMessage(result) {
@@ -110,11 +131,16 @@ function renderProcessList() {
     emptyMessage: `No matching ${state.processTab}.`,
     resultCountLabel: state.processTab,
     onSynchronize: state.libraryScope === 'global' ? () => { void resynchronizeGlobalLibraries(controls.querySelector('.codex-library-synchronize'), '.process-message', renderProcessList); } : undefined,
+    onCreate: state.libraryScope === 'global' && state.processTab === 'skills' ? createGlobalSkill : undefined,
+    createLabel: 'New skill',
     onFiltersChanged: (filters) => { state.query = filters.query; state.projectFilter = filters.projectId; state.tagFilter = filters.tag; renderProcessList(); },
     renderRecord: (record) => {
     const card = document.createElement('article'); card.className = 'codex-list-card';
     card.style.setProperty('--skill-category-color', colorForSkillTag(recordTags(record)[0] || 'Uncategorized'));
-    const node = button('', 'codex-list-item', () => { void renderProcessDetail(record); });
+    const node = button('', 'codex-list-item', () => {
+      if (state.libraryScope === 'global' && state.processTab === 'skills') navigateSkillRoute(`/skills/${encodeURIComponent(record.name)}`);
+      else void renderProcessDetail(record);
+    });
     if (state.processTab === 'skills') { node.replaceChildren(...renderSkillLibraryItemContent(record)); card.append(node); return card; }
     const title = document.createElement('strong'); title.textContent = record.name;
     const detail = document.createElement('span');
@@ -125,7 +151,8 @@ function renderProcessList() {
     node.append(title, detail, labels); card.append(node); return card;
     },
   });
-  message('.process-message', visible.length ? `${visible.length} ${state.processTab}` : records.length ? `No matching ${state.processTab}.` : `No ${state.processTab} are available.`);
+  const standardGlobalSkillResult = state.libraryScope === 'global' && state.processTab === 'skills' && visible.length > 0;
+  message('.process-message', standardGlobalSkillResult ? '' : visible.length ? `${visible.length} ${state.processTab}` : records.length ? `No matching ${state.processTab}.` : `No ${state.processTab} are available.`);
 }
 function option(value, label = value) { const node = document.createElement('option'); node.value = value; node.textContent = label; return node; }
 function renderSkillTagChoices(record) {
@@ -201,22 +228,24 @@ async function refreshProjectSkillAuthoring(savedSkill) {
   renderProcessList();
   if (!el('.process-detail').hidden) await renderProcessDetail(refreshed);
 }
-function createGlobalSkill() {
+function openGlobalSkillCreatorRoute() {
   openSkillLibraryCreator({
     requestProjectId: '',
     projects: state.projects.map((project) => ({ id: project.id, name: project.name })),
-    onSaved: async (savedSkill) => { await refreshGlobalSkillAuthoring(savedSkill); },
+    onSaved: async (savedSkill) => {
+      await refreshGlobalSkillAuthoring(savedSkill);
+      history.replaceState(history.state, '', `/skills/${encodeURIComponent(savedSkill.name)}/edit`);
+    },
     onSaveError: (error) => { message('.process-message', error, true); },
+    onClosed: () => {
+      if (location.pathname.startsWith('/skills/')) navigateSkillRoute('/skills', true);
+    },
   });
 }
+function createGlobalSkill() { navigateSkillRoute('/skills/new'); }
 function editGlobalSkill(record) {
   if (!record.editable) return;
-  void openSkillLibraryEditor({
-    skillName: record.name,
-    requestProjectId: '',
-    onSaved: async (savedSkill) => { await refreshGlobalSkillAuthoring(savedSkill); },
-    onSaveError: (error) => { message('.process-detail-message', error, true); },
-  });
+  navigateSkillRoute(`/skills/${encodeURIComponent(record.name)}/edit`);
 }
 function editSkillLibraryRecord(record) {
   if (!record.editable) return;
@@ -259,7 +288,7 @@ async function renderProcessDetail(record) {
   const generation = ++processDetailGeneration;
   if (record.projectId) state.projectId = record.projectId;
   const detail = el('.process-detail'); detail.hidden = false; detail.classList.remove('skill-detail-layout'); detail.replaceChildren();
-  const viewContext = { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines', detailTitle: state.processTab === 'skills' ? 'Skill details' : 'Pipeline details' };
+  const viewContext = { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines', detailTitle: state.processTab === 'skills' ? record.name : 'Pipeline details' };
   const title = document.createElement('h3'); title.className = 'skill-detail-title'; title.textContent = record.name;
   const purpose = document.createElement('p');
   purpose.textContent = state.processTab === 'skills' ? record.description : (record.purpose || 'No purpose provided.');
@@ -269,19 +298,23 @@ async function renderProcessDetail(record) {
     // WHY: Desktop requires Markdown-only left ownership while existing metadata and mutations remain grouped on the right.
     if (state.libraryScope === 'global') {
       detail.classList.add('skill-detail-layout');
-      const scroll = document.createElement('div'); scroll.className = 'skill-detail-scroll';
-      const controls = document.createElement('aside'); controls.className = 'skill-detail-controls';
+      const workspace = createSkillWorkspace({ mode: 'view', railTitle: 'Skill details', menuLabel: 'Skill details and settings', closeLabel: 'Close skill details', rootClassName: 'skill-detail-workspace', contentClassName: 'skill-detail-scroll', railClassName: 'skill-detail-controls skill-viewer-settings-panel' });
+      const scroll = workspace.content;
+      const controls = workspace.rail;
+      const controlsBody = workspace.railBody;
       const actions = document.createElement('footer'); actions.className = 'skill-detail-actions';
       const tagsField = renderSkillTagChoices(record);
       const favorite = button(record.favorite ? '★' : '☆', 'skill-favorite-toggle', () => { void toggleGlobalSkillFavorite(record); });
       favorite.setAttribute('aria-label', record.favorite ? 'Remove from favorites' : 'Add to favorites');
       favorite.setAttribute('aria-pressed', String(record.favorite === true));
+      controlsBody.append(purpose, favorite, tagsField);
       const edit = button(record.contentKind === 'pipeline-prompt' ? 'Edit prompt' : 'Edit skill', 'codex-secondary skill-detail-edit', () => editGlobalSkill(record));
       edit.hidden = record.editable !== true;
       const status = document.createElement('p'); status.className = 'codex-message process-detail-message'; status.setAttribute('role', 'status');
-      actions.append(tagsField, favorite, edit, status);
-      controls.append(title, purpose, actions);
-      detail.replaceChildren(scroll, controls);
+      actions.append(edit, status);
+      controlsBody.prepend(title);
+      workspace.railFooter.append(actions);
+      detail.replaceChildren(workspace.root);
       setMobileCodexView(document, 'detail', viewContext);
       await hydrateGlobalSkillDetail(record, scroll, generation);
       return;
@@ -477,6 +510,8 @@ async function openProcess() {
   state.libraryScope = 'project'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';
   el('.process-resynchronize').hidden = true;
   el('.skill-new').hidden = true;
+  el('.process-modal').classList.remove('codex-app-screen');
+  el('.process-modal').classList.remove('skill-library-route');
   el('.process-modal').showModal(); setMobileCodexView(document, 'library', { global: false, libraryTitle: 'Process card' }); message('.process-message', 'Loading libraries…');
   try { const result = await loadLibraries(); message('.process-message', result.issues?.map((issue) => issue.message).join(' ') || ''); renderProcessList(); }
   catch (error) { message('.process-message', error.message, true); el('.process-library').replaceChildren(); }
@@ -486,15 +521,20 @@ async function openSkills() {
   state.libraryScope = 'global'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';
   el('.process-resynchronize').hidden = false;
   el('.skill-new').hidden = false;
+  el('.process-modal').classList.add('skill-library-route');
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.processTab === 'skills')));
-  el('.process-modal').showModal(); setMobileCodexView(document, 'library', { global: true, libraryTitle: 'Skill library' });
+  showCodexScreen('.process-modal'); setMobileCodexView(document, 'library', { global: true, libraryTitle: 'Skill library' });
+  if (globalLibrariesLoaded) {
+    renderProcessList();
+    return;
+  }
   message('.process-message', 'Loading skill library…');
   try { const result = await loadGlobalLibraries(); renderProcessList(); const failure = failedLibrarySlicesMessage(result); if (failure) message('.process-message', failure, true); }
   catch (error) { message('.process-message', error.message, true); el('.process-library').replaceChildren(); }
 }
 async function openPipelines() {
   state.libraryScope = 'global'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';
-  el('.pipelines-modal').showModal();
+  showCodexScreen('.pipelines-modal');
   message('.pipelines-message', 'Loading pipelines…');
   try { const result = await loadGlobalLibraries(); renderPipelineLibrary(); const failure = failedLibrarySlicesMessage(result); message('.pipelines-message', failure || (state.pipelines.length ? `${state.pipelines.length} pipelines` : 'No saved pipelines.'), Boolean(failure)); }
   catch (error) { message('.pipelines-message', error.message, true); el('.pipeline-library').replaceChildren(); }
@@ -545,7 +585,7 @@ function renderPipelineLibrary() {
 function clonePipeline(pipeline) {
   return { id: pipeline?.id || uid('codex-pipeline'), existingId: pipeline?.id || '', scope: pipeline?.scope || (state.projectFilter === 'All' ? 'server' : 'project'), name: pipeline?.name || '', purpose: pipeline?.purpose || '', steps: pipeline ? pipelineSteps(pipeline).map((step) => ({ ...step, skills: step.skills.map((skill) => ({ ...skill })) })) : [] };
 }
-function openEditor(pipeline = null) { if (pipeline?.scope === 'server') state.projectId = ''; else if (pipeline?.projectId) state.projectId = pipeline.projectId; state.editor = clonePipeline(pipeline); el('.pipelines-modal').close(); el('.pipeline-editor-modal').showModal(); renderEditor(); }
+function openEditor(pipeline = null) { if (pipeline?.scope === 'server') state.projectId = ''; else if (pipeline?.projectId) state.projectId = pipeline.projectId; state.editor = clonePipeline(pipeline); closeCodexScreen('.pipelines-modal'); showCodexScreen('.pipeline-editor-modal'); renderEditor(); }
 function move(items, index, delta) { const target = index + delta; if (target < 0 || target >= items.length) return; [items[index], items[target]] = [items[target], items[index]]; }
 function renderEditor() {
   const editor = state.editor; const form = el('.pipeline-editor-form'); form.elements['pipeline-name'].value = editor.name; form.elements['pipeline-purpose'].value = editor.purpose;
@@ -627,7 +667,7 @@ function openSkillPicker(stepId) {
   const step = state.editor.steps.find((item) => item.id === stepId);
   state.pickerStepId = stepId; state.pickerQuery = ''; state.pickerProjectFilter = 'All'; state.pickerTagFilter = 'All'; state.pickerInsertionIndex = step?.skills.length || 0;
   state.pickerSelectedSkillName = sortSkillsByFavorite(pickerSkills())[0]?.name || '';
-  el('.pipeline-editor-modal').close(); el('.skill-picker-modal').showModal(); renderSkillPicker();
+  closeCodexScreen('.pipeline-editor-modal'); showCodexScreen('.skill-picker-modal'); renderSkillPicker();
 }
 function confirmPicker() {
   const step = state.editor.steps.find((item) => item.id === state.pickerStepId);
@@ -640,14 +680,14 @@ function confirmPicker() {
   step.skills.splice(state.pickerInsertionIndex, 0, { id: uid('codex-pipeline-skill'), skillName: selected.name, contentKind: selected.contentKind, codexModel: null, codexEffort: null });
   closePicker();
 }
-function closePicker() { el('.skill-picker-modal').close(); el('.pipeline-editor-modal').showModal(); renderEditor(); }
+function closePicker() { closeCodexScreen('.skill-picker-modal'); showCodexScreen('.pipeline-editor-modal'); renderEditor(); }
 async function saveEditor() {
   const editor = state.editor; const form = el('.pipeline-editor-form'); editor.name = form.elements['pipeline-name'].value.trim(); editor.purpose = form.elements['pipeline-purpose'].value.trim();
   if (!editor.name) return message('.pipeline-editor-message', 'Pipeline name is required.', true);
   const save = el('.pipeline-save'); setBusy(save, true); message('.pipeline-editor-message', 'Saving…');
   const pipeline = { id: editor.id, name: editor.name, purpose: editor.purpose, stepIds: editor.steps.map((step) => step.id) };
   const steps = editor.steps.map((step) => ({ id: step.id, name: step.name.trim(), purpose: step.purpose.trim(), skills: step.skills }));
-  try { const base = editor.scope === 'server' ? '/api/codex/server-pipelines' : '/api/codex/pipelines'; const url = editor.existingId ? `${base}/${encodeURIComponent(editor.existingId)}` : base; const body = await jsonRequest(url, { method: editor.existingId ? 'PUT' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pipeline, steps, scope: editor.scope }) }, editor.scope === 'server' ? '' : state.projectId); const project = state.projects.find((item) => item.id === state.projectId); const savedPipelines = (body.pipelines || []).map((item) => ({ ...item, scope: editor.scope, projectId: editor.scope === 'server' ? '' : state.projectId, projectName: editor.scope === 'server' ? 'Server' : (project?.name || ''), projectColor: editor.scope === 'server' ? '#38d9e8' : (project?.color || '#20242b'), ...(editor.scope === 'server' ? { projects: state.projects } : {}) })); const savedSteps = (body.steps || []).map((item) => ({ ...item, scope: editor.scope, projectId: editor.scope === 'server' ? '' : state.projectId })); if (state.libraryScope === 'global') { state.pipelines = [...state.pipelines.filter((item) => editor.scope === 'server' ? item.scope !== 'server' : item.projectId !== state.projectId), ...savedPipelines]; state.steps = [...state.steps.filter((item) => editor.scope === 'server' ? item.scope !== 'server' : item.projectId !== state.projectId), ...savedSteps]; } else { state.pipelines = savedPipelines; state.steps = savedSteps; } el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); renderPipelineLibrary(); message('.pipelines-message', body.issues?.map((issue) => issue.message).join(' ') || 'Pipeline saved.'); }
+  try { const base = editor.scope === 'server' ? '/api/codex/server-pipelines' : '/api/codex/pipelines'; const url = editor.existingId ? `${base}/${encodeURIComponent(editor.existingId)}` : base; const body = await jsonRequest(url, { method: editor.existingId ? 'PUT' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pipeline, steps, scope: editor.scope }) }, editor.scope === 'server' ? '' : state.projectId); const project = state.projects.find((item) => item.id === state.projectId); const savedPipelines = (body.pipelines || []).map((item) => ({ ...item, scope: editor.scope, projectId: editor.scope === 'server' ? '' : state.projectId, projectName: editor.scope === 'server' ? 'Server' : (project?.name || ''), projectColor: editor.scope === 'server' ? '#38d9e8' : (project?.color || '#20242b'), ...(editor.scope === 'server' ? { projects: state.projects } : {}) })); const savedSteps = (body.steps || []).map((item) => ({ ...item, scope: editor.scope, projectId: editor.scope === 'server' ? '' : state.projectId })); if (state.libraryScope === 'global') { state.pipelines = [...state.pipelines.filter((item) => editor.scope === 'server' ? item.scope !== 'server' : item.projectId !== state.projectId), ...savedPipelines]; state.steps = [...state.steps.filter((item) => editor.scope === 'server' ? item.scope !== 'server' : item.projectId !== state.projectId), ...savedSteps]; } else { state.pipelines = savedPipelines; state.steps = savedSteps; } closeCodexScreen('.pipeline-editor-modal'); showCodexScreen('.pipelines-modal'); renderPipelineLibrary(); message('.pipelines-message', body.issues?.map((issue) => issue.message).join(' ') || 'Pipeline saved.'); }
   catch (error) { message('.pipeline-editor-message', formatError(error), true); } finally { setBusy(save, false); }
 }
 export function setMobileCodexContext(context) {
@@ -659,9 +699,33 @@ export function setMobileCodexContext(context) {
   if (priorIdentity !== `${state.projectId}:${state.ledgerId}:${state.cardId}`) processActionGeneration += 1;
   el('.process-card-button').disabled = !state.cardId;
 }
-export function openMobileCodexLibrary(kind) {
-  if (kind === 'pipelines') void openPipelines();
-  else void openSkills();
+export async function openMobileCodexLibrary(kind) {
+  if (kind === 'pipelines') await openPipelines();
+  else await openSkills();
+}
+export async function openMobileSkillRoute(skillName, mode) {
+  if (mode === 'new') {
+    openGlobalSkillCreatorRoute();
+    return;
+  }
+  const record = state.skills.find((skill) => skill.name === skillName);
+  if (!record) {
+    message('.process-message', `Skill not found: ${skillName}`, true);
+    return;
+  }
+  if (mode !== 'edit') {
+    await renderProcessDetail(record);
+    return;
+  }
+  await openSkillLibraryEditor({
+    skillName: record.name,
+    requestProjectId: '',
+    onSaved: async (savedSkill) => { await refreshGlobalSkillAuthoring(savedSkill); },
+    onSaveError: (error) => { message('.process-detail-message', error, true); },
+    onClosed: () => {
+      if (location.pathname.endsWith('/edit')) navigateSkillRoute(`/skills/${encodeURIComponent(record.name)}`, true);
+    },
+  });
 }
 export function initializeMobileCodex() {
   el('.process-card-button').addEventListener('click', openProcess);
@@ -675,12 +739,17 @@ export function initializeMobileCodex() {
   });
   el('.process-close').addEventListener('click', () => {
     if (!el('.process-detail').hidden) {
+      if (state.libraryScope === 'global' && state.processTab === 'skills') {
+        navigateSkillRoute('/skills');
+        return;
+      }
       setMobileCodexView(document, 'library', { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines' });
       return;
     }
-    el('.process-modal').close();
+    closeCodexScreen('.process-modal');
+    if (state.libraryScope === 'global') leaveCodexScreen();
     processActionGeneration += 1;
-  }); el('.pipelines-close').addEventListener('click', () => el('.pipelines-modal').close());
+  }); el('.pipelines-close').addEventListener('click', () => { closeCodexScreen('.pipelines-modal'); leaveCodexScreen(); });
   el('.process-resynchronize').addEventListener('click', (event) => { void resynchronizeGlobalLibraries(event.currentTarget, '.process-message', renderProcessList); });
   el('.skill-new').addEventListener('click', createGlobalSkill);
   el('.pipelines-resynchronize').addEventListener('click', (event) => { void resynchronizeGlobalLibraries(event.currentTarget, '.pipelines-message', renderPipelineLibrary); });
@@ -689,7 +758,7 @@ export function initializeMobileCodex() {
   el('.process-filter-clear').addEventListener('click', () => { state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All'; renderProcessList(); });
   el('.pipelines-search').addEventListener('input', (event) => { state.query = event.target.value; renderPipelineLibrary(); event.target.focus(); });
   el('.pipelines-filter-clear').addEventListener('click', () => { state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All'; renderPipelineLibrary(); });
-  el('.pipeline-new').addEventListener('click', () => { state.projectId = state.projectFilter === 'All' ? '' : state.projectFilter; openEditor(); }); el('.pipeline-editor-back').addEventListener('click', () => { el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); });
+  el('.pipeline-new').addEventListener('click', () => { state.projectId = state.projectFilter === 'All' ? '' : state.projectFilter; openEditor(); }); el('.pipeline-editor-back').addEventListener('click', () => { closeCodexScreen('.pipeline-editor-modal'); showCodexScreen('.pipelines-modal'); });
   el('.pipeline-add-step').addEventListener('click', () => { state.editor.steps.push({ id: uid('codex-step'), name: `Step ${state.editor.steps.length + 1}`, purpose: '', skills: [] }); renderEditor(); });
   el('.pipeline-editor-form').elements['pipeline-name'].addEventListener('input', (event) => { state.editor.name = event.target.value; });
   el('.pipeline-editor-form').elements['pipeline-purpose'].addEventListener('input', (event) => { state.editor.purpose = event.target.value; });
