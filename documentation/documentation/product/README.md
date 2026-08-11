@@ -16,6 +16,7 @@
 3. **Ledgers:** opens project-owned canvases whose available ledger files are declared in `.decision-os/state.json`.
 4. **Thread panel:** attaches operator and agent discussion to the active card.
 5. **Keys panel:** exposes the current keyboard contract from `AGENTS.md`.
+6. [**Grouped Ledgers**](./ledgers-project-disclosures.md): describes the global project disclosures, project-qualified navigation, empty-project state, and nested responsive boundary.
 
 ---
 
