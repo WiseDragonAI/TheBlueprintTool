@@ -349,7 +349,7 @@ export function integrateFeature(name) {
     env: { ...process.env, GIT_SSH_COMMAND: `ssh -i ${resolve(homedir(), '.ssh', 'id_jb_wise')} -o IdentitiesOnly=yes` },
     code: 'worktree_dev_push_failed',
   });
-  git(primaryRoot, ['worktree', 'remove', feature.featureRoot], { timeout: 180_000 });
+  git(primaryRoot, ['worktree', 'remove', '--force', feature.featureRoot], { timeout: 180_000 });
   git(primaryRoot, ['branch', '-d', feature.branch]);
   return {
     ok: true,
