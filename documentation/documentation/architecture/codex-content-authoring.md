@@ -44,6 +44,8 @@
 8. Favorite and tag requests use the same `PUT` route with only `favorite` and `tags`. They mutate pipeline-store metadata and do not claim a Markdown save or Git content revision.
 9. A successful create returns only after its focused Git revision exists. A skill transaction contains only its `SKILL.md`; a prompt transaction contains its Markdown and `.decision-os/codex-pipelines.json`.
 10. A successful content save returns the reloaded path-free `skill` detail and advances repository `HEAD` exactly once. HTTP `422 content_not_changed` creates no commit.
+11. Agent-authored updates to an existing pipeline prompt use its registered working copy directly. After editing `.decision-os/pipeline-prompts/<name>.md`, load its current revision and submit `POST /p/:projectId/api/codex/skill-library/:name/revisions/commit` with `{revision}`.
+12. The working-copy commit route accepts only registered pipeline prompts, validates current bytes and prompt references, rejects stale revisions and clean working copies, preserves staged-path protection, commits only the prompt Markdown, and returns the reloaded content plus Git revision.
 
 ---
 

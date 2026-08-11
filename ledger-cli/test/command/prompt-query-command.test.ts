@@ -77,7 +77,7 @@ test('prompt query withholds output when any requested prompt fails', async () =
   }
 });
 
-test('prompt create and update use project-scoped authored transactions', async () => {
+test('prompt create and direct working-copy update use project-scoped authored transactions', async () => {
   const previousServer = process.env.DECISION_OS_SERVER_URL;
   const previousProject = process.env.DECISION_OS_PROJECT_ID;
   const previousFetch = globalThis.fetch;
@@ -91,19 +91,19 @@ test('prompt create and update use project-scoped authored transactions', async 
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : null;
     requests.push({ body, method, url: String(url) });
-    // WHAT: return a committed creation receipt for the first mutation.
-    // WHY: the CLI must expose authored content and Git revisions from POST.
+    // WHAT: return a committed direct-edit receipt for the working-copy endpoint.
+    // WHY: update must expose the focused Git commit without transmitting Markdown.
+    if (method === 'POST' && String(url).endsWith('/revisions/commit')) {
+      return response({ skill: { revision: 'updated-revision', gitRevision: { commit: 'updated-commit' } } });
+    }
+    // WHAT: return a committed creation receipt for the collection endpoint.
+    // WHY: the CLI must expose authored content and Git revisions from prompt creation.
     if (method === 'POST') {
       return response({ skill: { revision: 'created-revision', gitRevision: { commit: 'created-commit' } } }, 201);
     }
-    // WHAT: provide the current optimistic revision before replacement.
+    // WHAT: provide the current directly edited working-copy revision before commit.
     // WHY: update must load unseen server state instead of accepting a caller revision.
     if (method === 'GET') return response({ skill: { revision: 'current-revision' } });
-    // WHAT: return a committed replacement receipt after revision validation.
-    // WHY: the CLI reports completion only after the PUT transaction commits.
-    if (method === 'PUT') {
-      return response({ skill: { revision: 'updated-revision', gitRevision: { commit: 'updated-commit' } } });
-    }
     return response({ error: 'unexpected method' }, 500);
   }) as typeof fetch;
   const messages: string[] = [];
@@ -113,7 +113,7 @@ test('prompt create and update use project-scoped authored transactions', async 
       'prompt', 'create', '--name', 'ResearchPrompt', '--description', 'Research one source', '--markdown-file', markdownFile,
     ], { emit: (message) => messages.push(message) });
     const updated = await dispatchLedgerCliCommandController([
-      'prompt', 'update', '--project', 'project-a', '--name', 'ResearchPrompt', '--markdown-file', markdownFile,
+      'prompt', 'update', '--project', 'project-a', '--name', 'ResearchPrompt',
     ], { emit: (message) => messages.push(message) });
 
     assert.equal(created.ok, true);
@@ -130,9 +130,9 @@ test('prompt create and update use project-scoped authored transactions', async 
         body: null,
       },
       {
-        method: 'PUT',
-        url: 'http://127.0.0.1:50150/p/project-a/api/codex/skill-library/ResearchPrompt',
-        body: { markdown: '## A. objective\n', revision: 'current-revision', defaultCodexModel: null, defaultCodexEffort: null },
+        method: 'POST',
+        url: 'http://127.0.0.1:50150/p/project-a/api/codex/skill-library/ResearchPrompt/revisions/commit',
+        body: { revision: 'current-revision' },
       },
     ]);
     assert.deepEqual(messages.map((message) => JSON.parse(message)), [
@@ -156,9 +156,9 @@ test('prompt create and update use project-scoped authored transactions', async 
 test('prompt commands require a supported operation and required inputs', async () => {
   const operation = await dispatchLedgerCliCommandController(['prompt', 'save', '--name', 'SYSTEM_PROMPT']);
   const name = await dispatchLedgerCliCommandController(['prompt', 'query']);
-  const markdown = await dispatchLedgerCliCommandController(['prompt', 'update', '--name', 'SYSTEM_PROMPT']);
+  const replacementFile = await dispatchLedgerCliCommandController(['prompt', 'update', '--name', 'SYSTEM_PROMPT', '--markdown-file', '/tmp/SYSTEM_PROMPT.md']);
 
   assert.deepEqual(operation, { ok: false, error: 'prompt requires query, create, or update.' });
   assert.deepEqual(name, { ok: false, error: 'prompt query requires --name.' });
-  assert.deepEqual(markdown, { ok: false, error: 'prompt update requires --markdown-file.' });
+  assert.deepEqual(replacementFile, { ok: false, error: 'prompt update requires direct editing and does not accept --markdown-file.' });
 });

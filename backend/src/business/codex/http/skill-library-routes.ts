@@ -3,6 +3,7 @@
  * WHY: Content authoring transport belongs to the Codex library capability.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { commitPipelinePromptWorkingCopyController } from '../controller/commit-pipeline-prompt-working-copy-controller.js';
 import { createCodexSkillLibraryController } from '../controller/create-codex-skill-library-controller.js';
 import { readCodexSkillLibraryController } from '../controller/read-codex-skill-library-controller.js';
 import { retryCodexSkillRevisionController } from '../controller/retry-codex-skill-revision-controller.js';
@@ -74,6 +75,29 @@ export async function handleCodexSkillLibraryRoutes(input: {
       : '';
     sendResult(input.response, result, 201);
     if (publishSkillName) input.publishAuthoredSkill(publishSkillName, 'create');
+    return HTTP_ROUTE_HANDLED;
+  }
+
+  const workingCopyCommitRoute = input.url.match(
+    /^\/api\/codex\/(skill-library|server-skills)\/([^/]+)\/revisions\/commit$/,
+  );
+  // WHAT: commit one validated registered pipeline-prompt working copy without replacing its bytes.
+  // WHY: direct prompt editing needs a focused server-owned Git transaction after the edit.
+  if (workingCopyCommitRoute && input.request.method === 'POST') {
+    const serverOwned = workingCopyCommitRoute[1] === 'server-skills';
+    const skillName = decodeRouteSegment(workingCopyCommitRoute[2]);
+    const runtime = serverOwned
+      ? { ...input.requestRuntime, decisionOsRoot: input.masterDecisionOsRoot, projectId: '' }
+      : input.requestRuntime;
+    const result = input.applyOwnedDetail(await commitPipelinePromptWorkingCopyController({
+      action_payload: { ...await readJsonObject(input.request), skillName },
+      runtime_state: runtime,
+    }));
+    // WHAT: record only a recoverable Git failure emitted after validated working bytes.
+    // WHY: commit recovery evidence must remain visible without failing unrelated routes.
+    if (result.ok === false && result.recovery) input.recordRevisionFailure(skillName, result);
+    input.response.setHeader('cache-control', 'no-store');
+    sendResult(input.response, result, 200);
     return HTTP_ROUTE_HANDLED;
   }
 

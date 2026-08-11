@@ -1,6 +1,6 @@
 /**
- * WHAT: Creates and replaces server-owned pipeline prompts through the authored-content API.
- * WHY: operators need revision-safe prompt mutations without composing HTTP requests manually.
+ * WHAT: Creates prompts from source files and commits directly edited registered prompt working copies.
+ * WHY: prompt authors need concise revision-safe commands without temporary replacement files or handcrafted HTTP.
  */
 import { readFile } from 'node:fs/promises';
 import type { Result } from '../../../lib/types.js';
@@ -89,9 +89,12 @@ export async function mutatePipelinePrompt(input: PromptMutation): Promise<Resul
   // WHAT: require one stable prompt identity.
   // WHY: authored-content routes cannot mutate an inferred catalog item.
   if (!name) return { ok: false, error: `prompt ${input.action} requires --name.` };
-  // WHAT: require one complete Markdown source file.
-  // WHY: prompt saves replace the whole authored document atomically.
-  if (!markdownFile) return { ok: false, error: `prompt ${input.action} requires --markdown-file.` };
+  // WHAT: require one complete Markdown source file only for prompt creation.
+  // WHY: creation has no registered working copy to edit directly.
+  if (input.action === 'create' && !markdownFile) return { ok: false, error: 'prompt create requires --markdown-file.' };
+  // WHAT: reject replacement-file updates after the direct-edit workflow is selected.
+  // WHY: update must commit the registered prompt bytes that the author inspected and edited in place.
+  if (input.action === 'update' && markdownFile) return { ok: false, error: 'prompt update requires direct editing and does not accept --markdown-file.' };
   // WHAT: require the project-scoped API routing identity.
   // WHY: shared prompt ownership is resolved through a registered request context.
   if (!projectId) return { ok: false, error: `prompt ${input.action} requires --project or DECISION_OS_PROJECT_ID.` };
@@ -100,16 +103,16 @@ export async function mutatePipelinePrompt(input: PromptMutation): Promise<Resul
   // WHY: no local fallback owns pipeline-prompt registration.
   if (!server.ok) return server;
 
-  let markdown = '';
-  try {
-    markdown = await readFile(markdownFile, 'utf8');
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : `Unable to read ${markdownFile}.` };
-  }
   const collectionUrl = `${server.value}/p/${encodeURIComponent(projectId)}/api/codex/skill-library`;
   // WHAT: create a new registered pipeline prompt in one authored transaction.
   // WHY: creation must couple Markdown, registration metadata, and Git evidence.
   if (input.action === 'create') {
+    let markdown = '';
+    try {
+      markdown = await readFile(markdownFile, 'utf8');
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : `Unable to read ${markdownFile}.` };
+    }
     const description = text(input.description).trim();
     // WHAT: require discoverable purpose for a new prompt identity.
     // WHY: the prompt library must not contain unexplained authored content.
@@ -136,12 +139,12 @@ export async function mutatePipelinePrompt(input: PromptMutation): Promise<Resul
   // WHY: the API uses this token to reject concurrent edits.
   if (!revision) return { ok: false, error: 'Prompt update could not load the current revision.' };
   const updated = await request({
-    method: 'PUT',
-    url: itemUrl,
-    body: { markdown, revision, defaultCodexModel: null, defaultCodexEffort: null },
+    method: 'POST',
+    url: `${itemUrl}/revisions/commit`,
+    body: { revision },
   });
-  // WHAT: preserve the exact update failure without retrying stale content.
-  // WHY: conflicts require a fresh operator-visible invocation.
+  // WHAT: preserve the exact working-copy commit failure without retrying stale content.
+  // WHY: conflicts require a fresh operator-visible invocation after inspecting the direct edit.
   if (!updated.ok) return updated;
   return mutationReceipt(updated.value, 'update', name);
 }
