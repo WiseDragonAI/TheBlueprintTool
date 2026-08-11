@@ -435,7 +435,8 @@ test('renders and persists the shared carousel resize handle in a Control Room m
 
 test('renders replicated card facts as bullet points before the responsive card body', () => {
   assert.match(mobile, /function cardFacts\(card\) \{[\s\S]*Array\.isArray\(card\?\.facts\)/);
-  assert.match(mobile, /function renderResponsiveCardFacts\(card\) \{[\s\S]*list\.className = 'responsive-card-facts'/);
+  assert.match(mobile, /import \{ renderLedgerCardFacts \} from '\/src\/runtime\/ledger\/component\/render-ledger-card-facts\.js';/);
+  assert.match(mobile, /function renderResponsiveCardFacts\(card\) \{[\s\S]*return renderLedgerCardFacts\(facts, 'responsive-card-facts'\)/);
   assert.match(mobile, /const facts = renderResponsiveCardFacts\(card\)/);
   assert.match(mobile, /replaceChildren\(\.\.\.\(facts \? \[facts\] : \[\]\), overview/);
   assert.match(mobile, /replaceChildren\(\s*\.\.\.\(facts \? \[facts\] : \[\]\),\s*\.\.\.\(persistenceFailure/s);

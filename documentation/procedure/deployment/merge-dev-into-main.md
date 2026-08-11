@@ -27,7 +27,7 @@
 
 4. **WHAT:** The standalone command is the sole owner of the protected `dev` to `main` merge transaction.
 
-   **WHY:** `decision-os-delivery promote` consumes the published merge as immutable release input and performs no merge, commit, tag, and push operation.
+   **WHY:** Relay deployment consumes the published annotated `rel-X.Y.Z` tag through `decision-os-deploy-relay`; it performs no merge, commit, tag, and push operation.
 
 5. **WHAT:** Treat `READY` plus doctor exit `0` as admission, `NO-GO` plus doctor exit `2` as blocked, merge exit `2` as rejected repository state, and merge exit `3` as an execution failure.
 
@@ -46,7 +46,16 @@
 
    **WHY:** Production delivery admits only an already-published canonical main merge. The merge command itself never pushes, deploys, restarts a server, updates a remote submodule, and activates a release.
 
-8. **WHAT:** Read the `logFile` path from the success or rejection JSON.
+8. **WHAT:** Deploy the relay from the published annotated parent release tag in the canonical primary `main` checkout:
+
+   ```bash
+   cd /home/jbb/dev/EditorBP/decision-os
+   node bin/decision-os-deploy-relay.mjs rel-<version> --json
+   ```
+
+   **WHY:** The release tag is the deployment input. Its resolved commit remains only the relay health compatibility fingerprint; no detached release worktree and no canary on port `50151` participates in relay deployment.
+
+9. **WHAT:** Read the `logFile` path from the success or rejection JSON.
 
    **WHY:** Every admitted, rejected, failed, and completed invocation writes a durable local JSONL receipt.
 

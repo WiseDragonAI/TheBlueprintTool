@@ -84,6 +84,16 @@ function identifier(value: unknown, field: string): string {
   return candidate;
 }
 
+function releaseTag(value: unknown, fallbackSha: string): string {
+  const candidate = String(value ?? `decision-os-${fallbackSha}`);
+  // WHAT: Admit canonical release tags and the existing SHA-derived legacy identity.
+  // WHY: The tag-owned deploy command must coexist with resumable delivery journals created before this command.
+  if (!/^(?:rel-\d+\.\d+\.\d+|decision-os-[a-f0-9]{40})$/.test(candidate)) {
+    throw new DeliveryRelayError('delivery_relay_release_tag_invalid', 'releaseTag must be a canonical rel-X.Y.Z tag.');
+  }
+  return candidate;
+}
+
 function wranglerContext(input: {
   releaseWorktree: string;
   environment?: NodeJS.ProcessEnv;
@@ -300,11 +310,14 @@ export async function readCurrentRelayDeployment(input: {
 export async function uploadRelayVersion(input: {
   releaseWorktree: string;
   mainSha: string;
+  releaseTag?: string;
   runner?: DeliveryRelayRunner;
   environment?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
 }): Promise<{ versionId: string; receipt: RelayCommandReceipt }> {
   const mainSha = sha(input.mainSha, 'mainSha');
+  const tag = releaseTag(input.releaseTag, mainSha);
+  const releaseLabel = input.releaseTag ? tag : mainSha;
   const context = wranglerContext(input);
   const { result, redactedArguments } = await wrangler({
     context,
@@ -316,9 +329,9 @@ export async function uploadRelayVersion(input: {
       '--var',
       `DECISION_OS_RELEASE_SHA:${mainSha}`,
       '--tag',
-      `decision-os-${mainSha}`,
+      tag,
       '--message',
-      `Decision OS relay ${mainSha}`,
+      `Decision OS relay ${releaseLabel}`,
     ],
     runner: input.runner ?? runBoundedProcess,
     signal: input.signal,
@@ -341,12 +354,15 @@ export async function uploadRelayVersion(input: {
 export async function deployRelayVersion(input: {
   releaseWorktree: string;
   mainSha: string;
+  releaseTag?: string;
   versionId: string;
   runner?: DeliveryRelayRunner;
   environment?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
 }): Promise<RelayCommandReceipt> {
   const mainSha = sha(input.mainSha, 'mainSha');
+  const tag = releaseTag(input.releaseTag, mainSha);
+  const releaseLabel = input.releaseTag ? tag : mainSha;
   const versionId = identifier(input.versionId, 'versionId');
   const context = wranglerContext(input);
   const { redactedArguments } = await wrangler({
@@ -358,7 +374,7 @@ export async function deployRelayVersion(input: {
       `${versionId}@100%`,
       '--yes',
       '--message',
-      `Activate Decision OS relay ${mainSha}`,
+      `Activate Decision OS relay ${releaseLabel}`,
     ],
     runner: input.runner ?? runBoundedProcess,
     signal: input.signal,
@@ -376,12 +392,15 @@ export async function deployRelayVersion(input: {
 export async function rollbackRelayVersion(input: {
   releaseWorktree: string;
   failedMainSha: string;
+  releaseTag?: string;
   priorVersionId: string;
   runner?: DeliveryRelayRunner;
   environment?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
 }): Promise<RelayCommandReceipt> {
   const failedMainSha = sha(input.failedMainSha, 'failedMainSha');
+  const tag = releaseTag(input.releaseTag, failedMainSha);
+  const releaseLabel = input.releaseTag ? tag : failedMainSha;
   const priorVersionId = identifier(input.priorVersionId, 'priorVersionId');
   const context = wranglerContext(input);
   const { redactedArguments } = await wrangler({
@@ -392,7 +411,7 @@ export async function rollbackRelayVersion(input: {
       priorVersionId,
       '--yes',
       '--message',
-      `Rollback Decision OS relay ${failedMainSha}`,
+      `Rollback Decision OS relay ${releaseLabel}`,
     ],
     runner: input.runner ?? runBoundedProcess,
     signal: input.signal,

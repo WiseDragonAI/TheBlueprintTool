@@ -9,14 +9,17 @@ import { resolve } from 'node:path';
 
 const read = (file) => readFileSync(resolve(file), 'utf8');
 
-test('delivery and canary runbooks expose the fixed candidate and live rollback contracts', () => {
-  const production = read('documentation/procedure/deployment/production-delivery-protocol.md');
+test('deployment and canary runbooks expose tag-owned production and isolated development contracts', () => {
+  const production = read('documentation/procedure/deployment/release-tag-deployment.md');
+  const legacy = read('documentation/procedure/deployment/production-delivery-protocol.md');
   const canary = read('documentation/procedure/deployment/canary-skill-authoring-dev-environment.md');
-  assert.match(production, /decision-os-delivery\.mjs candidate[\s\S]*--release-sha <40-character-origin-dev-sha>[\s\S]*--json/);
-  assert.match(production, /live relay `\/health`[\s\S]*exact predecessor `releaseSha`[\s\S]*`environment: "production"`/);
-  assert.match(production, /Pure local parsing and journal reads do not create redundant phase receipts/);
+  assert.match(production, /decision-os-merge-dev\.mjs <maj\|min\|fix> --json[\s\S]*decision-os-deploy-relay\.mjs rel-X\.Y\.Z --json/);
+  assert.match(production, /primary checkout[\s\S]*canonical workstation source[\s\S]*do not create detached release worktrees/);
+  assert.match(production, /two online production nodes[\s\S]*transferred bytes[\s\S]*throughput/);
+  assert.match(legacy, /not the canonical production deployment procedure/);
   assert.match(canary, /releaseSha: ""[\s\S]*deliveryProtocol: 0[\s\S]*activeReleasePointer: "unbootstrapped"/);
   assert.match(canary, /multiwezterm-process unregister[\s\S]*multiwezterm-process register[\s\S]*curl -sS http:\/\/127\.0\.0\.1:50151\/api\/health[\s\S]*decision-os-delivery\.mjs candidate/);
+  assert.match(canary, /decision-os-deploy-relay\.mjs rel-X\.Y\.Z --json/);
   assert.match(canary, /127\.0\.0\.1:50150\/decision-os\/projects/);
   assert.doesNotMatch(canary, /127\.0\.0\.1:50150\/projects/);
 });

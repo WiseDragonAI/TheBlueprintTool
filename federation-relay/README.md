@@ -46,28 +46,21 @@
    ```
 
 2. Canary admission requires the dev health response to identify the exact `origin/dev` SHA, dev Worker, dev namespace, protocol `1`, and current task-state protocol/schema/baseline.
-3. Production delivery requires the activated production health response to identify the exact generated `main` SHA and compatible protocol before node activation continues.
+3. Production relay deployment accepts one published annotated `rel-X.Y.Z` tag. Health identifies that tag's resolved commit fingerprint and compatible protocol.
 4. Each blank, stale, mismatched, incompatible, non-ready, and wrong-environment health identity blocks admission and delivery progress.
 
 ---
 
 ## D. Production Delivery Authority
 
-1. Routine production relay deployment belongs exclusively to `decision-os-delivery`.
-2. The delivery CLI:
-   1. Reads the current production deployment and exact predecessor version.
-   2. Uploads a version from immutable `releases/<mainSha>`.
-   3. Sets `DECISION_OS_RELEASE_SHA` to that exact SHA.
-   4. Activates the uploaded version at `100%`.
-   5. Verifies `/health`.
-   6. Persists external mutation evidence in the delivery journal.
-   7. Restores the recorded predecessor version during runtime rollback.
-3. Resume and final verification do not infer relay authority from the journal. They list current Cloudflare deployments and tagged versions, read live `/health`, and reconcile those authorities with the durable relay receipts.
-4. Rollback is terminal only after deployment metadata identifies the recorded predecessor version and live production `/health` reports that version's exact `releaseSha`, delivery protocol `1`, compatible state protocol, and `environment: "production"`.
-5. Relay list, upload, activation, rollback, and verification use pinned Wrangler `4.111.0`, fixed argument arrays, finite deadlines, cancellation, bounded output, process settlement, and token redaction.
-6. The end-to-end procedure is [Production Delivery Protocol](../documentation/procedure/deployment/production-delivery-protocol.md).
-7. Direct `wrangler deploy`, `wrangler versions upload`, `wrangler versions deploy`, and `wrangler rollback` are not routine release commands.
-8. Direct Wrangler mutation is recovery-only after an explicit operator direction and preservation of the delivery journal, relay predecessor, incident evidence, and current deployment identity.
+1. Routine relay-only production deployment belongs to `bin/decision-os-deploy-relay.mjs`.
+2. Invoke it from the canonical primary `main` checkout with one published annotated release tag: `node bin/decision-os-deploy-relay.mjs rel-X.Y.Z --json`.
+3. The command verifies published `main`, the published peeled tag target, tag ancestry, clean relay build inputs, and exact equality of relay source, Wrangler and package manifests, plus `shared/` with the tagged tree.
+4. The command reads the current production deployment and health, uploads a Worker version tagged `rel-X.Y.Z`, sets `DECISION_OS_RELEASE_SHA` to the tag's resolved commit fingerprint, activates the version at `100%`, and verifies production `/health`.
+5. A post-activation health failure restores the recorded predecessor version and verifies the predecessor release fingerprint.
+6. The command uses pinned Wrangler `4.111.0`, fixed argument arrays, finite deadlines, cancellation, bounded output, process settlement, and token redaction.
+7. Node activation and node rollback remain separate from relay-only deployment. The canonical boundary is [Release-Tag Production Deployment](../documentation/procedure/deployment/release-tag-deployment.md).
+8. Direct `wrangler deploy`, `wrangler versions upload`, `wrangler versions deploy`, and `wrangler rollback` are recovery-only operations.
 
 ---
 
@@ -96,7 +89,7 @@
    ```
 
 3. The connector is disabled when any required setting is absent.
-4. Delivery protocol-1 bootstrap and supervised restart are separate node-owned operations documented in [Production Delivery Protocol](../documentation/procedure/deployment/production-delivery-protocol.md).
+4. Application activation and supervised restart are separate node-owned operations documented in [Release-Tag Production Deployment](../documentation/procedure/deployment/release-tag-deployment.md).
 
 ---
 

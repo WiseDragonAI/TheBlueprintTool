@@ -172,15 +172,19 @@ test('ledger cards render facts as bullet points between the title and Markdown 
     const card = renderDetail({
       id: 'card-facts',
       title: 'Fact card',
-      facts: ['First fact', 'Second fact'],
+      facts: ['First fact', '**Second** `fact`'],
       comment: { what: 'Card body.' },
     }) as unknown as FakeElement;
     const facts = findElementByClass(card, 'ledger-card-facts') as FakeElement;
     const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
     assert.equal(facts.tagName, 'ul');
     assert.equal((facts.children[0] as FakeElement).tagName, 'li');
-    assert.equal((facts.children[0] as FakeElement).textContent, 'First fact');
-    assert.equal((facts.children[1] as FakeElement).textContent, 'Second fact');
+    assert.equal(((facts.children[0] as FakeElement).children[0] as FakeText).textContent, 'First fact');
+    assert.equal((facts.children[1] as FakeElement).children[0] instanceof FakeElement, true);
+    assert.equal(((facts.children[1] as FakeElement).children[0] as FakeElement).tagName, 'strong');
+    assert.equal(((facts.children[1] as FakeElement).children[0] as FakeElement).textContent, 'Second');
+    assert.equal(((facts.children[1] as FakeElement).children[2] as FakeElement).tagName, 'code');
+    assert.equal(((facts.children[1] as FakeElement).children[2] as FakeElement).textContent, 'fact');
     assert.equal(card.children.indexOf(facts) < card.children.indexOf(body), true);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
@@ -210,6 +214,41 @@ test('ledger cards render numbered markdown as semantic ordered lists', () => {
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }
+});
+
+test('ledger card facts keep malformed Markdown and HTML-like input inert', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = renderDetail({
+      id: 'card-fact-safety',
+      title: 'Fact safety card',
+      facts: ['**unfinished', '<script>alert(1)</script>'],
+      comment: { what: 'Card body.' },
+    }) as unknown as FakeElement;
+    const facts = findElementByClass(card, 'ledger-card-facts') as FakeElement;
+    const malformed = facts.children[0] as FakeElement;
+    const htmlLike = facts.children[1] as FakeElement;
+    assert.equal(malformed.children[0] instanceof FakeText, true);
+    assert.equal((malformed.children[0] as FakeText).textContent, '**unfinished');
+    assert.equal(htmlLike.children[0] instanceof FakeText, true);
+    assert.equal((htmlLike.children[0] as FakeText).textContent, '<script>alert(1)</script>');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
+test('ledger card fact inline nodes use the same visible code and strong contract as card Markdown', () => {
+  const canvasCss = readFileSync(new URL('frontend/assets/canvas/objects.css', root), 'utf8');
+  const responsiveCss = readFileSync(new URL('frontend/assets/application.css', root), 'utf8');
+  assert.match(canvasCss, /\.ledger-card-facts code\s*\{[\s\S]*color:\s*var\(--card-code-color\);[\s\S]*font-family:\s*inherit;/);
+  assert.match(canvasCss, /\.ledger-card-facts strong\s*\{[\s\S]*color:\s*var\(--text\);[\s\S]*font-weight:\s*800;/);
+  assert.match(responsiveCss, /\.responsive-card-facts code\s*\{[\s\S]*color:\s*color-mix\(in srgb, var\(--zone-color\), white 52%\);[\s\S]*font-family:\s*inherit;/);
+  assert.match(responsiveCss, /\.responsive-card-facts strong\s*\{[\s\S]*color:\s*var\(--text\);[\s\S]*font-weight:\s*800;/);
 });
 
 test('thread command markdown preserves each backtick span as a code element', () => {
