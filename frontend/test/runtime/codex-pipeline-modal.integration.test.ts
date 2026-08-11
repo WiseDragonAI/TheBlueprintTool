@@ -18,6 +18,35 @@ class FakeStyle {
   removeProperty(name: string): void { this.values.delete(name); }
 }
 
+class FakeClassList {
+  constructor(private readonly element: FakeElement) {}
+
+  add(...tokens: string[]): void {
+    this.element.className = [...new Set([...this.tokens(), ...tokens])].join(' ');
+  }
+
+  remove(...tokens: string[]): void {
+    const removed = new Set(tokens);
+    this.element.className = this.tokens().filter((token) => !removed.has(token)).join(' ');
+  }
+
+  contains(token: string): boolean {
+    return this.tokens().includes(token);
+  }
+
+  toggle(token: string, force?: boolean): boolean {
+    const enabled = force ?? !this.contains(token);
+    // WHAT: Apply the class-list transition selected by the requested target state.
+    // WHY: The fake DOM must preserve the production classList toggle contract for modal controls.
+    enabled ? this.add(token) : this.remove(token);
+    return enabled;
+  }
+
+  private tokens(): string[] {
+    return this.element.className.split(/\s+/).filter(Boolean);
+  }
+}
+
 class FakeElement {
   readonly tagName: string;
   readonly children: FakeElement[] = [];
@@ -25,6 +54,7 @@ class FakeElement {
   readonly attributes = new Map<string, string>();
   readonly listeners = new Map<string, FakeListener[]>();
   readonly style = new FakeStyle();
+  readonly classList = new FakeClassList(this);
   parentElement: FakeElement | null = null;
   className = '';
   id = '';
@@ -215,7 +245,9 @@ function source(path: string): string {
 }
 
 function findByText(rootElement: FakeElement, text: string): FakeElement[] {
-  return [rootElement, ...descendants(rootElement)].filter((element) => element.textContent.trim() === text);
+  return [rootElement, ...descendants(rootElement)].filter((element) => (
+    element.children.length === 0 && element.textContent.trim() === text
+  ));
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -880,8 +912,8 @@ test('skill editor reconciles a conflicting draft and protected skills remain un
     renderSkillLibraryEditorModal();
     assert.match(fakeDocument.skillLibraryEditorModal.textContent, /System skills are managed by Codex\./);
     const saveButtons = findByText(fakeDocument.skillLibraryEditorModal, 'Save new revision');
-    assert.equal(saveButtons.length, 1);
-    assert.equal(saveButtons[0].disabled, true);
+    assert.equal(saveButtons.length, 2);
+    assert.equal(saveButtons.every((saveButton) => saveButton.disabled), true);
     assert.equal(await saveSkillLibraryDraft(), false);
     assert.equal(skillLibraryEditorState.detail?.readOnlyReason, 'System skills are managed by Codex.');
   } finally {
@@ -943,7 +975,7 @@ test('skill editor guards dirty close and uses one draft-to-history content surf
     assert.equal(skillLibraryEditorState.revisionDetail, null);
     assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-codemirror-host')?.hidden, false);
     assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-history-pane')?.hidden, true);
-    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Save new revision').length, 1);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Save new revision').length, 2);
     assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'New revision').length, 1);
     const newer = findByText(fakeDocument.skillLibraryEditorModal, 'Newer')[0];
     const older = findByText(fakeDocument.skillLibraryEditorModal, 'Older')[0];
@@ -972,7 +1004,7 @@ test('skill editor guards dirty close and uses one draft-to-history content surf
     assert.equal(skillLibraryEditorState.markdown, 'preserved draft');
     assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-codemirror-host')?.hidden, false);
     assert.equal(fakeDocument.skillLibraryEditorModal.querySelector('.skill-history-pane')?.hidden, true);
-    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Save new revision').length, 1);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Save new revision').length, 2);
     await selectSkillRevision(1);
     assert.equal(skillLibraryEditorState.revisionDetail?.commit, 'commit-old');
     assert.match(skillLibraryEditorState.revisionDetail?.patch ?? '', /^@@/);
