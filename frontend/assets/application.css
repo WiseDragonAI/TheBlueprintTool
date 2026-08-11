@@ -348,6 +348,7 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .card-body { display: grid; gap: 20px; padding: 22px 0; color: var(--text); }
 .responsive-card-facts { display: grid; gap: 8px; margin: 0; padding: 16px 20px 16px 38px; border: 1px solid color-mix(in srgb, var(--zone-color), rgba(255,255,255,.18) 12%); border-radius: var(--radius); background: var(--panel); }
 .responsive-card-facts li::marker { color: color-mix(in srgb, var(--zone-color), white 52%); }
+.responsive-card-facts strong { color: var(--text); font-weight: 800; }
 .task-state-status { width: max-content; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; }
 .task-state-status.is-replicated { color: var(--accent); }
 .task-state-status.is-synchronizing { color: var(--accent); }
@@ -384,7 +385,7 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .ledger-card-body > * { margin: 0; }
 .ledger-card-body h1, .ledger-card-body h2, .ledger-card-body h3, .ledger-card-body h4, .ledger-card-body h5, .ledger-card-body h6 { color: color-mix(in srgb, var(--zone-color), white 52%); font-size: 1rem; letter-spacing: 0; }
 .ledger-card-body a { color: var(--accent); }
-.ledger-card-body code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
+.ledger-card-body code, .responsive-card-facts code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
 .ledger-card-body ol { margin: 0; padding-left: 17px; }
 .ledger-card-body li + li { margin-top: 4px; }
 .ledger-card-body li::marker { color: color-mix(in srgb, var(--zone-color), white 52%); }
@@ -790,9 +791,11 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .skill-detail-controls { display: grid; align-content: start; gap: 16px; min-width: 0; min-height: 0; }
 .skill-detail-actions { display: grid; gap: 12px; min-width: 0; padding-top: 12px; border-top: 1px solid var(--line); }
 .skill-markdown-section, .skill-reference-map { display: grid; gap: 10px; min-width: 0; }
-.skill-markdown-section > h4, .skill-reference-map > h4 { margin: 0; color: var(--text); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
+.skill-document-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.skill-document-header > h4, .skill-reference-map > h4 { margin: 0; color: var(--text); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
 .skill-document-edit { width: fit-content; border: 0; padding: 0; color: var(--accent); background: transparent; box-shadow: none; font: inherit; font-size: 14px; font-weight: 700; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
 .skill-document-edit:hover, .skill-document-edit:focus-visible { text-decoration: underline; }
+.skill-document-copy { flex: 0 0 auto; min-height: 32px; padding: 5px 10px; font-size: 12px; }
 .skill-markdown-section > .ledger-card-body, .skill-reference-content { min-width: 0; }
 .skill-reference-cards { display: grid; gap: 10px; padding-left: 18px; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); }
 .skill-reference-card { position: relative; display: grid; gap: 8px; min-width: 0; border: 1px solid var(--line); border-radius: 2px; background: rgba(255,255,255,.025); }

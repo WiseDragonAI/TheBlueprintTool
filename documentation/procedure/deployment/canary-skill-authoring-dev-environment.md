@@ -229,26 +229,23 @@
    3. Fresh passed receipts for `authoring`, `editor`, `direct-path`, `prompt-execution`, and `federation`
 3. The writer does not import the run owner, lease owner, and journal owner. Candidate preparation therefore creates no delivery run and cannot authorize production mutation by itself.
 4. Invalid top-level shape, protocol, SHA, relay identity, node identity, duplicate node identity, node timestamp, missing proof, duplicate proof, non-passed proof, and proof timestamp fail as `delivery_candidate_evidence_invalid`. A document above the delivery size bound fails as `delivery_candidate_evidence_too_large`. Both failures precede replacement of the prior bundle.
-5. The explicit fixed `promote --release-sha` invocation is the operator's admission action.
+5. Candidate evidence remains development evidence. It does not authorize production merge, relay deployment, application restart, and production synchronization claims.
 
 ---
 
-## L. Promotion Gate
+## L. Production Handoff
 
 1. Require one clean pushed candidate where `HEAD == origin/dev`, current `origin/main` is an ancestor, all required checks pass, and candidate evidence matches that exact SHA.
-2. Require every active project-owning node to expose delivery protocol `1` and adopted supervisor evidence.
-3. The workstation bootstrap owner is `multiterm-workstation-v1`. Production promotion remains blocked until the operator provides the phone's exact node-owned supervisor record and its validated adapter exists.
-4. Production delivery uses only:
+2. Merge and publish through `decision-os-merge-dev`; use the resulting annotated `rel-X.Y.Z` tag as production release authority.
+3. Deploy the production relay only from canonical primary `main`:
 
    ```bash
-   node bin/decision-os-delivery.mjs promote \
-     --release-sha <40-character-origin-dev-sha> \
-     --server http://127.0.0.1:50150 \
-     --json
+   node bin/decision-os-deploy-relay.mjs rel-X.Y.Z --json
    ```
 
-5. Bootstrap, promote, status, resume, runtime rollback, journals, exit codes, and incident diagnosis are defined in [Production Delivery Protocol](./production-delivery-protocol.md).
-6. Do not manually merge `dev`, push `main`, deploy the production Worker, repoint a node release, stop a server, and restart a server outside that protocol.
+4. The development canary on `50151` is not production-state proof. Observe the real production catalog and require two online production nodes before claiming convergence or speed.
+5. Application restart is separate, uses the canonical repository launcher through the registered supervisor, and requires explicit restart authorization.
+6. Follow [Release-Tag Production Deployment](./release-tag-deployment.md). Do not repoint a node release, create a detached production checkout, and substitute canary evidence for production evidence.
 
 ---
 
@@ -272,5 +269,5 @@
 
 3. Preserve `.wrangler/state-dev` when it is referenced by evidence or an incident. Remove it only after recording the result.
 4. Remove the `dev` worktree only after both dev registrations are absent and candidate work is no longer required.
-5. Canary cleanup never stops production `50150`, changes production configuration, changes a production release pointer, deploys relay traffic, edits a delivery journal, deletes production state, and replaces production rollback.
-6. An admitted production delivery is reversed only with `decision-os-delivery rollback` under [Production Delivery Protocol](./production-delivery-protocol.md).
+5. Canary cleanup never stops production `50150`, changes production configuration, changes canonical production application source or supervision, deploys relay traffic, edits historical delivery evidence, deletes production state, and replaces production rollback.
+6. Production recovery follows [Full Production Rollback](./full-production-rollback.md) and creates a corrective release tag; dev cleanup never acts as rollback.

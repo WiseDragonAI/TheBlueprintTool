@@ -1,10 +1,10 @@
 ## A. Admission State
 
-1. **Current state:** Workstation is verified on epoch `4`. Mobile migration, relay epoch-4 deployment, and the complete cross-node proof remain open.
-2. Keep the Workstation server, Mobile server, and relay deployment unchanged until the operator explicitly authorizes the remaining production maintenance window.
+1. **Current state:** Workstation is verified on epoch `4`, and production relay tag `rel-0.4.0` is deployed. Mobile migration, canonical application activation, and the complete cross-node proof remain open.
+2. Keep the Workstation server and Mobile server unchanged until the operator explicitly authorizes the remaining production maintenance window.
 3. Runtime start and restart never launch migration. Migration begins only through the explicit offline CLI after operator authorization.
 4. Do not create a new transaction while one exists. Reuse the exact backup root only for deterministic recovery or independent verification.
-5. Do not start Mobile migration until the progress ledger records the exact reviewed commit installed on the stopped node.
+5. Do not start Mobile migration until the progress ledger records the exact reviewed release tag installed on the stopped node.
 6. Do not admit the Mobile maintenance window until Mobile reports its exact registered stop and start commands, repository state, catalog root, and external backup path.
 7. Retained epoch-3 backups and relay `state:v3:*` keys remain rollback authority until section `O` passes.
 
@@ -12,7 +12,7 @@
 
 ## B. Preconditions
 
-1. Record one reviewed epoch-4 commit for installation on Workstation and Mobile.
+1. Record one published annotated epoch-4 `rel-X.Y.Z` tag for installation on Workstation and Mobile.
 2. The relay deployment uses the matching epoch-4 protocol.
 3. Both Decision OS servers and all Decision OS-owned child processes are stopped.
 4. Automatic restart is disabled on both nodes.
@@ -54,11 +54,11 @@
 
 ---
 
-## D. Reviewed Commit Installation
+## D. Reviewed Release Installation
 
-1. Merge the reviewed feature branch into Workstation `main` with a merge commit containing `WHAT:` and `WHY:`, then push `main`.
-2. Install the pushed `origin/main` commit on Mobile.
-3. Require `git rev-parse HEAD` to return the same recorded commit on both nodes.
+1. Merge reviewed `dev` through `decision-os-merge-dev`, publish `main`, and publish the resulting annotated `rel-X.Y.Z` tag.
+2. Keep Workstation on canonical published `main`; install the source identified by the same release tag on Mobile through its node-owned update path.
+3. Require the release tag to resolve to the reviewed merge and require that release to be installed on both nodes.
 4. Do not modify either repository while its Decision OS server is running; the frontend is served directly from the checkout and would otherwise diverge from the loaded backend.
 
 ---
@@ -118,10 +118,16 @@
 
 ## G. Relay Deployment
 
-1. Deploy epoch-4 relay code against the existing stable `FederationRelay` Durable Object namespace.
+1. From canonical primary `main`, deploy the published annotated release tag:
+
+   ```bash
+   node bin/decision-os-deploy-relay.mjs rel-X.Y.Z --json
+   ```
+
 2. Preserve node credential hashes, manifests, labels, and every `state:v3:*` key unchanged. Epoch-4 state uses only `state:v4:*`.
-3. Require `/health` to report protocol `decision-os-task-state/4`, schema `4`, and baseline epoch `4`.
-4. Keep both nodes offline during relay admission.
+3. Require `/health` to report the tag's resolved compatibility fingerprint, production identity, protocol `decision-os-task-state/4`, schema `4`, and baseline epoch `4`.
+4. Record the predecessor deployment and activated Worker version from the command receipt.
+5. Relay deployment does not activate application code. Application restarts remain separately authorized node operations.
 
 ---
 
@@ -199,7 +205,7 @@
    ```
 
 4. Require state `rolled-back`.
-5. Restore the reviewed epoch-3 code commit.
+5. Restore the reviewed epoch-3 release through a forward corrective release tag.
 6. Start Workstation, then Mobile.
 7. Require epoch-3 roots and projections to match their pre-cutover evidence.
 8. Preserve failed epoch-4 state, transaction journals, and reports as incident evidence.
@@ -208,7 +214,7 @@
 
 ## N. Closeout Evidence
 
-1. Reviewed code commit installed on both nodes.
+1. Reviewed release tag installed on both nodes.
 2. Redacted credential-presence checks.
 3. Node migration reports and rollback backup paths.
 4. Relay deployment version and health response.
@@ -275,6 +281,12 @@
    2. Merge `724fa0ef` contains the cutover and was verified against the restarted Workstation Rudy task.
 5. **The complete production gate remains open.**
    1. Mobile read-only preflight and migration evidence are missing.
-   2. Epoch-4 relay deployment evidence is missing.
-   3. Workstation, Mobile, and relay root convergence evidence is missing.
-   4. Bidirectional assigned-node execution and artifact retrieval evidence is missing.
+   2. The workstation application still reported an unbootstrapped release identity after relay deployment.
+   3. Workstation, Mobile, and relay root convergence evidence is missing because Mobile was offline.
+   4. Production full-state transfer time and throughput are unmeasured.
+   5. Bidirectional assigned-node execution and artifact retrieval evidence is missing.
+6. **Epoch-4 relay deployment is complete.**
+   1. Release tag: `rel-0.4.0`.
+   2. Worker version: `ad1cf3ca-76e7-4e5d-9ec8-e877098f69f0`.
+   3. Healthy at `2026-08-08T10:26:45.021Z` with production identity, schema `4`, and baseline epoch `4`.
+   4. The following observation recorded no new incidents and zero relay queue, pending delivery, runtime-dirty, active-repair, and content-queue counts.

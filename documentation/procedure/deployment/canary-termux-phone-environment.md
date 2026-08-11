@@ -20,7 +20,7 @@
 3. The phone therefore runs `federation-relay/src/termux-local-relay.ts` with Node, `ws`, and the same protocol, state join, bucket, flow-control, authentication, catalog, and health contracts as the source relay.
 4. Phone relay state is durable and ignored under `federation-relay/.wrangler/state-termux/relay.json`.
 5. The ignored `federation-relay/.dev.vars.termux` owns only the phone-dev administrator secret and exact dev release SHA.
-6. This Node runtime is a local canary adapter. Production relay deployment remains exclusively owned by the Cloudflare delivery protocol.
+6. This Node runtime is a local development canary adapter. Production relay deployment is owned by the canonical tag command in [Release-Tag Production Deployment](./release-tag-deployment.md).
 
 ---
 
