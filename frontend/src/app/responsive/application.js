@@ -1565,18 +1565,56 @@ function renderGlobalLedgers() {
   state.activeLedgerId = '';
   state.activeZoneId = '';
   renderLedgerLinks();
-  const ledgers = state.projects.flatMap((project) => project.ledgers.map((ledger) => ({ project, ledger })));
-  elements['overview-summary'].textContent = `${ledgers.length} ${ledgers.length === 1 ? 'ledger' : 'ledgers'} across ${state.projects.length} projects`;
-  elements['overview-ledgers'].replaceChildren(...ledgers.map(({ project, ledger }) => {
-    const link = document.createElement('a');
-    link.className = 'overview-ledger';
-    link.href = ledgerPathForProject(project.id, ledger.id);
-    link.innerHTML = '<span><h2></h2><p></p></span><span class="row-arrow">›</span>';
-    link.querySelector('h2').textContent = ledger.title;
-    link.querySelector('p').textContent = `${project.name} · ${ledger.id}`;
-    link.addEventListener('click', (event) => { event.preventDefault(); navigate(link.getAttribute('href')); });
-    return link;
-  }));
+  const ledgerCount = state.projects.reduce((total, project) => total + project.ledgers.length, 0);
+  // WHAT: Select the singular summary label only for one ledger.
+  // WHY: The aggregate count must remain grammatically correct after grouping the rendered rows.
+  elements['overview-summary'].textContent = `${ledgerCount} ${ledgerCount === 1 ? 'ledger' : 'ledgers'} across ${state.projects.length} projects`;
+  const projectList = document.createElement('div');
+  projectList.className = 'overview-project-list';
+  state.projects.forEach((project) => {
+    const projectRow = document.createElement('details');
+    projectRow.className = 'overview-project';
+    projectRow.dataset.projectId = project.id;
+    const summary = document.createElement('summary');
+    summary.className = 'overview-project-summary';
+    const projectName = document.createElement('span');
+    projectName.className = 'overview-project-name';
+    projectName.textContent = project.name;
+    summary.append(projectName);
+    const projectLedgers = document.createElement('div');
+    projectLedgers.className = 'overview-project-ledgers';
+    // WHAT: Render an explicit empty-project message instead of omitting a catalog project.
+    // WHY: The global Ledgers catalog must represent registered projects that own no ledgers.
+    if (project.ledgers.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'overview-project-empty';
+      empty.textContent = 'No ledgers';
+      projectLedgers.append(empty);
+    }
+    project.ledgers.forEach((ledger) => {
+      const link = document.createElement('a');
+      link.className = 'overview-ledger';
+      link.href = ledgerPathForProject(project.id, ledger.id);
+      const copy = document.createElement('span');
+      const title = document.createElement('h2');
+      title.textContent = ledger.title;
+      const detail = document.createElement('p');
+      detail.textContent = `${project.name} · ${ledger.id}`;
+      copy.append(title, detail);
+      const arrow = document.createElement('span');
+      arrow.className = 'row-arrow';
+      arrow.textContent = '›';
+      link.append(copy, arrow);
+      link.addEventListener('click', (event) => {
+        event.preventDefault();
+        navigate(link.getAttribute('href'));
+      });
+      projectLedgers.append(link);
+    });
+    projectRow.append(summary, projectLedgers);
+    projectList.append(projectRow);
+  });
+  elements['overview-ledgers'].replaceChildren(projectList);
   document.querySelector('.create-ledger-button').hidden = true;
   setView('overview-view');
   document.title = 'Ledgers · Decision OS';
