@@ -4,6 +4,9 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { dispatchLedgerCliCommandController } from '../../src/business/command/controller/dispatch-ledger-cli-command.js';
 
 function response(value: unknown, status = 200): Response {
@@ -74,10 +77,88 @@ test('prompt query withholds output when any requested prompt fails', async () =
   }
 });
 
-test('prompt query requires its operation and at least one name', async () => {
+test('prompt create and update use project-scoped authored transactions', async () => {
+  const previousServer = process.env.DECISION_OS_SERVER_URL;
+  const previousProject = process.env.DECISION_OS_PROJECT_ID;
+  const previousFetch = globalThis.fetch;
+  const root = mkdtempSync(join(tmpdir(), 'ledger-cli-prompt-'));
+  const markdownFile = join(root, 'ResearchPrompt.md');
+  writeFileSync(markdownFile, '## A. objective\n');
+  process.env.DECISION_OS_SERVER_URL = 'http://127.0.0.1:50150';
+  process.env.DECISION_OS_PROJECT_ID = 'project-a';
+  const requests: Array<{ body: Record<string, unknown> | null; method: string; url: string }> = [];
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    const method = init?.method ?? 'GET';
+    const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : null;
+    requests.push({ body, method, url: String(url) });
+    // WHAT: return a committed creation receipt for the first mutation.
+    // WHY: the CLI must expose authored content and Git revisions from POST.
+    if (method === 'POST') {
+      return response({ skill: { revision: 'created-revision', gitRevision: { commit: 'created-commit' } } }, 201);
+    }
+    // WHAT: provide the current optimistic revision before replacement.
+    // WHY: update must load unseen server state instead of accepting a caller revision.
+    if (method === 'GET') return response({ skill: { revision: 'current-revision' } });
+    // WHAT: return a committed replacement receipt after revision validation.
+    // WHY: the CLI reports completion only after the PUT transaction commits.
+    if (method === 'PUT') {
+      return response({ skill: { revision: 'updated-revision', gitRevision: { commit: 'updated-commit' } } });
+    }
+    return response({ error: 'unexpected method' }, 500);
+  }) as typeof fetch;
+  const messages: string[] = [];
+
+  try {
+    const created = await dispatchLedgerCliCommandController([
+      'prompt', 'create', '--name', 'ResearchPrompt', '--description', 'Research one source', '--markdown-file', markdownFile,
+    ], { emit: (message) => messages.push(message) });
+    const updated = await dispatchLedgerCliCommandController([
+      'prompt', 'update', '--project', 'project-a', '--name', 'ResearchPrompt', '--markdown-file', markdownFile,
+    ], { emit: (message) => messages.push(message) });
+
+    assert.equal(created.ok, true);
+    assert.equal(updated.ok, true);
+    assert.deepEqual(requests, [
+      {
+        method: 'POST',
+        url: 'http://127.0.0.1:50150/p/project-a/api/codex/skill-library',
+        body: { name: 'ResearchPrompt', description: 'Research one source', markdown: '## A. objective\n', contentKind: 'pipeline-prompt' },
+      },
+      {
+        method: 'GET',
+        url: 'http://127.0.0.1:50150/p/project-a/api/codex/skill-library/ResearchPrompt',
+        body: null,
+      },
+      {
+        method: 'PUT',
+        url: 'http://127.0.0.1:50150/p/project-a/api/codex/skill-library/ResearchPrompt',
+        body: { markdown: '## A. objective\n', revision: 'current-revision', defaultCodexModel: null, defaultCodexEffort: null },
+      },
+    ]);
+    assert.deepEqual(messages.map((message) => JSON.parse(message)), [
+      { version: 1, operation: 'create', name: 'ResearchPrompt', revision: 'created-revision', commit: 'created-commit' },
+      { version: 1, operation: 'update', name: 'ResearchPrompt', revision: 'updated-revision', commit: 'updated-commit' },
+    ]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    rmSync(root, { recursive: true, force: true });
+    // WHAT: restore the caller-owned server address after the mutation test.
+    // WHY: later command tests must not inherit the mocked server.
+    if (previousServer === undefined) delete process.env.DECISION_OS_SERVER_URL;
+    else process.env.DECISION_OS_SERVER_URL = previousServer;
+    // WHAT: restore the caller-owned project identity after the mutation test.
+    // WHY: later command tests must not inherit project-scoped routing.
+    if (previousProject === undefined) delete process.env.DECISION_OS_PROJECT_ID;
+    else process.env.DECISION_OS_PROJECT_ID = previousProject;
+  }
+});
+
+test('prompt commands require a supported operation and required inputs', async () => {
   const operation = await dispatchLedgerCliCommandController(['prompt', 'save', '--name', 'SYSTEM_PROMPT']);
   const name = await dispatchLedgerCliCommandController(['prompt', 'query']);
+  const markdown = await dispatchLedgerCliCommandController(['prompt', 'update', '--name', 'SYSTEM_PROMPT']);
 
-  assert.deepEqual(operation, { ok: false, error: 'prompt requires the query operation.' });
+  assert.deepEqual(operation, { ok: false, error: 'prompt requires query, create, or update.' });
   assert.deepEqual(name, { ok: false, error: 'prompt query requires --name.' });
+  assert.deepEqual(markdown, { ok: false, error: 'prompt update requires --markdown-file.' });
 });

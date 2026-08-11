@@ -27,9 +27,11 @@ ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id <maste
 
 ```sh
 ledger-cli prompt query --name <prompt-name> [--name <prompt-name>]...
+ledger-cli prompt create --project <project-id> --name <prompt-name> --description <text> --markdown-file <file>
+ledger-cli prompt update --project <project-id> --name <prompt-name> --markdown-file <file>
 ```
 
-`prompt query` reads named server-owned pipeline prompts and prints each prompt verbatim in argument order. Each prompt starts with `---` and `# <Prompt Name>`.
+`prompt query` reads named server-owned pipeline prompts and prints each prompt verbatim in argument order. `prompt create` and `prompt update` commit complete Markdown documents through revision-safe authored transactions.
 
 ## Capture a webpage source
 
