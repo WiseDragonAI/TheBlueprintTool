@@ -4,7 +4,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { decodeRouteSegment } from '../../server/http/route-segment.js';
-import { taskExecutionStateTaskId } from '../../codex/helper/task-execution-state-task-id.js';
+import { resolveExecutionStateScope } from '../../codex/helper/execution-state-scope.js';
 import { projectTaskExecutionState } from '../../codex/helper/project-task-execution-state.js';
 import { buildTaskExecutionPresentation } from '../../codex/helper/task-execution-presentation.js';
 import { taskExecutionPresentationHttpResult } from '../../codex/helper/task-execution-presentation-http-result.js';
@@ -32,22 +32,29 @@ export async function handleRemoteExecutionRoutes(input: {
   url: URL;
 }): Promise<{ handled: boolean }> {
   if (input.request.method !== 'GET') return { handled: false };
-  const executionStateRead = input.scopedPath.match(/^\/api\/tasks\/([^/]+)\/execution-state$/);
-  if (executionStateRead) {
+  const canonicalStateRead = input.scopedPath.match(/^\/api\/ledgers\/([^/]+)\/cards\/([^/]+)\/execution-state$/);
+  const legacyTaskStateRead = input.scopedPath.match(/^\/api\/tasks\/([^/]+)\/execution-state$/);
+  // WHAT: Project execution state through the same card scope for local and remote replicas.
+  // WHY: A selected replica must not lose ordinary-card run history at the federation boundary.
+  if (canonicalStateRead || legacyTaskStateRead) {
     input.response.setHeader('cache-control', 'no-store');
     input.response.setHeader('content-type', 'application/json');
+    // WHAT: Keep synchronization failure local to this execution-state read.
+    // WHY: Remote diagnostics and unrelated project traffic must remain available.
     if (!input.state || !input.projection) {
       input.response.statusCode = 202;
       input.response.end(JSON.stringify({ ok: false, error: 'task_execution_state_synchronizing' }));
       return { handled: true };
     }
-    const requestedCardId = decodeRouteSegment(executionStateRead[1]);
-    const taskId = taskExecutionStateTaskId(
-      input.projection.ledger as AnyRecord,
+    const ledgerId = canonicalStateRead ? decodeRouteSegment(canonicalStateRead[1]) : 'tasks';
+    const requestedCardId = decodeRouteSegment(canonicalStateRead?.[2] ?? legacyTaskStateRead?.[1] ?? '');
+    const scope = resolveExecutionStateScope({
+      taskLedger: input.projection.ledger as AnyRecord,
+      ledgerId,
       requestedCardId,
-    );
+    });
     input.response.end(JSON.stringify(projectTaskExecutionState({
-      taskId,
+      scope,
       state: input.state,
       queuePosition: input.queuePosition,
     })));

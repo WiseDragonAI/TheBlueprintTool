@@ -52,6 +52,7 @@ test('admits idempotently into epoch-4 state and rebuilds every required local i
   assert.equal(admitted.artifacts.revision, 1);
   assert.equal(repository.findByRequest('master-a', 'request-a')?.metadata.executionId, 'execution-a');
   assert.deepEqual(repository.byTaskId('master-a').map((record) => record.metadata.executionId), ['execution-a']);
+  assert.deepEqual(repository.bySourceCardId('master-a').map((record) => record.metadata.executionId), ['execution-a']);
   assert.deepEqual(repository.bySessionId('session-a').map((record) => record.metadata.executionId), ['execution-a']);
   assert.deepEqual(repository.byPhase('preparing').map((record) => record.metadata.executionId), ['execution-a']);
   assert.deepEqual(repository.byExecutorNodeId('workstation').map((record) => record.metadata.executionId), ['execution-a']);
@@ -86,6 +87,7 @@ test('indexes pipeline identity and preserves legal awaited lifecycle plus termi
   });
 
   await repository.admit({ metadata: pipelineMetadata, executorNodeId: 'workstation' });
+  assert.deepEqual(repository.bySourceCardId('source-a').map((record) => record.metadata.executionId), ['execution-pipeline']);
   assert.deepEqual(repository.byPipelineRunId('pipeline-a').map((record) => record.metadata.executionId), ['execution-pipeline']);
   await repository.transition('execution-pipeline', { phase: 'queued' });
   await repository.transition('execution-pipeline', { phase: 'starting' });

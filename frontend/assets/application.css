@@ -385,7 +385,8 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .ledger-card-body > * { margin: 0; }
 .ledger-card-body h1, .ledger-card-body h2, .ledger-card-body h3, .ledger-card-body h4, .ledger-card-body h5, .ledger-card-body h6 { color: color-mix(in srgb, var(--zone-color), white 52%); font-size: 1rem; letter-spacing: 0; }
 .ledger-card-body a { color: var(--accent); }
-.ledger-card-body code, .responsive-card-facts code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
+.ledger-card-body code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
+.responsive-card-facts code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
 .ledger-card-body ol { margin: 0; padding-left: 17px; }
 .ledger-card-body li + li { margin-top: 4px; }
 .ledger-card-body li::marker { color: color-mix(in srgb, var(--zone-color), white 52%); }
