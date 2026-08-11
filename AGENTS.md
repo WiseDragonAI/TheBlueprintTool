@@ -8,8 +8,8 @@
 - Do not write French acknowledgements such as `Traité`; use English equivalents such as `Treated`.
 - Never write `you are right`.
 - Never add any kind of over-explanation unless explicitly ordered by the operator.
-- When the operator refers to a `prompt` or `prompts`, inspect `/home/jbb/.decision-os/pipeline-prompts` before answering.
-- Create pipeline prompts with `ledger-cli prompt create`; update an existing prompt by editing `/home/jbb/.decision-os/pipeline-prompts/<name>.md` directly, then run `ledger-cli prompt update --project <project-id> --name <name>` to validate and commit that working copy; do not use a temporary replacement file or handcrafted authored-content HTTP request for updates.
+- When the operator refers to a `prompt` or `prompts`, inspect `$HOME/.decision-os/pipeline-prompts` before answering.
+- Create pipeline prompts with `ledger-cli prompt create`; update an existing prompt by editing `$HOME/.decision-os/pipeline-prompts/<name>.md` directly, then run `ledger-cli prompt update --project <project-id> --name <name>` to validate and commit that working copy; do not use a temporary replacement file or handcrafted authored-content HTTP request for updates.
 - When research requires a webpage source capture, run `download-webpage <url>` and preserve the returned temporary `document` unchanged as the verbatim source artifact.
 
 ## KNOWLEDGE
@@ -299,9 +299,9 @@ actual behavior of a live route:
 
 ```bash
 curl -sS http://127.0.0.1:50150/api/diagnostics/frontend-telemetry-config | jq .
-tail -n 200 /home/jbb/.decision-os/frontend-telemetry.jsonl | jq -c .
+tail -n 200 "$HOME/.decision-os/frontend-telemetry.jsonl" | jq -c .
 rg 'task-execution-http-settled|codex-log-summary-settled' \
-  /home/jbb/.decision-os/frontend-telemetry.jsonl
+  "$HOME/.decision-os/frontend-telemetry.jsonl"
 ```
 
 Treat a missing follow-up telemetry event as the first unobserved transition,
