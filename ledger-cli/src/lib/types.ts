@@ -58,8 +58,12 @@ export type LedgerCliCommand = {
   mutationFile?: string;
   mutationOperation: LedgerMutationOperation;
   promptOperation?: {
-    action?: 'query';
+    action?: 'create' | 'query' | 'update';
+    description?: string;
+    markdownFile?: string;
+    name?: string;
     names: string[];
+    projectId?: string;
   };
   migrationOperation?: MigrationOperation;
   masterTaskMigrationOperation?: {

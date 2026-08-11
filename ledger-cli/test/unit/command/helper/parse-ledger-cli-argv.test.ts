@@ -182,6 +182,48 @@ test('parse-ledger-cli-argv parses repeated prompt query names', () => {
   assert.deepEqual(command.promptOperation?.names, ['CLI_TOOLS', 'SYSTEM_PROMPT']);
 });
 
+test('parse-ledger-cli-argv parses prompt mutation inputs', () => {
+  const create = parseLedgerCliArgv([
+    'prompt',
+    'create',
+    '--project',
+    'project-a',
+    '--name',
+    'ResearchPrompt',
+    '--description',
+    'Research one source',
+    '--markdown-file',
+    '/tmp/research.md',
+  ]);
+  const update = parseLedgerCliArgv([
+    'prompt',
+    'update',
+    '--project',
+    'project-a',
+    '--name',
+    'ResearchPrompt',
+    '--markdown-file',
+    '/tmp/research-v2.md',
+  ]);
+
+  assert.deepEqual(create.promptOperation, {
+    action: 'create',
+    description: 'Research one source',
+    markdownFile: '/tmp/research.md',
+    name: 'ResearchPrompt',
+    names: ['ResearchPrompt'],
+    projectId: 'project-a',
+  });
+  assert.deepEqual(update.promptOperation, {
+    action: 'update',
+    description: undefined,
+    markdownFile: '/tmp/research-v2.md',
+    name: 'ResearchPrompt',
+    names: ['ResearchPrompt'],
+    projectId: 'project-a',
+  });
+});
+
 test('parse-ledger-cli-argv parses ledger export command', () => {
   const command = parseLedgerCliArgv([
     'export',
