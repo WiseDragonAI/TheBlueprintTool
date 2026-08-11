@@ -2,7 +2,7 @@
 
 1. This runbook creates, updates, verifies, and recovers the default developer prompts required to operate Decision OS.
 2. The server-owned Decision OS root owns prompt identity and metadata in `codex-pipelines.json` and exact UTF-8 Markdown in `pipeline-prompts/<PROMPT_NAME>.md`. Project-owned `.decision-os` roots are not prompt owners.
-3. Use the existing authored-content API for every create and update. Never edit `.decision-os/codex-pipelines.json` directly.
+3. Create prompts through `ledger-cli prompt create`. Update an existing prompt by editing its registered server-owned Markdown directly, then run `ledger-cli prompt update` to validate and commit the working copy. Never edit `.decision-os/codex-pipelines.json` directly.
 4. Decision OS packages the required source files under `backend/defaults/pipeline-prompts/` and installs any missing defaults into the server-owned root during pipeline-catalog initialization.
 5. The required defaults are:
    1. `SYSTEM_PROMPT` — common Decision OS developer instructions.
@@ -105,37 +105,27 @@
 
 ## F. Update An Existing Default
 
-1. Select the server-owned authoring endpoint and packaged source files:
-
-   ```sh
-   api_root='http://127.0.0.1:50150/api/codex/server-skills'
-   prompt_root='backend/defaults/pipeline-prompts'
-   ```
-
-2. Read current content and its optimistic revision:
+1. Select the registered server-owned prompt Markdown:
 
    ```sh
    prompt_name='CODEX_RUN'
-   curl -fsS "${api_root}/${prompt_name}" >"/tmp/${prompt_name}.json"
-   jq -r '.skill.revision' "/tmp/${prompt_name}.json"
+   prompt_file="/home/jbb/.decision-os/pipeline-prompts/${prompt_name}.md"
+   test -f "$prompt_file"
    ```
 
-3. Submit the complete replacement Markdown with the loaded revision:
+2. Edit `prompt_file` directly with the available file-editing tool. Do not create a temporary replacement Markdown document.
+3. Validate and commit the exact edited working copy:
 
    ```sh
-   prompt_revision="$(jq -r '.skill.revision' "/tmp/${prompt_name}.json")"
-   jq -n \
-     --arg revision "$prompt_revision" \
-     --rawfile markdown "${prompt_root}/${prompt_name}.md" \
-     '{markdown:$markdown,revision:$revision,defaultCodexModel:null,defaultCodexEffort:null}' |
-     curl -fsS -X PUT \
-       -H 'content-type: application/json' \
-       --data-binary @- \
-       "${api_root}/${prompt_name}"
+   ledger-cli prompt update \
+     --project "$DECISION_OS_PROJECT_ID" \
+     --name "$prompt_name"
    ```
 
-4. The transaction validates identity, template syntax, contained ownership, exact loaded revision, staged-path protection, and committed Git evidence.
-5. Every authored commit has a concise subject plus non-empty `WHAT:` and `WHY:` paragraphs.
+4. The command loads the edited working-copy revision and submits it to the project-scoped commit route without transmitting replacement Markdown.
+5. The transaction validates registered identity, prompt Markdown, template syntax, exact loaded revision, staged-path protection, focused commit ownership, and committed Git evidence.
+6. A clean working copy returns `content_not_changed` and creates no commit.
+7. Every authored commit has a concise subject plus non-empty `WHAT:` and `WHY:` paragraphs.
 
 ---
 

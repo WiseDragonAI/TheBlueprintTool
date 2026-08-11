@@ -1132,6 +1132,130 @@ export async function saveCodexSkillLibrary(input: {
   return { ok: true, statusCode: 200, skill: withSavedMetadata(detail, savedRecord!), publication: { status: 'not-applicable' } };
 }
 
+export async function commitPipelinePromptWorkingCopy(input: {
+  decisionOsRoot: string;
+  runtime?: AnyRecord;
+  skillName: string;
+  revision: string;
+}): Promise<SaveSkillResult> {
+  const skill = librarySkills(input, true).find((candidate) => candidate.name === input.skillName);
+  // WHAT: reject an identity that is absent from the current authored-content catalog.
+  // WHY: direct working-copy commits must remain bound to a registered owner.
+  if (!skill) return { ok: false, statusCode: 404, code: 'content_not_found', error: 'Pipeline prompt not found.', skillName: input.skillName };
+  // WHAT: admit only server-owned pipeline prompts to direct working-copy commit.
+  // WHY: skills retain their frontmatter-aware authored save transaction.
+  if (skill.source !== 'pipeline-prompt') {
+    return { ok: false, statusCode: 422, code: 'invalid_content_kind', error: 'Direct working-copy commit requires a pipeline prompt.', skillName: input.skillName };
+  }
+  // WHAT: preserve the catalog read-only decision before inspecting working bytes.
+  // WHY: protected content must not become writable through the commit-only route.
+  if (!skill.editable) {
+    const readOnlyReason = skill.readOnlyReason || 'This content is read-only.';
+    return {
+      ok: false,
+      statusCode: 403,
+      code: 'content_read_only',
+      error: readOnlyReason,
+      readOnlyReason,
+      sourceClass: skillSourceClass(skill),
+      skillName: input.skillName,
+    };
+  }
+  const markdown = readFileSync(skill.skillFile, 'utf8');
+  const currentRevision = skillRevision(markdown);
+  // WHAT: require the CLI-loaded working-copy revision to match the bytes being committed.
+  // WHY: a concurrent direct edit must invalidate the pending commit request.
+  if (!input.revision || input.revision !== currentRevision) {
+    return {
+      ok: false,
+      statusCode: 409,
+      code: 'content_revision_conflict',
+      error: 'The pipeline prompt changed after the working copy was loaded.',
+      skillName: input.skillName,
+      currentRevision,
+    };
+  }
+  const validation = validatePipelinePromptMarkdown(markdown);
+  // WHAT: reject invalid directly edited Markdown without changing its bytes.
+  // WHY: invalid durable state must remain available for explicit correction.
+  if (!validation.ok) {
+    const error = 'error' in validation ? validation.error : 'Invalid pipeline prompt Markdown.';
+    const oversized = /1,000,000 byte limit/.test(error);
+    return {
+      ok: false,
+      statusCode: oversized ? 413 : 422,
+      code: oversized ? 'content_too_large' : 'invalid_content_markdown',
+      field: 'markdown',
+      error,
+      skillName: input.skillName,
+    };
+  }
+  const templates = validatePipelinePromptTemplates({
+    decisionOsRoot: pipelinePromptDecisionOsRoot(input),
+    name: skill.name,
+    markdown,
+  });
+  // WHAT: reject unresolved prompt references before creating Git evidence.
+  // WHY: committed prompt bytes must remain admissible by the prompt compiler.
+  if (!templates.ok) {
+    return {
+      ok: false,
+      statusCode: 422,
+      code: 'pipeline_prompt_template_invalid',
+      field: 'markdown',
+      error: 'error' in templates ? templates.error : 'Invalid pipeline prompt template.',
+      skillName: input.skillName,
+    };
+  }
+
+  let committedMarkdown = '';
+  try {
+    const history = await readSkillGitHistory(skill.skillFile, 1);
+    const latest = history[0];
+    // WHAT: reject a registered prompt with no committed owner revision.
+    // WHY: commit-only updates require one tracked baseline for change detection.
+    if (!latest) {
+      return { ok: false, statusCode: 503, code: 'content_history_unavailable', error: 'The pipeline prompt has no committed baseline.', skillName: input.skillName };
+    }
+    committedMarkdown = (await readSkillGitRevision(skill.skillFile, latest.commit)).markdown;
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: 503,
+      code: 'content_history_unavailable',
+      error: error instanceof Error ? error.message : 'The pipeline prompt history is unavailable.',
+      skillName: input.skillName,
+    };
+  }
+  // WHAT: reject a clean working copy without creating an empty authored commit.
+  // WHY: prompt update must prove a direct Markdown edit exists.
+  if (markdown === committedMarkdown) {
+    return {
+      ok: false,
+      statusCode: 422,
+      code: 'content_not_changed',
+      error: 'The registered pipeline prompt working copy is unchanged.',
+      skillName: input.skillName,
+      currentRevision,
+    };
+  }
+
+  try {
+    await commitSkillFileRevision({
+      file: skill.skillFile,
+      contentRevision: currentRevision,
+      subject: `Revise pipeline-prompt ${skill.name}`,
+    });
+  } catch (error) {
+    return stableGitFailure({ error, skillName: input.skillName, contentRevision: currentRevision });
+  }
+  const detail = await readCodexSkillLibraryDetail(input);
+  // WHAT: return committed content only after the catalog reloads the new Git evidence.
+  // WHY: the CLI receipt requires both content revision and commit identity.
+  if (!detail) return { ok: false, statusCode: 500, code: 'content_reload_failed', error: 'The committed pipeline prompt could not be reloaded.', skillName: input.skillName };
+  return { ok: true, statusCode: 200, skill: detail, publication: { status: 'not-applicable' } };
+}
+
 export async function retryCodexSkillRevision(input: {
   decisionOsRoot: string;
   runtime?: AnyRecord;

@@ -649,6 +649,34 @@ test('server startup initializes a child repository and pipeline-prompt save nev
     // WHY: Automatic non-forced library synchronization may legitimately use the same connector.
     assert.deepEqual(federationRequestPaths.filter((path) => path.includes('refresh=1')), []);
 
+    const directlyEditedMarkdown = '# Directly edited local controller\n';
+    writeFileSync(promptFile, directlyEditedMarkdown);
+    const editedDetailResponse = await settleWithin(fetch(`${baseUrl}/api/codex/server-skills/local-controller`), 'directly edited prompt detail');
+    assert.equal(editedDetailResponse.status, 200);
+    const editedDetail = await editedDetailResponse.json() as Record<string, any>;
+    const directCommitResponse = await settleWithin(fetch(`${baseUrl}/api/codex/server-skills/local-controller/revisions/commit`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ revision: editedDetail.skill.revision }),
+    }), 'direct prompt commit response');
+    assert.equal(directCommitResponse.status, 200);
+    const directCommit = await directCommitResponse.json() as Record<string, any>;
+    assert.equal(directCommit.ok, true);
+    assert.equal(directCommit.skill.markdown, directlyEditedMarkdown);
+    assert.equal(directCommit.skill.gitRevision.commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' }).trim());
+    assert.deepEqual(
+      execFileSync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], { cwd: decisionOsRoot, encoding: 'utf8' }).trim().split('\n'),
+      ['pipeline-prompts/local-controller.md'],
+    );
+    const cleanCommitResponse = await settleWithin(fetch(`${baseUrl}/api/codex/server-skills/local-controller/revisions/commit`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ revision: directCommit.skill.revision }),
+    }), 'clean prompt commit response');
+    assert.equal(cleanCommitResponse.status, 422);
+    const cleanCommit = await cleanCommitResponse.json() as Record<string, any>;
+    assert.equal(cleanCommit.code, 'content_not_changed');
+
     const history = await readCodexSkillRevisionHistory({
       decisionOsRoot,
       runtime: { serverRoot: workspace },
@@ -656,7 +684,7 @@ test('server startup initializes a child repository and pipeline-prompt save nev
     });
     assert.equal(history.ok, true);
     if (history.ok) {
-      assert.equal(history.history.length, 3);
+      assert.equal(history.history.length, 4);
       assert.equal(history.nextCursor, null);
     }
   } finally {

@@ -73,8 +73,8 @@ export async function dispatchLedgerCliCommandController(
       if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
       return result;
     }
-    // WHAT: route prompt creation and replacement through the authored-content API helper.
-    // WHY: CLI mutation must retain revision checks and focused Git evidence.
+    // WHAT: route prompt creation and direct working-copy commit through the authored-content helper.
+    // WHY: both mutations must retain revision checks and focused Git evidence.
     if (command.promptOperation?.action === 'create' || command.promptOperation?.action === 'update') {
       const result = await mutatePipelinePrompt(command.promptOperation);
       // WHAT: emit only a committed successful mutation receipt.

@@ -9,7 +9,7 @@
 - Never write `you are right`.
 - Never add any kind of over-explanation unless explicitly ordered by the operator.
 - When the operator refers to a `prompt` or `prompts`, inspect `/home/jbb/.decision-os/pipeline-prompts` before answering.
-- Create pipeline prompts with `ledger-cli prompt create` and update them with `ledger-cli prompt update`; do not handcraft authored-content HTTP requests.
+- Create pipeline prompts with `ledger-cli prompt create`; update an existing prompt by editing `/home/jbb/.decision-os/pipeline-prompts/<name>.md` directly, then run `ledger-cli prompt update --project <project-id> --name <name>` to validate and commit that working copy; do not use a temporary replacement file or handcrafted authored-content HTTP request for updates.
 - When research requires a webpage source capture, run `download-webpage <url>` and preserve the returned temporary `document` unchanged as the verbatim source artifact.
 
 ## KNOWLEDGE
@@ -128,12 +128,6 @@
 - Use existing non-interactive credentials for authenticated operations.
 - When operator authentication is unavoidable, run the provider's no-browser flow, give the operator the URL, and wait for the operator to complete the browser interaction.
 
-## Production Rollback Procedure
-
-- **Mandatory trigger:** For any operator request involving rollback, restoration to a release tag, production ref rewind, production state restoration, or production server rollback, read and follow [`documentation/procedure/deployment/full-production-rollback.md`](documentation/procedure/deployment/full-production-rollback.md) before any mutation.
-- A rollback is not complete when only Git refs and the workstation process changed. The procedure must reach one verified release-tag boundary across the parent repository, `.decision-os` child repository, preserved post-target work, canonical primary `main` checkout, MultiTerm supervisor, Cloudflare relay, durable runtime incidents and pause registries, federation connectivity, and post-restart health.
-- Do not restart a rolled-back production node while Cloudflare still serves a relay from the rejected release line. Align and verify the relay first, then start the node.
-
 ## decision-os Server Procedure
 
 ## Decision OS Submodule Boundary
@@ -176,7 +170,7 @@ Use the fixed merge tool for a local `dev` to `main` promotion:
 
 ```bash
 cd /home/jbb/dev/EditorBP/decision-os
-node bin/decision-os-merge-dev.mjs <maj|min|fix> --json
+node bin/decision-os-merge-dev.mjs --json
 ```
 
 When the operator has already authorized the merge, run the normal promotion
@@ -220,50 +214,6 @@ Every invocation writes one local JSONL receipt under
 `.decision-os-merge-dev-logs/`. This directory is Git-ignored and must remain
 untracked. Doctor is observational and creates no receipt. Review and clean logs according to
 [`documentation/procedure/deployment/merge-dev-into-main.md`](documentation/procedure/deployment/merge-dev-into-main.md); the tool never deletes logs automatically.
-
-### Production Relay Deployment Tool
-
-Deploy the production relay from the canonical primary `main` checkout with the
-annotated release tag created and published by `decision-os-merge-dev`:
-
-```bash
-cd /home/jbb/dev/EditorBP/decision-os
-node bin/decision-os-deploy-relay.mjs rel-X.Y.Z --json
-```
-
-The release authority is the provided `rel-X.Y.Z` tag. The tool resolves that
-tag to the existing 40-character runtime compatibility fingerprint, verifies
-the tag and current `main` are published, and verifies that the relay source,
-Wrangler and package manifests, plus `shared/` match the tagged tree before
-mutation.
-
-The tool deploys directly from the canonical primary `main` checkout. Do not
-create a detached release worktree, change the production node pointer, use
-port `50151`, or invoke Wrangler directly for this relay-only deployment.
-
-The tool records the active Cloudflare predecessor before upload, activates
-the tagged version at 100 percent, verifies production relay health, and
-restores the predecessor automatically when post-activation health verification
-fails.
-
-The complete canonical procedure and proof boundary are defined in
-[`documentation/procedure/deployment/release-tag-deployment.md`](documentation/procedure/deployment/release-tag-deployment.md).
-
-### Production Application Release Activation
-
-- The production application release authority is the published annotated
-  `rel-X.Y.Z` tag. Its workstation process runs from canonical primary `main`.
-- Do not create a detached production release worktree, use a release symlink,
-  change a release pointer, or register a launcher below
-  `~/.decision-os-production/releases/`.
-- Relay deployment does not deploy or restart the application. A production
-  restart remains a separate explicitly authorized operation through the
-  registered MultiTerm process on port `50150`.
-- Before restart, verify the registered command resolves to
-  `/home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs`.
-- Production synchronization and speed proof must use the real production
-  catalog plus two online production nodes. Port `50151` evidence cannot close
-  that proof.
 
 ### Server Restart Ownership
 
