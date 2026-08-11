@@ -37,6 +37,7 @@ Durable knowledge is organized by document role, then domain, then topic. New wo
 18. [Prompt expression and system-prompt catalog](./documentation/architecture/prompt-expression-catalog.md)
 19. [Epoch-4 federation repair and recovery](./documentation/architecture/epoch-4-federation-repair-and-recovery.md)
 20. [Epoch-4 replication incident postmortem](./postmortem/epoch-4-replication-incident-2026-08-09.md)
+21. [Manage canonical dev and feature worktrees](./procedure/implementation/manage-worktrees.md)
 
 ---
 
