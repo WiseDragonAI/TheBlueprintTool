@@ -11,6 +11,13 @@
 
 ## KNOWLEDGE
 
+### Working Document Lifecycle
+
+- New files under `documentation/working-documents/` may contain only analysis that is active in the current iteration. Files that predate this lifecycle rule are a finite migration backlog, not evidence of active work.
+- Before an iteration is finished, extract verified final-state technical knowledge into its canonical KB owner: current behavior in `documentation/documentation/`, accepted requirements in `documentation/specs/`, repeatable operations in `documentation/procedure/`, and completed incident analysis in `documentation/postmortem/`.
+- Do not promote intermediate TODO lists, implementation checklists, hypotheses, progress reports, or superseded plans into the KB.
+- After extraction, delete the completed iteration's working documents. A finished new iteration must leave no source document in `documentation/working-documents/`; a dedicated backlog-recycling iteration must delete every legacy source it settles.
+
 ### Error Handling and Failsafe Boundaries
 
 - **Contain recoverable failures.** A failed request, task, project runtime, watcher, federation stream, or child process must fail only its owning scope. Keep unrelated HTTP routes, projects, federation traffic, health routes, and diagnostic routes available.
