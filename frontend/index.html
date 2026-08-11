@@ -8,6 +8,7 @@
     <title>Project | Ledger</title>
     <style>html,body{min-height:100%;margin:0;background:#090a0c;color-scheme:dark}</style>
     <link rel="stylesheet" href="/assets/vendor/highlight-atom-one-dark.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
   </head>
   <body>
     <template id="canvas-surface-shell">
@@ -675,7 +676,7 @@
         </dialog>
 
         <dialog class="codex-modal process-modal" aria-labelledby="process-title">
-          <section class="codex-sheet">
+          <section class="codex-sheet mx-auto h-full w-full max-w-screen-2xl">
             <header><button class="codex-back process-close" type="button" aria-label="Close card processing">×</button><div><p class="eyebrow">Card processing</p><h2 id="process-title">Process card</h2></div><div class="codex-header-actions"><button class="codex-secondary process-resynchronize" type="button" hidden>Resynchronize</button><button class="primary-button skill-new" type="button" hidden>New skill</button></div></header>
             <div class="codex-tabs" role="tablist" aria-label="Processing library"><button type="button" data-process-tab="skills" aria-selected="true">Skills</button><button type="button" data-process-tab="pipelines" aria-selected="false">Pipelines</button></div>
             <div class="codex-library-controls">
@@ -691,7 +692,7 @@
         </dialog>
 
         <dialog class="codex-modal pipelines-modal" aria-labelledby="pipelines-title">
-          <section class="codex-sheet">
+          <section class="codex-sheet mx-auto h-full w-full max-w-screen-2xl">
             <header><button class="codex-back pipelines-close" type="button" aria-label="Close pipelines">×</button><div><p class="eyebrow">Library</p><h2 id="pipelines-title">Pipelines</h2></div><div class="codex-header-actions"><button class="codex-secondary pipelines-resynchronize" type="button">Resynchronize</button><button class="primary-button pipeline-new" type="button">New</button></div></header>
             <div class="codex-library-controls">
               <label class="codex-library-search"><span aria-hidden="true">⌕</span><input class="pipelines-search" type="search" placeholder="Search pipelines" aria-label="Search pipelines"></label>
@@ -705,7 +706,7 @@
         </dialog>
 
         <dialog class="codex-modal pipeline-editor-modal" aria-labelledby="pipeline-editor-title">
-          <form class="codex-sheet pipeline-editor-form">
+          <form class="codex-sheet pipeline-editor-form mx-auto h-full w-full max-w-screen-2xl">
             <header><button class="codex-back pipeline-editor-back" type="button" aria-label="Back to pipelines">←</button><div><p class="eyebrow">Pipeline</p><h2 id="pipeline-editor-title">Edit pipeline</h2></div><button class="primary-button pipeline-save" type="submit">Save</button></header>
             <p class="codex-message pipeline-editor-message" role="alert"></p>
             <label class="codex-field"><span>Name</span><input name="pipeline-name" required maxlength="120"></label>
@@ -716,7 +717,7 @@
         </dialog>
 
         <dialog class="codex-modal skill-picker-modal" aria-labelledby="skill-picker-title">
-          <section class="codex-sheet">
+          <section class="codex-sheet mx-auto h-full w-full max-w-screen-2xl">
             <header><button class="codex-back skill-picker-back" type="button" aria-label="Back to pipeline editor">←</button><div><p class="eyebrow">Step skill</p><h2 id="skill-picker-title">Add skill</h2></div></header>
             <div class="skill-picker-controls codex-library-controls"></div>
             <p class="codex-message skill-picker-message" role="alert"></p>

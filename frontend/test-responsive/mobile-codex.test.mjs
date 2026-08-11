@@ -2,16 +2,18 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { setMobileCodexView } from '../src/app/responsive/codex-view.js';
+import { closeCodexRouteScreens, setMobileCodexView } from '../src/app/responsive/codex-view.js';
 
 const root = new URL('../', import.meta.url);
-const [html, script, styles, mobile, sharedRow, sharedLibrary] = await Promise.all([
+const [html, script, styles, mobile, sharedRow, sharedLibrary, sharedWorkspace, skillEditor] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('src/app/responsive/codex.js', root), 'utf8'),
   readFile(new URL('assets/application.css', root), 'utf8'),
   readFile(new URL('src/app/responsive/application.js', root), 'utf8'),
   readFile(new URL('../frontend/src/runtime/codex/component/render-skill-library-item-content.ts', root), 'utf8'),
   readFile(new URL('../frontend/src/runtime/codex/component/render-codex-library.ts', root), 'utf8'),
+  readFile(new URL('../frontend/src/runtime/codex/component/create-skill-workspace.ts', root), 'utf8'),
+  readFile(new URL('../frontend/src/runtime/codex/effect/render-skill-library-editor-modal.ts', root), 'utf8'),
 ]);
 
 test('mobile card detail exposes processing and both process libraries', () => {
@@ -39,6 +41,30 @@ test('dynamic navigation library actions use delegated event handling', () => {
   assert.match(script, /document\.addEventListener\('click', \(event\) => \{/);
   assert.match(script, /event\.target\.closest\('\.nav-pipelines-button, \.nav-skills-button'\)/);
   assert.doesNotMatch(script, /el\('\.nav-(?:pipelines|skills)-button'\)\.addEventListener/);
+});
+
+test('accepted route navigation closes every full-screen Codex surface before rendering the destination', () => {
+  const removedClasses = [];
+  const screens = ['pipelines', 'pipeline-editor'].map((name) => ({
+    closeCalls: 0,
+    close() { this.closeCalls += 1; },
+    classList: { remove(value) { removedClasses.push([name, value]); } },
+  }));
+  closeCodexRouteScreens({
+    querySelectorAll(selector) {
+      assert.equal(selector, '.codex-app-screen');
+      return screens;
+    },
+  });
+  assert.deepEqual(screens.map((screen) => screen.closeCalls), [1, 1]);
+  assert.deepEqual(removedClasses, [['pipelines', 'codex-app-screen'], ['pipeline-editor', 'codex-app-screen']]);
+  assert.match(mobile, /history\[replace[\s\S]*closeCodexRouteScreens\(\)[\s\S]*commitRouteView\(\)/);
+  assert.match(mobile, /popstate'[\s\S]*closeCardDetail\(\{ fromHistory: true \}\)[\s\S]*closeCodexRouteScreens\(\)[\s\S]*commitRouteView\(\)/);
+});
+
+test('desktop skill library uses equal vertical breathing room around the skill list', () => {
+  assert.match(styles, /@media \(min-width: 768px\) \{[\s\S]*?\.codex-app-screen\.skill-library-route \.process-library \{[^}]*padding: 18px 24px;/);
+  assert.match(styles, /\.codex-app-screen\.skill-library-route \.process-library > \.codex-list-card:first-child \{ border-top-width: 1px; \}/);
 });
 
 test('mobile processing guards duplicate submissions and delegates status to the card route', () => {
@@ -74,6 +100,20 @@ test('mobile pipeline editor supports ordered steps, ordered skills, inheritance
   assert.match(script, /The selected pipeline content has no supported content kind\./);
   assert.match(script, /method: editor\.existingId \? 'PUT' : 'POST'/);
   assert.match(script, /setBusy\(save, true\)/);
+});
+
+test('global Codex routes use non-modal full-screen workspaces while Process Card remains modal', () => {
+  assert.match(script, /function showCodexScreen\(selector\)/);
+  assert.match(script, /screen\.classList\.add\('codex-app-screen'\)/);
+  assert.match(script, /if \(!screen\.open\) screen\.show\(\)/);
+  assert.match(script, /el\('\.process-modal'\)\.showModal\(\)/);
+  assert.match(script, /showCodexScreen\('\.process-modal'\)/);
+  assert.match(script, /showCodexScreen\('\.pipelines-modal'\)/);
+  assert.match(script, /showCodexScreen\('\.pipeline-editor-modal'\)/);
+  assert.match(script, /showCodexScreen\('\.skill-picker-modal'\)/);
+  assert.match(styles, /\.codex-app-screen \{[^}]*position: fixed;[^}]*width: 100vw !important;[^}]*height: calc\(100dvh - 64px\) !important;/);
+  assert.match(styles, /@media \(min-width: 768px\) \{[^]*\.codex-app-screen \{ left: 250px; width: calc\(100vw - 250px\) !important; \}/);
+  assert.match(html, /tailwindcss@2\.2\.19\/dist\/tailwind\.min\.css/);
 });
 
 test('mobile controls share voice-derived geometry, depth, motion, and accessible states', () => {
@@ -192,13 +232,17 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /codexSkillAuthoringProjectId\(record, state\.projectId\)/);
   assert.match(script, /requestProjectId,[\s\S]*refreshProjectSkillAuthoring/);
   assert.match(script, /const edit = button\(record\.contentKind === 'pipeline-prompt' \? 'Edit prompt' : 'Edit skill'/);
-  assert.match(script, /actions\.append\(tagsField, favorite, edit, status\)/);
+  assert.match(script, /createSkillWorkspace\(\{ mode: 'view'/);
+  assert.match(skillEditor, /createSkillWorkspace\(\{/);
+  assert.match(sharedWorkspace, /root\.append\(menu, backdrop, content, rail\)/);
+  assert.match(script, /controlsBody\.append\(purpose, favorite, tagsField\)/);
+  assert.match(script, /actions\.append\(edit, status\)/);
   assert.doesNotMatch(script, /card\.append\(node, renderSkillLibraryEditAction/);
   assert.match(script, /openSkillLibraryEditor\(\{/);
   assert.match(script, /openSkillLibraryCreator\(\{/);
   assert.doesNotMatch(script, /Select a project context before creating authored content\./);
-  assert.match(script, /function createGlobalSkill\(\) \{[^]*requestProjectId: ''/);
-  assert.match(script, /function editGlobalSkill\(record\) \{[^]*requestProjectId: ''/);
+  assert.match(script, /function createGlobalSkill\(\) \{ navigateSkillRoute\('\/skills\/new'\); \}/);
+  assert.match(script, /navigateSkillRoute\(`\/skills\/\$\{encodeURIComponent\(record\.name\)\}\/edit`\)/);
   assert.match(html, /class="primary-button skill-new"[^>]*>New skill<\/button>/);
   assert.match(script, /serverSkillPath\(record\.name\)/);
   assert.doesNotMatch(script, /Promise\.all\(recordProjects\(record\)\.map\(\(project\) => jsonRequest\(`\/api\/codex\/skill-library/);
@@ -244,7 +288,7 @@ test('pipeline Add skill uses the shared rich catalog and explicit confirmation'
   assert.doesNotMatch(script, /skills\.map\(\(skill\) => button\(skill\.name/);
 });
 
-test('skill detail is an exclusive modal view and the single close control restores every library control', () => {
+test('skill detail is an exclusive workspace view and the single close control restores every library control', () => {
   const selectors = new Map([
     ['.codex-tabs', { hidden: false }],
     ['.codex-library-controls', { hidden: false }],

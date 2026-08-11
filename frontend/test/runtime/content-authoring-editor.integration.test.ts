@@ -761,6 +761,8 @@ test('authoring dependencies, local assets, modal geometry, and responsive entry
   assert.match(responsive, /openSkillLibraryCreator\(\{/);
   assert.match(responsive, /openSkillLibraryEditor\(\{/);
   assert.match(responsive, /renderEditableSkillDocument\(\{/);
-  assert.match(readFileSync(new URL('frontend/src/runtime/codex/effect/render-skill-library-editor-modal.ts', root), 'utf8'), /decorateSkillCategoryLabel\(choice, tag\)/);
-  assert.match(readFileSync(new URL('frontend/src/runtime/codex/effect/render-skill-library-editor-modal.ts', root), 'utf8'), /statePanel\.append\(metadata, controls\);\s*body\.append\(statePanel, contentPane\)/);
+  const skillEditorSource = readFileSync(new URL('frontend/src/runtime/codex/effect/render-skill-library-editor-modal.ts', root), 'utf8');
+  assert.match(skillEditorSource, /decorateSkillCategoryLabel\(choice, tag\)/);
+  assert.match(skillEditorSource, /createSkillWorkspace\(\{[^]*railTitle: 'Skill controls'/);
+  assert.match(skillEditorSource, /statePanelBody\.append\(metadata, timelineNavigation, controls, mobileTools\)/);
 });

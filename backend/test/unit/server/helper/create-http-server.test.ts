@@ -94,7 +94,7 @@ test('create-http-server serves shared TypeScript modules through their browser 
   }
 });
 
-test('create-http-server serves the System status application route', async () => {
+test('create-http-server serves System status and stateful skill application routes', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-system-status-route-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
   const frontendRoot = join(projectRoot, 'frontend');
@@ -115,6 +115,10 @@ test('create-http-server serves the System status application route', async () =
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
     assert.match(await response.text(), /System status/);
+    const skillEditor = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/skills/accessibility-excellence/edit`);
+    assert.equal(skillEditor.status, 200);
+    assert.equal(skillEditor.headers.get('content-type'), 'text/html; charset=utf-8');
+    assert.match(await skillEditor.text(), /System status/);
   } finally {
     server.close();
     await once(server, 'close');

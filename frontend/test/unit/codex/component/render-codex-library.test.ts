@@ -35,6 +35,10 @@ class FakeStyle {
 class FakeClassList {
   constructor(private readonly element: FakeElement) {}
 
+  add(...classNames: string[]): void {
+    this.element.className = [...new Set([...this.element.className.split(/\s+/).filter(Boolean), ...classNames])].join(' ');
+  }
+
   contains(className: string): boolean {
     return this.element.className.split(/\s+/).includes(className);
   }
@@ -73,7 +77,11 @@ class FakeElement {
 
   append(...children: FakeElement[]): void {
     for (const child of children) {
-      child.remove();
+      const previousParent = child.parentElement;
+      const previousIndex = previousParent?.children.indexOf(child) ?? -1;
+      // WHAT: Detach an already-mounted child without clearing its active focus state.
+      // WHY: Native DOM append moves a focused element and preserves focus across rerenders.
+      if (previousParent && previousIndex >= 0) previousParent.children.splice(previousIndex, 1);
       child.parentElement = this;
       this.children.push(child);
     }

@@ -35,6 +35,8 @@ export type CodexLibraryRenderInput<T extends CodexLibraryRecord> = {
   resultCountLabel: string;
   synchronizing?: boolean;
   onSynchronize?: () => void;
+  onCreate?: () => void;
+  createLabel?: string;
   renderRecord: (record: T, selected: boolean) => HTMLElement;
   onFiltersChanged: (filters: CodexLibraryFilterState) => void;
 };
@@ -94,6 +96,7 @@ function availableTags<T extends CodexLibraryRecord>(records: readonly T[]): str
 }
 
 export function renderCodexLibrary<T extends CodexLibraryRecord>(input: CodexLibraryRenderInput<T>): T[] {
+  input.controlsHost.classList.add('codex-control-rail');
   const projects = availableProjects(input.records, input.projects);
   const tags = availableTags(input.records);
   const filters: CodexLibraryFilterState = {
@@ -123,6 +126,39 @@ export function renderCodexLibrary<T extends CodexLibraryRecord>(input: CodexLib
   search.dataset.codexFocusKey = 'codex-library-query';
   if (search.value !== filters.query) search.value = filters.query;
   search.oninput = () => update({ query: search.value });
+
+  const filterToggle = document.createElement('button');
+  filterToggle.type = 'button';
+  filterToggle.className = 'codex-mobile-filter-toggle';
+  const activeFilterCount = Number(filters.projectId !== 'All') + Number(filters.tag !== 'All');
+  filterToggle.textContent = activeFilterCount ? `Filters · ${activeFilterCount}` : 'Filters';
+  filterToggle.setAttribute('aria-expanded', String(input.controlsHost.dataset.mobileFiltersOpen === 'true'));
+  filterToggle.addEventListener('click', () => {
+    const open = input.controlsHost.dataset.mobileFiltersOpen !== 'true';
+    input.controlsHost.dataset.mobileFiltersOpen = String(open);
+    input.controlsHost.classList?.toggle?.('mobile-filters-open', open);
+    filterToggle.setAttribute('aria-expanded', String(open));
+  });
+  const filterPanel = document.createElement('aside');
+  filterPanel.className = 'codex-library-filter-panel codex-side-panel codex-control-rail';
+  filterPanel.setAttribute('aria-label', 'Library filters');
+  const filterPanelHead = document.createElement('header');
+  filterPanelHead.className = 'skill-workspace-rail-header';
+  const filterPanelTitle = document.createElement('h3');
+  filterPanelTitle.textContent = 'Filters';
+  const filterPanelClose = filterButton('×', false, 'plain-close codex-library-filter-close', () => {
+    input.controlsHost.dataset.mobileFiltersOpen = 'false';
+    input.controlsHost.classList?.remove?.('mobile-filters-open');
+    filterToggle.setAttribute('aria-expanded', 'false');
+  });
+  filterPanelClose.setAttribute('aria-label', 'Close filters');
+  filterPanelHead.append(filterPanelTitle, filterPanelClose);
+  const filterBackdrop = filterButton('', false, 'codex-library-filter-backdrop codex-side-panel-backdrop', () => {
+    input.controlsHost.dataset.mobileFiltersOpen = 'false';
+    input.controlsHost.classList?.remove?.('mobile-filters-open');
+    filterToggle.setAttribute('aria-expanded', 'false');
+  });
+  filterBackdrop.setAttribute('aria-label', 'Close filters');
 
   const projectFilters = document.createElement('div');
   projectFilters.className = 'codex-filter-row codex-library-project-filters';
@@ -154,18 +190,29 @@ export function renderCodexLibrary<T extends CodexLibraryRecord>(input: CodexLib
   const clear = filterButton('Clear filters', false, 'codex-filter-clear', () => input.onFiltersChanged({ query: '', projectId: 'All', tag: 'All' }));
   const actions = document.createElement('div');
   actions.className = 'codex-library-control-actions';
+  if (input.onCreate) {
+    actions.append(filterButton(input.createLabel ?? 'New', false, 'primary-button codex-library-create', input.onCreate));
+  }
   if (input.onSynchronize) {
     const synchronize = filterButton(input.synchronizing ? 'Synchronizing…' : 'Resynchronize', false, 'codex-secondary codex-library-synchronize', input.onSynchronize);
     synchronize.disabled = input.synchronizing === true;
     actions.append(synchronize);
   }
   actions.append(clear);
+  const filterPanelBody = document.createElement('div');
+  filterPanelBody.className = 'skill-workspace-rail-body';
+  filterPanelBody.append(searchLabel, projectFilters, tagFilters);
+  const filterPanelFooter = document.createElement('footer');
+  filterPanelFooter.className = 'skill-workspace-rail-footer';
+  filterPanelFooter.append(actions);
   if (mountedSearchLabel) {
-    while (searchLabel.nextSibling) searchLabel.nextSibling.remove();
-    input.controlsHost.append(projectFilters, tagFilters, actions);
+    filterPanel.replaceChildren(filterPanelHead, filterPanelBody, filterPanelFooter);
+    input.controlsHost.append(filterToggle, filterBackdrop, filterPanel);
   } else {
-    input.controlsHost.replaceChildren(searchLabel, projectFilters, tagFilters, actions);
+    filterPanel.replaceChildren(filterPanelHead, filterPanelBody, filterPanelFooter);
+    input.controlsHost.replaceChildren(filterToggle, filterBackdrop, filterPanel);
   }
+  input.controlsHost.classList?.toggle?.('mobile-filters-open', input.controlsHost.dataset.mobileFiltersOpen === 'true');
 
   const visible = visibleCodexLibraryRecords(input.records, filters, input.favoriteFirst);
   if (visible.length) input.resultsHost.replaceChildren(...visible.map((record) => input.renderRecord(record, record.id === input.selectedId)));

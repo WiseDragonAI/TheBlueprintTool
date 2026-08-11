@@ -2,7 +2,7 @@
 
 This directory is the canonical knowledge base for the `decision-os` repository.
 
-The structure follows the proven workstation model used by `Senior`, `DroidFleet`, and `MOH`: working analysis remains traceable, while durable knowledge is organized by document role, then domain, then topic.
+Durable knowledge is organized by document role, then domain, then topic. New working analysis exists only for an active iteration and is removed after its verified technical content is integrated; pre-lifecycle sources remain an explicit migration backlog.
 
 ## A. Canonical Roles
 
@@ -10,7 +10,7 @@ The structure follows the proven workstation model used by `Senior`, `DroidFleet
 2. [Specs](./specs/README.md) records accepted behavior, invariants, boundaries, and non-goals.
 3. [Procedure](./procedure/README.md) records repeatable operator and agent workflows, commands, safety boundaries, validation, rollback, and escalation.
 4. [Postmortem](./postmortem/README.md) records root causes, failure modes, lessons, and regression-prevention rules.
-5. [Working Documents](./working-documents/README.md) holds active analysis that has not become canonical truth.
+5. [Working Documents](./working-documents/README.md) holds temporary active analysis and the identified pre-lifecycle migration backlog.
 6. [Archive](./archive/README.md) holds superseded material and migration evidence outside the active knowledge layer.
 
 ---
@@ -35,6 +35,9 @@ The structure follows the proven workstation model used by `Senior`, `DroidFleet
 16. [Restore an accidentally tombstoned Epoch-4 note](./procedure/tasks/restore-accidentally-tombstoned-note.md)
 17. [Create and operate the default prompt library](./procedure/implementation/default-prompt-library.md)
 18. [Prompt expression and system-prompt catalog](./documentation/architecture/prompt-expression-catalog.md)
+19. [Epoch-4 federation repair and recovery](./documentation/architecture/epoch-4-federation-repair-and-recovery.md)
+20. [Epoch-4 replication incident postmortem](./postmortem/epoch-4-replication-incident-2026-08-09.md)
+21. [Manage canonical dev and feature worktrees](./procedure/implementation/manage-worktrees.md)
 
 ---
 
@@ -56,4 +59,6 @@ The structure follows the proven workstation model used by `Senior`, `DroidFleet
 4. Use a single Markdown file for a small topic and a directory with `README.md` for a large topic.
 5. Do not create a same-name topic file and topic directory at the same level.
 6. Preserve exact paths, routes, commands, symbols, IDs, and status literals.
-7. Move superseded sources to `archive/` only after their durable knowledge has been extracted.
+7. Before closing an iteration, integrate verified final-state technical knowledge and delete its working documents.
+8. Recycle pre-lifecycle sources through dedicated cleanup iterations that delete every settled source.
+9. Do not promote intermediate TODO lists, implementation checklists, hypotheses, progress reports, or superseded plans.
