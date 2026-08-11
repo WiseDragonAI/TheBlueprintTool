@@ -54,6 +54,19 @@ function flagNumber(args: string[], flag: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function promptAction(args: string[]): 'create' | 'query' | 'update' | undefined {
+  // WHAT: select prompt creation from the exact second argument.
+  // WHY: prompt mutation must never be inferred from unrelated flags.
+  if (args[1] === 'create') return 'create';
+  // WHAT: select prompt inspection from the exact second argument.
+  // WHY: query retains its read-only command boundary.
+  if (args[1] === 'query') return 'query';
+  // WHAT: select prompt replacement from the exact second argument.
+  // WHY: update owns the optimistic revision transaction.
+  if (args[1] === 'update') return 'update';
+  return undefined;
+}
+
 function relationshipValues(args: string[]): Array<{ from: string; id: string; label?: string; to: string }> {
   return trailingValues(args, '--add-relationship').map((value) => {
     const [id = '', from = '', to = '', label] = value.split(':');
@@ -110,7 +123,14 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       : undefined,
     mutationFile: flagValue(argv, '--mutation'),
     promptOperation: normalizedMode === 'prompt'
-      ? { action: argv[1] === 'query' ? 'query' : undefined, names: trailingValues(argv, '--name') }
+      ? {
+        action: promptAction(argv),
+        description: flagValue(argv, '--description'),
+        markdownFile: flagValue(argv, '--markdown-file'),
+        name: flagValue(argv, '--name'),
+        names: trailingValues(argv, '--name'),
+        projectId: flagValue(argv, '--project'),
+      }
       : undefined,
     migrationOperation: normalizedMode === 'migrate-decision-os'
       ? {
