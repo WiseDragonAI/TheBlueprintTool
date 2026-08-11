@@ -5,7 +5,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import { projectTaskExecutionState } from '../helper/project-task-execution-state.js';
-import { taskExecutionStateTaskId } from '../helper/task-execution-state-task-id.js';
+import { resolveExecutionStateScope } from '../helper/execution-state-scope.js';
 import { decodeRouteSegment } from '../../server/http/route-segment.js';
 import {
   HTTP_ROUTE_HANDLED,
@@ -23,13 +23,21 @@ export async function handleTaskExecutionReadRoutes(input: {
   state: ProjectTaskState | null;
   url: string;
 }): Promise<HttpRouteOutcome> {
-  const stateRead = input.request.method === 'GET'
+  const canonicalStateRead = input.request.method === 'GET'
+    ? input.url.match(/^\/api\/ledgers\/([^/]+)\/cards\/([^/]+)\/execution-state$/)
+    : null;
+  const legacyTaskStateRead = input.request.method === 'GET'
     ? input.url.match(/^\/api\/tasks\/([^/]+)\/execution-state$/)
     : null;
-  if (stateRead) {
+  // WHAT: Serve the canonical ledger-card execution summary and retain the task-only compatibility route.
+  // WHY: Ordinary card identity requires an explicit ledger while existing task clients remain valid.
+  if (canonicalStateRead || legacyTaskStateRead) {
     input.response.setHeader('cache-control', 'no-store');
     input.response.setHeader('content-type', 'application/json');
-    const requestedCardId = decodeRouteSegment(stateRead[1]);
+    const ledgerId = canonicalStateRead ? decodeRouteSegment(canonicalStateRead[1]) : 'tasks';
+    const requestedCardId = decodeRouteSegment(canonicalStateRead?.[2] ?? legacyTaskStateRead?.[1] ?? '');
+    // WHAT: Contain unavailable synchronized task state inside this read route.
+    // WHY: Other project and diagnostic routes must remain available while execution state recovers.
     if (!input.state) {
       input.response.statusCode = 503;
       input.response.end(JSON.stringify({
@@ -39,12 +47,13 @@ export async function handleTaskExecutionReadRoutes(input: {
       }));
       return HTTP_ROUTE_HANDLED;
     }
-    const taskId = taskExecutionStateTaskId(
-      input.state.projection().ledger,
+    const scope = resolveExecutionStateScope({
+      taskLedger: input.state.projection().ledger,
+      ledgerId,
       requestedCardId,
-    );
+    });
     input.response.end(JSON.stringify(projectTaskExecutionState({
-      taskId,
+      scope,
       state: input.state,
       queuePosition: input.queuePosition,
     })));

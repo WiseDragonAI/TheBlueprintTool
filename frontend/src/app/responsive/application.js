@@ -2152,7 +2152,8 @@ async function refreshMasterSubtaskExecutionState(masterCardId) {
   const result = await requestTaskExecutionState({
     projectId,
     replicaNodeId: route.replicaNodeId,
-    taskId: masterCardId,
+    ledgerId: 'tasks',
+    cardId: masterCardId,
     signal: controller.signal,
   });
   if (controller.signal.aborted

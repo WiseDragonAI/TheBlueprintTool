@@ -607,7 +607,7 @@ test('generated skill-result threads bind and render their retained provider ses
     assert.ok(codexLog.querySelector('.codex-log-status'));
     assert.equal(codexLog.querySelector('.codex-log-empty'), null);
     assert.deepEqual(requests, [
-      `/api/tasks/${cardId}/execution-state`,
+      `/api/ledgers/ux/cards/${cardId}/execution-state`,
       `/api/task-executions/${executionId}`,
     ]);
     const statusValues = codexLog.querySelectorAll('dd').map((element) => element.textContent);

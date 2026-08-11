@@ -221,7 +221,15 @@ function resolveTask(input: {
   request: TaskExecutionLaunchRequest;
   localNodeId: string;
 }): { taskId: string; assignedNodeId: string; lineage: string[] } {
-  if (input.request.ledgerId !== 'tasks') return { taskId: '', assignedNodeId: input.localNodeId, lineage: [] };
+  // WHAT: Make an ordinary ledger card its own local execution group.
+  // WHY: Normal canvas cards need durable history and concurrency ownership without task relationships.
+  if (input.request.ledgerId !== 'tasks') {
+    return {
+      taskId: input.request.sourceCardId,
+      assignedNodeId: input.localNodeId,
+      lineage: [input.request.sourceCardId],
+    };
+  }
   const projection = input.state.projection();
   const cards = records(projection.ledger.cards);
   const { taskId, lineage } = resolveTaskLineage({

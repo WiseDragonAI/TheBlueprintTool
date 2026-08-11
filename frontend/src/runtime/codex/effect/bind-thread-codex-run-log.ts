@@ -84,7 +84,7 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
   const generation = poller.generation;
   const abortController = new AbortController();
   poller.abortController = abortController;
-  const { projectId, replicaNodeId, cardId: taskId, threadId } = poller.identity;
+  const { projectId, replicaNodeId, ledgerId, cardId, threadId } = poller.identity;
   const startedAt = Date.now();
   let retryDelay: number | null = null;
   const ownsRequest = (): boolean => taskLogPollers.get(threadId) === poller
@@ -92,18 +92,20 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
     && poller.abortController === abortController;
   try {
     telemetry('codex-log-refresh-started', {
-      projectId, replicaNodeId, taskId, threadId, generation,
+      projectId, replicaNodeId, ledgerId, cardId, threadId, generation,
     });
     const summaryResult = await requestTaskExecutionState({
       projectId,
       replicaNodeId,
-      taskId,
+      ledgerId,
+      cardId,
       signal: abortController.signal,
     });
     telemetry('codex-log-summary-settled', {
       projectId,
       replicaNodeId,
-      taskId,
+      ledgerId,
+      cardId,
       threadId,
       generation,
       durationMs: Date.now() - startedAt,
@@ -130,7 +132,8 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
     telemetry('codex-log-summary-installed', {
       projectId,
       replicaNodeId,
-      taskId,
+      ledgerId,
+      cardId,
       threadId,
       generation,
       sessions: summary.sessions.length,
@@ -170,7 +173,8 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
     telemetry('codex-log-presentation-settled', {
       projectId,
       replicaNodeId,
-      taskId,
+      ledgerId,
+      cardId,
       threadId,
       generation,
       executionId: selectedExecutionId,
@@ -198,7 +202,8 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
     telemetry('codex-log-refresh-failed', {
       projectId,
       replicaNodeId,
-      taskId,
+      ledgerId,
+      cardId,
       threadId,
       generation,
       durationMs: Date.now() - startedAt,
@@ -217,7 +222,8 @@ async function refreshTaskLog(poller: TaskLogPoller): Promise<void> {
     telemetry('codex-log-refresh-settled', {
       projectId,
       replicaNodeId,
-      taskId,
+      ledgerId,
+      cardId,
       threadId,
       generation,
       durationMs: Date.now() - startedAt,
