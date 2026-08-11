@@ -1,6 +1,6 @@
 /**
- * WHAT: Builds the project-scoped environment shared by every Decision OS Codex child.
- * WHY: Codex must receive one stable ledger command without discovering repository paths.
+ * WHAT: Builds the project-scoped environment and command shims shared by every Decision OS Codex child.
+ * WHY: Codex must receive stable ledger and research commands without discovering repository paths.
  */
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, delimiter, resolve } from 'node:path';
@@ -13,18 +13,45 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-export function ensureLedgerCliShim(input: { masterDecisionOsRoot: string; launcher: string; nodeExecutable?: string }): string {
-  const launcher = resolve(input.launcher);
-  const nodeExecutable = resolve(input.nodeExecutable ?? process.execPath);
-  if (!existsSync(launcher)) throw new Error(`Ledger CLI launcher not found: ${launcher}`);
-  if (!existsSync(nodeExecutable)) throw new Error(`Node executable not found: ${nodeExecutable}`);
-  const directory = resolve(input.masterDecisionOsRoot, 'runtime', 'bin');
-  const shim = resolve(directory, 'ledger-cli');
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
-  writeFileSync(shim, `#!/bin/sh\nexec ${shellQuote(nodeExecutable)} ${shellQuote(launcher)} \"$@\"\n`, { encoding: 'utf8', mode: 0o700 });
+function installCommandShim(input: {
+  command: string;
+  directory: string;
+  launcher: string;
+  nodeExecutable: string;
+}): void {
+  const shim = resolve(input.directory, input.command);
+  writeFileSync(shim, `#!/bin/sh\nexec ${shellQuote(input.nodeExecutable)} ${shellQuote(input.launcher)} \"$@\"\n`, { encoding: 'utf8', mode: 0o700 });
   chmodSync(shim, 0o700);
   const verified = spawnSync(shim, ['--help'], { encoding: 'utf8' });
-  if (verified.status !== 0) throw new Error(`Ledger CLI shim verification failed: ${verified.stderr || verified.error?.message || `exit ${verified.status}`}`);
+  // WHAT: reject a command shim that cannot execute its launcher.
+  // WHY: child prompts must not receive a broken command contract.
+  if (verified.status !== 0) {
+    throw new Error(`${input.command} shim verification failed: ${verified.stderr || verified.error?.message || `exit ${verified.status}`}`);
+  }
+}
+
+export function ensureLedgerCliShim(input: {
+  masterDecisionOsRoot: string;
+  launcher: string;
+  webpageLauncher: string;
+  nodeExecutable?: string;
+}): string {
+  const launcher = resolve(input.launcher);
+  const webpageLauncher = resolve(input.webpageLauncher);
+  const nodeExecutable = resolve(input.nodeExecutable ?? process.execPath);
+  // WHAT: reject a missing ledger launcher before writing command shims.
+  // WHY: the runtime cannot satisfy its ledger mutation contract without it.
+  if (!existsSync(launcher)) throw new Error(`Ledger CLI launcher not found: ${launcher}`);
+  // WHAT: reject a missing webpage launcher before writing command shims.
+  // WHY: research prompts require the documented source-capture command.
+  if (!existsSync(webpageLauncher)) throw new Error(`Webpage CLI launcher not found: ${webpageLauncher}`);
+  // WHAT: reject a missing Node executable before writing command shims.
+  // WHY: every generated shim delegates to this exact runtime.
+  if (!existsSync(nodeExecutable)) throw new Error(`Node executable not found: ${nodeExecutable}`);
+  const directory = resolve(input.masterDecisionOsRoot, 'runtime', 'bin');
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  installCommandShim({ command: 'ledger-cli', directory, launcher, nodeExecutable });
+  installCommandShim({ command: 'download-webpage', directory, launcher: webpageLauncher, nodeExecutable });
   return directory;
 }
 
