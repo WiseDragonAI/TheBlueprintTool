@@ -202,8 +202,6 @@ test('parse-ledger-cli-argv parses prompt mutation inputs', () => {
     'project-a',
     '--name',
     'ResearchPrompt',
-    '--markdown-file',
-    '/tmp/research-v2.md',
   ]);
 
   assert.deepEqual(create.promptOperation, {
@@ -217,7 +215,7 @@ test('parse-ledger-cli-argv parses prompt mutation inputs', () => {
   assert.deepEqual(update.promptOperation, {
     action: 'update',
     description: undefined,
-    markdownFile: '/tmp/research-v2.md',
+    markdownFile: undefined,
     name: 'ResearchPrompt',
     names: ['ResearchPrompt'],
     projectId: 'project-a',

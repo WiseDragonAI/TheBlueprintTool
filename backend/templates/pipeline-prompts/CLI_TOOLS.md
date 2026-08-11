@@ -28,10 +28,10 @@ ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id <maste
 ```sh
 ledger-cli prompt query --name <prompt-name> [--name <prompt-name>]...
 ledger-cli prompt create --project <project-id> --name <prompt-name> --description <text> --markdown-file <file>
-ledger-cli prompt update --project <project-id> --name <prompt-name> --markdown-file <file>
+ledger-cli prompt update --project <project-id> --name <prompt-name>
 ```
 
-`prompt query` reads named server-owned pipeline prompts and prints each prompt verbatim in argument order. `prompt create` and `prompt update` commit complete Markdown documents through revision-safe authored transactions.
+`prompt query` reads named server-owned pipeline prompts and prints each prompt verbatim in argument order. `prompt create` commits a new complete Markdown document. To update a prompt, edit `/home/jbb/.decision-os/pipeline-prompts/<prompt-name>.md` directly, then run `prompt update` to validate and commit that registered working copy. Never use a temporary replacement file for an update.
 
 ## Capture a webpage source
 

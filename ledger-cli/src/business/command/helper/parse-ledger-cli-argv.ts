@@ -61,8 +61,8 @@ function promptAction(args: string[]): 'create' | 'query' | 'update' | undefined
   // WHAT: select prompt inspection from the exact second argument.
   // WHY: query retains its read-only command boundary.
   if (args[1] === 'query') return 'query';
-  // WHAT: select prompt replacement from the exact second argument.
-  // WHY: update owns the optimistic revision transaction.
+  // WHAT: select direct prompt working-copy commit from the exact second argument.
+  // WHY: update owns the optimistic revision and focused Git transaction.
   if (args[1] === 'update') return 'update';
   return undefined;
 }
