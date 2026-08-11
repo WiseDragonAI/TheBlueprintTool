@@ -65,7 +65,8 @@
 2. It uses the Wise SSH identity required by repository policy.
 3. After the exact push succeeds, it removes the completed feature worktree and deletes the merged feature branch.
 4. A push failure preserves the feature recovery boundary and the admitted local merge.
-5. Dev integration does not promote `main`, restart a server, deploy the relay, rewrite prompt bytes, or close a master task.
+5. An interrupted post-push cleanup resumes through `decision-os-worktree cleanup <feature-name> --json`; do not substitute manual branch or worktree deletion.
+6. Dev integration does not promote `main`, restart a server, deploy the relay, rewrite prompt bytes, or close a master task.
 
 ---
 
