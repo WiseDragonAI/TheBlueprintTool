@@ -109,7 +109,7 @@
 
    ```sh
    prompt_name='CODEX_RUN'
-   prompt_file="/home/jbb/.decision-os/pipeline-prompts/${prompt_name}.md"
+   prompt_file="$HOME/.decision-os/pipeline-prompts/${prompt_name}.md"
    test -f "$prompt_file"
    ```
 
@@ -154,7 +154,7 @@
 1. Confirm the four registered identities in the server-owned store:
 
    ```sh
-   server_decision_os_root='/home/jbb/.decision-os'
+   server_decision_os_root="$HOME/.decision-os"
    jq -r '.authoredContent[] | select(.id == "SYSTEM_PROMPT" or .id == "SKILL" or .id == "CODEX_RUN" or .id == "CLI_TOOLS") | [.id,.kind,.contentFile] | @tsv' "${server_decision_os_root}/codex-pipelines.json"
    ```
 
