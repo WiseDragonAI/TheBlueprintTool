@@ -26,6 +26,7 @@ import { applyScopedMasterTaskProgress } from '../../ledger/effect/apply-scoped-
 import { queueSkill } from '../../codex/effect/queue-skill.js';
 import { readCardMarkdown } from '../../ledger/helper/read-card-markdown.js';
 import { queryPipelinePrompts } from '../../prompt/helper/query-pipeline-prompts.js';
+import { mutatePipelinePrompt } from '../../prompt/helper/mutate-pipeline-prompt.js';
 import { queryCodexStatus } from '../../codex/effect/query-codex-status.js';
 
 export async function dispatchLedgerCliCommandController(
@@ -60,15 +61,28 @@ export async function dispatchLedgerCliCommandController(
     return result;
   }
 
+  // WHAT: route the prompt command family outside ledger-file management.
+  // WHY: server-owned prompt content is controlled by authored-content APIs.
   if (command.mode === 'prompt') {
-    // WHAT: reject prompt commands that do not select the supported query operation.
-    // WHY: prompt writes and catalog-wide reads have no authorized CLI contract.
-    if (command.promptOperation?.action !== 'query') {
-      return { ok: false, error: 'prompt requires the query operation.' };
+    // WHAT: preserve the existing ordered batch-read operation.
+    // WHY: query has no mutation inputs or authored transaction.
+    if (command.promptOperation?.action === 'query') {
+      const result = await queryPipelinePrompts({ action: 'query', names: command.promptOperation.names });
+      // WHAT: emit only a complete successful prompt query.
+      // WHY: failed batch reads must leave stdout empty.
+      if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+      return result;
     }
-    const result = await queryPipelinePrompts(command.promptOperation);
-    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
-    return result;
+    // WHAT: route prompt creation and direct working-copy commit through the authored-content helper.
+    // WHY: both mutations must retain revision checks and focused Git evidence.
+    if (command.promptOperation?.action === 'create' || command.promptOperation?.action === 'update') {
+      const result = await mutatePipelinePrompt(command.promptOperation);
+      // WHAT: emit only a committed successful mutation receipt.
+      // WHY: callers must not mistake a failed authored transaction for completion.
+      if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+      return result;
+    }
+    return { ok: false, error: 'prompt requires query, create, or update.' };
   }
 
   if (command.mode === 'queue-skill') {

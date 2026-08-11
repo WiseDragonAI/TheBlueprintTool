@@ -68,6 +68,7 @@ export function createDecisionOsServer(input: { action_payload?: AnyRecord; runt
   runtime.ledgerCliShimDirectory = ensureLedgerCliShim({
     masterDecisionOsRoot,
     launcher: resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../bin/ledger-cli.mjs'),
+    webpageLauncher: resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../bin/download-webpage.mjs'),
   });
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };

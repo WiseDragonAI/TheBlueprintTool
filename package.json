@@ -18,12 +18,14 @@
     "decision-os-trace": "./bin/decision-os-trace.mjs",
     "ledger-cli": "./bin/ledger-cli.mjs",
     "normalize-card-heights": "./bin/normalize-card-heights.mjs",
-    "save-html": "./bin/save-html.mjs"
+    "save-html": "./bin/save-html.mjs",
+    "download-webpage": "./bin/download-webpage.mjs"
   },
   "scripts": {
     "start:workspace": "node ./bin/decision-os-server.mjs",
     "pull:restart": "node ./bin/decision-os-pull-restart.mjs",
     "save-html": "node ./bin/save-html.mjs",
+    "download-webpage": "node ./bin/download-webpage.mjs",
     "typecheck:frontend": "frontend/node_modules/.bin/tsc -p frontend/tsconfig.json --noEmit",
     "typecheck:backend": "backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit",
     "test:browser": "TSX_TSCONFIG_PATH=backend/tsconfig.json node --test --test-concurrency=1 --import ./frontend/node_modules/tsx/dist/esm/index.mjs \"tests/browser/**/*.spec.ts\"",
