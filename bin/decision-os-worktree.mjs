@@ -350,7 +350,7 @@ export function integrateFeature(name) {
     code: 'worktree_dev_push_failed',
   });
   git(primaryRoot, ['worktree', 'remove', '--force', feature.featureRoot], { timeout: 180_000 });
-  git(primaryRoot, ['branch', '-d', feature.branch]);
+  git(primaryRoot, ['branch', '-D', feature.branch]);
   return {
     ok: true,
     command: 'integrate',
@@ -363,6 +363,40 @@ export function integrateFeature(name) {
     deletedBranch: feature.branch,
     admission,
   };
+}
+
+export function cleanupMergedFeature(name) {
+  const slug = assertFeatureName(name);
+  const branch = `feature/${slug}`;
+  const branchRef = `refs/heads/${branch}`;
+  const branchExists = git(primaryRoot, ['show-ref', '--verify', '--quiet', branchRef], { accepted: [0, 1] }).status === 0;
+  // WHAT: Require the exact local feature branch selected for cleanup.
+  // WHY: Cleanup never infers a similarly named branch or reports absent state as completed work.
+  if (!branchExists) throw new WorktreeCliError('worktree_cleanup_branch_missing', `${branch} does not exist.`);
+  const merged = git(primaryRoot, ['merge-base', '--is-ancestor', branchRef, 'refs/heads/dev'], { accepted: [0, 1] }).status === 0;
+  // WHAT: Delete only a feature branch fully contained by canonical dev.
+  // WHY: An unmerged branch remains a required recovery boundary.
+  if (!merged) throw new WorktreeCliError('worktree_cleanup_unmerged', `${branch} is not contained by dev.`);
+  const owners = registeredWorktrees().filter((record) => record.branch === branchRef);
+  // WHAT: Reject ambiguous duplicate ownership before removing a registered feature checkout.
+  // WHY: Cleanup must target one exact worktree path.
+  if (owners.length > 1) throw new WorktreeCliError('worktree_cleanup_ambiguous', `${branch} owns ${owners.length} worktrees.`);
+  let removedWorktree = '';
+  // WHAT: Remove the one clean registered feature checkout before deleting its branch.
+  // WHY: Git cannot delete a branch while a linked worktree owns it.
+  if (owners.length === 1) {
+    const featureRoot = owners[0].path;
+    const parentStatus = exactStatus(featureRoot, true);
+    const childRoot = resolve(featureRoot, '.decision-os');
+    const childStatus = existsSync(resolve(childRoot, '.git')) ? exactStatus(childRoot, false) : '';
+    // WHAT: Preserve every dirty parent or child feature checkout.
+    // WHY: Cleanup authority extends only to fully committed state already contained by dev.
+    if (parentStatus || childStatus) throw new WorktreeCliError('worktree_cleanup_dirty', `Feature cleanup is dirty: ${parentStatus || childStatus}.`);
+    git(primaryRoot, ['worktree', 'remove', '--force', featureRoot], { timeout: 180_000 });
+    removedWorktree = featureRoot;
+  }
+  git(primaryRoot, ['branch', '-D', branch]);
+  return { ok: true, command: 'cleanup', name: slug, branch, removedWorktree, devSha: gitText(devRoot, ['rev-parse', 'HEAD^{commit}']) };
 }
 
 export function statusReceipt() {
@@ -419,7 +453,7 @@ function withOperationLock(operation) {
 }
 
 function usage() {
-  return 'Usage: decision-os-worktree <init-dev|status|create|integrate> [feature-name] --json';
+  return 'Usage: decision-os-worktree <init-dev|status|create|integrate|cleanup> [feature-name] --json';
 }
 
 export function runCli(argv = process.argv.slice(2)) {
@@ -442,6 +476,9 @@ export function runCli(argv = process.argv.slice(2)) {
     // WHAT: Dispatch one exact feature integration and cleanup transaction.
     // WHY: Merge, admission, push, and cleanup must share one immutable feature identity.
     else if (command === 'integrate' && argv.length === 3) receipt = withOperationLock(() => integrateFeature(argv[1]));
+    // WHAT: Dispatch recovery cleanup for one feature already contained by canonical dev.
+    // WHY: Interrupted post-push cleanup must remain available without manual Git mutation.
+    else if (command === 'cleanup' && argv.length === 3) receipt = withOperationLock(() => cleanupMergedFeature(argv[1]));
     else throw new WorktreeCliError('worktree_usage', usage());
     process.stdout.write(`${JSON.stringify(receipt)}\n`);
     return 0;

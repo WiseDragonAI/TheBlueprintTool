@@ -21,9 +21,10 @@ function isCliError(error: unknown, code: string): boolean {
     && (error as { code: string }).code === code;
 }
 
-test('integration cleanup admits removal of the verified initialized-submodule worktree', () => {
+test('integration cleanup admits the verified worktree and feature branch after exact push', () => {
   const source = readFileSync(new URL('../../../bin/decision-os-worktree.mjs', import.meta.url), 'utf8');
   assert.match(source, /\['worktree', 'remove', '--force', feature\.featureRoot\]/);
+  assert.match(source, /\['branch', '-D', feature\.branch\]/);
 });
 
 test('worktree feature names own one portable branch and directory identity', () => {
