@@ -8,6 +8,8 @@
 - Do not write French acknowledgements such as `Traité`; use English equivalents such as `Treated`.
 - Never write `you are right`.
 - Never add any kind of over-explanation unless explicitly ordered by the operator.
+- When the operator refers to a `prompt` or `prompts`, inspect `/home/jbb/.decision-os/pipeline-prompts` before answering.
+- When research requires a webpage source capture, run `download-webpage <url>` and preserve the returned temporary `document` unchanged as the verbatim source artifact.
 
 ## KNOWLEDGE
 
