@@ -43,8 +43,8 @@ test('dynamic navigation library actions use delegated event handling', () => {
   assert.doesNotMatch(script, /el\('\.nav-(?:pipelines|skills)-button'\)\.addEventListener/);
 });
 
-test('desktop skill library preserves breathing room above the first skill', () => {
-  assert.match(styles, /@media \(min-width: 768px\) \{[\s\S]*?\.codex-app-screen\.skill-library-route \.process-library \{[^}]*padding: 18px 24px 24px;/);
+test('desktop skill library uses equal vertical breathing room around the skill list', () => {
+  assert.match(styles, /@media \(min-width: 768px\) \{[\s\S]*?\.codex-app-screen\.skill-library-route \.process-library \{[^}]*padding: 18px 24px;/);
 });
 
 test('mobile processing guards duplicate submissions and delegates status to the card route', () => {
