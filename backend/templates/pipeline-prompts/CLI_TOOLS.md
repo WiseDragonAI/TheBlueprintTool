@@ -31,7 +31,7 @@ ledger-cli prompt create --project <project-id> --name <prompt-name> --descripti
 ledger-cli prompt update --project <project-id> --name <prompt-name>
 ```
 
-`prompt query` reads named server-owned pipeline prompts and prints each prompt verbatim in argument order. `prompt create` commits a new complete Markdown document. To update a prompt, edit `/home/jbb/.decision-os/pipeline-prompts/<prompt-name>.md` directly, then run `prompt update` to validate and commit that registered working copy. Never use a temporary replacement file for an update.
+`prompt query` reads named server-owned pipeline prompts and prints each prompt verbatim in argument order. `prompt create` commits a new complete Markdown document. To update a prompt, edit `$HOME/.decision-os/pipeline-prompts/<prompt-name>.md` directly, then run `prompt update` to validate and commit that registered working copy. Never use a temporary replacement file for an update.
 
 ## Capture a webpage source
 
