@@ -45,6 +45,7 @@ test('dynamic navigation library actions use delegated event handling', () => {
 
 test('desktop skill library uses equal vertical breathing room around the skill list', () => {
   assert.match(styles, /@media \(min-width: 768px\) \{[\s\S]*?\.codex-app-screen\.skill-library-route \.process-library \{[^}]*padding: 18px 24px;/);
+  assert.match(styles, /\.codex-app-screen\.skill-library-route \.process-library > \.codex-list-card:first-child \{ border-top-width: 1px; \}/);
 });
 
 test('mobile processing guards duplicate submissions and delegates status to the card route', () => {
