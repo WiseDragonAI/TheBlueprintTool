@@ -41,6 +41,14 @@ download-webpage <url>
 
 `download-webpage` accepts one HTTP or HTTPS URL, writes the complete HTML response body to an isolated temporary `document`, and returns its source metadata as JSON. Preserve the returned document unchanged as verbatim research evidence.
 
+## Capture a webpage source
+
+```sh
+download-webpage <url>
+```
+
+`download-webpage` accepts one HTTP or HTTPS URL, writes the complete HTML response body to an isolated temporary `document`, and returns its source metadata as JSON. Preserve the returned document unchanged as verbatim research evidence.
+
 ## Inspect repository maps
 
 ```sh
