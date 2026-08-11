@@ -14,7 +14,7 @@ import { closeCodexRouteScreens } from './codex-view.js';
 import { compareControlRoomQueueTasks, executionPresentation, parentMasterTask, projectMasterTask, visibleMasterTaskSubtasks, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
-import { projectSettingsValues, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
+import { projectSettingsValues, projectSyncRequestInput, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
 import { isCardEditingKeyboardTarget } from '/src/runtime/input/helper/is-card-editing-keyboard-target.js';
 import { committedProjectColor, hexToHsv, hsvToHex, projectColorPickerGradients } from './project-color-picker.js';
 import { taskFamilyCardAccent, taskFamilyCardIds } from '/src/runtime/ledger/helper/task-family-accent.js';
@@ -1438,13 +1438,17 @@ function renderProjectDetail(project) {
   elements['project-detail-color'].style.backgroundColor = project.color;
   elements['project-detail-status'].textContent = `${projectPresenceLabel(project)} · ${project.ledgers.length} ${project.ledgers.length === 1 ? 'ledger' : 'ledgers'}`;
   elements['project-detail-path'].textContent = `Replicas: ${projectOwnerLabel(project)} · ${project.id}`;
-  document.querySelector('.project-settings-button').hidden = !projectLocalReplica(project);
+  // WHAT: Keep settings reachable when a remote-only project has a complete Sync source.
+  // WHY: Source selection is valid without a locally editable project replica.
+  document.querySelector('.project-settings-button').hidden = !projectLocalReplica(project) && !projectSyncRequestInput(project);
   setView('project-detail-view');
   document.title = `${project.name} · Projects`;
 }
 
 function openProjectSettings() {
   const project = state.projects.find((entry) => entry.id === state.viewedProjectId);
+  // WHAT: Stop opening settings when the selected catalog project was replaced before the click settled.
+  // WHY: The modal must not present controls for a project that is no longer in the active catalog.
   if (!project) return;
   const values = projectSettingsValues(project);
   const name = document.querySelector('#project-settings-name');
@@ -1452,7 +1456,6 @@ function openProjectSettings() {
   name.value = values.name;
   description.value = values.description;
   const localReplica = projectLocalReplica(project);
-  const syncReplica = projectReplicas(project).find((replica) => replica.local !== true && replica.online !== false);
   name.disabled = !localReplica;
   description.disabled = !localReplica;
   projectSettingsColorInput.value = values.color;
@@ -1460,9 +1463,10 @@ function openProjectSettings() {
   document.querySelector('.project-settings-save').hidden = !localReplica;
   document.querySelector('.project-settings-owner').textContent = `${projectPresenceLabel(project)} · ${project.id}`;
   const sync = document.querySelector('.project-settings-sync');
-  sync.disabled = !project.originFingerprint || !syncReplica;
-  sync.dataset.projectId = project.id;
-  sync.dataset.replicaNodeId = syncReplica?.nodeId || '';
+  const syncRequest = projectSyncRequestInput(project);
+  // WHAT: Enable Sync only while the displayed project has a complete current source request.
+  // WHY: The button must never expose an incomplete or outdated repository identity.
+  sync.disabled = !syncRequest;
   renderProjectSettingsColorField(values.color);
   projectSettingsModal.querySelector('.project-settings-error').hidden = true;
   projectSettingsModal.showModal();
@@ -1470,15 +1474,19 @@ function openProjectSettings() {
 }
 
 async function startSelectedProjectSync() {
-  const project = state.projects.find((entry) => entry.id === state.viewedProjectId);
-  if (!project) return;
   const button = document.querySelector('.project-settings-sync');
   const error = projectSettingsModal.querySelector('.project-settings-error');
+  const syncRequest = projectSyncRequestInput(state.projects.find((entry) => entry.id === state.viewedProjectId));
+  // WHAT: Reject a click whose selected project no longer has an eligible source replica.
+  // WHY: A catalog refresh can invalidate the modal's prior Sync identity before the user submits it.
+  if (!syncRequest) {
+    button.disabled = true;
+    return;
+  }
   button.disabled = true;
   error.hidden = true;
   try {
-    const sourceNodeId = button.dataset.replicaNodeId;
-    const admission = await startProjectSyncRequest({ fetchImpl: fetch, sourceProjectId: project.id, sourceNodeId, idempotencyKey: `${sourceNodeId}:${project.id}:${project.originFingerprint}` });
+    const admission = await startProjectSyncRequest({ fetchImpl: fetch, ...syncRequest });
     projectSettingsModal.close();
     state.projectFilter = 'All';
     state.controlFilter = 'All';
