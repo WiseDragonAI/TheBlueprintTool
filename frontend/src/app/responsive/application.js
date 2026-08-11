@@ -10,6 +10,7 @@ import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { upsertResponsiveRouteCard } from './upsert-responsive-route-card.js';
 import { initializeMobileCodex, openMobileCodexLibrary, openMobileSkillRoute, setMobileCodexContext } from './codex.js';
+import { closeCodexRouteScreens } from './codex-view.js';
 import { compareControlRoomQueueTasks, executionPresentation, parentMasterTask, projectMasterTask, visibleMasterTaskSubtasks, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
@@ -429,6 +430,7 @@ function navigate(path, replace = false, returnPathOverride = '') {
   }
   const returnPath = returnPathOverride || `${location.pathname}${location.search}${location.hash}`;
   history[replace ? 'replaceState' : 'pushState']({ returnPath }, '', path);
+  closeCodexRouteScreens();
   closeMenu();
   const retained = commitRouteView();
   void loadRoute({ retainView: retained });
@@ -3484,6 +3486,7 @@ window.addEventListener('popstate', () => {
   if (!requestActiveLedgerCardEditorClose('back')) return;
   if (!requestSkillLibraryEditorClose('back')) return;
   if (closeCardDetail({ fromHistory: true })) {
+    closeCodexRouteScreens();
     const retained = commitRouteView();
     void loadRoute({ retainView: retained });
   }

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { setMobileCodexView } from '../src/app/responsive/codex-view.js';
+import { closeCodexRouteScreens, setMobileCodexView } from '../src/app/responsive/codex-view.js';
 
 const root = new URL('../', import.meta.url);
 const [html, script, styles, mobile, sharedRow, sharedLibrary, sharedWorkspace, skillEditor] = await Promise.all([
@@ -41,6 +41,25 @@ test('dynamic navigation library actions use delegated event handling', () => {
   assert.match(script, /document\.addEventListener\('click', \(event\) => \{/);
   assert.match(script, /event\.target\.closest\('\.nav-pipelines-button, \.nav-skills-button'\)/);
   assert.doesNotMatch(script, /el\('\.nav-(?:pipelines|skills)-button'\)\.addEventListener/);
+});
+
+test('accepted route navigation closes every full-screen Codex surface before rendering the destination', () => {
+  const removedClasses = [];
+  const screens = ['pipelines', 'pipeline-editor'].map((name) => ({
+    closeCalls: 0,
+    close() { this.closeCalls += 1; },
+    classList: { remove(value) { removedClasses.push([name, value]); } },
+  }));
+  closeCodexRouteScreens({
+    querySelectorAll(selector) {
+      assert.equal(selector, '.codex-app-screen');
+      return screens;
+    },
+  });
+  assert.deepEqual(screens.map((screen) => screen.closeCalls), [1, 1]);
+  assert.deepEqual(removedClasses, [['pipelines', 'codex-app-screen'], ['pipeline-editor', 'codex-app-screen']]);
+  assert.match(mobile, /history\[replace[\s\S]*closeCodexRouteScreens\(\)[\s\S]*commitRouteView\(\)/);
+  assert.match(mobile, /popstate'[\s\S]*closeCardDetail\(\{ fromHistory: true \}\)[\s\S]*closeCodexRouteScreens\(\)[\s\S]*commitRouteView\(\)/);
 });
 
 test('desktop skill library uses equal vertical breathing room around the skill list', () => {
