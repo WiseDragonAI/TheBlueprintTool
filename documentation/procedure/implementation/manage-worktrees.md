@@ -67,7 +67,21 @@
 
 ---
 
-## F. Prohibited Manual Substitutes
+## F. Resume Interrupted Cleanup
+
+1. Run:
+
+   ```bash
+   node bin/decision-os-worktree.mjs cleanup <feature-name> --json
+   ```
+
+2. The command requires the exact feature branch to be fully contained by canonical dev.
+3. A registered parent and child checkout must both be clean before removal.
+4. The command removes the initialized-submodule worktree, deletes the exact merged branch, and refuses every unmerged or dirty recovery boundary.
+
+---
+
+## G. Prohibited Manual Substitutes
 
 1. Do not create feature worktrees with direct `git worktree add`.
 2. Do not link feature dependencies manually.
