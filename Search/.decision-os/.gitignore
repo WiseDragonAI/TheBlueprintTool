@@ -2,7 +2,7 @@
 /cache/
 /codex-pipeline-recovery/
 /codex-process-queue.json
-/executor-analysis/
+/frontend-telemetry.jsonl*
 /memories.sqlite3
 /migrations/
 /runs/
