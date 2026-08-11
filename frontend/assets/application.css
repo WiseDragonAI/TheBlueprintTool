@@ -1369,6 +1369,7 @@ body:has(.codex-modal[open]) { overflow: hidden; }
     border-radius: 0;
     background: transparent;
   }
+  .codex-app-screen.skill-library-route .process-library > .codex-list-card:first-child { border-top-width: 1px; }
   .codex-app-screen.skill-library-route .codex-list-card::before { width: 2px; }
   .codex-app-screen.skill-library-route .codex-list-item { padding-block: 15px; }
   .codex-app-screen .skill-detail-workspace .skill-detail-title { display: none; }
