@@ -15,3 +15,14 @@ export function setMobileCodexView(root, view, context = {}) {
   const eyebrow = root.querySelector('.process-modal .eyebrow');
   if (eyebrow) eyebrow.textContent = detail || context.global ? (context.libraryTitle || 'Library') : 'Card processing';
 }
+
+/**
+ * WHAT: Settles every full-screen Codex surface owned by the route being left.
+ * WHY: A fixed route surface must not remain above the destination after navigation commits.
+ */
+export function closeCodexRouteScreens(root = document) {
+  root.querySelectorAll('.codex-app-screen').forEach((screen) => {
+    screen.close();
+    screen.classList.remove('codex-app-screen');
+  });
+}
