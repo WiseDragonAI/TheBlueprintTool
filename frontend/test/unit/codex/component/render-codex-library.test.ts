@@ -42,6 +42,19 @@ class FakeClassList {
   contains(className: string): boolean {
     return this.element.className.split(/\s+/).includes(className);
   }
+
+  remove(...classNames: string[]): void {
+    this.element.className = this.element.className.split(/\s+/).filter((className) => className && !classNames.includes(className)).join(' ');
+  }
+
+  toggle(className: string, force?: boolean): boolean {
+    const shouldAdd = force ?? !this.contains(className);
+    // WHAT: Apply the requested fake-DOM class state to mirror the browser toggle contract.
+    // WHY: The mobile filter regression must observe the same open-state transition as the renderer.
+    if (shouldAdd) this.add(className);
+    else this.remove(className);
+    return shouldAdd;
+  }
 }
 
 class FakeElement {
@@ -49,6 +62,7 @@ class FakeElement {
   dataset: Record<string, string> = {};
   disabled = false;
   hidden = false;
+  onclick: (() => void) | null = null;
   oninput: (() => void) | null = null;
   parentElement: FakeElement | null = null;
   placeholder = '';
@@ -73,6 +87,11 @@ class FakeElement {
     const listeners = this.listeners.get(type) ?? [];
     listeners.push(listener);
     this.listeners.set(type, listeners);
+  }
+
+  click(): void {
+    this.onclick?.();
+    for (const listener of this.listeners.get('click') ?? []) listener();
   }
 
   append(...children: FakeElement[]): void {
@@ -118,6 +137,10 @@ class FakeElement {
     this.attributes.set(name, value);
   }
 
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
   private contains(candidate: FakeElement | null): boolean {
     return candidate === this || this.children.some((child) => child.contains(candidate));
   }
@@ -131,45 +154,110 @@ class FakeDocument {
   }
 }
 
-test('shared catalog keeps its search input mounted while query filtering rerenders', () => {
+function descendantsWithClass(element: FakeElement, className: string): FakeElement[] {
+  return element.children.flatMap((child) => [
+    ...(child.classList.contains(className) ? [child] : []),
+    ...descendantsWithClass(child, className),
+  ]);
+}
+
+function controlByText(element: FakeElement, className: string, text: string): FakeElement {
+  const control = descendantsWithClass(element, className).find((candidate) => candidate.textContent === text);
+  assert.ok(control, `expected ${className} control with text ${text}`);
+  return control;
+}
+
+function assertSingleLibraryShell(controls: FakeElement, expectedActions: readonly string[]): void {
+  for (const className of [
+    'codex-mobile-filter-toggle',
+    'codex-library-filter-backdrop',
+    'codex-library-filter-panel',
+    'codex-library-search',
+    'codex-library-query',
+    'codex-library-project-filters',
+    'codex-library-tag-filters',
+    'codex-library-control-actions',
+  ]) assert.equal(descendantsWithClass(controls, className).length, 1, `expected one ${className}`);
+  for (const className of expectedActions) assert.equal(descendantsWithClass(controls, className).length, 1, `expected one ${className}`);
+}
+
+test('shared catalog retains one complete focused shell across repeated Skills, Pipelines, and picker transitions', () => {
   const previousDocument = globalThis.document;
   const fakeDocument = new FakeDocument();
   globalThis.document = fakeDocument as unknown as Document;
   try {
-    const controls = fakeDocument.createElement('div');
-    const results = fakeDocument.createElement('div');
-    let filters = { query: '', projectId: 'All', tag: 'All' };
-    const render = (): void => {
-      renderCodexLibrary({
-        records: [alpha, beta, gamma],
-        projects: [],
-        filters,
-        controlsHost: controls as unknown as HTMLElement,
-        resultsHost: results as unknown as HTMLElement,
-        emptyMessage: 'No matches.',
-        resultCountLabel: 'records',
-        onFiltersChanged: (next) => {
-          filters = next;
-          render();
-        },
-        renderRecord: (record) => {
-          const row = fakeDocument.createElement('article');
-          row.dataset.recordId = record.id;
-          return row as unknown as HTMLElement;
-        },
-      });
-    };
+    for (const surface of [
+      { name: 'Skills', create: true, synchronize: true },
+      { name: 'Pipelines', create: false, synchronize: true },
+      { name: 'skill picker', create: false, synchronize: false },
+    ]) {
+      const controls = fakeDocument.createElement('div');
+      const results = fakeDocument.createElement('div');
+      let filters = { query: '', projectId: 'All', tag: 'All' };
+      let createEnabled = surface.create;
+      let synchronizeEnabled = surface.synchronize;
+      const render = (): void => {
+        renderCodexLibrary({
+          records: [alpha, beta, gamma],
+          projects: [{ id: 'one', name: 'One' }, { id: 'two', name: 'Two' }],
+          filters,
+          controlsHost: controls as unknown as HTMLElement,
+          resultsHost: results as unknown as HTMLElement,
+          showProjects: true,
+          emptyMessage: 'No matches.',
+          resultCountLabel: `${surface.name} records`,
+          onCreate: createEnabled ? () => {} : undefined,
+          onSynchronize: synchronizeEnabled ? () => {} : undefined,
+          onFiltersChanged: (next) => {
+            filters = next;
+            render();
+          },
+          renderRecord: (record) => {
+            const row = fakeDocument.createElement('article');
+            row.dataset.recordId = record.id;
+            return row as unknown as HTMLElement;
+          },
+        });
+      };
 
-    render();
-    const search = controls.querySelector('.codex-library-query');
-    assert.ok(search);
-    search.focus();
-    search.value = 'build';
-    search.oninput?.();
+      render();
+      const search = controls.querySelector('.codex-library-query');
+      assert.ok(search, `expected a mounted search for ${surface.name}`);
+      search.focus();
+      search.value = 'build';
+      search.oninput?.();
+      assertSingleLibraryShell(controls, ['codex-filter-clear', ...(createEnabled ? ['codex-library-create'] : []), ...(synchronizeEnabled ? ['codex-library-synchronize'] : [])]);
+      assert.equal(controls.querySelector('.codex-library-query'), search);
+      assert.equal(fakeDocument.activeElement, search);
+      assert.equal(results.dataset.resultCount, '2');
 
-    assert.equal(controls.querySelector('.codex-library-query'), search);
-    assert.equal(fakeDocument.activeElement, search);
-    assert.equal(results.dataset.resultCount, '2');
+      controlByText(controls, 'project-filter-chip', 'One').click();
+      assert.equal(filters.projectId, 'one');
+      assert.equal(results.dataset.resultCount, '1');
+      controlByText(controls, 'skill-category-filter', 'Interface').click();
+      assert.equal(filters.tag, 'Interface');
+      assert.equal(results.dataset.resultCount, '1');
+      controlByText(controls, 'codex-filter-clear', 'Clear filters').click();
+      assert.deepEqual(filters, { query: '', projectId: 'All', tag: 'All' });
+
+      const toggle = controls.querySelector('.codex-mobile-filter-toggle');
+      assert.ok(toggle);
+      toggle.click();
+      assert.equal(controls.dataset.mobileFiltersOpen, 'true');
+      assert.equal(controls.classList.contains('mobile-filters-open'), true);
+      assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+      controlByText(controls, 'codex-library-filter-close', '×').click();
+      assert.equal(controls.dataset.mobileFiltersOpen, 'false');
+      controls.querySelector('.codex-library-filter-backdrop')?.click();
+      assert.equal(controls.classList.contains('mobile-filters-open'), false);
+
+      createEnabled = false;
+      synchronizeEnabled = false;
+      render();
+      assertSingleLibraryShell(controls, ['codex-filter-clear']);
+      assert.equal(descendantsWithClass(controls, 'codex-library-create').length, 0);
+      assert.equal(descendantsWithClass(controls, 'codex-library-synchronize').length, 0);
+    }
   } finally {
     globalThis.document = previousDocument;
   }
