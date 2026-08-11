@@ -38,7 +38,8 @@ export function federatedProjectCatalog(input: {
     groups.set(projectId, [...(groups.get(projectId) ?? []), row]);
   }
   return [...groups.entries()].map(([projectId, replicas]) => {
-    const authority = [...replicas].sort((left, right) => text(left.nodeId).localeCompare(text(right.nodeId)))[0];
+    const replicasByNode = [...replicas].sort((left, right) => text(left.nodeId).localeCompare(text(right.nodeId)));
+    const authority = replicasByNode[0];
     const ledgers = new Map<string, unknown>();
     for (const replica of replicas) {
       for (const ledger of Array.isArray(replica.ledgers) ? replica.ledgers : []) {
@@ -52,7 +53,7 @@ export function federatedProjectCatalog(input: {
       ledgers: [...ledgers.values()],
       available: replicas.some((replica) => replica.online !== false || replica.local === true),
       replicaCount: replicas.length,
-      replicas: [...replicas].sort((left, right) => text(left.nodeId).localeCompare(text(right.nodeId))).map((replica) => ({
+      replicas: replicasByNode.map((replica) => ({
         projectId,
         nodeId: replica.nodeId,
         nodeLabel: replica.nodeLabel,
@@ -60,9 +61,10 @@ export function federatedProjectCatalog(input: {
         local: replica.local,
         available: replica.available,
         replica: replica.replica,
+        originFingerprint: replica.originFingerprint,
       })),
     };
-    for (const key of ['nodeId', 'nodeLabel', 'online', 'local', 'ownerNodeId', 'ownerNodeLabel', 'remote', 'localProjectId']) delete project[key];
+    for (const key of ['nodeId', 'nodeLabel', 'online', 'local', 'ownerNodeId', 'ownerNodeLabel', 'remote', 'localProjectId', 'originFingerprint']) delete project[key];
     return project;
   });
 }

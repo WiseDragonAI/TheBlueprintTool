@@ -13,7 +13,6 @@ import type { DecisionOsProject } from '../helper/project-catalog.js';
 import type { ProjectCatalogStore } from '../helper/project-catalog-store.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint } from '../helper/project-url-scope.js';
 import { readRequestBuffer } from '../helper/read-request-buffer.js';
-import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 import { applyLedgerMutation, type LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { decodeRouteSegment } from './route-segment.js';
 import { HTTP_ROUTE_HANDLED, HTTP_ROUTE_NEXT, type HttpRouteOutcome } from './http-route.js';
@@ -57,16 +56,6 @@ export async function handleProjectCatalogRoutes(input: {
 
   if (input.url === '/decision-os/projects' && input.request.method === 'GET') {
     const localOwner = input.federation.localOwner();
-    const localProjects = input.projects.map((project) => {
-      let originFingerprint = '';
-      try {
-        originFingerprint = readRepositoryOriginIdentity(project.root).originFingerprint;
-      } catch {
-        // WHAT: Keep a registered non-Git project visible.
-        // WHY: Repository metadata is optional presentation data, not project admission.
-      }
-      return { ...project, originFingerprint };
-    });
     const remoteProjects = input.federation.remoteProjects().map((project) => {
       const store = input.taskStoreForProject(project.localProjectId, project.ownerNodeId);
       const replicated = Boolean(store && store.diagnostics().entityCount > 0);
@@ -85,7 +74,7 @@ export async function handleProjectCatalogRoutes(input: {
     input.response.setHeader('content-type', 'application/json');
     input.response.end(JSON.stringify({
       projects: federatedProjectCatalog({
-        localProjects,
+        localProjects: input.projects,
         remoteProjects,
         localNode: {
           nodeId: localOwner.ownerNodeId,
