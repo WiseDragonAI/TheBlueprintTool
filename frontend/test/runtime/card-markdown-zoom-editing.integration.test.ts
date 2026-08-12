@@ -10,7 +10,7 @@ function source(path: string): string {
 }
 
 function canvasCardDetailListSelectors(css: string): string[] {
-  return Array.from(css.matchAll(/(?:^|})\s*([^{}]+)\s*\{[^{}]*\}/g))
+  return Array.from(css.matchAll(/(?:^|(?<=}))\s*([^{}]+)\s*\{[^{}]*\}/g))
     .flatMap((match) => match[1].split(','))
     .map((selector) => selector.replace(/\s+/g, ' ').trim())
     .filter((selector) => (
