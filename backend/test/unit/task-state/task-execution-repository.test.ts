@@ -122,6 +122,14 @@ test('indexes pipeline identity and preserves legal awaited lifecycle plus termi
   assert.equal(cancelled.lifecycle.finishedAt, stopAcceptedAt);
   assert.equal(cancelled.lifecycle.phaseSince, cleanupSettledAt);
   assert.deepEqual(repository.byPhase('cancelled').map((record) => record.metadata.executionId), ['execution-pipeline']);
+  const terminalRoot = store.rootHash();
+  const duplicateTerminal = await repository.transition('execution-pipeline', {
+    phase: 'cancelled',
+    changedAt: '2026-07-23T01:00:14.000Z',
+    result: { status: 'cancelled', summary: 'Duplicate process settlement.' },
+  });
+  assert.deepEqual(duplicateTerminal, cancelled);
+  assert.equal(store.rootHash(), terminalRoot);
   await assert.rejects(repository.transition('execution-pipeline', { phase: 'running' }), /task_execution_transition_invalid:cancelled:running/);
 
   const finalized = await repository.finalizeArtifacts('execution-pipeline', {
@@ -131,6 +139,29 @@ test('indexes pipeline identity and preserves legal awaited lifecycle plus termi
   assert.equal(finalized.artifacts.revision, 2);
   assert.equal(finalized.artifacts.jsonl?.hash, 'a'.repeat(64));
   assert.equal(finalized.artifacts.stderr?.hash, 'b'.repeat(64));
+});
+
+test('repeated succeeded settlement is idempotent at the serialized repository boundary', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-execution-repository-duplicate-terminal-'));
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: { cards: [], annotations: [], relationships: [] } });
+  const repository = createTaskExecutionRepository({ store, writerId: 'workstation', projectId: 'project-a' });
+  context.after(async () => { await store.flush(); rmSync(root, { recursive: true, force: true }); });
+
+  await repository.admit({ metadata: metadata(), executorNodeId: 'workstation' });
+  const succeeded = await repository.transition('execution-a', {
+    phase: 'succeeded',
+    changedAt: '2026-07-23T01:01:00.000Z',
+    result: { status: 'succeeded', summary: 'exit code 0' },
+  });
+  const terminalRoot = store.rootHash();
+  const duplicate = await repository.transition('execution-a', {
+    phase: 'succeeded',
+    changedAt: '2026-07-23T01:01:01.000Z',
+    result: { status: 'succeeded', summary: 'duplicate adopted-process settlement' },
+  });
+
+  assert.deepEqual(duplicate, succeeded);
+  assert.equal(store.rootHash(), terminalRoot);
 });
 
 test('publishes execution tombstones and session deletion state atomically after terminal settlement', async (context) => {
