@@ -63,6 +63,15 @@
 
 - Git-index hunks are operator-approved and protected. Agents must not modify, overwrite, or unstage staged lines. If required work conflicts with a staged hunk, stop and request operator direction.
 
+### Shared Branch Git Hygiene
+
+- Before editing or pushing a shared branch, fetch without submodule recursion and inspect ancestry, ahead/behind counts, and local changes.
+- Reconcile remote commits first. Fast-forward when behind; preserve both histories when diverged.
+- Fetch again immediately before pushing. If remote advanced, reconcile and recheck.
+- Never force-push `main`, `dev`, or another shared branch. A rejected push requires fetch and reconciliation.
+- Preserve unrelated staged, unstaged, and submodule changes. Commit only task-owned paths.
+- After pushing, fetch again and verify local HEAD equals the remote tip and contains the former remote tip.
+
 ### Reference Component Fidelity
 
 - **Trigger.** When the operator names an existing widget or component as the visual reference, inspect that component's rendered structure and every CSS rule controlling its surface, icon, label, casing, spacing, and states before implementation.
