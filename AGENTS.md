@@ -380,7 +380,7 @@ Ctrl+D  Resize selected cards to their content and selected zones to contained c
 
 - Never finish a feature with implementation changes left uncommitted.
 - After implementing and verifying a feature, create focused commits before reporting the feature complete.
-- Every implementation commit must include the iteration's intended Decision OS card and thread Markdown changes under `.decision-os/cards/**` and `.decision-os/threads/**`. Do not leave those documentation changes untracked or defer them to a later cleanup commit.
+- Every implementation commit must include the iteration's intended Decision OS card and thread Markdown changes under `.decision-os/cards/**` and `.decision-os/threads/**`. If the commit did not include the documentation, add it in a new commit and do not block. The important thing is clean, then ordered.
 - Every agent-authored commit, including a merge commit, must have a concise subject and a non-empty body.
 - The commit body must contain a `WHAT:` paragraph identifying the changed behavior, documentation, data contract, or operational boundary.
 - The commit body must contain a `WHY:` paragraph recording the incident, invariant, operator decision, or verified need that required the change.
