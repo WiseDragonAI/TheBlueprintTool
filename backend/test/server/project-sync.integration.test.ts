@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -24,7 +24,7 @@ async function waitFor<T>(read: () => Promise<T | null>, timeoutMs = 5_000): Pro
   throw new Error('Timed out waiting for project synchronization state.');
 }
 
-test('exposes origin identity and fixed repository status while protecting federation role execution', async () => {
+test('serves the catalog without Git while protecting fixed repository status and federation role execution', async () => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-project-sync-route-'));
   const remote = join(home, 'origin.git');
   const project = join(home, 'project-a');
@@ -73,9 +73,24 @@ test('exposes origin identity and fixed repository status while protecting feder
   await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
-    const catalog = await fetch(`${base}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string; color: string; originFingerprint: string }> };
+    const gitSentinelRoot = join(home, 'catalog-git-sentinel');
+    const gitSentinel = join(gitSentinelRoot, 'git');
+    const gitInvocation = join(home, 'catalog-git-invoked');
+    mkdirSync(gitSentinelRoot);
+    writeFileSync(gitSentinel, `#!/bin/sh\nprintf invoked > '${gitInvocation}'\nexit 97\n`);
+    chmodSync(gitSentinel, 0o755);
+    const pathBeforeCatalog = process.env.PATH ?? '';
+    const catalog = await (async () => {
+      process.env.PATH = `${gitSentinelRoot}:${pathBeforeCatalog}`;
+      try {
+        return await fetch(`${base}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string; color: string }> };
+      } finally {
+        process.env.PATH = pathBeforeCatalog;
+      }
+    })();
     assert.equal(catalog.projects.length, 1);
-    assert.match(catalog.projects[0].originFingerprint, /^[0-9a-f]{64}$/);
+    assert.equal(Object.hasOwn(catalog.projects[0], 'originFingerprint'), false);
+    assert.equal(existsSync(gitInvocation), false);
     const statusResponse = await fetch(`${base}/api/project-sync/repository-status?projectId=${encodeURIComponent(catalog.projects[0].id)}`);
     const status = await statusResponse.json() as { snapshot: { headSha: string; originSha: string; porcelain: string; worktrees: unknown[] } };
     assert.equal(statusResponse.status, 200);

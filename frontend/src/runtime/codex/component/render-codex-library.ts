@@ -95,6 +95,24 @@ function availableTags<T extends CodexLibraryRecord>(records: readonly T[]): str
   return [...new Set(records.flatMap((record) => [...recordTags(record)]))].sort((left, right) => left.localeCompare(right));
 }
 
+function directControl<T extends HTMLElement>(parent: HTMLElement, className: string): T | undefined {
+  return [...parent.children].find((child) => child.classList.contains(className)) as T | undefined;
+}
+
+function reconcileDirectChildren(parent: HTMLElement, current: readonly Element[]): void {
+  const retained = new Set(current);
+  for (const child of [...parent.children]) {
+    // WHAT: Remove a direct child that is not part of this render's one control shell.
+    // WHY: Persistent library hosts rerender in place and must not retain prior filter or action content.
+    if (!retained.has(child)) child.remove();
+  }
+  for (const child of current) {
+    // WHAT: Mount a current shell node only when it is not already connected to its retained parent.
+    // WHY: Leaving retained parents connected preserves the mounted search node's browser focus across rerenders.
+    if (child.parentElement !== parent) parent.append(child);
+  }
+}
+
 export function renderCodexLibrary<T extends CodexLibraryRecord>(input: CodexLibraryRenderInput<T>): T[] {
   input.controlsHost.classList.add('codex-control-rail');
   const projects = availableProjects(input.records, input.projects);
@@ -112,6 +130,8 @@ export function renderCodexLibrary<T extends CodexLibraryRecord>(input: CodexLib
     : undefined;
   const searchLabel = mountedSearchLabel ?? document.createElement('label');
   const search = mountedSearch ?? document.createElement('input');
+  // WHAT: Build the search label only when this host has no reusable mounted label.
+  // WHY: The label owns the focused query node and must stay connected during persistent-host rerenders.
   if (!mountedSearchLabel) {
     searchLabel.className = 'codex-library-search';
     const searchIcon = document.createElement('span');
@@ -119,30 +139,34 @@ export function renderCodexLibrary<T extends CodexLibraryRecord>(input: CodexLib
     searchIcon.textContent = '⌕';
     searchLabel.replaceChildren(searchIcon, search);
   }
+  // WHAT: Classify a newly created search input before it enters the shell.
+  // WHY: Existing mounted inputs already carry the query identity that callers and focus restoration use.
   if (!mountedSearch) search.className = 'codex-library-query';
   search.type = 'search';
   search.placeholder = 'Search library';
   search.setAttribute('aria-label', 'Search library');
   search.dataset.codexFocusKey = 'codex-library-query';
+  // WHAT: Synchronize the retained query input with the current filter state only when its value changed.
+  // WHY: Avoiding a redundant value assignment preserves native input state while still reflecting external rerenders.
   if (search.value !== filters.query) search.value = filters.query;
   search.oninput = () => update({ query: search.value });
 
-  const filterToggle = document.createElement('button');
+  const filterToggle = directControl<HTMLButtonElement>(input.controlsHost, 'codex-mobile-filter-toggle') ?? document.createElement('button');
   filterToggle.type = 'button';
   filterToggle.className = 'codex-mobile-filter-toggle';
   const activeFilterCount = Number(filters.projectId !== 'All') + Number(filters.tag !== 'All');
   filterToggle.textContent = activeFilterCount ? `Filters · ${activeFilterCount}` : 'Filters';
   filterToggle.setAttribute('aria-expanded', String(input.controlsHost.dataset.mobileFiltersOpen === 'true'));
-  filterToggle.addEventListener('click', () => {
+  filterToggle.onclick = () => {
     const open = input.controlsHost.dataset.mobileFiltersOpen !== 'true';
     input.controlsHost.dataset.mobileFiltersOpen = String(open);
     input.controlsHost.classList?.toggle?.('mobile-filters-open', open);
     filterToggle.setAttribute('aria-expanded', String(open));
-  });
-  const filterPanel = document.createElement('aside');
+  };
+  const filterPanel = directControl<HTMLElement>(input.controlsHost, 'codex-library-filter-panel') ?? document.createElement('aside');
   filterPanel.className = 'codex-library-filter-panel codex-side-panel codex-control-rail';
   filterPanel.setAttribute('aria-label', 'Library filters');
-  const filterPanelHead = document.createElement('header');
+  const filterPanelHead = directControl<HTMLElement>(filterPanel, 'skill-workspace-rail-header') ?? document.createElement('header');
   filterPanelHead.className = 'skill-workspace-rail-header';
   const filterPanelTitle = document.createElement('h3');
   filterPanelTitle.textContent = 'Filters';
@@ -153,11 +177,14 @@ export function renderCodexLibrary<T extends CodexLibraryRecord>(input: CodexLib
   });
   filterPanelClose.setAttribute('aria-label', 'Close filters');
   filterPanelHead.append(filterPanelTitle, filterPanelClose);
-  const filterBackdrop = filterButton('', false, 'codex-library-filter-backdrop codex-side-panel-backdrop', () => {
+  const filterBackdrop = directControl<HTMLButtonElement>(input.controlsHost, 'codex-library-filter-backdrop') ?? document.createElement('button');
+  filterBackdrop.type = 'button';
+  filterBackdrop.className = 'codex-library-filter-backdrop codex-side-panel-backdrop';
+  filterBackdrop.onclick = () => {
     input.controlsHost.dataset.mobileFiltersOpen = 'false';
     input.controlsHost.classList?.remove?.('mobile-filters-open');
     filterToggle.setAttribute('aria-expanded', 'false');
-  });
+  };
   filterBackdrop.setAttribute('aria-label', 'Close filters');
 
   const projectFilters = document.createElement('div');
@@ -190,28 +217,28 @@ export function renderCodexLibrary<T extends CodexLibraryRecord>(input: CodexLib
   const clear = filterButton('Clear filters', false, 'codex-filter-clear', () => input.onFiltersChanged({ query: '', projectId: 'All', tag: 'All' }));
   const actions = document.createElement('div');
   actions.className = 'codex-library-control-actions';
+  // WHAT: Include the create action only for callers that currently enable creation.
+  // WHY: A shared persistent host can change surface shape and must remove a stale create action.
   if (input.onCreate) {
     actions.append(filterButton(input.createLabel ?? 'New', false, 'primary-button codex-library-create', input.onCreate));
   }
+  // WHAT: Include the synchronize action only for callers that currently provide synchronization.
+  // WHY: Reconciliation must remove stale actions when a host changes catalog capabilities.
   if (input.onSynchronize) {
     const synchronize = filterButton(input.synchronizing ? 'Synchronizing…' : 'Resynchronize', false, 'codex-secondary codex-library-synchronize', input.onSynchronize);
     synchronize.disabled = input.synchronizing === true;
     actions.append(synchronize);
   }
   actions.append(clear);
-  const filterPanelBody = document.createElement('div');
+  const filterPanelBody = directControl<HTMLElement>(filterPanel, 'skill-workspace-rail-body') ?? document.createElement('div');
   filterPanelBody.className = 'skill-workspace-rail-body';
-  filterPanelBody.append(searchLabel, projectFilters, tagFilters);
-  const filterPanelFooter = document.createElement('footer');
+  const filterPanelFooter = directControl<HTMLElement>(filterPanel, 'skill-workspace-rail-footer') ?? document.createElement('footer');
   filterPanelFooter.className = 'skill-workspace-rail-footer';
-  filterPanelFooter.append(actions);
-  if (mountedSearchLabel) {
-    filterPanel.replaceChildren(filterPanelHead, filterPanelBody, filterPanelFooter);
-    input.controlsHost.append(filterToggle, filterBackdrop, filterPanel);
-  } else {
-    filterPanel.replaceChildren(filterPanelHead, filterPanelBody, filterPanelFooter);
-    input.controlsHost.replaceChildren(filterToggle, filterBackdrop, filterPanel);
-  }
+  reconcileDirectChildren(filterPanelHead, [filterPanelTitle, filterPanelClose]);
+  reconcileDirectChildren(filterPanelBody, [searchLabel, projectFilters, tagFilters]);
+  reconcileDirectChildren(filterPanelFooter, [actions]);
+  reconcileDirectChildren(filterPanel, [filterPanelHead, filterPanelBody, filterPanelFooter]);
+  reconcileDirectChildren(input.controlsHost, [filterToggle, filterBackdrop, filterPanel]);
   input.controlsHost.classList?.toggle?.('mobile-filters-open', input.controlsHost.dataset.mobileFiltersOpen === 'true');
 
   const visible = visibleCodexLibraryRecords(input.records, filters, input.favoriteFirst);

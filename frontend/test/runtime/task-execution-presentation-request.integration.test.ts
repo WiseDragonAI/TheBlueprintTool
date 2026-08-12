@@ -44,10 +44,14 @@ test('requests one task summary and one exact complete execution snapshot', asyn
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     }) as typeof globalThis.fetch;
 
-    assert.equal((await requestTaskExecutionState({ projectId: 'project-a', taskId: 'task-a' })).ok, true);
+    assert.equal((await requestTaskExecutionState({
+      projectId: 'project-a',
+      ledgerId: 'rust-serverless',
+      cardId: 'card-overview',
+    })).ok, true);
     assert.equal((await requestTaskExecutionPresentation({ projectId: 'project-a', executionId: 'execution-a' })).ok, true);
     assert.deepEqual(requests, [
-      '/p/project-a/api/tasks/task-a/execution-state',
+      '/p/project-a/api/ledgers/rust-serverless/cards/card-overview/execution-state',
       '/p/project-a/api/task-executions/execution-a',
     ]);
     assert.equal(requests.some((request) => /since|cursor|codex\/skills\/runs/.test(request)), false);

@@ -8,6 +8,7 @@ import type {
   TaskExecutionStateSummary,
 } from '../../../../../shared/schemas/task-execution-presentation-types.js';
 import type { ProjectTaskState } from '../../task-state/helper/project-task-state.js';
+import type { ExecutionStateScope } from './execution-state-scope.js';
 
 type ExecutionRecord = ReturnType<ProjectTaskState['executions']['byTaskId']>[number];
 
@@ -44,11 +45,27 @@ function executionItem(record: ExecutionRecord, queuePosition: number | null): T
 }
 
 export function projectTaskExecutionState(input: {
-  taskId: string;
+  scope: ExecutionStateScope;
   state: ProjectTaskState;
   queuePosition?: (record: ExecutionRecord) => number | null;
 }): TaskExecutionStateSummary {
-  const executions = input.state.executions.byTaskId(input.taskId).map((record) => executionItem(
+  const current = input.state.executions.byTaskId(input.scope.taskId)
+    .filter((record) => record.metadata.ledgerId === input.scope.ledgerId);
+  // WHAT: Add immutable historical ordinary-card records whose legacy task identity was empty.
+  // WHY: Existing Codex evidence must become visible without rewriting synchronized execution entities.
+  const legacy = input.scope.includeLegacyUnscopedExecutions
+    ? input.state.executions.bySourceCardId(input.scope.sourceCardId).filter((record) => (
+      record.metadata.taskId === ''
+      && record.metadata.ledgerId === input.scope.ledgerId
+    ))
+    : [];
+  const records = [...new Map(
+    [...current, ...legacy].map((record) => [record.metadata.executionId, record]),
+  ).values()].sort((left, right) => (
+    left.metadata.requestedAt.localeCompare(right.metadata.requestedAt)
+    || left.metadata.executionId.localeCompare(right.metadata.executionId)
+  ));
+  const executions = records.map((record) => executionItem(
     record,
     record.lifecycle.phase === 'queued' ? input.queuePosition?.(record) ?? null : null,
   ));
@@ -78,7 +95,7 @@ export function projectTaskExecutionState(input: {
   // WHAT: Default to the latest active execution, then the latest terminal execution.
   // WHY: Initial display needs one deterministic target without hiding the complete history.
   return {
-    taskId: input.taskId,
+    taskId: input.scope.taskId,
     activeExecutionIds,
     defaultExecutionId: activeExecutionIds.at(-1) ?? executions.at(-1)?.executionId ?? null,
     sessions,

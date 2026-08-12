@@ -39,6 +39,26 @@ export function projectSettingsValues(project, random = Math.random) {
   };
 }
 
+export function projectSyncRequestInput(project) {
+  const replica = (Array.isArray(project?.replicas) ? project.replicas : []).find((candidate) => {
+    const sourceProjectId = String(candidate?.projectId ?? '').trim();
+    const sourceNodeId = String(candidate?.nodeId ?? '').trim();
+    const originFingerprint = String(candidate?.originFingerprint ?? '').trim().toLowerCase();
+    // WHAT: Select only a remote replica that exposes every identity needed by Sync admission.
+    // WHY: The first eligible catalog replica is the current routable repository source.
+    return candidate?.local === false
+      && candidate?.online === true
+      && Boolean(sourceProjectId && sourceNodeId && originFingerprint);
+  });
+  // WHAT: Reject Sync when no current remote replica carries a routable source identity.
+  // WHY: A request must target one online replica and its repository identity, never stale modal data.
+  if (!replica) return null;
+  const sourceProjectId = String(replica.projectId).trim();
+  const sourceNodeId = String(replica.nodeId).trim();
+  const originFingerprint = String(replica.originFingerprint).trim().toLowerCase();
+  return { sourceProjectId, sourceNodeId, idempotencyKey: `${sourceNodeId}:${sourceProjectId}:${originFingerprint}` };
+}
+
 export async function saveProjectSettingsRequest({ fetchImpl, projects, projectId, values }) {
   const response = await fetchImpl(`/decision-os/projects/${encodeURIComponent(projectId)}`, {
     method: 'PATCH',

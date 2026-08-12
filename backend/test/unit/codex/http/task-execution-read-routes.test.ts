@@ -40,6 +40,100 @@ test('missing optimistic task returns an empty execution projection without thro
   });
 });
 
+test('returns historical execution state for one ordinary ledger card', async () => {
+  let body = '';
+  const response = {
+    end(value = '') { body += String(value); },
+    setHeader() {},
+    statusCode: 200,
+  } as unknown as ServerResponse;
+  const historical = {
+    metadata: {
+      executionId: 'execution-old',
+      requestId: 'request-old',
+      sessionId: 'session-old',
+      projectId: 'project-a',
+      ledgerId: 'rust-serverless',
+      taskId: '',
+      sourceCardId: 'card-overview',
+      ownerCardId: 'card-overview',
+      kind: 'thread',
+      requestedAt: '2026-08-11T13:20:10.000Z',
+      model: 'gpt-5.6-sol',
+      effort: 'high',
+      pipelineRunId: null,
+      pipelineStepId: null,
+      pipelineSkillRunId: null,
+      predecessorExecutionId: null,
+      restartOfExecutionId: null,
+    },
+    lifecycle: {
+      phase: 'succeeded',
+      phaseSince: '2026-08-11T13:27:28.000Z',
+      startedAt: '2026-08-11T13:20:10.000Z',
+      finishedAt: '2026-08-11T13:27:28.000Z',
+      executorNodeId: 'workstation',
+      providerSessionId: 'provider-old',
+      result: { status: 'succeeded', summary: 'exit code 0' },
+      error: null,
+      revision: 6,
+    },
+    artifacts: {
+      jsonl: { hash: 'a'.repeat(64), bytes: 100, mediaType: 'application/x-ndjson' },
+      stderr: null,
+      telemetry: null,
+      result: null,
+      changedAt: '2026-08-11T13:27:28.000Z',
+      revision: 2,
+    },
+  };
+  const state = {
+    executions: {
+      byTaskId: () => [],
+      bySourceCardId: (cardId: string) => cardId === 'card-overview' ? [historical] : [],
+    },
+    projection: () => ({ ledger: { cards: [], relationships: [] } }),
+  } as unknown as ProjectTaskState;
+
+  const result = await handleTaskExecutionReadRoutes({
+    presentation: async () => ({ body: '', statusCode: 404 }),
+    queuePosition: () => 0,
+    request: { method: 'GET' } as IncomingMessage,
+    response,
+    state,
+    url: '/api/ledgers/rust-serverless/cards/card-overview/execution-state',
+  });
+
+  assert.equal(result.handled, true);
+  assert.deepEqual(JSON.parse(body), {
+    taskId: 'card-overview',
+    activeExecutionIds: [],
+    defaultExecutionId: 'execution-old',
+    sessions: [{
+      sessionId: 'session-old',
+      requestedAt: '2026-08-11T13:20:10.000Z',
+      executions: [{
+        executionId: 'execution-old',
+        sessionId: 'session-old',
+        sourceCardId: 'card-overview',
+        kind: 'thread',
+        phase: 'succeeded',
+        requestedAt: '2026-08-11T13:20:10.000Z',
+        startedAt: '2026-08-11T13:20:10.000Z',
+        finishedAt: '2026-08-11T13:27:28.000Z',
+        model: 'gpt-5.6-sol',
+        effort: 'high',
+        predecessorExecutionId: null,
+        executorNodeId: 'workstation',
+        revision: 6,
+        queuePosition: null,
+        error: null,
+        artifacts: { jsonl: true, stderr: false, telemetry: false, result: false },
+      }],
+    }],
+  });
+});
+
 test('returns project-scoped codex status and stable not-found responses', async () => {
   const responseFor = () => {
     let body = '';

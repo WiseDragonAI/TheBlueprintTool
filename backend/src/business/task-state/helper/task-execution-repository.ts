@@ -34,6 +34,7 @@ type ExecutionIndexes = {
   records: Map<string, ExecutionRecord>;
   diagnostics: Map<string, ExecutionDiagnostic>;
   taskIds: Map<string, Set<string>>;
+  sourceCardIds: Map<string, Set<string>>;
   sessionIds: Map<string, Set<string>>;
   pipelineRunIds: Map<string, Set<string>>;
   phases: Map<TaskExecutionPhase, Set<string>>;
@@ -61,6 +62,7 @@ function emptyIndexes(): ExecutionIndexes {
     records: new Map(),
     diagnostics: new Map(),
     taskIds: new Map(),
+    sourceCardIds: new Map(),
     sessionIds: new Map(),
     pipelineRunIds: new Map(),
     phases: new Map(),
@@ -204,6 +206,7 @@ export function createTaskExecutionRepository(input: {
     }
     for (const [executionId, record] of next.records) {
       add(next.taskIds, record.metadata.taskId, executionId);
+      add(next.sourceCardIds, record.metadata.sourceCardId, executionId);
       add(next.sessionIds, record.metadata.sessionId, executionId);
       add(next.pipelineRunIds, record.metadata.pipelineRunId ?? '', executionId);
       add(next.phases, record.lifecycle.phase, executionId);
@@ -233,7 +236,7 @@ export function createTaskExecutionRepository(input: {
   };
 
   const recordsFor = (
-    index: 'taskIds' | 'sessionIds' | 'pipelineRunIds' | 'phases' | 'executorNodeIds',
+    index: 'taskIds' | 'sourceCardIds' | 'sessionIds' | 'pipelineRunIds' | 'phases' | 'executorNodeIds',
     key: string,
   ): ExecutionRecord[] => {
     rebuild();
@@ -427,6 +430,7 @@ export function createTaskExecutionRepository(input: {
       return structuredClone(ordered(indexes.records.values()));
     },
     byTaskId: (taskId: string): ExecutionRecord[] => structuredClone(recordsFor('taskIds', taskId)),
+    bySourceCardId: (sourceCardId: string): ExecutionRecord[] => structuredClone(recordsFor('sourceCardIds', sourceCardId)),
     bySessionId: (sessionId: string): ExecutionRecord[] => structuredClone(recordsFor('sessionIds', sessionId)),
     byPipelineRunId: (pipelineRunId: string): ExecutionRecord[] => structuredClone(recordsFor('pipelineRunIds', pipelineRunId)),
     byPhase: (phase: TaskExecutionPhase): ExecutionRecord[] => structuredClone(recordsFor('phases', phase)),

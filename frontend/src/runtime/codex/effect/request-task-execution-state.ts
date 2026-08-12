@@ -70,11 +70,12 @@ async function requestJson<T>(input: {
 export function requestTaskExecutionState(input: {
   projectId: string;
   replicaNodeId?: string;
-  taskId: string;
+  ledgerId: string;
+  cardId: string;
   signal?: AbortSignal;
 }): Promise<TaskExecutionReadResult<TaskExecutionStateSummary>> {
   return requestJson({
-    path: `/api/tasks/${encodeURIComponent(input.taskId)}/execution-state`,
+    path: `/api/ledgers/${encodeURIComponent(input.ledgerId)}/cards/${encodeURIComponent(input.cardId)}/execution-state`,
     projectId: input.projectId,
     replicaNodeId: String(input.replicaNodeId ?? ''),
     signal: input.signal,

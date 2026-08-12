@@ -1002,13 +1002,19 @@
   font-size: 1em;
 }
 
-.ledger-card-body ol,
-.ledger-card-body ul {
+.ledger-card-detail-layer .ledger-card-body ol {
   margin: 0;
   padding-left: 17px;
+  list-style-type: decimal;
 }
 
-.ledger-card-body li::marker {
+.ledger-card-detail-layer .ledger-card-body ul {
+  margin: 0;
+  padding-left: 17px;
+  list-style-type: disc;
+}
+
+.ledger-card-detail-layer .ledger-card-body li::marker {
   color: var(--card-code-color);
 }
 
@@ -1654,12 +1660,12 @@
   -webkit-user-select: text;
 }
 
-.ledger-card-body li {
+.ledger-card-detail-layer .ledger-card-body li {
   margin: 0 0 5px;
 }
 
-.ledger-card-body li + li {
-  margin-top: 4px;
+.ledger-card-detail-layer .ledger-card-body li + li {
+  margin-top: 9px;
 }
 
 .ledger-card-body code {

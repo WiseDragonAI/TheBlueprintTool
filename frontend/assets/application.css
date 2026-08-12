@@ -385,7 +385,8 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .ledger-card-body > * { margin: 0; }
 .ledger-card-body h1, .ledger-card-body h2, .ledger-card-body h3, .ledger-card-body h4, .ledger-card-body h5, .ledger-card-body h6 { color: color-mix(in srgb, var(--zone-color), white 52%); font-size: 1rem; letter-spacing: 0; }
 .ledger-card-body a { color: var(--accent); }
-.ledger-card-body code, .responsive-card-facts code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
+.ledger-card-body code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
+.responsive-card-facts code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
 .ledger-card-body ol { margin: 0; padding-left: 17px; }
 .ledger-card-body li + li { margin-top: 4px; }
 .ledger-card-body li::marker { color: color-mix(in srgb, var(--zone-color), white 52%); }
@@ -723,6 +724,16 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .creation-cancel { min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); background: var(--panel-strong); }
 
 .overview-ledgers, .zone-list { display: grid; gap: 10px; }
+.overview-project-list { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+.overview-project { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-inline-start: 4px solid var(--project-color); border-radius: var(--radius); background: var(--panel); }
+.overview-project-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; min-height: 64px; padding: 16px; color: var(--text); cursor: pointer; list-style: none; }
+.overview-project-summary::-webkit-details-marker { display: none; }
+.overview-project-summary::after { content: '›'; color: var(--accent); font-size: 22px; transition: transform var(--motion-disclosure) var(--ease-out); }
+.overview-project[open] > .overview-project-summary::after { transform: rotate(90deg); }
+.overview-project-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
+.overview-project-name { overflow: hidden; font-size: 17px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.overview-project-ledgers { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; padding: 10px; border-top: 1px solid var(--line); }
+.overview-project-empty { margin: 0; padding: 16px 6px 6px; color: var(--muted); font-size: 13px; }
 
 .codex-modal { width: min(100%, 720px); max-width: none; height: min(100dvh, 860px); max-height: none; margin: auto; padding: 0; border: 1px solid var(--line-strong); color: var(--text); background: var(--panel-deep); }
 .process-modal { height: min(80dvh, 860px); }
@@ -1483,6 +1494,7 @@ html[data-task-back-handoff="true"]::view-transition-new(root) { animation: task
   .desktop-new-task-button { display: inline-flex; pointer-events: auto; }
   .ledger-header { grid-template-columns: minmax(0, 1fr) minmax(250px, 340px); align-items: end; }
   .card-list, .overview-ledgers, .zone-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview-project-ledgers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .done-task-list { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 }

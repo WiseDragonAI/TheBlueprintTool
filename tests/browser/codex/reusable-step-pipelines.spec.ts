@@ -139,6 +139,132 @@ test('Process card keeps an overflowing skill catalog readable.', { timeout: 30_
   }
 });
 
+test('Persistent Skills, Pipelines, and picker rails reconcile one served control shell.', { timeout: 60_000 }, async () => {
+  const fixture = createFixture({ extraSkillCount: 24 });
+  let server: ServerHandle | undefined;
+  let browser: Browser | undefined;
+  try {
+    seedLibraryRailFixture(fixture);
+    server = await startDecisionOsServer(fixture);
+    browser = await launchBrowser();
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    page.setDefaultTimeout(10_000);
+
+    const skillsResponse = await page.goto(`${server.url}/skills`, { waitUntil: 'domcontentloaded' });
+    assert.equal(skillsResponse?.status(), 200, `Skills route failed at ${server.url}/skills.`);
+    const skills = page.locator('.process-modal');
+    await skills.waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelectorAll('.process-library .codex-list-item').length >= 26);
+    const skillsControls = skills.locator('.codex-library-controls');
+    const skillsResults = skills.locator('.process-library');
+    const skillBaselineRail = await assertLibraryRailShell(skillsControls, skillsResults, ['codex-library-synchronize', 'codex-filter-clear']);
+    const skillInitialResultCount = await libraryResultCount(skillsResults);
+    await skillsControls.locator('.codex-library-query').fill('rail-interface-skill');
+    await assertFocusedLibrarySearch(skillsControls);
+    assert.equal(await libraryResultCount(skillsResults), 1);
+    assertLibraryRailBounded(skillBaselineRail, await assertLibraryRailShell(skillsControls, skillsResults, ['codex-library-synchronize', 'codex-filter-clear']));
+    await skillsControls.locator('.project-filter-chip').nth(1).click();
+    assert.equal(await skillsControls.locator('.project-filter-chip').nth(1).getAttribute('aria-pressed'), 'true');
+    assert.equal(await libraryResultCount(skillsResults), 1);
+    assertLibraryRailBounded(skillBaselineRail, await assertLibraryRailShell(skillsControls, skillsResults, ['codex-library-synchronize', 'codex-filter-clear']));
+    await skillsControls.getByRole('button', { name: 'Interface', exact: true }).click();
+    assert.equal(await skillsControls.getByRole('button', { name: 'Interface', exact: true }).getAttribute('aria-pressed'), 'true');
+    assert.equal(await libraryResultCount(skillsResults), 1);
+    assertLibraryRailBounded(skillBaselineRail, await assertLibraryRailShell(skillsControls, skillsResults, ['codex-library-synchronize', 'codex-filter-clear']));
+    await skillsControls.getByRole('button', { name: 'Clear filters', exact: true }).click();
+    assert.equal(await skillsControls.locator('.codex-library-query').inputValue(), '');
+    assert.equal(await libraryResultCount(skillsResults), skillInitialResultCount);
+    assertLibraryRailBounded(skillBaselineRail, await assertLibraryRailShell(skillsControls, skillsResults, ['codex-library-synchronize', 'codex-filter-clear']));
+    const skillsSynchronization = page.waitForResponse((response) => (
+      response.request().method() === 'POST'
+      && new URL(response.url()).pathname === '/api/federation/libraries/synchronize'
+    ));
+    await skillsControls.getByRole('button', { name: 'Resynchronize', exact: true }).click();
+    assert.equal((await skillsSynchronization).status(), 202);
+    await skillsControls.getByRole('button', { name: 'Resynchronize', exact: true }).waitFor({ state: 'visible' });
+    assertLibraryRailBounded(skillBaselineRail, await assertLibraryRailShell(skillsControls, skillsResults, ['codex-library-synchronize', 'codex-filter-clear']));
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const skillFilterToggle = skillsControls.locator('.codex-mobile-filter-toggle');
+    await skillFilterToggle.click();
+    assert.equal(await skillFilterToggle.getAttribute('aria-expanded'), 'true');
+    await assertLibraryRailShell(skillsControls, skillsResults, ['codex-library-synchronize', 'codex-filter-clear']);
+    await skillsControls.locator('.codex-library-filter-close').click();
+    assert.equal(await skillFilterToggle.getAttribute('aria-expanded'), 'false');
+    await skillFilterToggle.click();
+    await page.mouse.click(20, 420);
+    assert.equal(await skillFilterToggle.getAttribute('aria-expanded'), 'false');
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const pipelinesResponse = await page.goto(`${server.url}/pipelines`, { waitUntil: 'domcontentloaded' });
+    assert.equal(pipelinesResponse?.status(), 200, `Pipelines route failed at ${server.url}/pipelines.`);
+    const pipelines = page.locator('.pipelines-modal');
+    await pipelines.waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelector('.pipeline-library')?.getAttribute('data-result-count') !== null);
+    assert.ok(await page.locator('.pipeline-library .codex-list-item').count() >= 2);
+    const pipelineControls = pipelines.locator('.codex-library-controls');
+    const pipelineResults = pipelines.locator('.pipeline-library');
+    const pipelineBaselineRail = await assertLibraryRailShell(pipelineControls, pipelineResults, ['codex-library-synchronize', 'codex-filter-clear']);
+    const pipelineInitialResultCount = await libraryResultCount(pipelineResults);
+    await pipelineControls.locator('.codex-library-query').fill('interface pipeline');
+    await assertFocusedLibrarySearch(pipelineControls);
+    assert.equal(await libraryResultCount(pipelineResults), 1);
+    assertLibraryRailBounded(pipelineBaselineRail, await assertLibraryRailShell(pipelineControls, pipelineResults, ['codex-library-synchronize', 'codex-filter-clear']));
+    await pipelineControls.locator('.project-filter-chip').nth(1).click();
+    assert.equal(await pipelineControls.locator('.project-filter-chip').nth(1).getAttribute('aria-pressed'), 'true');
+    await pipelineControls.getByRole('button', { name: 'Interface', exact: true }).click();
+    assert.equal(await libraryResultCount(pipelineResults), 1);
+    assertLibraryRailBounded(pipelineBaselineRail, await assertLibraryRailShell(pipelineControls, pipelineResults, ['codex-library-synchronize', 'codex-filter-clear']));
+    await pipelineControls.getByRole('button', { name: 'Clear filters', exact: true }).click();
+    assert.equal(await libraryResultCount(pipelineResults), pipelineInitialResultCount);
+    const pipelineSynchronization = page.waitForResponse((response) => (
+      response.request().method() === 'POST'
+      && new URL(response.url()).pathname === '/api/federation/libraries/synchronize'
+    ));
+    await pipelineControls.getByRole('button', { name: 'Resynchronize', exact: true }).click();
+    assert.equal((await pipelineSynchronization).status(), 202);
+    assertLibraryRailBounded(pipelineBaselineRail, await assertLibraryRailShell(pipelineControls, pipelineResults, ['codex-library-synchronize', 'codex-filter-clear']));
+
+    await pipelines.getByRole('button', { name: 'New', exact: true }).click();
+    const editor = page.locator('.pipeline-editor-modal');
+    await editor.waitFor({ state: 'visible' });
+    await editor.locator('.pipeline-add-step').click();
+    await editor.getByRole('button', { name: '+ Add skill', exact: true }).click();
+    const picker = page.locator('.skill-picker-modal');
+    await picker.waitFor({ state: 'visible' });
+    const pickerControls = picker.locator('.skill-picker-controls');
+    const pickerResults = picker.locator('.skill-picker-list');
+    await pickerResults.waitFor({ state: 'visible' });
+    const pickerBaselineRail = await assertLibraryRailShell(pickerControls, pickerResults, ['codex-library-synchronize', 'codex-filter-clear']);
+    const pickerInitialResultCount = await libraryResultCount(pickerResults);
+    await pickerControls.locator('.codex-library-query').fill('rail-research-skill');
+    await assertFocusedLibrarySearch(pickerControls);
+    assert.equal(await libraryResultCount(pickerResults), 1);
+    assertLibraryRailBounded(pickerBaselineRail, await assertLibraryRailShell(pickerControls, pickerResults, ['codex-library-synchronize', 'codex-filter-clear']));
+    await pickerControls.locator('.project-filter-chip').nth(1).click();
+    await pickerControls.getByRole('button', { name: 'Research', exact: true }).click();
+    assert.equal(await libraryResultCount(pickerResults), 1);
+    await pickerControls.getByRole('button', { name: 'Clear filters', exact: true }).click();
+    assert.equal(await libraryResultCount(pickerResults), pickerInitialResultCount);
+    const pickerSynchronization = page.waitForResponse((response) => (
+      response.request().method() === 'POST'
+      && new URL(response.url()).pathname === '/api/federation/libraries/synchronize'
+    ));
+    await pickerControls.getByRole('button', { name: 'Resynchronize', exact: true }).click();
+    assert.equal((await pickerSynchronization).status(), 202);
+    assertLibraryRailBounded(pickerBaselineRail, await assertLibraryRailShell(pickerControls, pickerResults, ['codex-library-synchronize', 'codex-filter-clear']));
+    await pickerResults.getByText('rail-research-skill', { exact: true }).click();
+    assert.equal(await pickerResults.locator('[aria-pressed="true"]').count(), 1);
+    assertLibraryRailBounded(pickerBaselineRail, await assertLibraryRailShell(pickerControls, pickerResults, ['codex-library-synchronize', 'codex-filter-clear']));
+  } finally {
+    await browser?.close();
+    // WHAT: Stop the temporary fixture server after its isolated browser scenario settles.
+    // WHY: The fixture owns no operator runtime and must not survive the test that created it.
+    if (server) await stopDecisionOsServer(server.process);
+    rmSync(fixture.workspace, { recursive: true, force: true });
+  }
+});
+
 test('Skills Library splits bounded Markdown from persistent desktop controls.', { timeout: 45_000 }, async () => {
   const fixture = createFixture({ extraSkillCount: 2 });
   let server: ServerHandle | undefined;
@@ -811,6 +937,103 @@ async function openProcessCard(page: Page): Promise<void> {
   await action.waitFor({ state: 'visible' });
   await action.click();
   await page.locator('.process-modal').waitFor({ state: 'visible' });
+}
+
+function seedLibraryRailFixture(fixture: BrowserFixture): void {
+  const timestamp = '2026-08-11T00:00:00.000Z';
+  const interfaceSkill = 'rail-interface-skill';
+  const researchSkill = 'rail-research-skill';
+  const storeFile = join(fixture.workspace, '.decision-os', 'codex-pipelines.json');
+  const store = JSON.parse(readFileSync(storeFile, 'utf8')) as Record<string, any>;
+  // WHAT: Materialize the two deterministic tagged skills that drive the served filter transitions.
+  // WHY: The browser scenario must not read operator skill data to prove its project and tag controls.
+  for (const [name, description] of [
+    [interfaceSkill, 'Interface-tagged skill for served control-rail filtering.'],
+    [researchSkill, 'Research-tagged skill for served control-rail filtering.'],
+  ]) {
+    const directory = join(fixture.workspace, '.skills', name);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(join(directory, 'SKILL.md'), [
+      '---',
+      `name: ${name}`,
+      `description: ${description}`,
+      '---',
+      '',
+      '# Library rail fixture',
+      '',
+      'Exercise the isolated browser fixture.',
+      '',
+    ].join('\n'), 'utf8');
+  }
+  store.skillLibrary = [
+    { skillName: interfaceSkill, favorite: true, tags: ['Interface'], defaultCodexModel: null, defaultCodexEffort: null, updatedAt: timestamp },
+    { skillName: researchSkill, favorite: false, tags: ['Research'], defaultCodexModel: null, defaultCodexEffort: null, updatedAt: timestamp },
+  ];
+  store.steps = [
+    {
+      id: 'rail-interface-step',
+      name: 'Interface step',
+      purpose: 'Expose the Interface filter in the served pipeline rail.',
+      skills: [{ id: 'rail-interface-pipeline-skill', skillName: interfaceSkill, contentKind: 'federated-skill', codexModel: null, codexEffort: null }],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+    {
+      id: 'rail-research-step',
+      name: 'Research step',
+      purpose: 'Expose the Research filter in the served pipeline rail.',
+      skills: [{ id: 'rail-research-pipeline-skill', skillName: researchSkill, contentKind: 'federated-skill', codexModel: null, codexEffort: null }],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+  ];
+  store.pipelines = [
+    { id: 'rail-interface-pipeline', name: 'Interface pipeline', purpose: 'Served pipeline filter fixture.', stepIds: ['rail-interface-step'], createdAt: timestamp, updatedAt: timestamp },
+    { id: 'rail-research-pipeline', name: 'Research pipeline', purpose: 'Served pipeline filter fixture.', stepIds: ['rail-research-step'], createdAt: timestamp, updatedAt: timestamp },
+  ];
+  store.runs = [];
+  store.activeWorkspaceRun = null;
+  writeFileSync(storeFile, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+}
+
+async function libraryResultCount(results: Locator): Promise<number> {
+  return Number(await results.getAttribute('data-result-count'));
+}
+
+async function assertFocusedLibrarySearch(controls: Locator): Promise<void> {
+  assert.equal(await controls.locator('.codex-library-query').evaluate((input) => document.activeElement === input), true,
+    'The retained library search input must stay focused after its input rerender.');
+}
+
+async function assertLibraryRailShell(
+  controls: Locator,
+  results: Locator,
+  actionClasses: readonly string[],
+): Promise<number> {
+  assert.equal(await controls.locator(':scope > .codex-mobile-filter-toggle').count(), 1);
+  assert.equal(await controls.locator(':scope > .codex-library-filter-backdrop').count(), 1);
+  assert.equal(await controls.locator(':scope > .codex-library-filter-panel').count(), 1);
+  assert.equal(await controls.locator('.codex-library-filter-panel .skill-workspace-rail-header').count(), 1);
+  assert.equal(await controls.locator('.codex-library-filter-panel .skill-workspace-rail-body').count(), 1);
+  assert.equal(await controls.locator('.codex-library-filter-panel .skill-workspace-rail-footer').count(), 1);
+  assert.equal(await controls.locator('.codex-library-query').count(), 1);
+  assert.equal(await controls.locator('.codex-library-project-filters').count(), 1);
+  assert.equal(await controls.locator('.codex-library-tag-filters').count(), 1);
+  assert.equal(await controls.locator('.codex-library-control-actions').count(), 1);
+  // WHAT: Verify every action enabled by the current surface is present once and remains usable.
+  // WHY: Persistent hosts must reconcile action capability changes without duplicating prior controls.
+  for (const actionClass of actionClasses) {
+    const action = controls.locator(`.${actionClass}`);
+    assert.equal(await action.count(), 1, `Expected one ${actionClass} action.`);
+    assert.equal(await action.isEnabled(), true, `Expected the ${actionClass} action to remain enabled.`);
+  }
+  assert.ok(await libraryResultCount(results) >= 0, 'The result host must retain its current result-count state.');
+  return controls.evaluate((rail) => rail.scrollHeight);
+}
+
+function assertLibraryRailBounded(baseline: number, current: number): void {
+  assert.ok(current <= baseline + 2,
+    `Expected the persistent control rail to remain bounded (${current}px > ${baseline}px + 2px).`);
 }
 
 function createFixture(options: { extraSkillCount?: number } = {}): BrowserFixture {

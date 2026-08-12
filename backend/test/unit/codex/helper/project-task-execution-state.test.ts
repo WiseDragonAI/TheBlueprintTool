@@ -13,6 +13,9 @@ function record(input: {
   sessionId: string;
   requestedAt: string;
   phase: TaskExecutionPhase;
+  ledgerId?: string;
+  taskId?: string;
+  sourceCardId?: string;
 }) {
   return {
     metadata: {
@@ -20,10 +23,10 @@ function record(input: {
       requestId: `request-${input.executionId}`,
       sessionId: input.sessionId,
       projectId: 'project-a',
-      ledgerId: 'tasks',
-      taskId: 'task-a',
-      sourceCardId: 'task-a',
-      ownerCardId: 'task-a',
+      ledgerId: input.ledgerId ?? 'tasks',
+      taskId: input.taskId ?? 'task-a',
+      sourceCardId: input.sourceCardId ?? 'task-a',
+      ownerCardId: input.sourceCardId ?? 'task-a',
       kind: 'pipeline-skill' as const,
       requestedAt: input.requestedAt,
       model: 'gpt-5.6-sol',
@@ -63,10 +66,22 @@ test('projects several sessions and preserves every valid active pipeline execut
     record({ executionId: 'execution-3', sessionId: 'session-2', requestedAt: '2026-07-25T03:00:00.000Z', phase: 'queued' }),
   ];
   const state = {
-    executions: { byTaskId: (taskId: string) => taskId === 'task-a' ? records : [] },
+    executions: {
+      byTaskId: (taskId: string) => taskId === 'task-a' ? records : [],
+      bySourceCardId: () => [],
+    },
   } as unknown as ProjectTaskState;
 
-  const summary = projectTaskExecutionState({ taskId: 'task-a', state });
+  const summary = projectTaskExecutionState({
+    scope: {
+      ledgerId: 'tasks',
+      requestedCardId: 'task-a',
+      taskId: 'task-a',
+      sourceCardId: 'task-a',
+      includeLegacyUnscopedExecutions: false,
+    },
+    state,
+  });
 
   assert.deepEqual(summary.sessions.map((session) => ({
     sessionId: session.sessionId,
@@ -84,4 +99,58 @@ test('projects several sessions and preserves every valid active pipeline execut
     telemetry: false,
     result: false,
   });
+});
+
+test('projects immutable historical ordinary-card executions with an empty task identity', () => {
+  const historical = record({
+    executionId: 'execution-old',
+    sessionId: 'session-old',
+    requestedAt: '2026-07-25T01:00:00.000Z',
+    phase: 'succeeded',
+    ledgerId: 'rust-serverless',
+    taskId: '',
+    sourceCardId: 'card-overview',
+  });
+  const current = record({
+    executionId: 'execution-new',
+    sessionId: 'session-new',
+    requestedAt: '2026-07-25T02:00:00.000Z',
+    phase: 'running',
+    ledgerId: 'rust-serverless',
+    taskId: 'card-overview',
+    sourceCardId: 'card-overview',
+  });
+  const wrongLedger = record({
+    executionId: 'execution-other',
+    sessionId: 'session-other',
+    requestedAt: '2026-07-25T03:00:00.000Z',
+    phase: 'running',
+    ledgerId: 'another-ledger',
+    taskId: '',
+    sourceCardId: 'card-overview',
+  });
+  const state = {
+    executions: {
+      byTaskId: (taskId: string) => taskId === 'card-overview' ? [current] : [],
+      bySourceCardId: (cardId: string) => cardId === 'card-overview' ? [historical, current, wrongLedger] : [],
+    },
+  } as unknown as ProjectTaskState;
+
+  const summary = projectTaskExecutionState({
+    scope: {
+      ledgerId: 'rust-serverless',
+      requestedCardId: 'card-overview',
+      taskId: 'card-overview',
+      sourceCardId: 'card-overview',
+      includeLegacyUnscopedExecutions: true,
+    },
+    state,
+  });
+
+  assert.deepEqual(summary.sessions.flatMap((session) => session.executions.map((execution) => execution.executionId)), [
+    'execution-old',
+    'execution-new',
+  ]);
+  assert.deepEqual(summary.activeExecutionIds, ['execution-new']);
+  assert.equal(summary.defaultExecutionId, 'execution-new');
 });

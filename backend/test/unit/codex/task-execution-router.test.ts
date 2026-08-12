@@ -717,8 +717,20 @@ test('binds non-task execution to the current node without creating task assignm
 
   const admitted = await router.route(request({ ledgerId: 'architecture', sourceCardId: 'card-a', ownerCardId: 'card-a' }));
 
-  assert.equal(admitted.taskId, '');
+  assert.equal(admitted.taskId, 'card-a');
   assert.equal(admitted.assignedNodeId, 'workstation');
   assert.equal(admitted.executorNodeId, 'workstation');
   assert.equal(workstation.state.store.entity('card', 'card-a'), null);
+
+  await assert.rejects(
+    router.route(request({
+      requestId: 'request-b',
+      executionId: 'execution-b',
+      sessionId: 'session-b',
+      ledgerId: 'architecture',
+      sourceCardId: 'card-a',
+      ownerCardId: 'card-a',
+    })),
+    (error: unknown) => error instanceof TaskExecutionAdmissionError && error.code === 'task_execution_active',
+  );
 });
