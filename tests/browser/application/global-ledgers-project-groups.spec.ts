@@ -37,6 +37,12 @@ type CatalogFixture = {
   workspace: string;
 };
 
+type ExpandedContentInset = {
+  dividerWidth: string;
+  firstChildBlockStartOffset: number;
+  firstChildInlineStartOffset: number;
+};
+
 test('global Ledgers groups ledgers by collapsed project', { timeout: 45_000 }, async () => {
   const fixture = createCatalogFixture();
   let server: FixtureServer | undefined;
@@ -76,9 +82,12 @@ async function exerciseGlobalLedgers(browser: Browser, serverUrl: string): Promi
     const alpha = page.locator('details.overview-project[data-project-id="project-alpha"]');
     const beta = page.locator('details.overview-project[data-project-id="project-beta"]');
     const gamma = page.locator('details.overview-project[data-project-id="project-gamma"]');
+    const projectBorderColors = await assertClosedProjectBorderColors(page);
+    assert.equal(await alpha.evaluate((row) => getComputedStyle(row).borderInlineStartWidth), '4px');
     const alphaSummary = alpha.locator(':scope > .overview-project-summary');
     await alphaSummary.click();
     assert.equal(await alpha.evaluate((row) => (row as HTMLDetailsElement).open), true);
+    const alphaExpandedContentInset = await assertExpandedContentInset(alpha);
     assert.equal(await page.locator('.overview-ledger:visible').count(), 2);
     assert.deepEqual(await alpha.locator('.overview-ledger').evaluateAll((links) => links.map((link) => link.getAttribute('href'))), [
       '/p/project-alpha/ledgers/tasks',
@@ -108,6 +117,7 @@ async function exerciseGlobalLedgers(browser: Browser, serverUrl: string): Promi
     await gammaSummary.focus();
     await page.keyboard.press('Enter');
     assert.equal(await gamma.evaluate((row) => (row as HTMLDetailsElement).open), true);
+    const gammaExpandedContentInset = await assertExpandedContentInset(gamma);
     assert.equal(await gamma.locator('.overview-project-empty').isVisible(), true);
     assert.equal(await gamma.locator('.overview-ledger').count(), 0);
     assert.doesNotMatch(await alpha.textContent() ?? '', /project-beta/);
@@ -124,6 +134,11 @@ async function exerciseGlobalLedgers(browser: Browser, serverUrl: string): Promi
       viewports: [759, 760],
       aggregateSummary: '3 ledgers across 3 projects',
       projectDisclosures: 3,
+      projectBorderColors,
+      expandedContentInset: {
+        'project-alpha': alphaExpandedContentInset,
+        'project-gamma': gammaExpandedContentInset,
+      },
       pointerExpanded: 'project-alpha',
       keyboardExpanded: ['project-beta', 'project-gamma'],
       navigationPath: new URL(page.url()).pathname,
@@ -133,6 +148,42 @@ async function exerciseGlobalLedgers(browser: Browser, serverUrl: string): Promi
   } finally {
     await page.close();
   }
+}
+
+async function assertClosedProjectBorderColors(page: Page): Promise<Record<string, string>> {
+  const colors = await page.locator('details.overview-project').evaluateAll((rows) => Object.fromEntries(rows.map((row) => [
+    row.getAttribute('data-project-id') ?? '',
+    getComputedStyle(row).borderInlineStartColor,
+  ])));
+  assert.deepEqual(colors, {
+    'project-alpha': 'rgb(56, 217, 232)',
+    'project-beta': 'rgb(167, 139, 250)',
+    'project-gamma': 'rgb(52, 211, 153)',
+  });
+  return colors;
+}
+
+async function assertExpandedContentInset(project: ReturnType<Page['locator']>): Promise<ExpandedContentInset> {
+  const inset = await project.locator('.overview-project-ledgers').evaluate((grid) => {
+    const firstChild = grid.firstElementChild;
+    // WHAT: Reject an expanded grid that has no child to measure against its retained inset.
+    // WHY: The served fixture must expose either a ledger card or the empty-state element inside every project grid.
+    if (!firstChild) throw new Error('Expanded project grids must retain a first child.');
+    const gridRect = grid.getBoundingClientRect();
+    const firstChildRect = firstChild.getBoundingClientRect();
+    const style = getComputedStyle(grid);
+    return {
+      dividerWidth: style.borderTopWidth,
+      firstChildBlockStartOffset: firstChildRect.top - gridRect.top - Number.parseFloat(style.borderTopWidth),
+      firstChildInlineStartOffset: firstChildRect.left - gridRect.left - Number.parseFloat(style.borderInlineStartWidth),
+    };
+  });
+  assert.deepEqual(inset, {
+    dividerWidth: '1px',
+    firstChildBlockStartOffset: 10,
+    firstChildInlineStartOffset: 10,
+  });
+  return inset;
 }
 
 async function assertAuthoritativeCatalog(serverUrl: string): Promise<void> {
