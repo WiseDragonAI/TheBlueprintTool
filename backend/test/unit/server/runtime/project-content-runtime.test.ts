@@ -41,6 +41,7 @@ function fixture(recordContentContribution: () => Promise<typeof emptyDelta>, re
   const invalidations: unknown[] = [];
   const federation: string[] = [];
   const incidents: unknown[] = [];
+  const pauses: string[] = [];
   const state = {
     projection: () => ({ ledger }),
     store: { contentHeads: () => retainedHeads },
@@ -57,7 +58,7 @@ function fixture(recordContentContribution: () => Promise<typeof emptyDelta>, re
     activeDecisionOsRoot: decisionOsRoot,
     globalClients: new Set([{ write: (message: string) => { writes.push(message); } }] as never[]),
     invalidateProject: (_projectId, changes) => { invalidations.push(changes); },
-    pauseWatcher: () => undefined,
+    pauseWatcher: (projectId) => { pauses.push(projectId); },
     project: () => ({ id: 'project-a', available: true, decisionOsRoot } as never),
     projectId: 'project-a',
     publishFederationChange: () => { federation.push('published'); },
@@ -68,7 +69,7 @@ function fixture(recordContentContribution: () => Promise<typeof emptyDelta>, re
     stateForProject: () => state,
     taskState: () => state,
   });
-  return { contentFile, federation, file, incidents, invalidations, runtime, workspace, writes };
+  return { contentFile, federation, file, incidents, invalidations, pauses, runtime, workspace, writes };
 }
 
 test('task SSE remains blocked until the external content head commit settles', async (context) => {
@@ -90,8 +91,8 @@ test('task SSE remains blocked until the external content head commit settles', 
   assert.equal(setup.federation.length, 0);
 });
 
-test('failed external head capture emits no revision, SSE, invalidation, or direct federation success', async (context) => {
-  const setup = fixture(async () => { throw new Error('task_content_capture_failed'); });
+test('deleted task sidecar remains contained without pausing the project watcher', async (context) => {
+  const setup = fixture(async () => { throw new Error('task_content_capture_failed:.decision-os/cards/tasks/card-a.md'); });
   context.after(async () => { await setup.runtime.watcher.close(); rmSync(setup.workspace, { recursive: true, force: true }); });
   await setup.runtime.ready;
 
@@ -103,7 +104,9 @@ test('failed external head capture emits no revision, SSE, invalidation, or dire
   assert.equal(setup.writes.length, 0);
   assert.equal(setup.invalidations.length, 0);
   assert.equal(setup.federation.length, 0);
-  assert.equal(setup.incidents.length, 1);
+  assert.equal(setup.incidents.length, 0);
+  assert.deepEqual(setup.pauses, []);
+  assert.equal(await setup.runtime.ready, true);
 });
 
 test('startup reconciliation blocks readiness until changed local bytes commit', async (context) => {

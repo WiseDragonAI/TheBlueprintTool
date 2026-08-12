@@ -303,18 +303,27 @@ export function createTaskExecutionRepository(input: {
       && current.lifecycle.providerSessionId === null
       && typeof transition.providerSessionId === 'string'
       && transition.providerSessionId.length > 0;
-    // WHAT: Permit only the same-phase mutation that binds a newly created provider session.
-    // WHY: Codex emits thread identity after the running transition while all other lifecycle changes remain explicit transitions.
-    if (!transitions[current.lifecycle.phase].has(transition.phase) && !providerSessionBinding) {
-      throw new Error(`task_execution_transition_invalid:${current.lifecycle.phase}:${transition.phase}`);
-    }
+    // WHAT: Reject an attempted executor replacement before classifying a repeated terminal settlement.
+    // WHY: Idempotent process cleanup must not weaken immutable execution ownership.
     if (transition.executorNodeId !== undefined && transition.executorNodeId !== current.lifecycle.executorNodeId) {
       throw new Error(`task_execution_executor_immutable:${executionId}`);
     }
+    // WHAT: Reject an attempted provider-session replacement before classifying a repeated terminal settlement.
+    // WHY: A duplicate terminal observer cannot acquire authority to change the bound provider session.
     if (current.lifecycle.providerSessionId !== null
       && transition.providerSessionId !== undefined
       && transition.providerSessionId !== current.lifecycle.providerSessionId) {
       throw new Error(`task_execution_provider_session_immutable:${executionId}`);
+    }
+    // WHAT: Return the committed record when concurrent process observers repeat the same terminal transition.
+    // WHY: Terminal settlement is at-least-once, so succeeded-to-succeeded cleanup must be idempotent inside the serialized repository boundary.
+    if (terminalPhases.has(current.lifecycle.phase) && transition.phase === current.lifecycle.phase) {
+      return structuredClone(current);
+    }
+    // WHAT: Permit only the same-phase mutation that binds a newly created provider session.
+    // WHY: Codex emits thread identity after the running transition while all other lifecycle changes remain explicit transitions.
+    if (!transitions[current.lifecycle.phase].has(transition.phase) && !providerSessionBinding) {
+      throw new Error(`task_execution_transition_invalid:${current.lifecycle.phase}:${transition.phase}`);
     }
     const changedAt = transition.changedAt ?? now().toISOString();
     if (!Number.isFinite(Date.parse(changedAt))) throw new Error('invalid_task_execution_timestamp');
