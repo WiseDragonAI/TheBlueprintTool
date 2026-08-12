@@ -10,6 +10,7 @@
   --line-strong: rgba(255, 255, 255, 0.28);
   --text: #f5f0e8;
   --muted: #9ba3ad;
+  --card-muted-text: #b8c2cc;
   --primary: #1aa8b8;
   --accent: #38d9e8;
   --accent-strong: #38d9e8;
@@ -384,6 +385,14 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .ledger-card-body { display: grid; gap: 14px; padding: 18px; border: 1px solid color-mix(in srgb, var(--zone-color), rgba(255,255,255,.18) 12%); border-radius: var(--radius); background-color: var(--panel); background-image: none; box-shadow: none; line-height: 1.65; overflow-wrap: anywhere; }
 .ledger-card-body > * { margin: 0; }
 .ledger-card-body h1, .ledger-card-body h2, .ledger-card-body h3, .ledger-card-body h4, .ledger-card-body h5, .ledger-card-body h6 { color: color-mix(in srgb, var(--zone-color), white 52%); font-size: 1rem; letter-spacing: 0; }
+#card-view .card-body > .ledger-card-body { color: var(--card-muted-text); font-weight: 400; }
+#card-view .card-body > .ledger-card-body .ledger-card-heading { color: color-mix(in srgb, var(--zone-color), white 52%); font-weight: 800; line-height: 1.22; letter-spacing: 0; }
+#card-view .card-body > .ledger-card-body .ledger-card-heading-1 { font-size: 1.2em; }
+#card-view .card-body > .ledger-card-body .ledger-card-heading-2 { font-size: 1.13em; }
+#card-view .card-body > .ledger-card-body .ledger-card-heading-3 { font-size: 1.06em; }
+#card-view .card-body > .ledger-card-body .ledger-card-heading-4,
+#card-view .card-body > .ledger-card-body .ledger-card-heading-5,
+#card-view .card-body > .ledger-card-body .ledger-card-heading-6 { font-size: 1em; }
 .ledger-card-body a { color: var(--accent); }
 .ledger-card-body code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
 .responsive-card-facts code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
