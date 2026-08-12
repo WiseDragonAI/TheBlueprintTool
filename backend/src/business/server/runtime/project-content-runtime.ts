@@ -159,6 +159,18 @@ export function createProjectContentRuntime(input: {
     onContentChange: observeCardFileChange,
     onProjectChange: publishLedger,
     onError: (error, context) => {
+      const message = error instanceof Error ? error.message : String(error);
+      // WHAT: Contain deletion of one task Markdown sidecar without pausing or closing the project watcher.
+      // WHY: The task-state resource head remains durable, and unrelated authored files must continue to be observed while the missing sidecar is explicitly unresolved.
+      if (message.startsWith('task_content_capture_failed:')) {
+        telemetry('runtime-scope-contained', {
+          scope: `project-watcher:${input.projectId}`,
+          code: 'task_content_capture_failed',
+          projectId: input.projectId,
+          file: context.file,
+        });
+        return;
+      }
       const incident = input.recordWatcherIncident({
         scope: `project-watcher:${input.projectId}`,
         component: 'project-file-watcher',
