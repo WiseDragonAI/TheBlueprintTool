@@ -1583,6 +1583,7 @@ function renderGlobalLedgers() {
     const projectRow = document.createElement('details');
     projectRow.className = 'overview-project';
     projectRow.dataset.projectId = project.id;
+    projectRow.style.setProperty('--project-color', project.color);
     const summary = document.createElement('summary');
     summary.className = 'overview-project-summary';
     const projectName = document.createElement('span');
