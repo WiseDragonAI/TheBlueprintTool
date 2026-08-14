@@ -39,6 +39,7 @@ function promptRuntimeContext(input: {
     SUB_CONTEXT: empty,
     SUB_TASKS: empty,
     FULL_THREAD: empty,
+    PENDING_NOTES: empty,
     FILE_MAP: empty,
     PREVIOUS_SKILL_RESULT: empty,
     EXECUTION_CONTEXT: empty,

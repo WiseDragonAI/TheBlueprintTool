@@ -10,6 +10,7 @@ import { readCodexPipelineRunController } from '../controller/read-codex-pipelin
 import { cancelCodexPipelineRunController } from '../controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../controller/restart-codex-pipeline-run-controller.js';
 import { queueCodexSkillAfterExecutionController } from '../controller/queue-codex-skill-after-execution-controller.js';
+import { queueCodexPipelineAfterExecutionController } from '../controller/queue-codex-pipeline-after-execution-controller.js';
 import { readCompactPipelineRunStatusController } from '../controller/read-compact-run-status-controller.js';
 import { readRequestBuffer } from '../../server/helper/read-request-buffer.js';
 import { decodeRouteSegment } from '../../server/http/route-segment.js';
@@ -97,6 +98,24 @@ export async function handleCodexPipelineRoutes(input: {
     );
     const queuePayload = await readJsonObject(input.request);
     const result = await queueCodexSkillAfterExecutionController({
+      action_payload: { ...queuePayload, executionId, onLedgerChange: input.onLedgerChange },
+      runtime_state: input.requestRuntime,
+    });
+    sendControllerResult(input.response, result, 202);
+    return HTTP_ROUTE_HANDLED;
+  }
+
+  // WHAT: Route a running thread's saved-pipeline successor through execution-scoped admission.
+  // WHY: The server must derive task ownership from the caller instead of trusting client-supplied card identities.
+  if (input.url.startsWith('/api/codex/executions/')
+    && input.url.endsWith('/queue-pipeline')
+    && input.request.method === 'POST') {
+    input.assertRuntimeAvailable();
+    const executionId = decodeRouteSegment(
+      input.url.slice('/api/codex/executions/'.length, -'/queue-pipeline'.length),
+    );
+    const queuePayload = await readJsonObject(input.request);
+    const result = await queueCodexPipelineAfterExecutionController({
       action_payload: { ...queuePayload, executionId, onLedgerChange: input.onLedgerChange },
       runtime_state: input.requestRuntime,
     });

@@ -31,6 +31,12 @@ test('parse-ledger-cli-argv parses project and master-task creation commands', (
   });
 });
 
+test('parse-ledger-cli-argv parses saved pipeline queue commands', () => {
+  const command = parseLedgerCliArgv(['queue-pipeline', '--pipeline', 'implementation-pipeline']);
+  assert.equal(command.mode, 'queue-pipeline');
+  assert.deepEqual(command.queuePipelineOperation, { pipelineId: 'implementation-pipeline' });
+});
+
 test('parse-ledger-cli-argv parses dynamic skill queue commands', () => {
   const command = parseLedgerCliArgv([
     'queue-skill',

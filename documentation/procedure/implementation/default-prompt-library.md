@@ -80,9 +80,10 @@
    2. `<SUB_CONTEXT>`
    3. `<SUB_TASKS>`
    4. `<FULL_THREAD>`
-   5. `<FILE_MAP>`
-   6. `<PREVIOUS_SKILL_RESULT>`
-   7. `<EXECUTION_CONTEXT>`
+   5. `<PENDING_NOTES>`
+   6. `<FILE_MAP>`
+   7. `<PREVIOUS_SKILL_RESULT>`
+   8. `<EXECUTION_CONTEXT>`
 4. Direct card-run identity:
    1. `<PROJECT_ID>`
    2. `<CARD_ID>`

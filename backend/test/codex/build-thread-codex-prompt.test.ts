@@ -77,6 +77,39 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   assert.doesNotMatch(prompt.taskContext, /^## [A-Z]\./m);
 });
 
+test('PENDING_NOTES injects only notes selected by ledger-cli after the last agent answer', () => {
+  const prompt = buildThreadCodexPrompt({
+    developerPromptSnapshot: '<PENDING_NOTES>',
+    workspaceRoot: '/workspace',
+    projectId: 'project-a',
+    ledgerFile: '/workspace/.decision-os/specs.json',
+    ledger: {
+      cards: [{ id: 'card-a', title: 'Card A' }],
+      notes: {
+        'thread-card-a': [
+          { id: 'note-old', role: 'operator', message: 'Superseded request.' },
+          { id: 'note-agent', role: 'agent', message: 'Previous answer.' },
+          { id: 'note-new-1', role: 'operator', message: 'First pending instruction.' },
+          { id: 'note-new-2', role: 'operator', message: 'Second pending instruction.' },
+        ],
+      },
+    },
+    cardId: 'card-a',
+    cardTitle: 'Card A',
+    cardMarkdownFile: '/workspace/.decision-os/cards/specs/card-a.md',
+    cardMarkdown: '# Card A\n',
+    threadId: 'thread-card-a',
+    threadMarkdownFile: '/workspace/.decision-os/threads/specs/thread-card-a.md',
+    threadMarkdown: '',
+    runSummaryFile: '/workspace/.decision-os/runs/codex-skills/specs/run.md',
+    operatorNoteTimestamp: '2026-07-08T01:00:00.000Z',
+    context: {},
+  });
+
+  assert.doesNotMatch(prompt.developerInstructions, /Superseded request|Previous answer/);
+  assert.match(prompt.developerInstructions, /# OPERATOR[\s\S]*First pending instruction\.[\s\S]*# OPERATOR[\s\S]*Second pending instruction\./);
+});
+
 test('voice Run prompt explicitly disallows skills', () => {
   const prompt = buildThreadCodexPrompt({
     developerPromptSnapshot,

@@ -79,7 +79,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const normalizedMode: LedgerCommand | 'assets' = argv.length === 0 || argv.includes('--help') || argv.includes('-h') || mode === 'help'
     ? 'help'
     : mode === 'assets' ? 'assets'
-    : mode === 'answer' || mode === 'card-context' || mode === 'card-read' || mode === 'codex-run-audit' || mode === 'codex-run-events' || mode === 'codex-status' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'master-task-apply' || mode === 'master-task-complete' || mode === 'master-task-create' || mode === 'master-task-gate' || mode === 'master-task-progress' || mode === 'migrate-decision-os' || mode === 'migrate-master-tasks' || mode === 'mutate' || mode === 'overview' || mode === 'projects' || mode === 'prompt' || mode === 'queue-skill' || mode === 'session-context' || mode === 'skills' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'zone-cards' ? mode : 'inspect';
+    : mode === 'answer' || mode === 'card-context' || mode === 'card-read' || mode === 'codex-run-audit' || mode === 'codex-run-events' || mode === 'codex-status' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'master-task-apply' || mode === 'master-task-complete' || mode === 'master-task-create' || mode === 'master-task-gate' || mode === 'master-task-progress' || mode === 'migrate-decision-os' || mode === 'migrate-master-tasks' || mode === 'mutate' || mode === 'overview' || mode === 'projects' || mode === 'prompt' || mode === 'queue-pipeline' || mode === 'queue-skill' || mode === 'session-context' || mode === 'skills' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'zone-cards' ? mode : 'inspect';
   const assetAction = (argv[1] === 'apply-gc-plan' || argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
     ? argv[1]
     : 'gc') as AssetCommand;
@@ -160,6 +160,11 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       : undefined,
     runEventsOperation: normalizedMode === 'codex-run-events'
       ? { root: flagValue(argv, '--root'), runId: flagValue(argv, '--run-id') ?? '', itemType: flagValue(argv, '--item-type') ?? '', limit: flagNumber(argv, '--limit') }
+      : undefined,
+    // WHAT: Parse the saved-pipeline identity only for queue-pipeline commands.
+    // WHY: Unrelated commands must not acquire successor scheduling input.
+    queuePipelineOperation: normalizedMode === 'queue-pipeline'
+      ? { pipelineId: flagValue(argv, '--pipeline') }
       : undefined,
     queueSkillOperation: normalizedMode === 'queue-skill'
       ? {

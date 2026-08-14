@@ -12,6 +12,14 @@ ledger-cli queue-skill --skill <skill-name> --model <model> --effort <effort>
 
 The command uses `DECISION_OS_SERVER_URL`, `DECISION_OS_PROJECT_ID`, and `DECISION_OS_EXECUTION_ID` from the running execution. Treat a successful response as the end of the current gate turn.
 
+## Queue a saved pipeline from a thread
+
+```sh
+ledger-cli queue-pipeline --pipeline <pipeline-id>
+```
+
+The command uses `DECISION_OS_SERVER_URL`, `DECISION_OS_PROJECT_ID`, and `DECISION_OS_EXECUTION_ID` from the running thread execution. A successful response links the saved pipeline as the same-task successor and starts it after the thread turn settles.
+
 ## Inspect task state
 
 ```sh
