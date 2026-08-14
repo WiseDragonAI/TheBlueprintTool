@@ -494,14 +494,14 @@
   padding: 0;
   border: 0;
   background: transparent;
-  --card-muted-text: #d7e1ea;
+  --card-muted-text: #b8c2cc;
   --card-code-color: var(--thread-code-color, color-mix(in srgb, var(--thread-accent), white 58%));
 }
 
 .thread-note p,
 .thread-note .ledger-card-body {
   margin: 0;
-  color: #f3f6fb;
+  color: var(--card-muted-text);
   font-size: 14px;
   font-weight: 400;
   line-height: 1.45;
@@ -599,13 +599,13 @@
   align-self: flex-start;
   max-width: min(92%, 640px);
   background: transparent;
-  color: #dfe7ee;
+  color: var(--card-muted-text);
   font-family: Ubuntu, ui-sans-serif, system-ui, sans-serif;
 }
 
 .thread-note.is-agent .thread-note-message,
 .thread-note.is-agent .thread-note-message p {
-  color: #dfe7ee;
+  color: var(--card-muted-text);
   font-size: 14px;
   font-weight: 400;
 }
@@ -1312,6 +1312,26 @@
 
 .thread-note-message .ledger-card-heading {
   color: var(--thread-heading-color, var(--thread-accent));
+  font-weight: 800;
+  line-height: 1.22;
+}
+
+.thread-note-message .ledger-card-heading-1 {
+  font-size: 1.2em;
+}
+
+.thread-note-message .ledger-card-heading-2 {
+  font-size: 1.13em;
+}
+
+.thread-note-message .ledger-card-heading-3 {
+  font-size: 1.06em;
+}
+
+.thread-note-message .ledger-card-heading-4,
+.thread-note-message .ledger-card-heading-5,
+.thread-note-message .ledger-card-heading-6 {
+  font-size: 1em;
 }
 
 .thread-note-message p:last-child,

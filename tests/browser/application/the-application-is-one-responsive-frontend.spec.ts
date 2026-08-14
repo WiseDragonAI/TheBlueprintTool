@@ -274,6 +274,131 @@ test('The responsive application preserves the mobile Control Room and expands t
   }
 });
 
+test('The served responsive card and both thread roles retain Markdown typography.', { timeout: 30_000 }, async () => {
+  const server = await startDecisionOsServer();
+  let browser: Browser | undefined;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    const route = await resolveResponsiveCardRoute(server.url);
+    const routeSegments = route.split('/');
+    const cardId = decodeURIComponent(routeSegments.at(-1) ?? '');
+    const ledgerId = decodeURIComponent(routeSegments[routeSegments.indexOf('ledgers') + 1] ?? '');
+    const threadId = `thread-${cardId}`;
+    assert.ok(cardId, 'The responsive card route must identify one card.');
+    assert.ok(ledgerId, 'The responsive card route must identify one ledger.');
+    const cardMarkdown = [
+      'Card normal typography **Card strong typography**.',
+      '# Card heading 1',
+      '## Card heading 2',
+      '### Card heading 3',
+      '#### Card heading 4',
+      '##### Card heading 5',
+      '###### Card heading 6',
+    ].join('\n\n');
+    const operatorMarkdown = [
+      'Operator normal typography **Operator strong typography**.',
+      '# Operator heading 1',
+      '## Operator heading 2',
+      '### Operator heading 3',
+      '#### Operator heading 4',
+      '##### Operator heading 5',
+      '###### Operator heading 6',
+    ].join('\n\n');
+    const agentMarkdown = [
+      'Agent normal typography **Agent strong typography**.',
+      '# Agent heading 1',
+      '## Agent heading 2',
+      '### Agent heading 3',
+      '#### Agent heading 4',
+      '##### Agent heading 5',
+      '###### Agent heading 6',
+    ].join('\n\n');
+    const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    await desktop.route(`**/api/ledgers/${encodeURIComponent(ledgerId)}/cards/${encodeURIComponent(cardId)}`, async (interceptedRoute) => {
+      const response = await interceptedRoute.fetch();
+      const card = await response.json() as { comment?: Record<string, unknown>; [key: string]: unknown };
+      await interceptedRoute.fulfill({
+        response,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...card, comment: { ...(card.comment ?? {}), what: cardMarkdown } }),
+      });
+    });
+    await desktop.route(`**/api/ledgers/${encodeURIComponent(ledgerId)}/threads/${encodeURIComponent(threadId)}`, async (interceptedRoute) => {
+      const response = await interceptedRoute.fetch();
+      const payload = await response.json() as { notes?: Record<string, unknown[]>; [key: string]: unknown };
+      await interceptedRoute.fulfill({
+        response,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...payload,
+          notes: {
+            ...(payload.notes ?? {}),
+            [threadId]: [
+              { id: 'note-browser-typography-operator', role: 'operator', message: operatorMarkdown, timestamp: '2026-08-11T00:00:00.000Z' },
+              { id: 'note-browser-typography-agent', role: 'agent', message: agentMarkdown, timestamp: '2026-08-11T00:00:01.000Z' },
+            ],
+          },
+        }),
+      });
+    });
+
+    await desktop.goto(`${server.url}${route}`, { waitUntil: 'domcontentloaded' });
+    await desktop.locator('#card-view:not([hidden]) .ledger-card-body').filter({ hasText: 'Card normal typography' }).waitFor({ state: 'visible', timeout: 10_000 });
+    await desktop.getByRole('button', { name: 'Thread', exact: true }).click();
+    await desktop.locator('.thread-note.is-operator .thread-note-message').filter({ hasText: 'Operator normal typography' }).waitFor({ state: 'visible', timeout: 10_000 });
+    await desktop.locator('.thread-note.is-agent .thread-note-message').filter({ hasText: 'Agent normal typography' }).waitFor({ state: 'visible', timeout: 10_000 });
+    const typography = await desktop.evaluate(() => (
+      [
+        { reader: 'card', selector: '#card-view .card-body > .ledger-card-body' },
+        { reader: 'operator', selector: '.thread-note.is-operator .thread-note-message' },
+        { reader: 'agent', selector: '.thread-note.is-agent .thread-note-message' },
+      ].map(({ reader: readerName, selector }) => {
+        const reader = document.querySelector<HTMLElement>(selector)!;
+        const normal = reader.querySelector<HTMLElement>('p')!;
+        const strong = reader.querySelector<HTMLElement>('strong')!;
+        return {
+          reader: readerName,
+          normal: {
+            color: getComputedStyle(normal).color,
+            fontWeight: getComputedStyle(normal).fontWeight,
+          },
+          strong: {
+            fontWeight: getComputedStyle(strong).fontWeight,
+          },
+          headings: [1, 2, 3, 4, 5, 6].map((level) => {
+            const heading = reader.querySelector<HTMLElement>(`.ledger-card-heading-${level}`)!;
+            return {
+              fontWeight: getComputedStyle(heading).fontWeight,
+              fontSize: Number.parseFloat(getComputedStyle(heading).fontSize),
+            };
+          }),
+        };
+      })
+    ));
+
+    for (const rendered of typography) {
+      const { reader } = rendered;
+      assert.equal(rendered.normal.color, 'rgb(184, 194, 204)', `${reader} normal text color`);
+      assert.equal(rendered.normal.fontWeight, '400', `${reader} normal text weight`);
+      assert.ok(Number.parseInt(rendered.strong.fontWeight, 10) > Number.parseInt(rendered.normal.fontWeight, 10), `${reader} authored strong weight`);
+      assert.equal(rendered.headings.length, 6, `${reader} heading count`);
+      for (const heading of rendered.headings) assert.equal(heading.fontWeight, '800', `${reader} heading weight`);
+      assert.ok(rendered.headings[0].fontSize > rendered.headings[1].fontSize, `${reader} H1 exceeds H2`);
+      assert.ok(rendered.headings[1].fontSize > rendered.headings[2].fontSize, `${reader} H2 exceeds H3`);
+      assert.ok(rendered.headings[2].fontSize > rendered.headings[3].fontSize, `${reader} H3 exceeds H4`);
+      assert.equal(rendered.headings[3].fontSize, rendered.headings[4].fontSize, `${reader} H4 equals H5`);
+      assert.equal(rendered.headings[4].fontSize, rendered.headings[5].fontSize, `${reader} H5 equals H6`);
+    }
+  } finally {
+    await browser?.close();
+    await stopDecisionOsServer(server.process);
+  }
+});
+
 test('An interrupted responsive thread hydration recovers without an operator reload.', { timeout: 30_000 }, async () => {
   const server = await startDecisionOsServer();
   let browser: Browser | undefined;
@@ -434,14 +559,21 @@ test('A new desktop task remains in its task view while its optimistic creation 
     const creationRequest = new Promise<void>((resolveObserved) => { creationObserved = resolveObserved; });
     const creationGate = new Promise<void>((resolveCreation) => { releaseCreation = resolveCreation; });
     let cardDetailReads = 0;
+    let createdCardId = '';
     await desktop.route('**/decision-os/tasks**', async (route) => {
+      // WHAT: Pass through every task endpoint request except the intake creation mutation under test.
+      // WHY: The fixture must defer only the optimistic creation transition and preserve all unrelated task traffic.
       if (route.request().method() !== 'PATCH') return route.continue();
       const mutation = route.request().postDataJSON() as {
         action?: string;
-        card?: Record<string, unknown>;
+        card?: { id?: string; [key: string]: unknown };
         annotation?: Record<string, unknown>;
       };
+      // WHAT: Pass through PATCH mutations that do not create the pending task intake.
+      // WHY: Only create-task-intake supplies the card identity needed to classify its later hydration request.
       if (mutation.action !== 'create-task-intake') return route.continue();
+      createdCardId = mutation.card?.id ?? '';
+      assert.ok(createdCardId, 'The create-task-intake mutation must contain the created card id.');
       creationObserved();
       await creationGate;
       await route.fulfill({
@@ -456,6 +588,11 @@ test('A new desktop task remains in its task view while its optimistic creation 
       });
     });
     await desktop.route('**/api/ledgers/tasks/cards/**', async (route) => {
+      const request = route.request();
+      const createdCardPath = `/p/${encodeURIComponent(project.id)}/api/ledgers/tasks/cards/${encodeURIComponent(createdCardId)}`;
+      // WHAT: Intercept only the pending card's exact project-scoped detail GET request.
+      // WHY: Descendants such as execution-state and unrelated card reads must keep their normal request behavior.
+      if (request.method() !== 'GET' || new URL(request.url()).pathname !== createdCardPath) return route.continue();
       cardDetailReads += 1;
       await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Card is not persisted yet.' }) });
     });

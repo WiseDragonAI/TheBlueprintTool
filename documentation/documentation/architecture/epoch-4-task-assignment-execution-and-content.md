@@ -28,7 +28,7 @@
 1. **Admission:** `TaskExecutionRouter` resolves the source card to its master, requires one conflict-free assignment, and persists the execution before dispatch.
 2. **Local execution:** The assigned node transitions a durable execution through `preparing`, `queued`, `starting`, `running`, and one terminal phase.
 3. **Remote execution:** The requesting node sends one authenticated execution request to the assigned node. The assigned node applies the same admission path and remains the only process owner.
-4. **Offline local authority:** Relay-root equality is not a local execution prerequisite. A locally assigned task can execute while relay transport is unavailable.
+4. **Offline local authority:** Relay-root equality is not a local execution prerequisite. A locally assigned task can execute while relay transport is unavailable. A timed-out relay repair records stopped-operation history without pausing the local task-state project.
 5. **Unavailable assignment:** An unreachable assigned node returns `assigned_node_unreachable` and creates no substitute execution on the requesting node.
 6. **Restart recovery:** Startup reads locally assigned active executions. It adopts a child only when both PID and process-start identity match; stale active state becomes `interrupted` after available artifacts are captured.
 7. **Projection rule:** Replicated lifecycle owns the visible phase. Missing process observation does not relabel a durable `starting` or `running` execution as `interrupted`.

@@ -36,6 +36,20 @@ export function createIncidentSupervisor(input: {
   let fatalExitScheduled = false;
 
   for (const incident of input.incidentLedger.active()) {
+    // WHAT: Convert a legacy repair timeout into non-pausing history when it is the scope's only failure class.
+    // WHY: Relay delay terminates one repair attempt and does not invalidate otherwise writable local task state.
+    if (incident.code === 'federation_state_no_progress' && incident.scope.startsWith('project-task-state:')) {
+      const activeScope = input.incidentLedger.active(incident.scope);
+      // WHAT: Resolve the legacy scope only when every active incident is the obsolete timeout classification.
+      // WHY: Startup normalization must preserve any independent durable-state failure sharing the old scope.
+      if (activeScope.every((candidate) => candidate.code === 'federation_state_no_progress')) {
+        input.incidentLedger.resolveScope(
+          incident.scope,
+          'Federation repair timeout is diagnostic history and does not pause local task state.',
+        );
+      }
+      continue;
+    }
     if (isTaskStateBootstrapGate(incident.code)
       && (incident.scope.startsWith('http-request:')
         || incident.scope.startsWith('project-task-write:')
@@ -92,6 +106,7 @@ export function createIncidentSupervisor(input: {
     component: string;
     operation: string;
     error: unknown;
+    code?: string;
     context: Record<string, unknown>;
   }): string => {
     const incident = recordIncident({ severity: 'warning', ...operation });

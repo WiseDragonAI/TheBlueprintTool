@@ -64,10 +64,13 @@ function recoveryHarness(fixture: Awaited<ReturnType<typeof legacyFixture>>, col
     error: new Error(`Federated state made no durable progress for ${fixture.projectId}.`),
     context: { projectId: fixture.projectId, from: 'relay', attemptId: noProgressAttempt },
   });
-  incidentSupervisor.pausedTaskProjects.set(fixture.projectId, noProgress);
-  // WHAT: Resolve only the durable timeout while retaining its stale in-memory cache for the regression fixture.
-  // WHY: Successful collision recovery must remove stale admission state even when no downstream ledger incident remains.
-  if (options.staleDownstreamCache) incidentLedger.resolveScope(`project-task-state:${fixture.projectId}`, 'Pre-resolved fixture timeout.');
+  incidentLedger.resolveScope(
+    `project-task-state:${fixture.projectId}`,
+    'Legacy federation timeout is non-pausing diagnostic history.',
+  );
+  // WHAT: Retain only the obsolete in-memory marker for the requested restart regression fixture.
+  // WHY: Collision recovery must remove stale admission state even when no downstream ledger incident remains.
+  if (options.staleDownstreamCache) incidentSupervisor.pausedTaskProjects.set(fixture.projectId, noProgress);
   const paused = incidentLedger.record({
     scope,
     component: 'federation-task-state-replicator',
@@ -77,14 +80,14 @@ function recoveryHarness(fixture: Awaited<ReturnType<typeof legacyFixture>>, col
     context: { projectId: fixture.projectId, from: 'relay', attemptId, deliveryId, rejected: [collision], evidenceKeys: [] },
   });
   incidentSupervisor.pausedFederationRepairs.set(fixture.projectId, paused);
-  // WHAT: Inject a downstream resolution persistence failure only for the requested regression fixture.
-  // WHY: Recovery must clean application state and restore pause authority after a failed diagnostic write.
+  // WHAT: Inject a collision-resolution persistence failure only for the requested regression fixture.
+  // WHY: Recovery must clean application state and restore collision pause authority after a failed diagnostic write.
   if (options.resolutionFailure) {
     const resolveScope = incidentLedger.resolveScope.bind(incidentLedger);
     incidentLedger.resolveScope = (targetScope: string, targetResolution = '') => {
-      // WHAT: Fail only the captured project-state resolution while preserving ordinary collision resolution behavior.
-      // WHY: The test must reach replacement installation before exercising rollback containment.
-      if (targetScope === `project-task-state:${fixture.projectId}`) return [];
+      // WHAT: Fail only collision resolution after replacement installation.
+      // WHY: The test must exercise rollback without depending on obsolete timeout-pause settlement.
+      if (targetScope === scope) return [];
       return resolveScope(targetScope, targetResolution);
     };
   }
@@ -150,7 +153,7 @@ function recoveryHarness(fixture: Awaited<ReturnType<typeof legacyFixture>>, col
   return { attemptId, incidentLedger, incidentSupervisor, openedState: () => openedState, openCount: () => openCount, publications, recovery: createRuntimeRecoveryService(input), scope, states };
 }
 
-test('explicit recovery upgrades one legacy publication incident from retained WAL evidence and settles both pauses', async (context) => {
+test('explicit recovery upgrades one legacy publication incident using retained timeout history', async (context) => {
   const fixture = await legacyFixture('decision-os-legacy-publication-recovery-');
   context.after(() => rmSync(fixture.root, { recursive: true, force: true }));
   const harness = recoveryHarness(fixture);
@@ -239,7 +242,7 @@ test('paused collision recovery installs no state when exact durable reopen fail
   assert.equal(harness.publications.length, 1);
   assert.equal(harness.incidentLedger.active(harness.scope).length, 2);
   assert.equal(harness.incidentLedger.active(harness.scope).some((incident) => incident.code === 'federation_repair_runtime_restore_failed'), true);
-  assert.equal(harness.incidentLedger.active(`project-task-state:${fixture.projectId}`).length, 1);
+  assert.equal(harness.incidentLedger.active(`project-task-state:${fixture.projectId}`).length, 0);
 });
 
 test('successful collision recovery clears a stale task-project pause cache with no active downstream incident', async (context) => {
@@ -251,7 +254,7 @@ test('successful collision recovery clears a stale task-project pause cache with
   assert.equal(harness.incidentSupervisor.pausedTaskProjects.has(fixture.projectId), false);
 });
 
-test('downstream resolution persistence failure removes replacement state and restores both pauses', async (context) => {
+test('collision resolution persistence failure removes replacement state and restores its pause', async (context) => {
   const fixture = await legacyFixture('decision-os-paused-publication-resolution-failure-');
   context.after(() => rmSync(fixture.root, { recursive: true, force: true }));
   const harness = recoveryHarness(fixture, fixture.collision, { stateInstalled: false, resolutionFailure: true });
@@ -260,5 +263,5 @@ test('downstream resolution persistence failure removes replacement state and re
   assert.equal(harness.states.has(fixture.projectId), false);
   assert.equal(harness.incidentLedger.active(harness.scope).some((incident) => incident.code === 'task_current_dot_collision'), true);
   assert.equal(harness.incidentLedger.active(harness.scope).some((incident) => incident.code === 'federation_repair_runtime_restore_failed'), true);
-  assert.equal(harness.incidentSupervisor.pausedTaskProjects.has(fixture.projectId), true);
+  assert.equal(harness.incidentSupervisor.pausedTaskProjects.has(fixture.projectId), false);
 });

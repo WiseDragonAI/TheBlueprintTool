@@ -16,6 +16,7 @@
 3. Accepted and rejected entries settle independently. A collision on one entity does not prevent unrelated valid entities in the same delivery from committing.
 4. Delivery identity, accepted hashes, rejected hashes, and the resulting relay root persist so reconnect can continue from durable state without replaying acknowledged work.
 5. Receiver durability and structural ACK settlement remain ahead of derived current-shard materialization, content scheduling, UI projection, and observer work.
+6. A finite no-progress deadline terminates only its repair attempt. It records resolved diagnostic history and does not pause valid local task state.
 
 ---
 
@@ -45,6 +46,7 @@
 3. Local-authority recovery creates a deterministic successor, publishes it, waits for the correlated relay ACK and exact root equality, flushes the store, reopens it, and revalidates the root and entity hashes.
 4. Normal project runtime is installed only after the durable reload and active-incident generation checks succeed.
 5. A restoration failure removes transient runtime state, retains the original pause evidence, and records `federation_repair_runtime_restore_failed`.
+6. Historical `federation_state_no_progress` evidence can supply legacy repair context without becoming project-pause authority. Startup converts retained timeout-only project incidents into resolved diagnostic history.
 
 ---
 
@@ -70,5 +72,7 @@
 10. `backend/test/unit/refresh/helper/watch-project-files.test.ts`
 11. `backend/test/unit/server/runtime/project-content-runtime.test.ts`
 12. `backend/test/unit/server/runtime/runtime-recovery-service.test.ts`
-13. `federation-relay/test/relay.test.ts`
-14. `federation-relay/test/termux-local-relay.node.test.ts`
+13. `backend/test/unit/server/runtime/incident-supervisor.test.ts`
+14. `backend/test/unit/federation/federation-state-runtime.test.ts`
+15. `federation-relay/test/relay.test.ts`
+16. `federation-relay/test/termux-local-relay.node.test.ts`
