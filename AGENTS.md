@@ -143,21 +143,17 @@ inside the submodule and is not added to either repository.
 ### Cleanliness Reporting Boundary
 
 - When the operator asks whether a repository, branch, checkout, or worktree is
-  clean, report only the owning parent repository's Git state and ignore
-  `.decision-os` submodule worktree state.
-- Mention `.decision-os` child-repository Git state only when the operator
-  explicitly asks for Decision OS submodule status or cleanliness.
-- The parent repository's `.decision-os` gitlink remains part of the parent
-  cleanliness result. Report a staged or changed gitlink because it changes the
-  parent repository; do not expand that marker into child paths unless the
-  operator explicitly asks for submodule details.
+  clean, report the owning parent repository's Git state while excluding the
+  exact `.decision-os` submodule marker. This exclusion covers child-worktree
+  dirt and staged or unstaged gitlink drift.
+- Mention `.decision-os` child-repository state or gitlink drift only when the
+  operator explicitly asks for Decision OS submodule status or cleanliness.
 
 The parent repository must record only the `.decision-os` gitlink. A parent
 status showing individual `.decision-os/...` files means the submodule boundary
-is missing or has been removed and must be repaired before reporting the parent
-clean. A parent status showing `m .decision-os` means the submodule has
-uncommitted content; commit authored content in the child repository before
-updating the parent gitlink.
+is missing or has been removed and must be repaired. A parent status showing
+`m .decision-os` means the submodule has uncommitted content; commit authored
+content in the child repository before updating the parent gitlink.
 
 This checkout uses the local-only submodule source
 `file:///home/jbb/dev/EditorBP/decision-os-data.git`. New local-only projects
