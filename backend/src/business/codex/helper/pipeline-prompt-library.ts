@@ -35,6 +35,7 @@ export const pipelinePromptRuntimeTokenNames = [
   'SUB_CONTEXT',
   'SUB_TASKS',
   'FULL_THREAD',
+  'PENDING_NOTES',
   'FILE_MAP',
   'PREVIOUS_SKILL_RESULT',
   'EXECUTION_CONTEXT',

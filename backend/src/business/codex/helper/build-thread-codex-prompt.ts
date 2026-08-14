@@ -7,6 +7,7 @@ import {
   createPipelinePromptRuntimeContext,
   renderPipelineDeveloperPrompt,
 } from './pipeline-prompt-library.js';
+import { buildPendingNotesMarkdown } from './build-pending-notes-markdown.js';
 import { decisionOsRuntimePlatform } from './resolve-codex-command.js';
 
 function runSkillPolicy(disallowSkills: boolean | undefined): string {
@@ -31,6 +32,7 @@ export function buildThreadCodexPrompt(input: {
   workspaceRoot: string;
   projectId: string;
   ledgerFile: string;
+  ledger?: unknown;
   cardId: string;
   cardTitle: string;
   cardMarkdownFile: string;
@@ -67,6 +69,11 @@ export function buildThreadCodexPrompt(input: {
       SUB_CONTEXT: empty,
       SUB_TASKS: empty,
       FULL_THREAD: () => input.threadMarkdown,
+      PENDING_NOTES: () => buildPendingNotesMarkdown({
+        ledger: input.ledger,
+        ledgerJsonFile: input.ledgerFile,
+        threadId: input.threadId,
+      }),
       FILE_MAP: empty,
       PREVIOUS_SKILL_RESULT: empty,
       EXECUTION_CONTEXT: () => JSON.stringify(input.context, null, 2),

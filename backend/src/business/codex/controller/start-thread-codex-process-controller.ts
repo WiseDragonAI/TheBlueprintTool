@@ -380,6 +380,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     workspaceRoot,
     projectId: String(runtime.projectId ?? ''),
     ledgerFile: ledgerPath,
+    ledger,
     cardId,
     cardTitle: String(source.title ?? cardId),
     cardMarkdownFile: sourceCardFile,

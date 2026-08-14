@@ -293,6 +293,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
         workspaceRoot,
         projectId: String(runtime.projectId ?? ''),
         ledgerFile: ledgerPath,
+        ledger,
         cardId,
         cardTitle: String(card.title ?? cardId),
         cardMarkdownFile: outputFile,

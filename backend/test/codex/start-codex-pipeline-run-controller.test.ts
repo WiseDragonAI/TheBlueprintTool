@@ -172,6 +172,7 @@ function runtimeContext(overrides: Partial<Record<string, string>> = {}) {
     SUB_CONTEXT: value('SUB_CONTEXT', '{}'),
     SUB_TASKS: value('SUB_TASKS'),
     FULL_THREAD: value('FULL_THREAD', '# OPERATOR'),
+    PENDING_NOTES: value('PENDING_NOTES'),
     FILE_MAP: value('FILE_MAP', '.'),
     PREVIOUS_SKILL_RESULT: value('PREVIOUS_SKILL_RESULT', 'Input'),
     EXECUTION_CONTEXT: value('EXECUTION_CONTEXT', '{}'),
@@ -183,14 +184,14 @@ function runtimeContext(overrides: Partial<Record<string, string>> = {}) {
   });
 }
 
-test('FILE_MAP is recognized beside EXECUTION_CONTEXT in both syntax versions', () => {
+test('PENDING_NOTES and FILE_MAP are recognized beside EXECUTION_CONTEXT', () => {
   assert.deepEqual(
     pipelinePromptTemplateVariables('{{FILE_MAP}}\n{{EXECUTION_CONTEXT}}'),
     ['FILE_MAP', 'EXECUTION_CONTEXT'],
   );
   assert.deepEqual(
-    pipelinePromptRuntimeTokens('<FILE_MAP>\n<EXECUTION_CONTEXT>'),
-    ['FILE_MAP', 'EXECUTION_CONTEXT'],
+    pipelinePromptRuntimeTokens('<PENDING_NOTES>\n<FILE_MAP>\n<EXECUTION_CONTEXT>'),
+    ['PENDING_NOTES', 'FILE_MAP', 'EXECUTION_CONTEXT'],
   );
   assert.equal(pipelinePromptRuntimeVariables.has('FILE_MAP'), true);
   assert.equal(pipelinePromptRuntimeVariables.has('EXECUTION_CONTEXT'), true);
@@ -223,6 +224,9 @@ function createPromptRepository(input: {
     '',
     'FULL_THREAD',
     '<FULL_THREAD>',
+    '',
+    'PENDING_NOTES',
+    '<PENDING_NOTES>',
     '',
     'FILE_MAP',
     '<FILE_MAP>',
@@ -461,6 +465,7 @@ test('pipeline prompt construction injects runtime tokens into only the admitted
     'SUBTASKS=<SUB_CONTEXT>',
     'FACTS=<SUB_TASKS>',
     'THREAD=<FULL_THREAD>',
+    'PENDING=<PENDING_NOTES>',
     'FILES=<FILE_MAP>',
     'PREVIOUS=<PREVIOUS_SKILL_RESULT>',
     'CONTEXT=<EXECUTION_CONTEXT>',
@@ -477,6 +482,7 @@ test('pipeline prompt construction injects runtime tokens into only the admitted
       SUB_CONTEXT: '## Subtask 1: Analyze\n\nAnalysis body.',
       SUB_TASKS: '## Analyze\n- Confirm evidence',
       FULL_THREAD: '# OPERATOR\n\nContinue the iteration.',
+      PENDING_NOTES: '# OPERATOR\n\nLatest unanswered instruction.',
       FILE_MAP: '.\n backend/\n  src/\n   server.ts',
       PREVIOUS_SKILL_RESULT: '# Worker result\n\nVerified analysis.',
       EXECUTION_CONTEXT: JSON.stringify({
@@ -491,6 +497,7 @@ test('pipeline prompt construction injects runtime tokens into only the admitted
   assert.match(prompt, /SUBTASKS=## Subtask 1: Analyze[\s\S]*Analysis body\./);
   assert.match(prompt, /FACTS=## Analyze\n- Confirm evidence/);
   assert.match(prompt, /Continue the iteration\./);
+  assert.match(prompt, /PENDING=# OPERATOR\n\nLatest unanswered instruction\./);
   assert.match(prompt, /FILES=\.\n backend\/\n  src\/\n   server\.ts/);
   assert.match(prompt, /PREVIOUS=# Worker result[\s\S]*Verified analysis\./);
   assert.match(prompt, /"projectId": "project-a"/);
@@ -702,6 +709,11 @@ test('a running pipeline prompt queues one worker then returns with the latest t
     writeFileSync(taskThreadFile, [
       readFileSync(taskThreadFile, 'utf8').trimEnd(),
       '',
+      '# AGENT',
+      '<!-- decision-os:note {"id":"note-agent-boundary","timestamp":"2026-07-29T01:04:00.000Z"} -->',
+      '',
+      'Previous thread answer.',
+      '',
       '# OPERATOR',
       '<!-- decision-os:note {"id":"note-latest","timestamp":"2026-07-29T01:05:00.000Z"} -->',
       '',
@@ -728,6 +740,9 @@ test('a running pipeline prompt queues one worker then returns with the latest t
     assert.match(returningInput, /# Master objective[\s\S]*Implement the dynamic gate\./);
     assert.match(returningInput, /Start from the complete task conversation\./);
     assert.match(returningInput, /This latest operator message must reach the returning gate\./);
+    const pendingInput = returningInput.match(/PENDING_NOTES\n([\s\S]*?)\nFILE_MAP/)?.[1] ?? '';
+    assert.doesNotMatch(pendingInput, /Start from the complete task conversation|Previous thread answer/);
+    assert.match(pendingInput, /# OPERATOR[\s\S]*This latest operator message must reach the returning gate\./);
     assert.match(returningInput, /SUB_CONTEXT[\s\S]*Existing subtask[\s\S]*Preserve this complete subtask body\./);
     assert.match(returningInput, /FILE_MAP[\s\S]*src\/[\s\S]*dynamic-gate\.ts/);
     assert.match(returningInput, /PREVIOUS_SKILL_RESULT[\s\S]*WORKER_RESULT/);

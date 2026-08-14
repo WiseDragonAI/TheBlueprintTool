@@ -20,6 +20,7 @@ import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './cod
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
 import { buildMeaningfulFileMap } from './build-meaningful-file-map.js';
 import { buildCardLaunchContext } from './build-card-launch-context.js';
+import { buildPendingNotesMarkdown } from './build-pending-notes-markdown.js';
 import { buildPipelineSubtasks, buildPipelineSubtaskContext } from './build-pipeline-subtask-context.js';
 import { isCodexThreadArtifactNote } from './is-codex-thread-artifact-note.js';
 import {
@@ -164,7 +165,7 @@ function pipelinePromptConversationContext(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
   taskCardId: string;
-}): { threadId: string; context: AnyRecord; subtaskContext: string } {
+}): { threadId: string; context: AnyRecord; pendingNotesMarkdown: string; subtaskContext: string } {
   const ledger = hydrateLedgerCardContent(
     JSON.parse(JSON.stringify(input.context.ledger)),
     input.decisionOsRoot,
@@ -179,6 +180,11 @@ function pipelinePromptConversationContext(input: {
     .filter((note) => !deleted.has(String(note.id ?? '')) && !isCodexThreadArtifactNote(note));
   return {
     threadId,
+    pendingNotesMarkdown: buildPendingNotesMarkdown({
+      ledger,
+      ledgerJsonFile: input.context.ledgerPath,
+      threadId,
+    }),
     subtaskContext: buildPipelineSubtaskContext({
       ledger,
       masterTaskId: input.taskCardId,
@@ -235,13 +241,14 @@ export function createPipelineSkillRuntimeContext(input: {
   serverSkill?: { markdown: string; packageRoot: string } | null | (() => { markdown: string; packageRoot: string } | null);
   executionContext?: AnyRecord;
 }): PipelinePromptRuntimeContext {
-  let conversation: { threadId: string; context: AnyRecord; subtaskContext: string } | null | undefined;
-  const resolveConversation = (): { threadId: string; context: AnyRecord; subtaskContext: string } | null => {
+  let conversation: { threadId: string; context: AnyRecord; pendingNotesMarkdown: string; subtaskContext: string } | null | undefined;
+  const resolveConversation = (): { threadId: string; context: AnyRecord; pendingNotesMarkdown: string; subtaskContext: string } | null => {
     if (conversation !== undefined) return conversation;
     if (input.taskConversationContext) {
       conversation = {
         threadId: input.taskThreadId ?? String((input.taskConversationContext.thread as AnyRecord | undefined)?.id ?? ''),
         context: input.taskConversationContext,
+        pendingNotesMarkdown: '',
         subtaskContext: input.subtaskContext ?? '',
       };
       return conversation;
@@ -315,6 +322,7 @@ export function createPipelineSkillRuntimeContext(input: {
       masterTaskId: input.outputParentCardId,
     }),
     FULL_THREAD: () => String(thread().markdown ?? ''),
+    PENDING_NOTES: () => resolveConversation()?.pendingNotesMarkdown ?? '',
     FILE_MAP: () => buildMeaningfulFileMap(input.workspaceRoot),
     PREVIOUS_SKILL_RESULT: () => previousSkillResult,
     EXECUTION_CONTEXT: () => JSON.stringify(executionContext, (_key, value) =>
