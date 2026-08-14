@@ -151,6 +151,9 @@
 7. `@pierre/diffs@1.2.12` renders the adjacent patch with red removals and blue additions. Minus and plus signs, line numbers, `Removed` and `Added` labels, revision text, focus order, region labels, and group labels preserve meaning without color.
 8. `frontend/src/runtime/codex/component/codemirror-file-editor.ts` contains the required future-use comment for a thread-attached file owner.
 9. The deferred attachment adapter must resolve attachment identity and file authorization on the backend, then pass confirmed Markdown bytes into the same CodeMirror boundary. Attachment mutation is not implemented, and the browser never submits an attachment path.
+10. Existing-skill editing projects `is-behind-existing-skill-editor` onto each rendered owner surface. The Process modal, skill picker, global Skills route, retained detail rail, and editor tools rail hide their own close controls while the editor header close remains visible.
+11. Creator mode does not project existing-skill ownership. Successful creation promotes the live session to existing-skill editing before save completion observers run; accepted close clears every projected owner marker before focus restoration and route settlement.
+12. Direct-detail editing retains the rendered detail owner and restores its close controls when editing ends. An edit deep link uses the normal route loader and renders a fresh detail owner after close.
 
 ---
 
