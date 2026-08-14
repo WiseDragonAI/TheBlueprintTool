@@ -18,6 +18,20 @@ test('thread markdown keeps inline code in the note font and accents list marker
   assert.match(css, /\.thread-note-message \.ledger-card-code-block code\s*\{[^}]*font-family:\s*var\(--mono\);/s);
 });
 
+test('thread markdown strong text has low-specificity shared ownership across both note roles', () => {
+  const css = readFileSync(new URL('frontend/assets/shared/thread.css', root), 'utf8');
+
+  assert.match(css, /:where\(\.thread-note-message\) strong\s*\{[^}]*color:\s*var\(--text\);[^}]*\}/s);
+  assert.match(css, /\.thread-note\.is-operator\s*\{/);
+  assert.match(css, /\.thread-note\.is-agent\s*\{[^}]*color:\s*var\(--card-muted-text\);/s);
+  assert.match(css, /\.thread-note p,\s*\.thread-note \.ledger-card-body\s*\{[^}]*color:\s*var\(--card-muted-text\);/s);
+  assert.match(css, /\.thread-note-message\s*\{[^}]*min-width:\s*0;[^}]*max-width:\s*100%;[^}]*overflow-wrap:\s*anywhere;/s);
+  assert.match(css, /\.thread-note-message \.ledger-card-heading\s*\{[^}]*color:\s*var\(--thread-heading-color,\s*var\(--thread-accent\)\);/s);
+  assert.match(css, /\.thread-note \.thread-note-message code\s*\{[^}]*color:\s*var\(--card-code-color\);/s);
+  assert.match(css, /\.thread-note-message li::marker\s*\{[^}]*color:\s*var\(--card-code-color\);/s);
+  assert.match(css, /\.thread-note-message \.ledger-card-blockquote-summary,\s*\.codex-log-event-body \.ledger-card-blockquote-summary\s*\{[^}]*color:\s*var\(--thread-accent\);/s);
+});
+
 test('blockquote disclosures retain visible interaction styling across card, responsive, thread, and Codex Log surfaces', () => {
   const cardCss = readFileSync(new URL('frontend/assets/canvas/objects.css', root), 'utf8');
   const responsiveCss = readFileSync(new URL('frontend/assets/application.css', root), 'utf8');

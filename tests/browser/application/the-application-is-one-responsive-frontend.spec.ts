@@ -367,6 +367,7 @@ test('The served responsive card and both thread roles retain Markdown typograph
             fontWeight: getComputedStyle(normal).fontWeight,
           },
           strong: {
+            color: getComputedStyle(strong).color,
             fontWeight: getComputedStyle(strong).fontWeight,
           },
           headings: [1, 2, 3, 4, 5, 6].map((level) => {
@@ -384,6 +385,7 @@ test('The served responsive card and both thread roles retain Markdown typograph
       const { reader } = rendered;
       assert.equal(rendered.normal.color, 'rgb(184, 194, 204)', `${reader} normal text color`);
       assert.equal(rendered.normal.fontWeight, '400', `${reader} normal text weight`);
+      assert.equal(rendered.strong.color, 'rgb(245, 240, 232)', `${reader} authored strong color`);
       assert.ok(Number.parseInt(rendered.strong.fontWeight, 10) > Number.parseInt(rendered.normal.fontWeight, 10), `${reader} authored strong weight`);
       assert.equal(rendered.headings.length, 6, `${reader} heading count`);
       for (const heading of rendered.headings) assert.equal(heading.fontWeight, '800', `${reader} heading weight`);
