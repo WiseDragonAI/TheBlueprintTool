@@ -19,9 +19,9 @@
    node bin/decision-os-merge-dev.mjs min --json
    ```
 
-   **WHY:** The command commits main-owned Decision OS content, records its gitlink, merges the local `dev` ref without adopting the `dev` gitlink, and creates one matching rollback version across the parent and child repositories.
+   **WHY:** The command commits main-owned Decision OS content, records its gitlink, merges the local `dev` ref without adopting the `dev` gitlink, creates one matching rollback version across the parent and child repositories, and atomically publishes parent `main`, `rel-<version>`, and `devrel-<version>`.
 
-3. **WHAT:** Treat exit `0` and the JSON receipt as successful local promotion.
+3. **WHAT:** Treat exit `0` and the JSON receipt as successful promotion and parent publication.
 
    **WHY:** The receipt identifies the admitted `dev` SHA, committed child SHA, optional child and gitlink commits, final merge SHA, exact merge parents, preserved Decision OS gitlink, four release tag targets, and final parent and child status.
 
@@ -37,14 +37,13 @@
 
    **WHY:** The command never accepts a manual version. It increments the latest canonical parent `rel-X.Y.Z` tag: `maj` resets minor and fix, `min` resets fix, and `fix` increments only fix.
 
-7. **WHAT:** Publish the exact receipt `mainSha`, parent tags, and child tags only when explicitly authorized.
+7. **WHAT:** Publish child tags separately only when explicitly authorized.
 
    ```bash
-   git push origin <mainSha>:refs/heads/main rel-<version> devrel-<version>
    git -C .decision-os push local-submodule rel-<version> devrel-<version>
    ```
 
-   **WHY:** Production delivery admits only an already-published canonical main merge. The merge command itself never pushes, deploys, restarts a server, updates a remote submodule, and activates a release.
+   **WHY:** The merge command atomically publishes the parent main branch and parent tags. It never pushes the child repository, deploys, restarts a server, and activates a release.
 
 8. **WHAT:** Deploy the relay from the published annotated parent release tag in the canonical primary `main` checkout:
 
