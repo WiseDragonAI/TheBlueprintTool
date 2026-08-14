@@ -24,6 +24,7 @@ import { createMasterTask } from '../../ledger/helper/create-master-task.js';
 import { applyScopedMasterTaskPlan } from '../../ledger/effect/apply-scoped-master-task-plan.js';
 import { applyScopedMasterTaskProgress } from '../../ledger/effect/apply-scoped-master-task-progress.js';
 import { queueSkill } from '../../codex/effect/queue-skill.js';
+import { queuePipeline } from '../../codex/effect/queue-pipeline.js';
 import { readCardMarkdown } from '../../ledger/helper/read-card-markdown.js';
 import { queryPipelinePrompts } from '../../prompt/helper/query-pipeline-prompts.js';
 import { mutatePipelinePrompt } from '../../prompt/helper/mutate-pipeline-prompt.js';
@@ -83,6 +84,16 @@ export async function dispatchLedgerCliCommandController(
       return result;
     }
     return { ok: false, error: 'prompt requires query, create, or update.' };
+  }
+
+  // WHAT: Dispatch saved-pipeline successor selection through its execution-scoped effect.
+  // WHY: Thread callers must not construct project routes or task ownership payloads themselves.
+  if (command.mode === 'queue-pipeline') {
+    const result = await queuePipeline(command.queuePipelineOperation ?? {});
+    // WHAT: Emit only the server-confirmed successor receipt.
+    // WHY: Failed admission must remain distinguishable from a queued pipeline.
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
   }
 
   if (command.mode === 'queue-skill') {
