@@ -20,6 +20,7 @@ import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './cod
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
 import { buildMeaningfulFileMap } from './build-meaningful-file-map.js';
 import { buildCardLaunchContext } from './build-card-launch-context.js';
+import { buildLastAgentNoteMarkdown } from './build-last-agent-note-markdown.js';
 import { buildPendingNotesMarkdown } from './build-pending-notes-markdown.js';
 import { buildPipelineSubtasks, buildPipelineSubtaskContext } from './build-pipeline-subtask-context.js';
 import { isCodexThreadArtifactNote } from './is-codex-thread-artifact-note.js';
@@ -323,6 +324,7 @@ export function createPipelineSkillRuntimeContext(input: {
     }),
     FULL_THREAD: () => String(thread().markdown ?? ''),
     PENDING_NOTES: () => resolveConversation()?.pendingNotesMarkdown ?? '',
+    LAST_AGENT_NOTE: () => buildLastAgentNoteMarkdown(String(thread().markdown ?? '')),
     FILE_MAP: () => buildMeaningfulFileMap(input.workspaceRoot),
     PREVIOUS_SKILL_RESULT: () => previousSkillResult,
     EXECUTION_CONTEXT: () => JSON.stringify(executionContext, (_key, value) =>

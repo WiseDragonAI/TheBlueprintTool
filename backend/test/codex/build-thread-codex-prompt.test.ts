@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { buildLastAgentNoteMarkdown } from '@backend/business/codex/helper/build-last-agent-note-markdown.js';
 import { buildThreadCodexPrompt } from '@backend/business/codex/helper/build-thread-codex-prompt.js';
 import { compilePipelinePromptGraph } from '@backend/business/codex/helper/pipeline-prompt-library.js';
 import { testCodexRunPrompt } from '../support/pipeline-prompt-fixture.js';
@@ -108,6 +109,45 @@ test('PENDING_NOTES injects only notes selected by ledger-cli after the last age
 
   assert.doesNotMatch(prompt.developerInstructions, /Superseded request|Previous answer/);
   assert.match(prompt.developerInstructions, /# OPERATOR[\s\S]*First pending instruction\.[\s\S]*# OPERATOR[\s\S]*Second pending instruction\./);
+});
+
+test('LAST_AGENT_NOTE injects only the latest agent answer from the active thread', () => {
+  const prompt = buildThreadCodexPrompt({
+    developerPromptSnapshot: '<LAST_AGENT_NOTE>',
+    workspaceRoot: '/workspace',
+    projectId: 'project-a',
+    ledgerFile: '/workspace/.decision-os/specs.json',
+    cardId: 'card-a',
+    cardTitle: 'Card A',
+    cardMarkdownFile: '/workspace/.decision-os/cards/specs/card-a.md',
+    cardMarkdown: '# Card A\n',
+    threadId: 'thread-card-a',
+    threadMarkdownFile: '/workspace/.decision-os/threads/specs/thread-card-a.md',
+    threadMarkdown: [
+      '# AGENT',
+      '',
+      'Superseded answer.',
+      '',
+      '# OPERATOR',
+      '',
+      'Follow-up request.',
+      '',
+      '# AGENT',
+      '',
+      'Latest agent answer.',
+      '',
+      '# OPERATOR',
+      '',
+      'Current request.',
+    ].join('\n'),
+    runSummaryFile: '/workspace/.decision-os/runs/codex-skills/specs/run.md',
+    operatorNoteTimestamp: '2026-07-08T01:00:00.000Z',
+    context: {},
+  });
+
+  assert.doesNotMatch(prompt.developerInstructions, /Superseded answer|Follow-up request|Current request/);
+  assert.match(prompt.developerInstructions, /^# AGENT[\s\S]*Latest agent answer\.\n$/);
+  assert.equal(buildLastAgentNoteMarkdown('# OPERATOR\n\nNo agent answer yet.\n'), '');
 });
 
 test('voice Run prompt explicitly disallows skills', () => {
