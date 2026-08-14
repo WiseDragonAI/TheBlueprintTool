@@ -35,6 +35,7 @@ function runtimeContext(overrides: Partial<Record<string, () => string>> = {}) {
     SUB_TASKS: overrides.SUB_TASKS ?? empty,
     FULL_THREAD: overrides.FULL_THREAD ?? empty,
     PENDING_NOTES: overrides.PENDING_NOTES ?? empty,
+    LAST_AGENT_NOTE: overrides.LAST_AGENT_NOTE ?? empty,
     FILE_MAP: overrides.FILE_MAP ?? empty,
     PREVIOUS_SKILL_RESULT: overrides.PREVIOUS_SKILL_RESULT ?? empty,
     EXECUTION_CONTEXT: overrides.EXECUTION_CONTEXT ?? empty,

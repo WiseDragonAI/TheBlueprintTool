@@ -81,9 +81,10 @@
    3. `<SUB_TASKS>`
    4. `<FULL_THREAD>`
    5. `<PENDING_NOTES>`
-   6. `<FILE_MAP>`
-   7. `<PREVIOUS_SKILL_RESULT>`
-   8. `<EXECUTION_CONTEXT>`
+   6. `<LAST_AGENT_NOTE>`
+   7. `<FILE_MAP>`
+   8. `<PREVIOUS_SKILL_RESULT>`
+   9. `<EXECUTION_CONTEXT>`
 4. Direct card-run identity:
    1. `<PROJECT_ID>`
    2. `<CARD_ID>`

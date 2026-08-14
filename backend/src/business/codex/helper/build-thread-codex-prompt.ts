@@ -7,6 +7,7 @@ import {
   createPipelinePromptRuntimeContext,
   renderPipelineDeveloperPrompt,
 } from './pipeline-prompt-library.js';
+import { buildLastAgentNoteMarkdown } from './build-last-agent-note-markdown.js';
 import { buildPendingNotesMarkdown } from './build-pending-notes-markdown.js';
 import { decisionOsRuntimePlatform } from './resolve-codex-command.js';
 
@@ -74,6 +75,7 @@ export function buildThreadCodexPrompt(input: {
         ledgerJsonFile: input.ledgerFile,
         threadId: input.threadId,
       }),
+      LAST_AGENT_NOTE: () => buildLastAgentNoteMarkdown(input.threadMarkdown),
       FILE_MAP: empty,
       PREVIOUS_SKILL_RESULT: empty,
       EXECUTION_CONTEXT: () => JSON.stringify(input.context, null, 2),

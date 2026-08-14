@@ -91,13 +91,16 @@ Runtime values are rendered once and are not scanned recursively. An unknown upp
 5. `<PENDING_NOTES>`
    1. **WHAT:** Supplies the active thread notes that `ledger-cli unanswered` classifies as awaiting an agent answer, rendered in chronological thread Markdown after the latest agent or assistant note.
    2. **WHY:** Authored prompts can receive the current unanswered operator instructions without replaying superseded conversation and without duplicating the CLI selection algorithm.
-6. `<FILE_MAP>`
+6. `<LAST_AGENT_NOTE>`
+   1. **WHAT:** Supplies only the latest agent note from the active admitted thread, rendered as canonical thread Markdown.
+   2. **WHY:** Authored prompts can receive the immediately preceding agent answer without replaying the complete conversation.
+7. `<FILE_MAP>`
    1. **WHAT:** Supplies the generated repository file map when the compiled prompt references it.
    2. **WHY:** Code-oriented stages can navigate the repository from a bounded structural inventory instead of broad discovery.
-7. `<PREVIOUS_SKILL_RESULT>`
+8. `<PREVIOUS_SKILL_RESULT>`
    1. **WHAT:** Supplies the direct result produced by the preceding pipeline skill.
    2. **WHY:** Dynamic gate recursion needs an explicit one-step handoff without conflating it with the full task context.
-8. `<EXECUTION_CONTEXT>`
+9. `<EXECUTION_CONTEXT>`
    1. **WHAT:** Supplies the admitted execution-context object serialized as formatted JSON.
    2. **WHY:** Authored prompts need one structured boundary for execution-specific facts that do not belong in prompt Markdown.
 
