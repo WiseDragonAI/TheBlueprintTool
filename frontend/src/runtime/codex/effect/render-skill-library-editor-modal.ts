@@ -2,7 +2,7 @@
  * WHAT: Adapts skill metadata and owner requests to one stable text-file editor session.
  * WHY: Metadata, status, save, and history rerenders must never replace the active editable EditorView.
  */
-import { skillLibraryEditorModal } from '../../dom.js';
+import { pipelineSkillPickerModal, processModal, skillLibraryEditorModal } from '../../dom.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import {
   createTextFileEditorSession,
@@ -209,6 +209,16 @@ function disposeSession(): void {
   disposeHistory();
 }
 
+/**
+ * WHAT: Mirrors an open existing-skill editor state onto the stable owner modal roots.
+ * WHY: Owner-local close controls must be suppressed only while their existing skill editor remains open.
+ */
+function syncExistingSkillEditorOwnerMarkers(): void {
+  const existingSkillEditorOpen = Boolean(skillLibraryEditorModal?.open && skillLibraryEditorState.mode === 'edit');
+  processModal?.classList?.toggle?.('is-behind-existing-skill-editor', existingSkillEditorOpen);
+  pipelineSkillPickerModal?.classList?.toggle?.('is-behind-existing-skill-editor', existingSkillEditorOpen);
+}
+
 function finishClose(): void {
   const onClosed = skillLibraryEditorState.onClosed;
   generation += 1;
@@ -218,6 +228,7 @@ function finishClose(): void {
   disposeSession();
   skillLibraryEditorModal?.close?.();
   skillLibraryEditorModal?.classList?.remove?.('codex-app-screen');
+  syncExistingSkillEditorOwnerMarkers();
   shell = null;
   if (!sessionReturnsFocus && focus?.isConnected) focus.focus();
   onClosed?.();
@@ -688,6 +699,7 @@ function startSession(input: Partial<SkillLibraryEditorState>): void {
   resetState(input);
   renderSkillLibraryEditorModal();
   showModal();
+  syncExistingSkillEditorOwnerMarkers();
 }
 
 export function openSkillLibraryCreator(input: {
@@ -696,6 +708,7 @@ export function openSkillLibraryCreator(input: {
   projects?: Array<{ id: string; name: string }>;
   onSaved?: SkillLibraryEditorState['onSaved'];
   onSaveError?: SkillLibraryEditorState['onSaveError'];
+  onClosed?: SkillLibraryEditorState['onClosed'];
 }): void {
   returnFocusTo = activeFocusTarget();
   startSession({
@@ -706,6 +719,7 @@ export function openSkillLibraryCreator(input: {
     projects: [...(input.projects ?? [])],
     onSaved: input.onSaved,
     onSaveError: input.onSaveError,
+    onClosed: input.onClosed,
   });
   telemetry('codex-skill-library-creator-open', { contentKind: skillLibraryEditorState.contentKind });
 }
@@ -815,6 +829,7 @@ export async function createSkillLibraryDraft(): Promise<boolean> {
   }
   const saved = result.skill;
   skillLibraryEditorState.mode = 'edit';
+  syncExistingSkillEditorOwnerMarkers();
   skillLibraryEditorState.skillName = saved.name;
   adoptDetail(saved, skillLibraryEditorState.availableTags, false);
   session?.markSaved(saved.markdown, saved.revision);

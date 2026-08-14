@@ -547,6 +547,12 @@
   max-height: 95dvh;
 }
 
+.process-modal.is-behind-existing-skill-editor [data-codex-focus-key="process-head-close"],
+.pipeline-skill-picker-modal.is-behind-existing-skill-editor [data-codex-focus-key="picker-head-close"],
+.codex-app-screen.process-modal.is-behind-existing-skill-editor > .codex-sheet > header > .process-close {
+  visibility: hidden;
+}
+
 .codex-modal-head,
 .codex-head-actions,
 .codex-modal-actions,

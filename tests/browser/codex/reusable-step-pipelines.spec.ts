@@ -139,6 +139,262 @@ test('Process card keeps an overflowing skill catalog readable.', { timeout: 30_
   }
 });
 
+test('Existing-skill editing leaves one visible close control across stable owners.', { timeout: 60_000 }, async () => {
+  const fixture = createFixture();
+  let server: ServerHandle | undefined;
+  let browser: Browser | undefined;
+  try {
+    try {
+      server = await startDecisionOsServer(fixture);
+      try {
+        browser = await launchBrowser();
+        const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+        page.setDefaultTimeout(10_000);
+        const pageErrors: string[] = [];
+        page.on('pageerror', (error) => pageErrors.push(error.message));
+        await page.addInitScript(() => {
+          const processCloseConfirmation = { accept: false, messages: [] as string[] };
+          (globalThis as typeof globalThis & { processCloseConfirmation: typeof processCloseConfirmation })
+            .processCloseConfirmation = processCloseConfirmation;
+          globalThis.confirm = (message?: string) => {
+            processCloseConfirmation.messages.push(message ?? '');
+            return processCloseConfirmation.accept;
+          };
+          localStorage.setItem('decision-os.canvas.state', JSON.stringify({
+            activeTab: 'specs',
+            railCollapsed: false,
+            selection: { cardIds: [], zoneIds: [], groupIds: [] },
+            viewport: { x: 0, y: 0, scale: 1 },
+            viewports: { specs: { x: 0, y: 0, scale: 1 } },
+          }));
+        });
+
+        const specsResponse = await page.goto(`${server.url}/specs`, { waitUntil: 'domcontentloaded' });
+        assert.equal(specsResponse?.status(), 200, `Specs route failed at ${server.url}/specs.`);
+        await page.waitForFunction((cardId) => Boolean(window.__coreState?.activeLedger?.cards?.some((card: { id?: string }) => card.id === cardId)), sourceCardId);
+        await openProcessCard(page);
+
+        const process = page.locator('.process-modal');
+        await process.getByRole('tab', { name: 'Skills', exact: true }).click();
+        const processSkill = process.locator(`[data-process-skill-name="${skillName}"]`).locator('xpath=..');
+        await processSkill.getByRole('button', { name: 'Edit skill', exact: true }).click();
+        const processEditor = page.locator('.skill-library-editor-modal');
+        await processEditor.waitFor({ state: 'visible' });
+        const processHeadClose = process.locator('[data-codex-focus-key="process-head-close"]');
+        const processEditorClose = processEditor.getByLabel('Close skill editor', { exact: true });
+        await assertOwnerCloseVisibility(process, processHeadClose, true, 'hidden');
+        await assertComputedVisibility(processEditorClose, 'visible');
+
+        const processEditorContent = processEditor.locator('.cm-content');
+        await processEditorContent.click();
+        await page.keyboard.press('Control+End');
+        await page.keyboard.type('\nExercise rejected Process dirty-close handling.');
+        await processEditorClose.click();
+        await processEditor.waitFor({ state: 'visible' });
+        await assertOwnerCloseVisibility(process, processHeadClose, true, 'hidden');
+        assert.deepEqual(await page.evaluate(() => (
+          globalThis as typeof globalThis & { processCloseConfirmation: { messages: string[] } }
+        ).processCloseConfirmation.messages), ['Discard unsaved changes?']);
+        await page.evaluate(() => {
+          (globalThis as typeof globalThis & { processCloseConfirmation: { accept: boolean } })
+            .processCloseConfirmation.accept = true;
+        });
+        await processEditorClose.click();
+        await processEditor.waitFor({ state: 'hidden' });
+        await assertOwnerCloseVisibility(process, processHeadClose, false, 'visible');
+
+        await process.getByRole('button', { name: 'Create skill', exact: true }).click();
+        await processEditor.waitFor({ state: 'visible' });
+        await assertOwnerCloseVisibility(process, processHeadClose, false, 'visible');
+        await assertComputedVisibility(processEditorClose, 'visible');
+        await processEditorClose.click();
+        await processEditor.waitFor({ state: 'hidden' });
+        await process.getByRole('button', { name: 'Close', exact: true }).click();
+        await process.waitFor({ state: 'hidden' });
+
+        await page.locator('[data-action="open-pipelines-modal"]').click();
+        const pipelineLibrary = page.locator('.pipelines-modal');
+        await pipelineLibrary.waitFor({ state: 'visible' });
+        await pipelineLibrary.getByRole('button', { name: 'New pipeline', exact: true }).click();
+        const pipelineEditor = page.locator('.pipeline-editor-modal');
+        await pipelineEditor.waitFor({ state: 'visible' });
+        await pipelineEditor.getByRole('button', { name: 'Add skill', exact: true }).click();
+        const skillPicker = page.locator('.pipeline-skill-picker-modal');
+        await skillPicker.waitFor({ state: 'visible' });
+        await skillPicker.locator(`[data-codex-focus-key="picker-skill:${skillName}"]`).click();
+        await skillPicker.getByRole('button', { name: 'Edit skill', exact: true }).click();
+        const pickerEditor = page.locator('.skill-library-editor-modal');
+        await pickerEditor.waitFor({ state: 'visible' });
+        const pickerHeadClose = skillPicker.locator('[data-codex-focus-key="picker-head-close"]');
+        const pickerEditorClose = pickerEditor.getByLabel('Close skill editor', { exact: true });
+        await assertOwnerCloseVisibility(skillPicker, pickerHeadClose, true, 'hidden');
+        await assertComputedVisibility(pickerEditorClose, 'visible');
+        await pickerEditorClose.click();
+        await pickerEditor.waitFor({ state: 'hidden' });
+        await skillPicker.waitFor({ state: 'visible' });
+        await assertOwnerCloseVisibility(skillPicker, pickerHeadClose, false, 'visible');
+
+        await skillPicker.getByRole('button', { name: 'Create pipeline prompt', exact: true }).click();
+        await pickerEditor.waitFor({ state: 'visible' });
+        await assertOwnerCloseVisibility(skillPicker, pickerHeadClose, false, 'visible');
+        await assertComputedVisibility(pickerEditorClose, 'visible');
+        await pickerEditorClose.click();
+        await pickerEditor.waitFor({ state: 'hidden' });
+        await skillPicker.waitFor({ state: 'visible' });
+        await skillPicker.getByRole('button', { name: 'Add skill', exact: true }).click();
+        await skillPicker.waitFor({ state: 'hidden' });
+
+        const skillsResponse = await page.goto(`${server.url}/skills`, { waitUntil: 'domcontentloaded' });
+        assert.equal(skillsResponse?.status(), 200, `Skills route failed at ${server.url}/skills.`);
+        const library = page.locator('.process-modal');
+        await library.waitFor({ state: 'visible' });
+        const selectedSkill = library.locator('.process-library .codex-list-item').filter({
+          has: page.locator('strong.skill-result-name', { hasText: new RegExp(`^${skillName}$`) }),
+        });
+        assert.equal(await selectedSkill.count(), 1, `Expected exactly one Skill row named ${skillName}.`);
+        await selectedSkill.waitFor({ state: 'visible' });
+        assert.equal(await selectedSkill.locator('strong.skill-result-name').textContent(), skillName);
+        const selectedSkillPath = `/skills/${encodeURIComponent(skillName)}`;
+        await selectedSkill.click();
+        await page.waitForURL((url) => url.pathname === selectedSkillPath);
+        const retainedWorkspace = library.locator('.process-detail .skill-workspace-view');
+        await retainedWorkspace.waitFor({ state: 'visible' });
+        const retainedWorkspaceHandle = await retainedWorkspace.elementHandle();
+        assert.ok(retainedWorkspaceHandle, 'The selected global Skill detail must retain its rendered workspace owner.');
+        await page.setViewportSize({ width: 390, height: 844 });
+        const retainedWorkspaceMenu = retainedWorkspace.getByLabel('Skill details and settings', { exact: true });
+        await retainedWorkspaceMenu.click();
+        assert.equal(await retainedWorkspaceMenu.getAttribute('aria-expanded'), 'true');
+        const retainedWorkspaceRail = retainedWorkspace.locator('.skill-workspace-rail');
+        const retainedWorkspaceRailClose = retainedWorkspaceRail.getByLabel('Close skill details', { exact: true });
+        await assertComputedVisibility(retainedWorkspaceRailClose, 'visible');
+        await retainedWorkspaceRail.locator('.skill-detail-edit').click();
+
+        const globalEditor = page.locator('.skill-library-editor-modal');
+        await globalEditor.waitFor({ state: 'visible' });
+        await page.waitForURL((url) => url.pathname === `${selectedSkillPath}/edit`);
+        const routeClose = library.locator(':scope > .codex-sheet > header > .process-close');
+        await assertOwnerCloseVisibility(library, routeClose, true, 'hidden');
+        await assertOwnerCloseVisibility(library, retainedWorkspaceRailClose, true, 'hidden');
+
+        const editorDrawerMenu = globalEditor.getByLabel('Skill details and editor tools', { exact: true });
+        await editorDrawerMenu.click();
+        assert.equal(await editorDrawerMenu.getAttribute('aria-expanded'), 'true');
+        await page.waitForFunction(() => document.querySelector('.skill-library-editor-modal')?.classList.contains('show-mobile-settings') === true);
+        const editorDrawerRail = globalEditor.getByRole('dialog', { name: 'Skill controls', exact: true });
+        assert.equal(await editorDrawerRail.count(), 1);
+        assert.equal(await editorDrawerRail.getAttribute('tabindex'), '-1');
+        const editorDrawerClose = globalEditor.locator('.skill-workspace-edit .skill-workspace-rail-header').getByLabel('Close skill controls', { exact: true });
+        const globalEditorClose = globalEditor.getByLabel('Close skill editor', { exact: true });
+        await assertComputedVisibility(editorDrawerClose, 'hidden');
+        await assertComputedVisibility(globalEditorClose, 'visible');
+        await editorDrawerRail.press('Escape');
+        assert.equal(await editorDrawerMenu.getAttribute('aria-expanded'), 'false');
+        await page.waitForFunction(() => document.querySelector('.skill-library-editor-modal')?.classList.contains('show-mobile-settings') === false);
+        assert.equal(await editorDrawerMenu.evaluate((menu) => document.activeElement === menu), true);
+        await globalEditorClose.click();
+        await globalEditor.waitFor({ state: 'hidden' });
+        await page.waitForURL((url) => url.pathname === selectedSkillPath);
+        assert.equal(await retainedWorkspaceHandle.evaluate((element) => element.isConnected), true,
+          'Closing direct-detail edit must retain the existing selected detail owner.');
+        await retainedWorkspace.waitFor({ state: 'visible' });
+        await assertOwnerCloseVisibility(library, routeClose, false, 'visible');
+        await assertOwnerCloseVisibility(library, retainedWorkspaceRailClose, false, 'visible');
+
+        const editDeepLinkResponse = await page.goto(`${server.url}${selectedSkillPath}/edit`, { waitUntil: 'domcontentloaded' });
+        assert.equal(editDeepLinkResponse?.status(), 200, `Edit deep link failed at ${server.url}${selectedSkillPath}/edit.`);
+        await globalEditor.waitFor({ state: 'visible' });
+        await assertOwnerCloseVisibility(library, routeClose, true, 'hidden');
+        assert.equal(await library.locator('.process-detail .skill-workspace-view').count(), 0,
+          'The edit deep link must start through the normal route loader instead of retaining a previous detail owner.');
+        const deepLinkEditorDrawerMenu = globalEditor.getByLabel('Skill details and editor tools', { exact: true });
+        await deepLinkEditorDrawerMenu.click();
+        assert.equal(await deepLinkEditorDrawerMenu.getAttribute('aria-expanded'), 'true');
+        await page.waitForFunction(() => document.querySelector('.skill-library-editor-modal')?.classList.contains('show-mobile-settings') === true);
+        const deepLinkEditorDrawerRail = globalEditor.getByRole('dialog', { name: 'Skill controls', exact: true });
+        assert.equal(await deepLinkEditorDrawerRail.count(), 1);
+        assert.equal(await deepLinkEditorDrawerRail.getAttribute('tabindex'), '-1');
+        await assertComputedVisibility(globalEditor.locator('.skill-workspace-edit .skill-workspace-rail-header').getByLabel('Close skill controls', { exact: true }), 'hidden');
+        const deepLinkEditorClose = globalEditor.getByLabel('Close skill editor', { exact: true });
+        await assertComputedVisibility(deepLinkEditorClose, 'visible');
+        await deepLinkEditorDrawerRail.press('Escape');
+        assert.equal(await deepLinkEditorDrawerMenu.getAttribute('aria-expanded'), 'false');
+        await page.waitForFunction(() => document.querySelector('.skill-library-editor-modal')?.classList.contains('show-mobile-settings') === false);
+        assert.equal(await deepLinkEditorDrawerMenu.evaluate((menu) => document.activeElement === menu), true);
+        await deepLinkEditorClose.click();
+        await globalEditor.waitFor({ state: 'hidden' });
+        await page.waitForURL((url) => url.pathname === selectedSkillPath);
+        const freshWorkspace = library.locator('.process-detail .skill-workspace-view');
+        await freshWorkspace.waitFor({ state: 'visible' });
+        const freshWorkspaceMenu = freshWorkspace.getByLabel('Skill details and settings', { exact: true });
+        await freshWorkspaceMenu.click();
+        assert.equal(await freshWorkspaceMenu.getAttribute('aria-expanded'), 'true');
+        const freshWorkspaceRailClose = freshWorkspace.locator('.skill-workspace-rail').getByLabel('Close skill details', { exact: true });
+        await assertOwnerCloseVisibility(library, routeClose, false, 'visible');
+        await assertComputedVisibility(freshWorkspaceRailClose, 'visible');
+
+        const createdSkillName = 'close-owner-created-skill';
+        await page.setViewportSize({ width: 1440, height: 900 });
+        const skillLibraryResponse = await page.goto(`${server.url}/skills`, { waitUntil: 'domcontentloaded' });
+        assert.equal(skillLibraryResponse?.status(), 200, `Skills route failed at ${server.url}/skills.`);
+        await library.waitFor({ state: 'visible' });
+        await library.getByRole('button', { name: 'New skill', exact: true }).click();
+        await page.waitForURL((url) => url.pathname === '/skills/new');
+        const creator = page.locator('.skill-library-editor-modal');
+        await creator.waitFor({ state: 'visible' });
+        const creatorRouteClose = library.locator(':scope > .codex-sheet > header > .process-close');
+        const creatorHeaderClose = creator.getByLabel('Close skill editor', { exact: true });
+        await assertOwnerCloseVisibility(library, creatorRouteClose, false, 'visible');
+        await assertComputedVisibility(creatorHeaderClose, 'visible');
+        await creator.locator('.cm-content').click();
+        await page.keyboard.press('Control+End');
+        await page.keyboard.type('\nCreate a promoted close-control owner from dirty Markdown.');
+
+        await page.setViewportSize({ width: 390, height: 844 });
+        const creatorDrawerMenu = creator.locator('.skill-editor-mobile-menu');
+        await creatorDrawerMenu.click();
+        assert.equal(await creatorDrawerMenu.getAttribute('aria-expanded'), 'true');
+        await page.waitForFunction(() => document.querySelector('.skill-library-editor-modal')?.classList.contains('show-mobile-settings') === true);
+        const creatorRail = creator.locator('.skill-workspace-edit .skill-workspace-rail');
+        await assertComputedVisibility(creatorRail.locator('.skill-workspace-rail-header > .plain-close'), 'visible');
+        await creatorRail.getByLabel('Name', { exact: true }).fill(createdSkillName);
+        await creatorRail.getByLabel('Description', { exact: true }).fill('Prove creator promotion retains sole close ownership.');
+        const createResponsePromise = page.waitForResponse((response) => (
+          response.request().method() === 'POST'
+          && new URL(response.url()).pathname === '/api/codex/skill-library'
+        ));
+        await creatorRail.getByRole('button', { name: 'Create', exact: true }).click();
+        const createResponse = await createResponsePromise;
+        assert.equal(createResponse.status(), 201);
+        await page.waitForURL((url) => url.pathname === `/skills/${encodeURIComponent(createdSkillName)}/edit`);
+        await page.waitForFunction(() => document.querySelectorAll('.skill-library-editor-modal.is-editing-content[open]').length === 1);
+        await assertOwnerCloseVisibility(library, creatorRouteClose, true, 'hidden');
+        await assertComputedVisibility(creator.locator('.skill-workspace-edit .skill-workspace-rail-header > .plain-close'), 'hidden');
+        await assertComputedVisibility(creatorHeaderClose, 'visible');
+        await creatorRail.press('Escape');
+        await page.waitForFunction(() => document.querySelector('.skill-library-editor-modal')?.classList.contains('show-mobile-settings') === false);
+        await page.evaluate(() => {
+          (globalThis as typeof globalThis & { processCloseConfirmation: { accept: boolean } })
+            .processCloseConfirmation.accept = true;
+        });
+        await creatorHeaderClose.click();
+        await creator.waitFor({ state: 'hidden' });
+        await page.waitForURL((url) => url.pathname === '/skills');
+        await assertOwnerCloseVisibility(library, creatorRouteClose, false, 'visible');
+        assert.deepEqual(pageErrors, []);
+      } finally {
+        await browser?.close();
+      }
+    } finally {
+      // WHAT: Stop the temporary fixture server after its isolated browser scenario settles.
+      // WHY: The fixture owns no operator runtime and must not survive the test that created it.
+      if (server) await stopDecisionOsServer(server.process);
+    }
+  } finally {
+    rmSync(fixture.workspace, { recursive: true, force: true });
+  }
+});
+
 test('Persistent Skills, Pipelines, and picker rails reconcile one served control shell.', { timeout: 60_000 }, async () => {
   const fixture = createFixture({ extraSkillCount: 24 });
   let server: ServerHandle | undefined;
@@ -1036,6 +1292,24 @@ function assertLibraryRailBounded(baseline: number, current: number): void {
     `Expected the persistent control rail to remain bounded (${current}px > ${baseline}px + 2px).`);
 }
 
+async function assertOwnerCloseVisibility(
+  owner: Locator,
+  closeControl: Locator,
+  expectedOwnerMarker: boolean,
+  expectedVisibility: 'hidden' | 'visible',
+): Promise<void> {
+  assert.equal(await owner.count(), 1, 'Expected exactly one owner root for the close-control assertion.');
+  assert.equal(await owner.evaluate((element) => element.classList.contains('is-behind-existing-skill-editor')), expectedOwnerMarker,
+    'Owner marker state did not match the expected existing-skill editor lifecycle.');
+  await assertComputedVisibility(closeControl, expectedVisibility);
+}
+
+async function assertComputedVisibility(locator: Locator, expectedVisibility: 'hidden' | 'visible'): Promise<void> {
+  assert.equal(await locator.count(), 1, 'Expected exactly one close-control visibility target.');
+  assert.equal(await locator.evaluate((element) => getComputedStyle(element).visibility), expectedVisibility,
+    `Expected close control visibility to be ${expectedVisibility}.`);
+}
+
 function createFixture(options: { extraSkillCount?: number } = {}): BrowserFixture {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-browser-pipeline-'));
   const decisionOsRoot = join(workspace, '.decision-os');
@@ -1160,7 +1434,7 @@ async function launchBrowser(): Promise<Browser> {
   return chromium.launch({
     headless: true,
     executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
-    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
   });
 }
 

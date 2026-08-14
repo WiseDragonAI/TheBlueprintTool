@@ -225,6 +225,7 @@ const {
 } = processModalModule;
 const {
   closeSkillLibraryEditor,
+  createSkillLibraryDraft,
   openSkillLibraryCreator,
   openSkillLibraryEditor,
   reloadSkillLibraryDraft,
@@ -254,6 +255,15 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => { resolve = done; });
   return { promise, resolve };
+}
+
+/**
+ * WHAT: Checks the Process and picker owner roots for the shared existing-editor marker.
+ * WHY: Both background close surfaces must follow the same editor lifecycle transition.
+ */
+function assertExistingSkillEditorOwnerMarkers(expected: boolean): void {
+  assert.equal(fakeDocument.processModal.classList.contains('is-behind-existing-skill-editor'), expected);
+  assert.equal(fakeDocument.pipelineSkillPickerModal.classList.contains('is-behind-existing-skill-editor'), expected);
 }
 
 const catalog = [
@@ -918,6 +928,144 @@ test('skill editor reconciles a conflicting draft and protected skills remain un
     assert.equal(skillLibraryEditorState.detail?.readOnlyReason, 'System skills are managed by Codex.');
   } finally {
     globalThis.fetch = previousFetch;
+  }
+});
+
+test('skill editor projects existing-edit lifecycle markers onto both background owners', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousConfirm = globalThis.confirm;
+  const previousEditorState = { ...skillLibraryEditorState };
+  const previousModalState = {
+    process: { open: fakeDocument.processModal.open, className: fakeDocument.processModal.className },
+    picker: { open: fakeDocument.pipelineSkillPickerModal.open, className: fakeDocument.pipelineSkillPickerModal.className },
+    editor: { open: fakeDocument.skillLibraryEditorModal.open, className: fakeDocument.skillLibraryEditorModal.className },
+    activeElement: fakeDocument.activeElement,
+  };
+  const firstEditable = { ...catalog[0], markdown: 'Existing analysis instructions.', references: [], history: [] };
+  const secondEditable = {
+    ...firstEditable,
+    name: 'architecture',
+    description: 'Describe the architecture.',
+    revision: 'architecture-a',
+    markdown: 'Existing architecture instructions.',
+  };
+  const createdSkill = {
+    ...firstEditable,
+    name: 'created-skill',
+    description: 'Created lifecycle skill.',
+    revision: 'created-a',
+    markdown: 'Created skill instructions.',
+  };
+  const responses = new Map<string, Response[]>([
+    ['GET /p/project-a/api/codex/skill-library/analysis', [new Response(JSON.stringify({ ok: true, skill: firstEditable }), { status: 200 })]],
+    ['GET /p/project-a/api/codex/skill-library/architecture', [new Response(JSON.stringify({ ok: true, skill: secondEditable }), { status: 200 })]],
+    ['POST /api/codex/skill-library', [
+      new Response(JSON.stringify({ ok: false, error: 'Creation rejected.' }), { status: 403 }),
+      new Response(JSON.stringify({ ok: true, skill: createdSkill }), { status: 201 }),
+    ]],
+  ]);
+  const onSavedStarted = deferred<void>();
+  const onSavedRelease = deferred<void>();
+  let pendingAcceptedCreate: Promise<boolean> = Promise.resolve(false);
+  let acceptedCreateSettled = false;
+  let onClosedObserved = false;
+  let creatorClosedCallCount = 0;
+  let confirmResult = false;
+  try {
+    fakeDocument.processModal.open = true;
+    fakeDocument.pipelineSkillPickerModal.open = true;
+    fakeDocument.processModal.classList.remove('is-behind-existing-skill-editor');
+    fakeDocument.pipelineSkillPickerModal.classList.remove('is-behind-existing-skill-editor');
+    globalThis.confirm = () => confirmResult;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      const response = responses.get(`${init?.method ?? 'GET'} ${url}`)?.shift();
+      assert.ok(response, `Unexpected lifecycle request: ${init?.method ?? 'GET'} ${url}`);
+      return response;
+    }) as typeof fetch;
+
+    await openSkillLibraryEditor({
+      skillName: 'analysis',
+      requestProjectId: 'project-a',
+      onClosed: () => {
+        assertExistingSkillEditorOwnerMarkers(false);
+        onClosedObserved = true;
+      },
+    });
+    assertExistingSkillEditorOwnerMarkers(true);
+
+    skillLibraryEditorState.defaultCodexModel = 'gpt-5.6-sol';
+    closeSkillLibraryEditor();
+    assert.equal(fakeDocument.skillLibraryEditorModal.open, true);
+    assertExistingSkillEditorOwnerMarkers(true);
+
+    confirmResult = true;
+    closeSkillLibraryEditor();
+    assert.equal(onClosedObserved, true);
+    assertExistingSkillEditorOwnerMarkers(false);
+
+    await openSkillLibraryEditor({ skillName: 'architecture', requestProjectId: 'project-a' });
+    assertExistingSkillEditorOwnerMarkers(true);
+
+    openSkillLibraryCreator({
+      requestProjectId: 'project-a',
+      onSaved: async () => {
+        onSavedStarted.resolve(undefined);
+        await onSavedRelease.promise;
+      },
+      onClosed: () => {
+        creatorClosedCallCount += 1;
+        assertExistingSkillEditorOwnerMarkers(false);
+      },
+    });
+    assertExistingSkillEditorOwnerMarkers(false);
+
+    skillLibraryEditorState.skillName = 'created-skill';
+    skillLibraryEditorState.createDescription = 'Created lifecycle skill.';
+    assert.equal(await createSkillLibraryDraft(), false);
+    assert.equal(skillLibraryEditorState.mode, 'create');
+    assertExistingSkillEditorOwnerMarkers(false);
+    assert.equal(creatorClosedCallCount, 0);
+
+    pendingAcceptedCreate = createSkillLibraryDraft();
+    void pendingAcceptedCreate.then(
+      () => {
+        // WHAT: Mark the accepted creation operation settled after the deferred save callback releases.
+        // WHY: The lifecycle matrix must keep promotion assertions before the creator promise settles.
+        acceptedCreateSettled = true;
+      },
+      () => {
+        // WHAT: Mark a rejected creation operation settled through the same deferred observation path.
+        // WHY: The lifecycle matrix must observe promise completion without changing its fulfilled result assertion.
+        acceptedCreateSettled = true;
+      },
+    );
+    await onSavedStarted.promise;
+    assert.equal(acceptedCreateSettled, false);
+    assert.equal(skillLibraryEditorState.mode, 'edit');
+    assertExistingSkillEditorOwnerMarkers(true);
+    assert.equal(creatorClosedCallCount, 0);
+
+    onSavedRelease.resolve(undefined);
+    assert.equal(await pendingAcceptedCreate, true);
+    closeSkillLibraryEditor();
+    assert.equal(fakeDocument.skillLibraryEditorModal.open, false);
+    assertExistingSkillEditorOwnerMarkers(false);
+    assert.equal(creatorClosedCallCount, 1);
+  } finally {
+    onSavedStarted.resolve(undefined);
+    onSavedRelease.resolve(undefined);
+    await pendingAcceptedCreate.catch(() => undefined);
+    globalThis.confirm = () => true;
+    // WHAT: Close only a lifecycle editor session that remains open after the assertions.
+    // WHY: Accepted close already invokes the retained creator callback, so cleanup must not invoke it twice.
+    if (fakeDocument.skillLibraryEditorModal.open) closeSkillLibraryEditor();
+    globalThis.fetch = previousFetch;
+    globalThis.confirm = previousConfirm;
+    Object.assign(skillLibraryEditorState, previousEditorState);
+    Object.assign(fakeDocument.processModal, previousModalState.process);
+    Object.assign(fakeDocument.pipelineSkillPickerModal, previousModalState.picker);
+    Object.assign(fakeDocument.skillLibraryEditorModal, previousModalState.editor);
+    fakeDocument.activeElement = previousModalState.activeElement;
   }
 });
 
