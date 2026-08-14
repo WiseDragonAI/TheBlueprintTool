@@ -44,6 +44,7 @@ export function createFederationStateRuntime(input: {
     record: ReturnType<ProjectTaskState['executions']['find']>;
     remote?: boolean;
   }) => void;
+  repairNoProgressTimeoutMs?: number;
   recordBackgroundFailure: (
     component: string,
     operation: string,
@@ -63,6 +64,7 @@ export function createFederationStateRuntime(input: {
     component: string;
     operation: string;
     error: unknown;
+    code?: string;
     context: Record<string, unknown>;
   }) => unknown;
   scheduleCodex: () => Promise<unknown>;
@@ -143,6 +145,7 @@ export function createFederationStateRuntime(input: {
   };
 
   const replicator = createFederationTaskStateReplicator({
+    noProgressTimeoutMs: input.repairNoProgressTimeoutMs,
     stores: () => new Map([...input.projectStates]
       .filter(([projectId]) => !input.pausedTaskProjects.has(projectId))
       .map(([projectId, state]) => [projectId, state.store])),
@@ -254,15 +257,14 @@ export function createFederationStateRuntime(input: {
       });
     },
     onRepairTimeout: ({ projectId, from, attemptId }) => {
-      const incident = input.recordIncident({
-        scope: `project-task-state:${projectId}`,
+      input.recordStoppedOperation({
+        scope: `federation-repair-attempt:${projectId}:${from}`,
         component: 'federation-task-state-replicator',
         operation: 'synchronize-federated-state',
         code: 'federation_state_no_progress',
         error: new Error(`Federated state made no durable progress for ${projectId}.`),
         context: { projectId, from, attemptId },
       });
-      input.pausedTaskProjects.set(projectId, incident);
     },
     onRepairCollision: ({ projectId, from, attemptId, deliveryId, relayRoot, rejected, evidence }) => {
       const incident = input.recordIncident({
@@ -291,12 +293,7 @@ export function createFederationStateRuntime(input: {
     const rejected = Array.isArray(incident.context.rejected) ? incident.context.rejected : [];
     const state = input.projectStates.get(projectId) ?? input.federatedProjectStates.get(projectId);
     const retained = state?.store.repairCollisionEvidence(attemptId) ?? [];
-    const downstreamAttempt = String(input.pausedTaskProjects.get(projectId)?.context.attemptId ?? '');
-    const downstreamParts = /^([a-f0-9]{64}):([a-f0-9]{64})$/.exec(downstreamAttempt);
-    // WHAT: Reuse a legacy timeout's relay root only when its receiver half equals the current durable store root.
-    // WHY: An unrelated or stale no-progress attempt must not become collision suppression authority.
-    const downstreamRelayRoot = downstreamParts && state?.store.rootHash() === downstreamParts[2] ? downstreamParts[1] : '';
-    const retainedRelayRoot = String(incident.context.relayRoot ?? '') || (/^[a-f0-9]{64}$/.test(downstreamRelayRoot) ? downstreamRelayRoot : '');
+    const retainedRelayRoot = String(incident.context.relayRoot ?? '');
     // WHAT: Restore automatic-repair suppression only from matching durable store evidence.
     // WHY: A malformed incident must remain visibly paused without granting transient recovery authority.
     if (attemptId && (retained.length > 0 || (attemptId.startsWith('publication:') && rejected.length > 0))) {

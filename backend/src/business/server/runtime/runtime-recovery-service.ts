@@ -262,10 +262,13 @@ export function createRuntimeRecoveryService(input: {
     // WHAT: Upgrade the original collision incident under its exact fingerprint after legacy evidence becomes durable.
     // WHY: Restart and generation guards must observe relay-root and evidence-key authority before creating the successor.
     if (adoptedLegacyEvidence) {
-      const downstreamAttempt = String(input.incidentLedger.active(`project-task-state:${projectId}`)
-        .find((incident) => incident.code === 'federation_state_no_progress')?.context.attemptId ?? '');
-      const downstreamParts = /^([a-f0-9]{64}):([a-f0-9]{64})$/.exec(downstreamAttempt);
-      const relayRoot = String(paused.context.relayRoot ?? '') || (downstreamParts && downstreamParts[2] === recoveryStore.rootHash() ? downstreamParts[1] : '');
+      const historicalNoProgress = input.incidentLedger.snapshot().incidents
+        .filter((incident) => incident.scope === `project-task-state:${projectId}` && incident.code === 'federation_state_no_progress')
+        .sort((left, right) => left.lastObservedAt.localeCompare(right.lastObservedAt))
+        .at(-1);
+      const historicalAttempt = String(historicalNoProgress?.context.attemptId ?? '');
+      const historicalParts = /^([a-f0-9]{64}):([a-f0-9]{64})$/.exec(historicalAttempt);
+      const relayRoot = String(paused.context.relayRoot ?? '') || (historicalParts && historicalParts[2] === recoveryStore.rootHash() ? historicalParts[1] : '');
       paused = input.incidentSupervisor.recordIncident({
         scope,
         component: 'federation-task-state-replicator',
@@ -320,22 +323,13 @@ export function createRuntimeRecoveryService(input: {
     }
     const downstreamScope = `project-task-state:${projectId}`;
     const downstreamActive = input.incidentLedger.active(downstreamScope);
-    // WHAT: Reject replacement installation while an unrelated project-state incident remains active.
-    // WHY: Collision recovery must not reopen a project whose separate durable invariant still fails.
-    if (downstreamActive.some((incident) => incident.code !== 'federation_state_no_progress')) return [];
+    // WHAT: Reject replacement installation while any independent project-state incident remains active.
+    // WHY: Repair timeout history has no pause authority, so every active project-state incident is a separate invariant failure.
+    if (downstreamActive.length > 0) return [];
     let replacement: ReturnType<typeof input.projectRuntimeRegistry.tryContext> = null;
     let ids: string[] = [];
     try {
       replacement = installLocalReplacement(project, 'federation-collision-recovery', false);
-      // WHAT: Resolve the derived timeout before the collision scope after replacement installation succeeds.
-      // WHY: A later persistence failure can restore both captured incidents without admitting the project between writes.
-      if (downstreamActive.length > 0) {
-        const resolvedDownstream = input.incidentLedger.resolveScope(downstreamScope, 'Terminal federation collision recovered with exact relay convergence.');
-        // WHAT: Reject a diagnostic write that failed to persist every captured downstream incident.
-        // WHY: Runtime maps cannot reopen from an incomplete durable resolution.
-        if (resolvedDownstream.length !== downstreamActive.length) throw new Error(`federation_repair_downstream_resolution_failed:${projectId}`);
-        ids.push(...resolvedDownstream.map((incident) => incident.id));
-      }
       ids.push(...resolveScope(scope, resolution));
       input.incidentSupervisor.pausedTaskProjects.delete(projectId);
     } catch (error) {
@@ -356,11 +350,6 @@ export function createRuntimeRecoveryService(input: {
       const restoredCollision = input.incidentLedger.active(scope)
         .find((incident) => incident.code === 'task_current_dot_collision') ?? restoreIncident(paused);
       input.incidentSupervisor.pausedFederationRepairs.set(projectId, restoredCollision);
-      const restoredDownstream = input.incidentLedger.active(downstreamScope)[0]
-        ?? (downstreamActive[0] ? restoreIncident(downstreamActive[0]) : null);
-      // WHAT: Restore the stale task-project pause map only when durable downstream evidence exists.
-      // WHY: An empty downstream ledger must not manufacture a new task-state incident.
-      if (restoredDownstream) input.incidentSupervisor.pausedTaskProjects.set(projectId, restoredDownstream);
       input.incidentSupervisor.recordIncident({
         scope,
         component: 'federation-task-state-recovery',
