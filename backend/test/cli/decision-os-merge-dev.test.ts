@@ -35,12 +35,13 @@ function configureIdentity(root: string): void {
   git(root, ['config', 'user.email', 'decision-os-test@example.invalid']);
 }
 
-type Fixture = { childRoot: string; fixtureRoot: string; parentRoot: string; initialChildSha: string };
+type Fixture = { childRoot: string; fixtureRoot: string; parentBare: string; parentRoot: string; initialChildSha: string };
 
 function createFixture(): Fixture {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'decision-os-merge-dev-'));
   const childSource = join(fixtureRoot, 'child-source');
   const childBare = join(fixtureRoot, 'child.git');
+  const parentBare = join(fixtureRoot, 'parent.git');
   const parentRoot = join(fixtureRoot, 'parent');
   git(fixtureRoot, ['init', '--initial-branch=main', childSource]);
   configureIdentity(childSource);
@@ -55,7 +56,10 @@ function createFixture(): Fixture {
   git(parentRoot, ['add', '.gitmodules', '.decision-os']);
   git(parentRoot, ['commit', '-m', 'Add Decision OS submodule']);
   git(parentRoot, ['tag', 'rel-0.1.0']);
-  return { childRoot: join(parentRoot, '.decision-os'), fixtureRoot, parentRoot, initialChildSha };
+  git(fixtureRoot, ['init', '--bare', parentBare]);
+  git(parentRoot, ['remote', 'add', 'origin', parentBare]);
+  git(parentRoot, ['push', '-u', 'origin', 'main']);
+  return { childRoot: join(parentRoot, '.decision-os'), fixtureRoot, parentBare, parentRoot, initialChildSha };
 }
 
 test('commits main child state and merges dev without adopting the dev gitlink', async () => {
@@ -107,6 +111,10 @@ test('commits main child state and merges dev without adopting the dev gitlink',
     { name: 'rel-0.1.1', repository: 'child', target: receipt.decisionOsSha },
     { name: 'devrel-0.1.1', repository: 'child', target: receipt.decisionOsSha },
   ]);
+  assert.deepEqual(receipt.publication, { branch: 'main', remote: 'origin', tags: ['rel-0.1.1', 'devrel-0.1.1'] });
+  assert.equal(git(fixture.parentBare, ['rev-parse', 'refs/heads/main']), receipt.mainSha);
+  assert.equal(git(fixture.parentBare, ['rev-list', '-n', '1', 'refs/tags/rel-0.1.1']), receipt.mainSha);
+  assert.equal(git(fixture.parentBare, ['rev-list', '-n', '1', 'refs/tags/devrel-0.1.1']), devSha);
   assert.equal(git(fixture.parentRoot, ['rev-parse', 'HEAD:.decision-os']), receipt.decisionOsSha);
   assert.equal(git(fixture.parentRoot, ['show', '-s', '--format=%P', 'HEAD']).split(' ')[1], devSha);
   assert.deepEqual(receipt.verification, {
@@ -145,6 +153,26 @@ test('rejects unrelated parent dirt before committing child state', async () => 
     readFileSync(join(fixture.parentRoot, '.decision-os-merge-dev-logs', rejectionLogs[0]!), 'utf8'),
     /"event":"promotion-failed".*"code":"merge_dev_parent_dirty"/,
   );
+});
+
+test('rejects a concurrent remote main advance without publishing either release tag', async () => {
+  const fixture = createFixture();
+  git(fixture.parentRoot, ['branch', 'dev']);
+  commitFile(fixture.parentRoot, 'main.txt', 'local promotion\n', 'Advance local main');
+  const concurrentRoot = join(fixture.fixtureRoot, 'concurrent-main');
+  git(fixture.fixtureRoot, ['clone', '--branch', 'main', fixture.parentBare, concurrentRoot]);
+  configureIdentity(concurrentRoot);
+  const remoteSha = commitFile(concurrentRoot, 'remote.txt', 'concurrent remote\n', 'Advance remote main');
+  git(concurrentRoot, ['push', 'origin', 'main']);
+
+  await assert.rejects(
+    () => mergeDevIntoMain(fixture.parentRoot),
+    (error: unknown) => error instanceof MergeDevError && error.code === 'merge_dev_git_failed',
+  );
+
+  assert.equal(git(fixture.parentBare, ['rev-parse', 'refs/heads/main']), remoteSha);
+  assert.equal(git(fixture.parentBare, ['tag', '--list', 'rel-0.1.1']), '');
+  assert.equal(git(fixture.parentBare, ['tag', '--list', 'devrel-0.1.1']), '');
 });
 
 test('rejects source conflicts during simulation before committing child state', async () => {

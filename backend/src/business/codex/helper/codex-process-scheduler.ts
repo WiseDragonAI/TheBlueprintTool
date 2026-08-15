@@ -6,7 +6,7 @@ import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './cod
 import {
   maxConcurrentCodexProcesses,
   federatedPipelineExecutionReady,
-  outputFileForPipelineCard,
+  outputFileForPipelineStep,
   resolvePipelineLedgerContext,
   runPipelineExecution,
 } from './codex-pipeline-runner.js';
@@ -37,7 +37,14 @@ function runnableExecutions(decisionOsRoot: string, runtime: AnyRecord) {
       contexts.set(run.ledgerId, resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId: run.ledgerId }));
     }
     const context = contexts.get(run.ledgerId);
-    return Boolean(context && outputFileForPipelineCard(context, decisionOsRoot, member.step.outputCardId));
+    // WHAT: Admit a local pipeline execution only when its selected Markdown result owner resolves safely.
+    // WHY: Card-backed and cardless runs require a durable output destination before claiming queue capacity.
+    return Boolean(context && outputFileForPipelineStep({
+      context,
+      decisionOsRoot,
+      run,
+      step: member.step,
+    }));
   };
   return state.executions.byPhase('queued')
     .filter((record) => (

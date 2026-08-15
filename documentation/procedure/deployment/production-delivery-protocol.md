@@ -40,7 +40,7 @@
 
 ## E. Current Production Boundary
 
-1. `decision-os-merge-dev` creates the reviewed `main` merge and annotated release tags.
+1. `decision-os-merge-dev` creates the reviewed `main` merge and annotated release tags, then atomically pushes parent `main`, `rel-X.Y.Z`, and `devrel-X.Y.Z`.
 2. `decision-os-deploy-relay rel-X.Y.Z --json` deploys the production relay from canonical `main`.
 3. Relay health reports the tag's resolved commit as the existing compatibility fingerprint.
 4. The relay command does not deploy or restart an application node.

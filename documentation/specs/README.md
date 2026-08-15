@@ -12,6 +12,7 @@
 
 1. [Knowledge Base](./knowledge-base/README.md) defines canonical KB ownership and maintenance invariants.
 2. [Commit traceability](./commit-traceability.md) requires agent-authored commit bodies to record exact `WHAT:` and `WHY:` evidence.
+3. [Master-task subtask accordion](./master-task-subtask-accordion.md) defines the responsive Control Room disclosure lifecycle, semantics, mounted-row behavior, and motion contract.
 
 ---
 

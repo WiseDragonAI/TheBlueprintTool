@@ -348,6 +348,17 @@ export function createFederationNodeConnector(input: {
       || !Array.isArray(retained.nodes)) throw new Error('invalid_federation_project_catalog');
     return validateCatalogNodes(retained.nodes, true);
   };
+  const catalogSignature = (candidateNodes: RemoteCatalogNodes, includeOnline: boolean): string => JSON.stringify(
+    [...candidateNodes]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([nodeId, node]) => ({
+        nodeId,
+        nodeLabel: node.nodeLabel,
+        ...(includeOnline ? { online: node.online } : {}),
+        projects: [...node.projects].sort((left, right) => left.id.localeCompare(right.id)),
+      })),
+  );
+  let lastNotifiedRuntimeCatalog = '';
   const installRemoteCatalog = (candidateNodes: RemoteCatalogNodes): void => {
     remoteNodes.clear();
     for (const [nodeId, node] of candidateNodes) remoteNodes.set(nodeId, node);
@@ -555,11 +566,20 @@ export function createFederationNodeConnector(input: {
         (frame.nodes ?? []).filter((node) => node.nodeId !== settings?.nodeId),
         false,
       );
-      // WHAT: Install a live catalog only after its complete candidate has persisted successfully.
-      // WHY: Runtime discovery and retained recovery must advance through one atomic authority transition.
-      if (!persistRemoteCatalog(candidateNodes)) return;
-      installRemoteCatalog(candidateNodes);
+      const durableChanged = catalogSignature(candidateNodes, false) !== catalogSignature(remoteNodes, false);
+      const runtimeSignature = catalogSignature(candidateNodes, true);
+      const runtimeChanged = runtimeSignature !== catalogSignature(remoteNodes, true);
+      // WHAT: Ignore only a catalog already installed and successfully delivered downstream.
+      // WHY: Repeated relay snapshots must not retrigger global reconstruction, while a failed callback remains retryable.
+      if (!runtimeChanged && runtimeSignature === lastNotifiedRuntimeCatalog) return;
+      // WHAT: Persist only catalog fields represented in retained JSON.
+      // WHY: An offline-to-online transition must update runtime availability without rewriting identical durable bytes.
+      if (durableChanged && !persistRemoteCatalog(candidateNodes)) return;
+      // WHAT: Install runtime availability only when the validated candidate changed.
+      // WHY: Duplicate notification retries must not churn the installed catalog map.
+      if (runtimeChanged) installRemoteCatalog(candidateNodes);
       input.onRemoteCatalogChange?.();
+      lastNotifiedRuntimeCatalog = runtimeSignature;
       return;
     }
     if (frame.type === 'content-change') {

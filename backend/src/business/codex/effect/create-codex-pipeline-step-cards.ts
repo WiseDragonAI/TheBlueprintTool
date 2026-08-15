@@ -15,10 +15,9 @@ export async function createCodexPipelineStepCards(input: {
   context: PipelineLedgerContext;
   run: CodexPipelineRun;
 }): Promise<AnyRecord | null> {
-  const settings = input.context.runtime?.decisionOsSettings as AnyRecord | undefined;
-  // WHAT: Skip automatic pipeline-step card creation only when the workspace setting is explicitly false.
-  // WHY: Existing workspaces retain card creation by default while production agents own their authored subtasks.
-  if (settings?.createPipelineStepCards === false) return null;
+  // WHAT: Skip the optional ledger presentation when this immutable run was admitted as cardless.
+  // WHY: Pipeline execution artifacts and lifecycle remain authoritative without generated canvas cards.
+  if (input.run.createStepCards === false) return null;
   const parent = (input.context.ledger.cards ?? [])
     .find((card) => String(card.id ?? '') === input.run.outputParentCardId);
   if (!parent) return { error: 'Pipeline output parent card not found.' };

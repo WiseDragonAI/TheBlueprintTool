@@ -3,9 +3,14 @@
  * WHY: Direct and saved workflows must share durable lifecycle, locking, defaults, logs, and resume behavior.
  */
 import { resolve } from 'node:path';
-import { codexContentKinds, type CodexContentKind } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import {
+  codexContentKinds,
+  type CodexContentKind,
+  type CodexPipelineRun,
+  type CodexPipelineRunStep,
+} from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { isAllowedCodexEffort, isAllowedCodexModel } from '../helper/resolve-codex-command.js';
-import { outputFileForPipelineCard, resolvePipelineLedgerContext } from '../helper/codex-pipeline-runner.js';
+import { outputFileForPipelineStep, resolvePipelineLedgerContext } from '../helper/codex-pipeline-runner.js';
 import { startTemporaryPipelineRun } from './start-codex-pipeline-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -66,9 +71,17 @@ export async function startCardSkillProcessController(
   const firstStep = Array.isArray(pipelineRun.steps) ? pipelineRun.steps[0] as AnyRecord | undefined : undefined;
   const firstSkill = Array.isArray(firstStep?.skills) ? firstStep.skills[0] as AnyRecord | undefined : undefined;
   const context = resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId });
-  const outputFile = context && firstStep?.outputCardId
-    ? outputFileForPipelineCard(context, decisionOsRoot, String(firstStep.outputCardId))
-    : '';
+  let outputFile = '';
+  // WHAT: Project the shared pipeline result path only for a complete admitted first-step context.
+  // WHY: The direct-run compatibility response must not invent an output owner after partial admission.
+  if (context && firstStep?.outputCardId) {
+    outputFile = outputFileForPipelineStep({
+      context,
+      decisionOsRoot,
+      run: pipelineRun as unknown as CodexPipelineRun,
+      step: firstStep as unknown as CodexPipelineRunStep,
+    });
+  }
   const compatibilityRun = result.skillRun && typeof result.skillRun === 'object'
     ? result.skillRun as AnyRecord
     : {

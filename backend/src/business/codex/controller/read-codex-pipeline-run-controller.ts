@@ -2,11 +2,12 @@
  * WHAT: Returns one durable pipeline run with step, skill, card, option, log, and error detail.
  * WHY: Pipeline UI state must be reconstructible without process-local child metadata.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import {
+  outputFileForPipelineStep,
   pipelineRunLogAvailability,
   reassessPipelineAfterSkill,
   resolvePipelineLedgerContext,
@@ -40,13 +41,22 @@ export async function readCodexPipelineRunController(
     const card = cardsById.get(step.outputCardId);
     const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
     const contentFile = resolveCardContentFile(decisionOsRoot, comment.contentFile) ?? '';
+    const outputFile = outputFileForPipelineStep({ context, decisionOsRoot, run, step });
+    const outputAvailable = Boolean(outputFile && existsSync(outputFile));
+    // WHAT: Report bytes only for the resolved durable result artifact.
+    // WHY: Cardless presentation must distinguish a missing artifact from an empty completed artifact.
+    const outputBytes = outputAvailable ? statSync(outputFile).size : 0;
     return {
       ...step,
       outputCard: {
         id: step.outputCardId,
         title: text(card?.title) || step.name,
         contentAvailable: Boolean(contentFile && existsSync(contentFile)),
-        contentBytes: contentFile && existsSync(contentFile) ? readFileSync(contentFile).byteLength : 0,
+        contentBytes: contentFile && existsSync(contentFile) ? statSync(contentFile).size : 0,
+      },
+      outputArtifact: {
+        available: outputAvailable,
+        bytes: outputBytes,
       },
       skills: step.skills.map((skill) => ({
         ...skill,

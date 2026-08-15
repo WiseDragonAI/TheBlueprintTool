@@ -30,6 +30,7 @@ export type MergeDevReceipt = {
   gitlinkCommitCreated: boolean;
   logFile: string;
   mainSha: string;
+  publication: { branch: 'main'; remote: 'origin'; tags: string[] };
   release: { tags: Array<{ name: string; repository: 'parent' | 'child'; target: string }>; version: string };
   verification: {
     childStatus: StatusRecord[];
@@ -174,6 +175,14 @@ function createReleaseTags(root: string, childRoot: string, version: string, mai
     git(repository, ['tag', '-a', tag.name, tag.target, '-m', `Mark ${tag.repository} release ${version}`, '-m', `WHAT: Mark the ${tag.repository} rollback boundary for release ${version}.\n\nWHY: Parent and Decision OS history must be recoverable as one release.`]);
   }
   return tags;
+}
+
+function publishParentRelease(root: string, version: string): { branch: 'main'; remote: 'origin'; tags: string[] } {
+  const tags = releaseTagNames(version);
+  // WHAT: Publish the promoted main branch and both parent release boundaries atomically.
+  // WHY: A successful promotion must not leave production main or either main/dev release tag local-only.
+  git(root, ['push', '--atomic', 'origin', 'refs/heads/main:refs/heads/main', ...tags.map((tag) => `refs/tags/${tag}:refs/tags/${tag}`)]);
+  return { branch: 'main', remote: 'origin', tags };
 }
 
 export type StatusRecord = { path: string; staged: boolean };
@@ -518,6 +527,7 @@ export async function mergeDevIntoMain(repositoryRoot: string, bump: ReleaseBump
       );
     }
     const releaseTags = createReleaseTags(root, childRoot, version, mainSha, devSha, decisionOsGitlink);
+    const publication = publishParentRelease(root, version);
     const receipt: MergeDevReceipt = {
       ok: true,
       devSha,
@@ -526,6 +536,7 @@ export async function mergeDevIntoMain(repositoryRoot: string, bump: ReleaseBump
       gitlinkCommitCreated,
       logFile,
       mainSha,
+      publication,
       release: { tags: releaseTags, version },
       verification: {
         childStatus,

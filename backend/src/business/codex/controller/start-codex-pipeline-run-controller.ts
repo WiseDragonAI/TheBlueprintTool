@@ -28,6 +28,7 @@ import { readScopedCodexPipelineStores, serverPipelineDecisionOsRoot } from '../
 import { availablePipelineContent } from '../helper/available-pipeline-content.js';
 import {
   maxConcurrentCodexProcesses,
+  pipelineStepOwnerCardId,
   reassessPipelineAfterSkill,
   resolvePipelineLedgerContext,
   type PipelineLedgerContext,
@@ -57,6 +58,13 @@ function text(value: unknown): string {
 
 function safeSegment(value: unknown): string {
   return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+}
+
+function pipelinePresentationCardIds(run: CodexPipelineRun): string[] {
+  // WHAT: Publish generated step identities only when this run owns generated presentation cards.
+  // WHY: Cardless ledger invalidation must target the existing source card rather than nonexistent step cards.
+  if (run.createStepCards !== false) return run.steps.map((step) => step.outputCardId);
+  return [run.sourceCardId];
 }
 
 function sourceCard(context: PipelineLedgerContext, sourceCardId: string): AnyRecord | null {
@@ -377,7 +385,7 @@ export async function startPipelineRun(input: {
       ledgerId: run.ledgerId,
       sessionId: skill.runId,
       sourceCardId: run.sourceCardId,
-      ownerCardId: step.outputCardId,
+      ownerCardId: pipelineStepOwnerCardId(run, step),
       kind: 'pipeline-skill',
       requestedAt: run.createdAt,
       model: skill.codexModel,
@@ -406,7 +414,7 @@ export async function startPipelineRun(input: {
           executionId: topology[0]?.skill.executionId ?? '',
           status: 'pending',
           cardId: input.sourceCardId,
-          cardIds: run.steps.map((step) => step.outputCardId),
+          cardIds: pipelinePresentationCardIds(run),
         });
       }
       return {
@@ -468,7 +476,7 @@ export async function startPipelineRun(input: {
             ledgerId: run.ledgerId,
             taskId: run.ledgerId === 'tasks' ? run.outputParentCardId : '',
             sourceCardId: run.sourceCardId,
-            ownerCardId: step.outputCardId,
+            ownerCardId: pipelineStepOwnerCardId(run, step),
             kind: 'pipeline-skill',
             requestedAt: run.createdAt,
             model: skill.codexModel,
@@ -535,7 +543,7 @@ export async function startPipelineRun(input: {
         pipelineRunId: run.id,
         status: 'pending',
         cardId: input.sourceCardId,
-        cardIds: run.steps.map((step) => step.outputCardId),
+        cardIds: pipelinePresentationCardIds(run),
       });
     }
     return {

@@ -41,6 +41,11 @@ import { createExecutionRequestId } from '/src/runtime/codex/helper/create-execu
 import { requestTaskExecutionState } from '/src/runtime/codex/effect/request-task-execution-state.js';
 import { applyMasterSubtaskExecutionState } from './master-subtask-execution-state.js';
 import {
+  reconcileMasterSubtaskDisclosureIdentity,
+  toggleMasterSubtaskDisclosureIdentity,
+} from './master-subtask-disclosure-state.js';
+import { renderMasterSubtaskDisclosure } from './render-master-subtask-disclosure.js';
+import {
   openLedgerCardEditor,
   requestActiveLedgerCardEditorClose,
 } from '/src/runtime/content-authoring/controller/ledger-card-editor.js';
@@ -154,6 +159,7 @@ let routeLoadController = null;
 let masterSubtaskExecutionController = null;
 let activeResponsiveTaskClock = null;
 let codexSettingsRequest = null;
+let expandedMasterSubtaskIdentity = '';
 const optimisticExecutionIntents = new Map();
 const pendingOptimisticExecutionDetails = new Map();
 const optimisticTaskIntents = new Map();
@@ -271,7 +277,12 @@ function setResourceProject(projectId) {
 }
 
 function setView(name) {
+  // WHAT: Reject a non-loading leave transition while card-detail tooling still owns the active surface.
+  // WHY: A blocked close must preserve both the rendered card and its current disclosure identity.
   if (name !== 'card-view' && name !== 'loading-view' && !closeCardDetail()) return false;
+  // WHAT: Clear the route-local disclosure identity whenever the card surface is left or loading starts.
+  // WHY: Re-entering a master-task card must begin collapsed instead of retaining a disclosure from a previous view.
+  if (name !== 'card-view') expandedMasterSubtaskIdentity = '';
   for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'settings-view', 'runtime-status-view', 'overview-view', 'control-room-view', 'done-view', 'ledger-view', 'zone-view', 'card-view']) {
     elements[id].hidden = id !== name;
   }
@@ -2723,6 +2734,13 @@ function renderCard(card) {
     cards: state.ledger?.cards ?? [],
     relationships: state.ledger?.relationships ?? []
   });
+  // WHAT: Select a disclosure identity only for the rendered master-task card branch.
+  // WHY: Non-master cards must reconcile to the empty collapsed sentinel without owning disclosure state.
+  const renderedMasterSubtaskIdentity = parsedTask.masterTask ? String(parsedTask.cardId || card.id) : '';
+  expandedMasterSubtaskIdentity = reconcileMasterSubtaskDisclosureIdentity(
+    expandedMasterSubtaskIdentity,
+    renderedMasterSubtaskIdentity,
+  );
   const parentMaster = parentMasterTask({
     cardId: card.id,
     cards: state.ledger?.cards ?? [],
@@ -2844,6 +2862,8 @@ function renderCard(card) {
     });
     persistenceFailure.append(message, retry);
   }
+  // WHAT: Render master-task subtasks through the disclosure while retaining the established detail composition.
+  // WHY: The responsive controller is the sole owner of route-local disclosure identity and existing task behavior.
   if (parsedTask.masterTask) {
     const visibleSubtasks = visibleMasterTaskSubtasks(parsedTask.subtasks);
     const overview = document.createElement('section');
@@ -2853,26 +2873,22 @@ function renderCard(card) {
     status.innerHTML = '<strong></strong><span></span>';
     status.querySelector('strong').textContent = parsedTask.status.replace('task-', '');
     status.querySelector('span').textContent = `${visibleSubtasks.filter((subtask) => subtask.status === 'complete').length} of ${visibleSubtasks.length} complete`;
-    const heading = document.createElement('h2');
-    heading.textContent = 'Subtasks';
-    const subtasks = document.createElement('div');
-    subtasks.className = 'task-subtasks';
-    subtasks.replaceChildren(...visibleSubtasks.map((subtask) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'subtask-row';
-      button.dataset.cardId = subtask.cardId;
-      button.dataset.taskTitle = subtask.title;
-      button.dataset.taskStatus = subtask.status;
-      button.innerHTML = '<span></span><small></small>';
-      button.querySelector('span').textContent = subtask.title;
-      button.querySelector('small').textContent = subtask.status;
-      button.addEventListener('click', () => {
+    const disclosure = renderMasterSubtaskDisclosure({
+      document,
+      cardIdentity: renderedMasterSubtaskIdentity,
+      visibleSubtasks,
+      expanded: expandedMasterSubtaskIdentity === renderedMasterSubtaskIdentity,
+      onToggle: () => {
+        expandedMasterSubtaskIdentity = toggleMasterSubtaskDisclosureIdentity(
+          expandedMasterSubtaskIdentity,
+          renderedMasterSubtaskIdentity,
+        );
+      },
+      onNavigate: (subtask) => {
         const zone = ledgerZones().find((entry) => entry.cards.some((entryCard) => String(entryCard.id) === subtask.cardId));
         navigate(cardPath(state.activeLedgerId, zone?.id ?? 'ungrouped', subtask.cardId));
-      });
-      return button;
-    }));
+      },
+    });
     const completion = document.createElement('section');
     completion.className = 'master-task-completion';
     const backlog = card.status === 'backlog';
@@ -3000,7 +3016,7 @@ function renderCard(card) {
       });
     });
     completion.append(delayButton, completionActions, deleteButton);
-    overview.append(status, heading, subtasks, completion);
+    overview.append(status, disclosure, completion);
     // The relationship-backed task summary is the navigation surface for a master task.
     // Keep it ahead of the narrative so linked cards remain visible on long mobile cards.
     elements['card-body'].replaceChildren(...(facts ? [facts] : []), overview, ...(persistenceFailure ? [persistenceFailure] : []), content);

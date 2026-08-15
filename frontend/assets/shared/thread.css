@@ -1262,6 +1262,10 @@
   overflow-wrap: anywhere;
 }
 
+:where(.thread-note-message) strong {
+  color: var(--text);
+}
+
 .thread-note-message .ledger-card-body,
 .thread-note-message .ledger-card-table-scroll {
   min-width: 0;

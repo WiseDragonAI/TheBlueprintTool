@@ -30,8 +30,11 @@ function leaveCodexScreen() {
   history.pushState({}, '', '/');
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
-function navigateSkillRoute(path, replace = false) {
+function navigateSkillRoute(path, replace = false, retainCurrentOwner = false) {
   history[replace ? 'replaceState' : 'pushState']({}, '', path);
+  // WHAT: Keep the already-rendered global skill detail mounted during a direct editor transition.
+  // WHY: Re-running the route owner replaces the detail workspace that must remain beneath its editor.
+  if (retainCurrentOwner) return;
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 async function jsonRequest(url, options, projectId = state.projectId) {
@@ -243,10 +246,28 @@ function openGlobalSkillCreatorRoute() {
     },
   });
 }
+function openGlobalSkillEditor(record, retainCurrentOwner = false) {
+  return openSkillLibraryEditor({
+    skillName: record.name,
+    requestProjectId: '',
+    onSaved: async (savedSkill) => { await refreshGlobalSkillAuthoring(savedSkill); },
+    onSaveError: (error) => { message('.process-detail-message', error, true); },
+    onClosed: () => {
+      // WHAT: Restore the selected skill route only while the editor still owns the current route.
+      // WHY: Browser back already selected its destination before the editor close callback runs.
+      if (location.pathname.endsWith('/edit')) navigateSkillRoute(`/skills/${encodeURIComponent(record.name)}`, true, retainCurrentOwner);
+    },
+  });
+}
 function createGlobalSkill() { navigateSkillRoute('/skills/new'); }
 function editGlobalSkill(record) {
+  // WHAT: Keep read-only global skills outside the editor transition.
+  // WHY: The detail can render protected content without authorizing a mutable editor session.
   if (!record.editable) return;
-  navigateSkillRoute(`/skills/${encodeURIComponent(record.name)}/edit`);
+  navigateSkillRoute(`/skills/${encodeURIComponent(record.name)}/edit`, false, true);
+  // WHAT: Surface a direct editor-loading rejection in the owning detail status area.
+  // WHY: The retained detail remains visible while its editor transition can fail asynchronously.
+  void openGlobalSkillEditor(record, true).catch((error) => { message('.process-detail-message', error.message, true); });
 }
 function editSkillLibraryRecord(record) {
   if (!record.editable) return;
@@ -718,15 +739,7 @@ export async function openMobileSkillRoute(skillName, mode) {
     await renderProcessDetail(record);
     return;
   }
-  await openSkillLibraryEditor({
-    skillName: record.name,
-    requestProjectId: '',
-    onSaved: async (savedSkill) => { await refreshGlobalSkillAuthoring(savedSkill); },
-    onSaveError: (error) => { message('.process-detail-message', error, true); },
-    onClosed: () => {
-      if (location.pathname.endsWith('/edit')) navigateSkillRoute(`/skills/${encodeURIComponent(record.name)}`, true);
-    },
-  });
+  await openGlobalSkillEditor(record);
 }
 export function initializeMobileCodex() {
   el('.process-card-button').addEventListener('click', openProcess);
