@@ -17,7 +17,7 @@ export function formatLedgerCliHelp(): string {
     '      Create one Tasks master card and its subtasks, then print their Markdown file paths.',
     '',
     '  queue-pipeline --pipeline <pipeline-id>',
-    '      Queue one saved pipeline after the current thread execution.',
+    '      Queue one saved pipeline after the current eligible execution.',
     '',
     '  queue-skill --skill <name> --model <model> --effort <effort>',
     '      Queue one skill after the current execution, then run the calling skill again in a fresh context.',

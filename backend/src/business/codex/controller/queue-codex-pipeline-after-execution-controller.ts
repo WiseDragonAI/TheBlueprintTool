@@ -1,6 +1,6 @@
 /**
- * WHAT: Queues one saved pipeline after a running thread execution.
- * WHY: Thread agents need a durable same-task successor without constructing pipeline topology themselves.
+ * WHAT: Queues one saved pipeline after a running thread, continuation, or terminal pipeline execution.
+ * WHY: Active agents need a durable same-task successor without constructing pipeline topology themselves.
  */
 import { resolve } from 'node:path';
 import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
@@ -66,14 +66,33 @@ export async function queueCodexPipelineAfterExecutionController(
       ok: false,
       statusCode: 409,
       code: 'task_execution_not_running',
-      error: 'Only a running thread execution can queue its successor pipeline.',
+      error: 'Only a running execution can queue its successor pipeline.',
       phase: currentExecution.lifecycle.phase,
     };
   }
-  // WHAT: Admit thread starts and thread continuations as pipeline callers.
-  // WHY: Both execution kinds own a conversation turn; pipeline skills retain their existing queue-skill contract.
-  if (currentExecution.metadata.kind !== 'thread' && currentExecution.metadata.kind !== 'continuation') {
-    return { ok: false, statusCode: 409, code: 'dynamic_pipeline_caller_invalid', error: 'Calling execution is not a thread run.' };
+  const callerKind = currentExecution.metadata.kind;
+  let initialInputCardId = '';
+  // WHAT: Resolve pipeline callers through their immutable manifest and preserve their direct output handoff.
+  // WHY: A saved successor must not branch before queued descendants or restart from the original source card.
+  if (callerKind === 'pipeline-skill') {
+    const currentRun = normalized.store.runs.find((run) => run.id === currentExecution.metadata.pipelineRunId);
+    const topology = currentRun?.steps.flatMap((step) => step.skills.map((skill) => ({ step, skill }))) ?? [];
+    const callerIndex = topology.findIndex(({ skill }) => skill.executionId === executionId);
+    // WHAT: Reject a pipeline caller that is absent from its declared immutable run.
+    // WHY: Terminal position and direct input ownership cannot be derived safely without that manifest member.
+    if (!currentRun || callerIndex < 0) {
+      return { ok: false, statusCode: 409, code: 'dynamic_pipeline_manifest_missing', error: 'Calling execution has no immutable pipeline manifest.' };
+    }
+    // WHAT: Allow only the final execution in a pipeline run to select a saved successor.
+    // WHY: Earlier members already own queued descendants and cannot create a competing branch.
+    if (callerIndex !== topology.length - 1) {
+      return { ok: false, statusCode: 409, code: 'dynamic_pipeline_caller_not_terminal', error: 'Only the terminal pipeline execution can queue a successor pipeline.' };
+    }
+    initialInputCardId = topology[callerIndex].step.outputCardId;
+  // WHAT: Reject execution kinds that do not own a Codex conversation or pipeline turn.
+  // WHY: Voice and unsupported runtime records cannot safely select a same-task successor.
+  } else if (callerKind !== 'thread' && callerKind !== 'continuation') {
+    return { ok: false, statusCode: 409, code: 'dynamic_pipeline_caller_invalid', error: 'Calling execution cannot queue a pipeline.' };
   }
   const ledgerId = currentExecution.metadata.ledgerId;
   const sourceCardId = currentExecution.metadata.sourceCardId;
@@ -99,5 +118,6 @@ export async function queueCodexPipelineAfterExecutionController(
     runtime_state: runtime,
     admissionLocked: true,
     queuedAfterExecutionId: executionId,
+    initialInputCardId,
   });
 }

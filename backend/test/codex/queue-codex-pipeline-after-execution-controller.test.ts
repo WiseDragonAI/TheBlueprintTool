@@ -59,7 +59,10 @@ function createWorkspace(): { workspace: string; decisionOsRoot: string } {
       steps: [
         {
           id: 'step-a', name: 'Step A', purpose: '', createdAt: now, updatedAt: now,
-          skills: [{ id: 'skill-a', skillName: 'worker', contentKind: 'federated-skill', codexModel: 'gpt-5.5', codexEffort: 'high' }],
+          skills: [
+            { id: 'skill-a', skillName: 'worker', contentKind: 'federated-skill', codexModel: 'gpt-5.5', codexEffort: 'high' },
+            { id: 'skill-a-terminal', skillName: 'worker', contentKind: 'federated-skill', codexModel: 'gpt-5.5', codexEffort: 'high' },
+          ],
         },
         {
           id: 'step-b', name: 'Step B', purpose: '', createdAt: now, updatedAt: now,
@@ -132,6 +135,7 @@ test('a running thread queues one idempotent saved pipeline in the same task', a
     assert.equal(admitted.run.sourceCardId, 'source-card');
     assert.equal(admitted.run.queuedAfterExecutionId, executionId);
     const successorExecutionId = admitted.run.steps[0].skills[0].executionId;
+    const terminalExecutionId = admitted.run.steps[0].skills[1].executionId;
     const successor = state.executions.find(successorExecutionId);
     assert.equal(successor?.metadata.taskId, 'source-card');
     assert.equal(successor?.metadata.predecessorExecutionId, executionId);
@@ -142,14 +146,40 @@ test('a running thread queues one idempotent saved pipeline in the same task', a
     assert.equal(conflict.status, 409);
     assert.equal(conflictBody.code, 'dynamic_pipeline_already_queued');
 
-    const cancel = await fetch(`${baseUrl}/api/codex/pipelines/runs/${admitted.run.id}/cancel`, {
+    await state.executions.transition(executionId, { phase: 'succeeded', result: { status: 'succeeded', summary: 'Thread settled.' } });
+    await state.executions.transition(successorExecutionId, { phase: 'starting' });
+    await state.executions.transition(successorExecutionId, { phase: 'running' });
+    const nonterminal = await fetch(`${baseUrl}/api/codex/executions/${successorExecutionId}/queue-pipeline`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ executionId: successorExecutionId }),
+      body: JSON.stringify({ pipelineId: 'pipeline-b' }),
+    });
+    assert.equal(nonterminal.status, 409);
+    assert.equal((await nonterminal.json() as Record<string, unknown>).code, 'dynamic_pipeline_caller_not_terminal');
+
+    await state.executions.transition(successorExecutionId, { phase: 'succeeded', result: { status: 'succeeded', summary: 'First skill settled.' } });
+    await state.executions.transition(terminalExecutionId, { phase: 'starting' });
+    await state.executions.transition(terminalExecutionId, { phase: 'running' });
+    const chainedResponse = await fetch(`${baseUrl}/api/codex/executions/${terminalExecutionId}/queue-pipeline`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pipelineId: 'pipeline-b' }),
+    });
+    const chained = await chainedResponse.json() as Record<string, any>;
+    assert.equal(chainedResponse.status, 202, JSON.stringify(chained));
+    assert.equal(chained.run.queuedAfterExecutionId, terminalExecutionId);
+    assert.equal(chained.run.initialInputCardId, admitted.run.steps[0].outputCardId);
+    const chainedExecutionId = chained.run.steps[0].skills[0].executionId;
+    assert.equal(state.executions.find(chainedExecutionId)?.metadata.predecessorExecutionId, terminalExecutionId);
+    assert.equal(state.executions.find(chainedExecutionId)?.lifecycle.phase, 'queued');
+
+    const cancel = await fetch(`${baseUrl}/api/codex/pipelines/runs/${chained.run.id}/cancel`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ executionId: chainedExecutionId }),
     });
     assert.equal(cancel.status, 202);
-    await state.executions.transition(executionId, { phase: 'cancelling' });
-    await state.executions.transition(executionId, { phase: 'cancelled', result: { status: 'cancelled', summary: 'Fixture settled.' } });
+    await state.executions.transition(terminalExecutionId, { phase: 'succeeded', result: { status: 'succeeded', summary: 'Terminal skill settled.' } });
   } finally {
     await closeServer(server);
     rmSync(fixture.workspace, { recursive: true, force: true });

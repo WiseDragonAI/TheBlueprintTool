@@ -1,6 +1,6 @@
 /**
- * WHAT: Queues one saved pipeline after the current thread execution.
- * WHY: A thread agent needs one execution-scoped command that preserves task ownership and predecessor ordering.
+ * WHAT: Queues one saved pipeline after the current eligible execution.
+ * WHY: An agent needs one execution-scoped command that preserves task ownership and predecessor ordering.
  */
 import type { Result } from '../../../lib/types.js';
 
@@ -41,5 +41,5 @@ export async function queuePipeline(
   // WHAT: Preserve the server's scoped admission failure for the calling agent.
   // WHY: A rejected successor must not be reported as queued.
   if (!response.ok) return { ok: false, error: `Dynamic pipeline queue failed (${response.status}): ${body}` };
-  return { ok: true, value: `Queued pipeline ${pipelineId} after the current thread execution.` };
+  return { ok: true, value: `Queued pipeline ${pipelineId} after the current execution.` };
 }

@@ -19,7 +19,7 @@ test('queue-pipeline sends the selected pipeline from the current execution', as
     });
     assert.deepEqual(result, {
       ok: true,
-      value: 'Queued pipeline implementation/pipeline after the current thread execution.',
+      value: 'Queued pipeline implementation/pipeline after the current execution.',
     });
     assert.equal(calls[0].url, 'http://127.0.0.1:50151/p/project%2Fa/api/codex/executions/execution%2Fthread/queue-pipeline');
     assert.equal(calls[0].init.method, 'POST');

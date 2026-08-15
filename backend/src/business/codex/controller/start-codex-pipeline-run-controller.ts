@@ -641,9 +641,9 @@ function pipelineDefinition(input: {
 }
 
 export async function startCodexPipelineRunController(
-  input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord; admissionLocked?: boolean; queuedAfterExecutionId?: string } | AnyRecord = {},
+  input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord; admissionLocked?: boolean; queuedAfterExecutionId?: string; initialInputCardId?: string } | AnyRecord = {},
 ): Promise<AnyRecord> {
-  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; admissionLocked?: boolean; queuedAfterExecutionId?: string };
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; admissionLocked?: boolean; queuedAfterExecutionId?: string; initialInputCardId?: string };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
@@ -691,5 +691,6 @@ export async function startCodexPipelineRunController(
     reservedFirstExecutionId: text(payload.executionId),
     requestIdPrefix: text(payload.requestId),
     queuedAfterExecutionId: text(envelope.queuedAfterExecutionId) || null,
+    initialInputCardId: text(envelope.initialInputCardId) || null,
   });
 }

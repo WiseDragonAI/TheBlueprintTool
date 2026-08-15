@@ -18,7 +18,7 @@ The command uses `DECISION_OS_SERVER_URL`, `DECISION_OS_PROJECT_ID`, and `DECISI
 ledger-cli queue-pipeline --pipeline <pipeline-id>
 ```
 
-The command uses `DECISION_OS_SERVER_URL`, `DECISION_OS_PROJECT_ID`, and `DECISION_OS_EXECUTION_ID` from the running thread execution. A successful response links the saved pipeline as the same-task successor and starts it after the thread turn settles.
+The command uses `DECISION_OS_SERVER_URL`, `DECISION_OS_PROJECT_ID`, and `DECISION_OS_EXECUTION_ID` from the running execution. A running thread, continuation, or terminal pipeline execution can call it. A successful response links the saved pipeline as the same-task successor, gives a pipeline caller's output card to the new pipeline, and starts it after the caller settles.
 
 ## Inspect task state
 
