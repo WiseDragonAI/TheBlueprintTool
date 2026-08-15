@@ -3,7 +3,7 @@ import test from 'node:test';
 import type { CodexPipelineRun } from '../../../shared/schemas/codex-pipeline-types.js';
 import { createCodexPipelineStepCards } from '@backend/business/codex/effect/create-codex-pipeline-step-cards.js';
 
-test('createPipelineStepCards false skips automatic card and relationship creation', async () => {
+test('run-owned createStepCards false skips automatic card and relationship creation', async () => {
   const ledger = {
     cards: [{ id: 'source-card', title: 'Source' }],
     relationships: [],
@@ -16,9 +16,9 @@ test('createPipelineStepCards false skips automatic card and relationship creati
       ledgerId: 'tasks',
       ledgerPath: '/unused/tasks.json',
       ledger,
-      runtime: { decisionOsSettings: { createPipelineStepCards: false } },
+      runtime: { decisionOsSettings: { createPipelineStepCards: true } },
     },
-    run: {} as CodexPipelineRun,
+    run: { createStepCards: false } as CodexPipelineRun,
   });
 
   assert.equal(result, null);
