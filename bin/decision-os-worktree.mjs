@@ -37,11 +37,12 @@ const generatedSearchIgnoreBefore = '/executor-analysis/';
 const generatedSearchIgnoreAfter = '/frontend-telemetry.jsonl*';
 
 export class WorktreeCliError extends Error {
-  constructor(code, message, exitCode = 2) {
+  constructor(code, message, exitCode = 2, instruction = '') {
     super(message);
     this.name = 'WorktreeCliError';
     this.code = code;
     this.exitCode = exitCode;
+    this.instruction = instruction;
   }
 }
 
@@ -387,7 +388,12 @@ export function publishFeatureChild(feature, parentAdmission) {
   // WHAT: Require the reviewed child to descend from canonical dev's reviewed gitlink.
   // WHY: A feature cannot publish a child history that omits its admitted parent baseline.
   if (!canonicalAncestor) {
-    throw new WorktreeCliError('worktree_feature_child_canonical_ancestry_invalid', `Feature child ${feature.childHead} does not descend from canonical child ${parentAdmission.decisionOsGitlink}.`);
+    throw new WorktreeCliError(
+      'worktree_feature_child_canonical_ancestry_invalid',
+      `Feature child ${feature.childHead} does not descend from canonical child ${parentAdmission.decisionOsGitlink}.`,
+      2,
+      `Rebase the feature worktree onto the latest dev with "git rebase dev" from ${feature.featureRoot}, resolve any conflicts, then run integration again.`,
+    );
   }
   const sourceAncestor = git(childRoot, ['merge-base', '--is-ancestor', observedSourceDevSha, feature.childHead], { accepted: [0, 1] }).status === 0;
   // WHAT: Require the reviewed child to contain the observed source dev history.
@@ -593,6 +599,22 @@ function usage() {
   return 'Usage: decision-os-worktree <init-dev|status|create|integrate|cleanup> [feature-name] --json';
 }
 
+/**
+ * WHAT: Serializes one worktree failure with its exact evidence and defined recovery instruction.
+ * WHY: CLI callers need stable machine-readable recovery output without parsing prose from the error message.
+ */
+export function worktreeFailureReceipt(error) {
+  const known = error instanceof WorktreeCliError;
+  return {
+    ok: false,
+    code: known ? error.code : 'worktree_failed',
+    message: error instanceof Error ? error.message : String(error),
+    // WHAT: Include a recovery instruction only when the exact failure defines one.
+    // WHY: Machine-readable callers must not infer mutation steps from a generic error category.
+    ...(known && error.instruction ? { instruction: error.instruction } : {}),
+  };
+}
+
 export function runCli(argv = process.argv.slice(2)) {
   try {
     const command = argv[0];
@@ -621,7 +643,7 @@ export function runCli(argv = process.argv.slice(2)) {
     return 0;
   } catch (error) {
     const known = error instanceof WorktreeCliError;
-    process.stderr.write(`${JSON.stringify({ ok: false, code: known ? error.code : 'worktree_failed', message: error instanceof Error ? error.message : String(error) })}\n`);
+    process.stderr.write(`${JSON.stringify(worktreeFailureReceipt(error))}\n`);
     return known ? error.exitCode : 3;
   }
 }

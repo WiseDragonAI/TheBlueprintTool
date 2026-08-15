@@ -93,6 +93,6 @@
 16. `worktree_feature_child_source_changed` — fetched child `origin/dev` differs from the directly observed source tip.
 17. `worktree_feature_child_remote_advanced` — the source changed before the leased child push settled.
 18. `worktree_feature_child_publication_failed` — the child push failed without evidence that the observed source tip advanced.
-19. `worktree_feature_child_canonical_ancestry_invalid` — the reviewed child does not descend from canonical dev's gitlink.
+19. `worktree_feature_child_canonical_ancestry_invalid` — the reviewed child does not descend from canonical dev's gitlink. JSON output preserves the exact child and canonical SHAs in `message` and supplies an `instruction` to run `git rebase dev` from the feature worktree before retrying integration.
 20. `worktree_feature_child_stale_feature` — the reviewed child omits the observed source `dev` history.
 21. `worktree_feature_child_publication_mismatch` — refetched child source does not equal the reviewed child SHA.

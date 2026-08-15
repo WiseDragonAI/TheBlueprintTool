@@ -15,6 +15,7 @@ import {
   installRealDependencies,
   publishFeatureChild,
   repairKnownGeneratedSearchIgnore,
+  worktreeFailureReceipt,
 } from '../../../bin/decision-os-worktree.mjs';
 
 function git(root: string, args: string[]): string {
@@ -180,12 +181,24 @@ test('child publication rejects a checkout origin override before source mutatio
   });
 });
 
-test('child publication rejects a reviewed child outside canonical child ancestry', () => {
+test('child publication reports exact canonical ancestry failure and rebase recovery', () => {
   withChildPublicationFixture((fixture) => {
     const unrelatedChildSha = gitCommitTree(fixture.childRoot, fixture.feature.childHead);
     assert.throws(
       () => publishFeatureChild(fixture.feature, { ...fixture.parentAdmission, decisionOsGitlink: unrelatedChildSha }),
-      (error: unknown) => isCliError(error, 'worktree_feature_child_canonical_ancestry_invalid'),
+      (error: unknown) => {
+        assert.equal(isCliError(error, 'worktree_feature_child_canonical_ancestry_invalid'), true);
+        assert.equal((error as Error).message, `Feature child ${fixture.feature.childHead} does not descend from canonical child ${unrelatedChildSha}.`);
+        const instruction = `Rebase the feature worktree onto the latest dev with "git rebase dev" from ${fixture.feature.featureRoot}, resolve any conflicts, then run integration again.`;
+        assert.equal((error as Error & { instruction?: string }).instruction, instruction);
+        assert.deepEqual(worktreeFailureReceipt(error), {
+          ok: false,
+          code: 'worktree_feature_child_canonical_ancestry_invalid',
+          message: `Feature child ${fixture.feature.childHead} does not descend from canonical child ${unrelatedChildSha}.`,
+          instruction,
+        });
+        return true;
+      },
     );
     assert.equal(git(fixture.source, ['rev-parse', 'refs/heads/dev']), fixture.baseChildSha);
   });
