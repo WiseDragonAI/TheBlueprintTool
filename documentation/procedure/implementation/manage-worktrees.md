@@ -90,3 +90,13 @@
 3. Do not hide dependency paths through checkout-local exclusions.
 4. Do not stash or reset unrelated dev dirt to obtain an integration receipt.
 5. Do not push the symbolic `dev` branch after admission; push only the admitted SHA refspec.
+
+---
+
+## H. Internal Architecture
+
+1. `bin/decision-os-worktree.mjs` is the thin executable and public export boundary.
+2. `bin/worktree/controllers/` owns command dispatch and operation lifecycles for dev initialization, feature creation, child publication, integration, cleanup, and status.
+3. `bin/worktree/helpers/` owns focused validation, Git and process IO, parsing, locking, dependency setup, and receipt derivation.
+4. `bin/worktree/config.mjs` owns immutable repository paths and dependency proofs; `bin/worktree/worktree-cli-error.mjs` owns the stable error contract.
+5. Keep the executable below `200` LOC and preserve the controller/helper ownership boundary when extending the lifecycle.
