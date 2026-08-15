@@ -598,6 +598,7 @@ function normalizeRuns(raw: unknown, issues: CodexPipelineStoreIssue[]): CodexPi
       pipelineId: nullableText(input.pipelineId),
       pipelineName: text(input.pipelineName),
       temporary: input.temporary === true,
+      createStepCards: input.createStepCards !== false,
       executionMode: input.executionMode === 'federated' ? 'federated' : 'local',
       ledgerId: text(input.ledgerId),
       sourceCardId: text(input.sourceCardId),

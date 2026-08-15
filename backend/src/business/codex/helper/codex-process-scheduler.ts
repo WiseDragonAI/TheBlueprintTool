@@ -6,7 +6,7 @@ import { assertCodexPipelineStoreAvailable, readCodexPipelineStore } from './cod
 import {
   maxConcurrentCodexProcesses,
   federatedPipelineExecutionReady,
-  outputFileForPipelineCard,
+  outputFileForPipelineStep,
   resolvePipelineLedgerContext,
   runPipelineExecution,
 } from './codex-pipeline-runner.js';
@@ -37,7 +37,12 @@ function runnableExecutions(decisionOsRoot: string, runtime: AnyRecord) {
       contexts.set(run.ledgerId, resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId: run.ledgerId }));
     }
     const context = contexts.get(run.ledgerId);
-    return Boolean(context && outputFileForPipelineCard(context, decisionOsRoot, member.step.outputCardId));
+    return Boolean(context && outputFileForPipelineStep({
+      context,
+      decisionOsRoot,
+      run,
+      step: member.step,
+    }));
   };
   return state.executions.byPhase('queued')
     .filter((record) => (

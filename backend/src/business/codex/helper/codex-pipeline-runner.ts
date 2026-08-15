@@ -343,6 +343,41 @@ export function outputFileForPipelineCard(context: PipelineLedgerContext, decisi
   return resolveCardContentFile(decisionOsRoot, comment.contentFile) ?? '';
 }
 
+function safeArtifactSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'step';
+}
+
+export function outputFileForPipelineStep(input: {
+  context: PipelineLedgerContext | null;
+  decisionOsRoot: string;
+  run: CodexPipelineRun;
+  step: CodexPipelineRunStep;
+}): string {
+  // WHAT: Resolve card-backed runs through their generated card content file.
+  // WHY: Existing manifests and enabled workspaces must retain their established presentation artifact.
+  if (input.run.createStepCards !== false) {
+    return input.context
+      ? outputFileForPipelineCard(input.context, input.decisionOsRoot, input.step.outputCardId)
+      : '';
+  }
+  const firstSkill = input.step.skills[0];
+  // WHAT: Reject a malformed cardless step without a skill-owned artifact directory.
+  // WHY: An output path cannot be derived safely when immutable topology has no skill.
+  if (!firstSkill) return '';
+  const artifact = resolve(dirname(firstSkill.stdoutFile), `${safeArtifactSegment(input.step.id)}.result.md`);
+  // WHAT: Accept only a run-owned artifact contained by the project Decision OS root.
+  // WHY: Persisted process paths must never redirect agent output outside the owning workspace state.
+  if (!isInside(input.decisionOsRoot, artifact)) return '';
+  return artifact;
+}
+
+export function pipelineStepOwnerCardId(run: CodexPipelineRun, step: CodexPipelineRunStep): string {
+  // WHAT: Keep generated-card ownership only for runs that admitted that presentation layer.
+  // WHY: Cardless executions must publish against the real source card instead of a nonexistent synthetic identity.
+  if (run.createStepCards !== false) return step.outputCardId;
+  return run.sourceCardId;
+}
+
 export function derivePipelineSkillStatus(input: {
   skill: CodexPipelineRunSkill;
   runtime?: AnyRecord;
@@ -476,15 +511,36 @@ function priorInput(input: {
   const index = flattened.findIndex((entry) => entry.skill.runId === input.skill.runId);
   if (index <= 0) {
     const cardId = input.run.initialInputCardId ?? input.run.sourceCardId;
-    return {
-      cardId,
-      content: cardContent({ context: input.context, decisionOsRoot: input.decisionOsRoot, cardId }),
-    };
+    const content = cardContent({ context: input.context, decisionOsRoot: input.decisionOsRoot, cardId });
+    // WHAT: Use the real initial card whenever it resolves to authored content.
+    // WHY: Ordinary pipelines and card-backed dynamic pipelines preserve their established input contract.
+    if (content || cardId === input.run.sourceCardId) return { cardId, content };
+    const producingRun = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs
+      .find((run) => run.steps.some((step) => step.outputCardId === cardId));
+    const producingStep = producingRun?.steps.find((step) => step.outputCardId === cardId);
+    const artifact = producingRun && producingStep
+      ? outputFileForPipelineStep({
+          context: input.context,
+          decisionOsRoot: input.decisionOsRoot,
+          run: producingRun,
+          step: producingStep,
+        })
+      : '';
+    // WHAT: Read a cardless predecessor through its immutable run-owned result artifact.
+    // WHY: Dynamic successor pipelines retain direct handoff even when no presentation card exists.
+    if (artifact && existsSync(artifact)) return { cardId, content: readFileSync(artifact, 'utf8') };
+    return { cardId, content: '' };
   }
   const prior = flattened[index - 1];
+  const artifact = outputFileForPipelineStep({
+    context: input.context,
+    decisionOsRoot: input.decisionOsRoot,
+    run: input.run,
+    step: prior.step,
+  });
   return {
     cardId: prior.step.outputCardId,
-    content: cardContent({ context: input.context, decisionOsRoot: input.decisionOsRoot, cardId: prior.step.outputCardId }),
+    content: artifact && existsSync(artifact) ? readFileSync(artifact, 'utf8') : '',
   };
 }
 
@@ -538,8 +594,16 @@ export async function spawnPipelineSkillProcess(input: {
     ledgerId: input.pipelineRun.ledgerId,
   });
   if (!context) throw new Error(`Ledger ${input.pipelineRun.ledgerId} could not be loaded for pipeline run ${input.pipelineRun.id}.`);
-  const outputFile = outputFileForPipelineCard(context, input.decisionOsRoot, input.step.outputCardId);
-  if (!outputFile) throw new Error(`Output card ${input.step.outputCardId} has no Markdown file.`);
+  const outputFile = outputFileForPipelineStep({
+    context,
+    decisionOsRoot: input.decisionOsRoot,
+    run: input.pipelineRun,
+    step: input.step,
+  });
+  // WHAT: Reject execution when neither an enabled card nor a contained run artifact owns the output.
+  // WHY: Agents require one durable Markdown destination before process launch.
+  if (!outputFile) throw new Error(`Pipeline step ${input.step.id} has no Markdown output file.`);
+  const ownerCardId = pipelineStepOwnerCardId(input.pipelineRun, input.step);
   const replicatedState = taskExecutionState(input.runtime);
   const replicatedExecution = replicatedState?.executions.find(input.skill.executionId) ?? null;
   if (!replicatedState || !replicatedExecution) throw new Error(`task_execution_not_found:${input.skill.executionId}`);
@@ -571,7 +635,7 @@ export async function spawnPipelineSkillProcess(input: {
     stepInputCardId: stageInput.cardId,
     stepInputCardContent: stageInput.content,
     outputParentCardId: input.pipelineRun.outputParentCardId,
-    outputCardId: input.step.outputCardId,
+    outputCardId: ownerCardId,
     outputSubtaskPosition: input.step.outputSubtaskPosition,
     outputMarkdownFile: outputFile,
     projectId: String(input.runtime.projectId ?? ''),
@@ -613,6 +677,7 @@ export async function spawnPipelineSkillProcess(input: {
   });
 
   mkdirSync(dirname(input.skill.stdoutFile), { recursive: true });
+  mkdirSync(dirname(outputFile), { recursive: true });
   const startedAt = replicatedExecution.lifecycle.startedAt ?? new Date().toISOString();
   let runtimeRun: AnyRecord = {};
   await launchCodexExecutionProcess({
@@ -621,7 +686,7 @@ export async function spawnPipelineSkillProcess(input: {
     workspaceRoot,
     ledgerId: input.pipelineRun.ledgerId,
     ledgerPath: context.ledgerPath,
-    cardId: input.step.outputCardId,
+    cardId: ownerCardId,
     runId: input.skill.runId,
     executionId: input.skill.executionId,
     command,
@@ -681,10 +746,10 @@ export async function spawnPipelineSkillProcess(input: {
         removeTaskExecutionProcess(input.runtime, input.skill.executionId);
         throw error;
       }
-      notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-started', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', cardId: input.step.outputCardId });
+      notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-started', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', cardId: ownerCardId });
     },
     onTurnStarted: (_event, observedAt) => {
-      notify(input.runtime.onCodexTurnStarted, { ledgerId: input.pipelineRun.ledgerId, cardId: input.pipelineRun.sourceCardId, outputCardId: input.step.outputCardId, threadId: `thread-${input.pipelineRun.sourceCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', startedAt: observedAt });
+      notify(input.runtime.onCodexTurnStarted, { ledgerId: input.pipelineRun.ledgerId, cardId: input.pipelineRun.sourceCardId, outputCardId: ownerCardId, threadId: `thread-${input.pipelineRun.sourceCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', startedAt: observedAt });
     },
     onSettled: async (settlement) => {
       const current = replicatedState.executions.find(input.skill.executionId);
@@ -741,14 +806,14 @@ export async function spawnPipelineSkillProcess(input: {
       removeTaskExecutionProcess(input.runtime, input.skill.executionId);
       const reassessed = reassessPipelineAfterSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id, skillRunId: input.skill.runId, settledStatus: status, error, exitCode, finishedAt: committed.finishedAt });
       updateRuntimeRun(input.runtime, input.skill.runId, { settledAt: new Date().toISOString() });
-      notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-settled', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, cardId: input.step.outputCardId, status, pipelineStatus: reassessed?.status ?? status });
+      notify(input.runtime.onPipelineLedgerChange, { reason: 'pipeline-skill-settled', ledgerId: input.pipelineRun.ledgerId, pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId, cardId: ownerCardId, status, pipelineStatus: reassessed?.status ?? status });
       scheduleCodexRuntime(input.runtime, 'schedule-after-pipeline-settlement', { pipelineRunId: input.pipelineRun.id, runId: input.skill.runId, executionId: input.skill.executionId });
       if (typeof input.runtime.onCodexRunSettled === 'function') {
         await input.runtime.onCodexRunSettled({
           ledgerId: input.pipelineRun.ledgerId,
-          cardId: input.step.outputCardId,
-          outputCardId: input.step.outputCardId,
-          threadId: `thread-${input.step.outputCardId}`,
+          cardId: ownerCardId,
+          outputCardId: ownerCardId,
+          threadId: `thread-${ownerCardId}`,
           runId: input.skill.runId,
           executionId: input.skill.executionId,
           pipelineRunId: input.pipelineRun.id,

@@ -134,6 +134,8 @@ export type CodexPipelineRun = {
   readonly pipelineId: string | null;
   readonly pipelineName: string;
   readonly temporary: boolean;
+  /** Immutable admission choice; generated step cards are an optional presentation layer. */
+  readonly createStepCards?: boolean;
   readonly executionMode?: 'local' | 'federated';
   readonly ledgerId: string;
   readonly sourceCardId: string;

@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/application/create-decision-os-server.js';
@@ -876,6 +876,81 @@ test('invalid local prompt states fail before run, card, and process side effect
     } finally {
       rmSync(fixture.workspace, { recursive: true, force: true });
     }
+  }
+});
+
+test('pipeline execution completes when automatic step-card generation is configurable', async () => {
+  const previousCodexBin = process.env.CODEX_BIN;
+  const { workspace, decisionOsRoot } = createWorkspace('decision-os-cardless-pipeline-');
+  const fakeCodex = join(workspace, 'fake-codex.mjs');
+  const lifecycleFile = join(workspace, 'lifecycle.txt');
+  for (const name of ['alpha', 'beta']) createSkill(workspace, name);
+  writeFileSync(join(decisionOsRoot, '.settings.json'), JSON.stringify({ createPipelineStepCards: false }));
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { appendFileSync, writeFileSync } from "node:fs";',
+    'const developerArgument = process.argv.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    'const instructions = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
+    'for await (const _chunk of process.stdin) {}',
+    'const skill = (instructions.match(/Current skill: (.+)/) || [])[1] || "missing";',
+    'const output = (instructions.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    `appendFileSync(${JSON.stringify(lifecycleFile)}, skill + "\\n");`,
+    'writeFileSync(output.trim(), "# " + skill + " result\\n\\nproduced-by=" + skill + "\\n");',
+    'writeFileSync(output.trim() + ".input", instructions);',
+    'console.log(JSON.stringify({ type: "thread.started", thread_id: "session-" + skill }));',
+    'console.log(JSON.stringify({ type: "turn.completed" }));',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  const now = '2026-08-15T00:00:00.000Z';
+  writeCodexPipelineStore({
+    decisionOsRoot,
+    availableSkillNames: ['alpha', 'beta'],
+    store: {
+      pipelines: [{ id: 'cardless-pipeline', name: 'Cardless pipeline', purpose: 'Card-independent execution proof', stepIds: ['one', 'two'], createdAt: now, updatedAt: now }],
+      steps: [
+        { id: 'one', name: 'One', purpose: '', createdAt: now, updatedAt: now, skills: [{ id: 'alpha-config', skillName: 'alpha', codexModel: null, codexEffort: null }] },
+        { id: 'two', name: 'Two', purpose: '', createdAt: now, updatedAt: now, skills: [{ id: 'beta-config', skillName: 'beta', codexModel: null, codexEffort: null }] },
+      ],
+      runs: [], skillLibrary: [], authoredContent: basePromptAuthoredContent(), activeWorkspaceRun: null,
+    },
+  });
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const response = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', sourceCardId: 'source-card', pipelineId: 'cardless-pipeline' }),
+    });
+    assert.equal(response.status, 202);
+    const started = await response.json() as Record<string, any>;
+    const completed = await waitForAsync(async () => {
+      const detail = await fetch(`${baseUrl}/api/codex/pipelines/runs/${encodeURIComponent(started.run.id)}`)
+        .then((entry) => entry.json()) as Record<string, any>;
+      return detail.run?.status === 'complete' ? detail.run : null;
+    }, 'configurable-card pipeline completion');
+    assert.deepEqual(readFileSync(lifecycleFile, 'utf8').trim().split('\n'), ['alpha', 'beta']);
+    const ledger = JSON.parse(readFileSync(join(decisionOsRoot, 'specs.json'), 'utf8')) as Record<string, any>;
+    const generated = ledger.cards.filter((card: Record<string, any>) => card.codexPipelineRunId === completed.id);
+    assert.equal(completed.createStepCards, false);
+    assert.equal(generated.length, 0);
+    assert.deepEqual(ledger.relationships, []);
+    const firstOutput = join(dirname(completed.steps[0].skills[0].stdoutFile), `${completed.steps[0].id}.result.md`);
+    const secondOutput = join(dirname(completed.steps[1].skills[0].stdoutFile), `${completed.steps[1].id}.result.md`);
+    assert.equal(existsSync(firstOutput), true);
+    assert.equal(existsSync(secondOutput), true);
+    assert.match(readFileSync(`${secondOutput}.input`, 'utf8'), /produced-by=alpha/);
+    const executions = taskExecutionState(runtime)?.executions.byPipelineRunId(completed.id) ?? [];
+    assert.equal(executions.every((execution) => execution.metadata.ownerCardId === 'source-card'), true);
+  } finally {
+    await closeServer(server);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
   }
 });
 

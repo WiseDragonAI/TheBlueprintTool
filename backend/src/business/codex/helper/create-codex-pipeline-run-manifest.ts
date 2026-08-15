@@ -128,6 +128,7 @@ export function createCodexPipelineRunManifest(input: {
     pipelineId: input.definition.pipelineId,
     pipelineName: input.definition.pipelineName,
     temporary: input.definition.temporary,
+    createStepCards: (input.runtime.decisionOsSettings as AnyRecord | undefined)?.createPipelineStepCards !== false,
     executionMode: input.definition.executionMode ?? 'local',
     ledgerId: input.ledgerId,
     sourceCardId: input.sourceCardId,

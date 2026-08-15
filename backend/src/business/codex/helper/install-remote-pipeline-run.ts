@@ -15,7 +15,7 @@ import {
   mutateCodexPipelineStore,
   readCodexPipelineStore,
 } from './codex-pipeline-store.js';
-import { resolvePipelineLedgerContext } from './codex-pipeline-runner.js';
+import { pipelineStepOwnerCardId, resolvePipelineLedgerContext } from './codex-pipeline-runner.js';
 import { resolveCodexPipelineRunDirectory } from './resolve-codex-pipeline-run-directory.js';
 import {
   assertPipelinePromptRunSkillSnapshot,
@@ -41,6 +41,7 @@ function topology(run: CodexPipelineRun): string {
     pipelineId: run.pipelineId,
     pipelineName: run.pipelineName,
     temporary: run.temporary,
+    createStepCards: run.createStepCards !== false,
     executionMode: run.executionMode ?? 'local',
     ledgerId: run.ledgerId,
     sourceCardId: run.sourceCardId,
@@ -100,7 +101,7 @@ function assertPendingManifest(run: CodexPipelineRun, requests: TaskExecutionLau
       || request.sessionId !== skill.runId
       || request.ledgerId !== run.ledgerId
       || request.sourceCardId !== run.sourceCardId
-      || request.ownerCardId !== step.outputCardId
+      || request.ownerCardId !== pipelineStepOwnerCardId(run, step)
       || request.model !== skill.codexModel
       || request.effort !== skill.codexEffort
       || request.predecessorExecutionId !== (index === 0
