@@ -1,18 +1,19 @@
-/** WHAT: Preserves the source responsive Control Room contract. WHY: Task lifecycle, routing, ordering, and display behavior must not regress during unification. */
+/** WHAT: Preserves the responsive Control Room and master-subtask disclosure source contracts. WHY: Task lifecycle, accessibility, ordering, and display behavior must not regress during unification. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { executionPresentation, executionStopwatch, cardCodexRunId, projectMasterTask, waitingAge } from '../src/app/responsive/control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/app/responsive/control-room-route.js';
 
-const [mobile, html, styles, bootApplication, embla, panzoom, mediaRenderer] = await Promise.all([
+const [mobile, html, styles, bootApplication, embla, panzoom, mediaRenderer, masterSubtaskDisclosureRenderer] = await Promise.all([
   readFile(new URL('../src/app/responsive/application.js', import.meta.url), 'utf8'),
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../assets/application.css', import.meta.url), 'utf8'),
   readFile(new URL('../src/app/controller/boot-application.ts', import.meta.url), 'utf8'),
   readFile(new URL('../assets/vendor/embla-carousel-8.6.0.umd.js', import.meta.url), 'utf8'),
   readFile(new URL('../assets/vendor/panzoom-4.6.2.es.js', import.meta.url), 'utf8'),
-  readFile(new URL('../src/runtime/ledger/component/render-ledger-card-media.ts', import.meta.url), 'utf8')
+  readFile(new URL('../src/runtime/ledger/component/render-ledger-card-media.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../src/app/responsive/render-master-subtask-disclosure.js', import.meta.url), 'utf8')
 ]);
 
 const task = (overrides = {}) => ({
@@ -41,8 +42,29 @@ test('projects master-task lifecycle and positioned relationships without Markdo
 test('renders master-detail rows and progress from the presentation-only visible subtask list', () => {
   assert.match(mobile, /const visibleSubtasks = visibleMasterTaskSubtasks\(parsedTask\.subtasks\)/);
   assert.match(mobile, /`\$\{visibleSubtasks\.filter\(\(subtask\) => subtask\.status === 'complete'\)\.length\} of \$\{visibleSubtasks\.length\} complete`/);
-  assert.match(mobile, /subtasks\.replaceChildren\(\.\.\.visibleSubtasks\.map\(\(subtask\) => \{/);
-  assert.doesNotMatch(mobile, /subtasks\.replaceChildren\(\.\.\.parsedTask\.subtasks\.map/);
+  assert.match(mobile, /renderMasterSubtaskDisclosure\(\{[\s\S]*visibleSubtasks,/);
+  assert.match(masterSubtaskDisclosureRenderer, /subtasks\.replaceChildren\(\.\.\.visibleSubtasks\.map\(\(subtask\) => renderSubtaskRow\(document, subtask, onNavigate\)\)\)/);
+  assert.doesNotMatch(masterSubtaskDisclosureRenderer, /parsedTask\.subtasks/);
+});
+
+test('pins the accessible mounted master-subtask disclosure structure, motion, and detail order', () => {
+  assert.match(masterSubtaskDisclosureRenderer, /section\.className = 'master-subtask-disclosure'/);
+  assert.match(masterSubtaskDisclosureRenderer, /heading\.className = 'master-subtask-disclosure-heading'[\s\S]*heading\.append\(toggle\);/);
+  assert.match(masterSubtaskDisclosureRenderer, /toggle\.className = 'master-subtask-disclosure-toggle'[\s\S]*toggle\.id = toggleId[\s\S]*toggle\.setAttribute\('aria-controls', panelId\)/);
+  assert.match(masterSubtaskDisclosureRenderer, /panel\.className = 'master-subtask-disclosure-panel'[\s\S]*panel\.setAttribute\('role', 'region'\)[\s\S]*panel\.setAttribute\('aria-labelledby', toggleId\)/);
+  assert.match(masterSubtaskDisclosureRenderer, /disclosure\.dataset\.expanded = String\(isExpanded\)[\s\S]*toggle\.setAttribute\('aria-expanded', String\(isExpanded\)\)[\s\S]*panel\.setAttribute\('aria-hidden', String\(!isExpanded\)\)[\s\S]*panel\.toggleAttribute\('inert', !isExpanded\)/);
+  assert.match(masterSubtaskDisclosureRenderer, /const next = disclosure\.dataset\.expanded !== 'true';\s*onToggle\(next\);\s*sync\(next\);/);
+  assert.match(styles, /\.master-subtask-disclosure \{[^}]*overflow: hidden;[^}]*border: 1px solid var\(--line\);/);
+  assert.match(styles, /\.master-subtask-disclosure-toggle:focus-visible \{[^}]*outline: 2px solid var\(--accent\);/);
+  assert.match(styles, /\.master-subtask-disclosure-panel \{[^}]*grid-template-rows: 0fr;[^}]*transition: grid-template-rows var\(--motion-disclosure\) var\(--ease-out\);/);
+  assert.match(styles, /\.master-subtask-disclosure\[data-expanded="true"\] \.master-subtask-disclosure-panel \{ grid-template-rows: 1fr; border-top: 1px solid var\(--line\); \}/);
+  assert.match(styles, /\.master-subtask-disclosure-chevron \{[^}]*transition: transform var\(--motion-disclosure\) var\(--ease-out\);/);
+  assert.match(styles, /\.master-subtask-disclosure-inner \{ min-height: 0; overflow: hidden; \}/);
+  assert.match(styles, /\.master-subtask-disclosure \.subtask-row \{ margin: 0; padding: 12px;/);
+  assert.match(styles, /\.master-subtask-disclosure \.subtask-row \+ \.subtask-row \{ border-top: 1px solid var\(--line\); \}/);
+  assert.match(styles, /\.master-subtask-disclosure \.subtask-row:last-child \{ margin-bottom: 0; \}/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.master-subtask-disclosure-panel,[\s\S]*\.master-subtask-disclosure-chevron \{ transition: none !important; \}/);
+  assert.match(mobile, /overview\.append\(status, disclosure, completion\);/);
 });
 
 test('replicated execution is the only local task execution authority', () => {
@@ -456,7 +478,7 @@ test('offers manual and configured-pipeline completion from the master-task deta
   assert.match(mobile, /acknowledgeOptimisticExecution\(\{ \.\.\.executionDetail, clientRequestId: executionDetail\.requestId, \.\.\.receipt \}\)/);
   assert.match(mobile, /pipelineCompleteButton\.disabled = card\.status === 'done' \|\| !configured/);
   assert.match(mobile, /navigate\(controlRoomPath\('exec'\), true\)/);
-  assert.match(mobile, /overview\.append\(status, heading, subtasks, completion\)/);
+  assert.match(mobile, /overview\.append\(status, disclosure, completion\)/);
   assert.match(mobile, /elements\['card-body'\]\.replaceChildren\(\.\.\.\(facts \? \[facts\] : \[\]\), overview, \.\.\.\(persistenceFailure \? \[persistenceFailure\] : \[\]\), content\)/);
   assert.doesNotMatch(mobile, /complete-master-subtask|masterTaskId=|Mark task as done/);
   assert.match(styles, /\.complete-master-task-button \{ width: 100%; min-height: 52px;/);

@@ -59,11 +59,13 @@
    node .worktrees/<feature-name>/bin/decision-os-worktree.mjs integrate <feature-name> --json
    ```
 
-2. The command requires committed and clean feature parent plus child state.
-3. It initializes canonical dev, merges the exact feature SHA with a merge commit, installs the merged child gitlink, and runs the fixed dev integration check.
-4. It pushes only `<admitted-dev-sha>:refs/heads/dev` with the Wise SSH identity.
-5. After the exact push succeeds, it removes the completed feature worktree and deletes the merged feature branch.
-6. A failed setup, merge, admission, or push preserves the feature recovery boundary and returns one stable error code.
+2. The command requires committed and clean feature parent plus child state, verifies that the reviewed parent gitlink equals the exact child `HEAD`, then admits local canonical `dev` only when it equals fetched `origin/dev` before any child-source mutation.
+3. It completes canonical dev initialization and cleanliness admission, re-fetches and revalidates the exact published parent SHA, then resolves `.decision-os` source from the reviewed parent `.gitmodules` blob.
+4. It rejects a child `origin` override, requires both canonical-child and observed-source-`dev` ancestry, and publishes the exact reviewed child SHA through a lease on the observed source `dev` tip.
+5. It refetches the configured child source and requires exact equality with the reviewed child SHA before it merges the exact feature SHA, installs the merged child gitlink, and runs the fixed dev integration check.
+6. The receipt includes parent admission, reviewed parent SHA and gitlink, canonical child gitlink, source, observed source tip, lease, refetched source tip, admitted dev SHA, and pushed parent ref.
+7. It pushes only `<admitted-dev-sha>:refs/heads/dev` with the Wise SSH identity, then removes the completed feature worktree and deletes the merged feature branch.
+8. A pre-merge child-publication rejection preserves the feature recovery boundary without a parent merge. A post-merge parent-admission failure preserves the local merge plus feature recovery boundary; repair the named condition, rerun the command, and never publish, clean, or delete manually.
 
 ---
 
