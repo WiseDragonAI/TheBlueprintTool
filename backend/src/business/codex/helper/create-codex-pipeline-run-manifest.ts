@@ -128,6 +128,8 @@ export function createCodexPipelineRunManifest(input: {
     pipelineId: input.definition.pipelineId,
     pipelineName: input.definition.pipelineName,
     temporary: input.definition.temporary,
+    // WHAT: Snapshot the current generated-card policy into the immutable run manifest.
+    // WHY: Later settings changes must not alter an admitted run's artifact or ownership topology.
     createStepCards: (input.runtime.decisionOsSettings as AnyRecord | undefined)?.createPipelineStepCards !== false,
     executionMode: input.definition.executionMode ?? 'local',
     ledgerId: input.ledgerId,

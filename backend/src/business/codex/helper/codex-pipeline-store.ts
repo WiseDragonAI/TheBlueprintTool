@@ -598,6 +598,8 @@ function normalizeRuns(raw: unknown, issues: CodexPipelineStoreIssue[]): CodexPi
       pipelineId: nullableText(input.pipelineId),
       pipelineName: text(input.pipelineName),
       temporary: input.temporary === true,
+      // WHAT: Normalize an omitted generated-card policy as enabled.
+      // WHY: Manifests written before the policy existed must preserve their card-backed artifact topology.
       createStepCards: input.createStepCards !== false,
       executionMode: input.executionMode === 'federated' ? 'federated' : 'local',
       ledgerId: text(input.ledgerId),

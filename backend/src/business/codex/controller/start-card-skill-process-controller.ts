@@ -71,14 +71,17 @@ export async function startCardSkillProcessController(
   const firstStep = Array.isArray(pipelineRun.steps) ? pipelineRun.steps[0] as AnyRecord | undefined : undefined;
   const firstSkill = Array.isArray(firstStep?.skills) ? firstStep.skills[0] as AnyRecord | undefined : undefined;
   const context = resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId });
-  const outputFile = context && firstStep?.outputCardId
-    ? outputFileForPipelineStep({
-        context,
-        decisionOsRoot,
-        run: pipelineRun as unknown as CodexPipelineRun,
-        step: firstStep as unknown as CodexPipelineRunStep,
-      })
-    : '';
+  let outputFile = '';
+  // WHAT: Project the shared pipeline result path only for a complete admitted first-step context.
+  // WHY: The direct-run compatibility response must not invent an output owner after partial admission.
+  if (context && firstStep?.outputCardId) {
+    outputFile = outputFileForPipelineStep({
+      context,
+      decisionOsRoot,
+      run: pipelineRun as unknown as CodexPipelineRun,
+      step: firstStep as unknown as CodexPipelineRunStep,
+    });
+  }
   const compatibilityRun = result.skillRun && typeof result.skillRun === 'object'
     ? result.skillRun as AnyRecord
     : {

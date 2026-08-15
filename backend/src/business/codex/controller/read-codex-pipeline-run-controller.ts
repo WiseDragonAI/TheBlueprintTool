@@ -43,6 +43,9 @@ export async function readCodexPipelineRunController(
     const contentFile = resolveCardContentFile(decisionOsRoot, comment.contentFile) ?? '';
     const outputFile = outputFileForPipelineStep({ context, decisionOsRoot, run, step });
     const outputAvailable = Boolean(outputFile && existsSync(outputFile));
+    // WHAT: Report bytes only for the resolved durable result artifact.
+    // WHY: Cardless presentation must distinguish a missing artifact from an empty completed artifact.
+    const outputBytes = outputAvailable ? statSync(outputFile).size : 0;
     return {
       ...step,
       outputCard: {
@@ -53,7 +56,7 @@ export async function readCodexPipelineRunController(
       },
       outputArtifact: {
         available: outputAvailable,
-        bytes: outputAvailable ? statSync(outputFile).size : 0,
+        bytes: outputBytes,
       },
       skills: step.skills.map((skill) => ({
         ...skill,

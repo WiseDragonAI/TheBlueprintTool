@@ -347,6 +347,10 @@ function safeArtifactSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'step';
 }
 
+/**
+ * WHAT: Resolves the durable Markdown result owner selected when the run was admitted.
+ * WHY: Execution must use the generated card only as an optional projection and otherwise use a contained run artifact.
+ */
 export function outputFileForPipelineStep(input: {
   context: PipelineLedgerContext | null;
   decisionOsRoot: string;
@@ -356,9 +360,10 @@ export function outputFileForPipelineStep(input: {
   // WHAT: Resolve card-backed runs through their generated card content file.
   // WHY: Existing manifests and enabled workspaces must retain their established presentation artifact.
   if (input.run.createStepCards !== false) {
-    return input.context
-      ? outputFileForPipelineCard(input.context, input.decisionOsRoot, input.step.outputCardId)
-      : '';
+    // WHAT: Reject card-backed output resolution when its ledger is unavailable.
+    // WHY: The generated card content owner can be validated only through its admitted ledger.
+    if (!input.context) return '';
+    return outputFileForPipelineCard(input.context, input.decisionOsRoot, input.step.outputCardId);
   }
   const firstSkill = input.step.skills[0];
   // WHAT: Reject a malformed cardless step without a skill-owned artifact directory.
@@ -371,6 +376,10 @@ export function outputFileForPipelineStep(input: {
   return artifact;
 }
 
+/**
+ * WHAT: Resolves the real card identity that owns one pipeline execution's events and task-state metadata.
+ * WHY: Cardless runs have no generated step-card identity and remain attached to their source card.
+ */
 export function pipelineStepOwnerCardId(run: CodexPipelineRun, step: CodexPipelineRunStep): string {
   // WHAT: Keep generated-card ownership only for runs that admitted that presentation layer.
   // WHY: Cardless executions must publish against the real source card instead of a nonexistent synthetic identity.
@@ -518,14 +527,17 @@ function priorInput(input: {
     const producingRun = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs
       .find((run) => run.steps.some((step) => step.outputCardId === cardId));
     const producingStep = producingRun?.steps.find((step) => step.outputCardId === cardId);
-    const artifact = producingRun && producingStep
-      ? outputFileForPipelineStep({
-          context: input.context,
-          decisionOsRoot: input.decisionOsRoot,
-          run: producingRun,
-          step: producingStep,
-        })
-      : '';
+    let artifact = '';
+    // WHAT: Resolve a dynamic predecessor artifact only when both persisted topology owners exist.
+    // WHY: A stale initial-input identity must remain an empty handoff instead of resolving an unrelated path.
+    if (producingRun && producingStep) {
+      artifact = outputFileForPipelineStep({
+        context: input.context,
+        decisionOsRoot: input.decisionOsRoot,
+        run: producingRun,
+        step: producingStep,
+      });
+    }
     // WHAT: Read a cardless predecessor through its immutable run-owned result artifact.
     // WHY: Dynamic successor pipelines retain direct handoff even when no presentation card exists.
     if (artifact && existsSync(artifact)) return { cardId, content: readFileSync(artifact, 'utf8') };
@@ -538,10 +550,12 @@ function priorInput(input: {
     run: input.run,
     step: prior.step,
   });
-  return {
-    cardId: prior.step.outputCardId,
-    content: artifact && existsSync(artifact) ? readFileSync(artifact, 'utf8') : '',
-  };
+  // WHAT: Read the direct predecessor only when its admitted result artifact exists.
+  // WHY: Sequential skills must never fall back to synthetic card content or an absent file.
+  if (artifact && existsSync(artifact)) {
+    return { cardId: prior.step.outputCardId, content: readFileSync(artifact, 'utf8') };
+  }
+  return { cardId: prior.step.outputCardId, content: '' };
 }
 
 export async function cancelPipelineDependents(input: {

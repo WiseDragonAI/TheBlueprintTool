@@ -41,6 +41,8 @@ function topology(run: CodexPipelineRun): string {
     pipelineId: run.pipelineId,
     pipelineName: run.pipelineName,
     temporary: run.temporary,
+    // WHAT: Include generated-card policy in the immutable remote topology comparison.
+    // WHY: The policy selects the result artifact and execution-owner identity on the executor.
     createStepCards: run.createStepCards !== false,
     executionMode: run.executionMode ?? 'local',
     ledgerId: run.ledgerId,
