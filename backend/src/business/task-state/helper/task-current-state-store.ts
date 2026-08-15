@@ -20,6 +20,12 @@ import { taskCurrentBaselineChanges } from './task-current-state-baseline.js';
 import { taskCurrentStateDiagnostics } from './task-current-state-diagnostics.js';
 import { createTaskCurrentStatePersistence } from './task-current-state-persistence.js';
 import {
+  encodeTaskStateCheckpoint,
+  readTaskStateCheckpoint,
+  taskStateCheckpointWitness,
+  type TaskStateCheckpointPayload,
+} from './task-current-state-checkpoint.js';
+import {
   taskCurrentBaselineEpoch,
   taskCurrentStateVersion,
   taskEntityTypes,
@@ -159,6 +165,8 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   const formatFile = resolve(root, 'format.json');
   const journalDirectory = resolve(root, 'journal');
   const heldDirectory = resolve(root, 'local', 'held');
+  const currentDirectory = resolve(root, 'current');
+  const checkpointFile = resolve(root, 'cache', 'checkpoint.json');
   const entities = new Map<string, TaskCurrentEntity>();
   const publication = createTaskLocalPublicationState(heldDirectory);
   const bucketEntries = new Map<string, Map<string, TaskCurrentEntity>>();
@@ -174,6 +182,14 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   let materializerError: Error | null = null;
   let transitionTail = Promise.resolve();
   let deferBucketSummaries = false;
+  let checkpointStatus: 'missing' | 'warm' | 'invalid' | 'cold' = 'missing';
+  let checkpointError = '';
+  let checkpointWritesDisabled = options.deferFormat === true;
+  let checkpointReadCount = 0;
+  let shardReadCount = 0;
+  let markerReadCount = 0;
+  let projectionMaterializationCount = 0;
+  const checkpointPaths = { current: currentDirectory, held: heldDirectory, journal: journalDirectory };
   const mergeTiming = { count: 0, entities: 0, prepareMs: 0, journalMs: 0, journalEncodeMs: 0, journalOpenMs: 0, journalQueueWaitMs: 0, journalWriteMs: 0, journalFileSyncMs: 0, journalRenameMs: 0, journalDirectorySyncMs: 0, installMs: 0, resultCloneMs: 0 };
 
   const serializeTransition = <Result>(operation: () => Promise<Result>): Promise<Result> => {
@@ -230,6 +246,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       }
     }
     materializeTaskCurrentEntity(projection, joined, { deferClockCanonicalization: deferProjectionClockCanonicalization });
+    projectionMaterializationCount += 1;
     return true;
   };
 
@@ -269,6 +286,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       const directory = resolve(root, 'current', entityType);
       if (!existsSync(directory)) continue;
       for (const name of readdirSync(directory).filter((value) => value.endsWith('.json')).sort()) {
+        shardReadCount += 1;
         applyEntity(JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as TaskCurrentEntity, true, true);
       }
     }
@@ -397,23 +415,56 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     canonicalizeTaskProjectionClock(projection);
   };
 
+  const checkpointPayload = (): TaskStateCheckpointPayload => ({
+    version: 1,
+    projectId: options.projectId,
+    entities: [...entities.values()].map((entity) => structuredClone(entity)),
+    projection: structuredClone(projection),
+    clock: structuredClone(clock),
+    buckets: bucketManifest(),
+    publication: publication.snapshot(),
+    witness: taskStateCheckpointWitness(checkpointPaths),
+  });
+
+  const persistCheckpoint = async (): Promise<void> => {
+    // WHAT: Skip cache publication for migration shadows, invalid retained cache bytes, and retained recovery evidence.
+    // WHY: Optimization state must not alter migration or collision-recovery authority.
+    if (checkpointWritesDisabled || (existsSync(journalDirectory) && readdirSync(journalDirectory).length > 0)) return;
+    try {
+      await persistence.atomicWrite(checkpointFile, encodeTaskStateCheckpoint(checkpointPayload()));
+      checkpointStatus = 'warm';
+      checkpointError = '';
+    } catch (error) {
+      checkpointError = error instanceof Error ? error.message : String(error);
+    }
+  };
+
   const runMaterializer = async (): Promise<void> => {
-    while (pendingEntities.size > 0 || publication.hasPending() || pendingJournals.size > 0) {
-      const currentEntities = [...pendingEntities.values()];
-      const held = publication.drain();
-      const currentJournals = [...pendingJournals];
-      pendingEntities.clear(); pendingJournals.clear();
-      try {
-        await runBoundedTaskMaterialization(currentEntities, async (entity) => { await persistence.atomicWrite(persistence.entityPath(entity), `${JSON.stringify(entity)}\n`); });
-        await runBoundedTaskMaterialization(held.writes, async (taskId) => { await persistence.atomicWrite(publication.markerFile(taskId), `${JSON.stringify(publication.marker(taskId))}\n`); });
-        await runBoundedTaskMaterialization(held.deletes, async (taskId) => persistence.durableRemove(publication.markerFile(taskId)));
-        await runBoundedTaskMaterialization(currentJournals, persistence.durableRemove);
-      } catch (error) {
-        for (const entity of currentEntities) pendingEntities.set(taskCurrentEntityKey(entity), entity);
-        publication.restore(held);
-        for (const file of currentJournals) pendingJournals.add(file);
-        throw error;
+    for (;;) {
+      while (pendingEntities.size > 0 || publication.hasPending() || pendingJournals.size > 0) {
+        const currentEntities = [...pendingEntities.values()];
+        const held = publication.drain();
+        const currentJournals = [...pendingJournals];
+        pendingEntities.clear(); pendingJournals.clear();
+        try {
+          // WHAT: Remove an admitted checkpoint before canonical files advance.
+          // WHY: A crash must select shards and journals instead of stale cached state.
+          if (!checkpointWritesDisabled && existsSync(checkpointFile)) await persistence.durableRemove(checkpointFile);
+          await runBoundedTaskMaterialization(currentEntities, async (entity) => { await persistence.atomicWrite(persistence.entityPath(entity), `${JSON.stringify(entity)}\n`); });
+          await runBoundedTaskMaterialization(held.writes, async (taskId) => { await persistence.atomicWrite(publication.markerFile(taskId), `${JSON.stringify(publication.marker(taskId))}\n`); });
+          await runBoundedTaskMaterialization(held.deletes, async (taskId) => persistence.durableRemove(publication.markerFile(taskId)));
+          await runBoundedTaskMaterialization(currentJournals, persistence.durableRemove);
+        } catch (error) {
+          for (const entity of currentEntities) pendingEntities.set(taskCurrentEntityKey(entity), entity);
+          publication.restore(held);
+          for (const file of currentJournals) pendingJournals.add(file);
+          throw error;
+        }
       }
+      await persistCheckpoint();
+      // WHAT: Repeat canonical settlement when a mutation arrived during checkpoint I/O.
+      // WHY: The materializer promise must not strand newly queued durable work.
+      if (pendingEntities.size === 0 && !publication.hasPending() && pendingJournals.size === 0) return;
     }
   };
 
@@ -492,11 +543,58 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     return file;
   };
 
-  publication.load();
   validateFormat();
-  loadEntityFiles();
-  recoverJournals();
-  scheduleMaterializer();
+  let restoredCheckpoint = false;
+  // WHAT: Attempt checkpoint admission only for a committed normal task-state format.
+  // WHY: Migration shadow stores must remain outside runtime cache ownership.
+  if (!options.deferFormat) {
+    checkpointReadCount += 1;
+    const retained = readTaskStateCheckpoint({
+      file: checkpointFile,
+      projectId: options.projectId,
+      witness: taskStateCheckpointWitness(checkpointPaths),
+    });
+    // WHAT: Install one current checkpoint only when no retained recovery journal exists.
+    // WHY: Collision evidence and post-checkpoint mutations require canonical replay.
+    if (retained.status === 'valid' && (!existsSync(journalDirectory) || readdirSync(journalDirectory).length === 0)) {
+      publication.installSnapshot(retained.payload.publication);
+      for (const entity of retained.payload.entities) entities.set(taskCurrentEntityKey(entity), entity);
+      Object.assign(projection, structuredClone(retained.payload.projection));
+      clock = structuredClone(retained.payload.clock);
+      for (const summary of retained.payload.buckets) bucketSummaries.set(summary.bucket, { ...summary });
+      for (const [key, entity] of entities) {
+        // WHAT: Exclude locally held entities from the active replication bucket map.
+        // WHY: Checkpoint restore must preserve the same publication visibility as marker reconstruction.
+        if (publication.isHeld(key)) continue;
+        const bucket = taskCurrentBucketForEntityKey(key);
+        const entries = bucketEntries.get(bucket) ?? new Map<string, TaskCurrentEntity>();
+        entries.set(key, entity);
+        bucketEntries.set(bucket, entries);
+      }
+      checkpointStatus = 'warm';
+      restoredCheckpoint = true;
+    } else {
+      // WHAT: Preserve and disable only a checkpoint whose own bytes or canonical witness are invalid.
+      // WHY: A valid checkpoint blocked by retained journals may be safely replaced after canonical recovery settles.
+      if (retained.status === 'invalid') {
+        checkpointStatus = 'invalid';
+        checkpointError = retained.error;
+        checkpointWritesDisabled = true;
+      }
+    }
+  }
+  // WHAT: Reconstruct canonical state only when no valid current checkpoint was admitted.
+  // WHY: Warm startup must avoid per-marker and per-shard filesystem work.
+  if (!restoredCheckpoint) {
+    markerReadCount = existsSync(heldDirectory) ? readdirSync(heldDirectory).filter((name) => name.endsWith('.json')).length : 0;
+    publication.load();
+    loadEntityFiles();
+    recoverJournals();
+    // WHAT: Mark a successful canonical load as cold unless invalid cache evidence owns diagnostics.
+    // WHY: Invalid cache bytes must remain visible and must not be overwritten automatically.
+    if (checkpointStatus !== 'invalid') checkpointStatus = 'cold';
+    scheduleMaterializer();
+  }
 
   return {
     root,
@@ -894,8 +992,19 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
         if (materializerError) throw materializerError;
       }
     },
-    diagnostics(): { entityCount: number; journalCount: number; currentBytes: number; mergeTiming: typeof mergeTiming } {
-      return { ...taskCurrentStateDiagnostics({ root, journalDirectory, entityCount: entities.size }), mergeTiming: { ...mergeTiming } };
+    diagnostics(): { entityCount: number; journalCount: number; currentBytes: number; mergeTiming: typeof mergeTiming; checkpoint: { status: string; error: string; reads: number; shardReads: number; markerReads: number; projectionMaterializations: number } } {
+      return {
+        ...taskCurrentStateDiagnostics({ root, journalDirectory, entityCount: entities.size }),
+        mergeTiming: { ...mergeTiming },
+        checkpoint: {
+          status: checkpointStatus,
+          error: checkpointError,
+          reads: checkpointReadCount,
+          shardReads: shardReadCount,
+          markerReads: markerReadCount,
+          projectionMaterializations: projectionMaterializationCount,
+        },
+      };
     },
   };
 }

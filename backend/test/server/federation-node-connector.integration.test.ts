@@ -93,6 +93,50 @@ async function waitFor<T>(read: () => Promise<T | null>): Promise<T> {
   throw new Error('Timed out waiting for federation state.');
 }
 
+test('duplicate live catalogs notify downstream only once', async (context) => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-duplicate-federation-catalog-'));
+  const catalogFile = join(workspace, 'catalog.json');
+  const relayHttp = createServer();
+  const relay = new WebSocketServer({ noServer: true });
+  const frame = JSON.stringify({
+    version: 1,
+    type: 'catalog',
+    nodes: [{
+      nodeId: 'node-b', nodeLabel: 'Node B', online: true,
+      projects: [{ id: 'project-b', name: 'Project B', description: '', color: '#123456', ledgers: [], originFingerprint: 'origin-b' }],
+    }],
+  });
+  relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
+    webSocket.send(frame);
+    setTimeout(() => webSocket.send(frame), 25);
+  }));
+  relayHttp.listen(0, '127.0.0.1');
+  await once(relayHttp, 'listening');
+  let changes = 0;
+  const connector = createFederationNodeConnector({
+    settings: {
+      federationRelayUrl: `http://127.0.0.1:${(relayHttp.address() as AddressInfo).port}`,
+      federationId: 'proof', federationNodeId: 'node-a', federationNodeCredential: 'credential',
+    },
+    catalogFile,
+    localProjects: () => [],
+    localServerUrl: () => 'http://127.0.0.1:1',
+    onRemoteCatalogChange: () => { changes += 1; },
+  });
+  context.after(async () => {
+    connector.stop();
+    relay.close();
+    await new Promise<void>((resolveClose) => relayHttp.close(() => resolveClose()));
+    rmSync(workspace, { recursive: true, force: true });
+  });
+  connector.start();
+
+  await waitFor(async () => changes === 1 && existsSync(catalogFile) ? true : null);
+  await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+  assert.equal(changes, 1);
+  assert.equal(connector.remoteProjects()[0]?.online, true);
+});
+
 test('retains configured node identity while relay transport is not configured', () => {
   const connector = createFederationNodeConnector({
     settings: { federationNodeId: 'workstation', federationNodeLabel: 'Workstation' },

@@ -3,7 +3,7 @@
  * WHY: The browser must not download hydrated ledgers and run histories to reconstruct task state.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 import type { DecisionOsProject } from './project-catalog.js';
@@ -554,10 +554,9 @@ export function createControlRoomProjectionStore(input: {
     const orderedSlices = projects.map((project) => slices.get(project.id)).filter((slice): slice is ProjectSlice => Boolean(slice));
     if (!incrementalPublish || rebuiltWholeProject || removedProject || !aggregateTaskIndex) aggregateTaskIndex = createAggregateTaskIndex(orderedSlices.flatMap((slice) => slice.tasks));
     const next = aggregateProjection({ slices: orderedSlices, revision: revision + 1, taskIndex: aggregateTaskIndex });
-    // WHAT: Invalidate the disk snapshot instead of serializing every task after a scoped entity change.
-    // WHY: Normal mutations must not stringify and rewrite the complete Control Room workspace cache.
-    if (incrementalPublish) rmSync(input.cacheFile, { force: true });
-    else persist(next);
+    // WHAT: Retain the previous disk snapshot after a scoped in-memory update.
+    // WHY: The next startup can admit it immediately and rebuild only stale project slices without a full cold projection.
+    if (!incrementalPublish) persist(next);
     current = next;
     revision = next.revision;
     dirtyAll = false;
@@ -586,20 +585,9 @@ export function createControlRoomProjectionStore(input: {
       }
     });
   };
-  const ensureLedgerIndexes = (projects: DecisionOsProject[]): void => {
-    for (const project of projects) {
-      if (ledgerIndexes.has(project.id)) continue;
-      const taskProjection = input.taskProjectionForProject(project);
-      const ledger = taskProjection?.ledger && typeof taskProjection.ledger === 'object' && !Array.isArray(taskProjection.ledger)
-        ? taskProjection.ledger as AnyRecord
-        : taskProjection;
-      if (ledger) ledgerIndexes.set(project.id, indexTaskLedger(ledger));
-    }
-  };
   return {
     get(projects) {
       latestProjects = projects;
-      ensureLedgerIndexes(projects);
       if (Date.now() - lastReconcileAt >= 30_000) this.reconcile(projects);
       if (!dirtyAll && dirtyProjects.size === 0 && current) return current;
       // WHAT: Build synchronously only when no usable projection exists yet.
@@ -639,13 +627,23 @@ export function createControlRoomProjectionStore(input: {
       latestProjects = projects;
       if (!current) { dirtyAll = true; lastReconcileAt = Date.now(); return true; }
       let changed = false;
+      const projectsById = new Map(projects.map((project) => [project.id, project]));
       for (const slice of slices.values()) {
-        if (slice.dependencies.some((entry) => {
+        const project = projectsById.get(slice.projectId);
+        const dependencyChanged = slice.dependencies.some((entry) => {
+          // WHAT: Detect creation of a dependency that was absent in the admitted slice.
+          // WHY: Project metadata changes must invalidate only their owning Control Room slice.
           if (entry.size < 0) return existsSync(entry.path);
+          // WHAT: Detect removal of an admitted project metadata dependency.
+          // WHY: A missing source file cannot retain its previous cached projection identity.
           if (!existsSync(entry.path)) return true;
           const next = statSync(entry.path);
           return next.size !== entry.size || next.mtimeMs !== entry.mtimeMs;
-        })) {
+        });
+        const taskRootChanged = project ? (input.taskRootForProject?.(project) ?? '') !== slice.taskRoot : false;
+        // WHAT: Rebuild only a slice whose metadata or canonical task root changed.
+        // WHY: A retained aggregate cache must avoid full-project reconstruction while never serving stale task state indefinitely.
+        if (dependencyChanged || taskRootChanged) {
           dirtyProjects.add(slice.projectId);
           changed = true;
         }

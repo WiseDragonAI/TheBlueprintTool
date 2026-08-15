@@ -31,6 +31,34 @@ function fixture(context: { after(callback: () => void): void }) {
   return { root, decisionOsRoot, project };
 }
 
+test('clean disk cache returns without rebuilding or indexing the task ledger', (context) => {
+  const { decisionOsRoot, project } = fixture(context);
+  const cacheFile = join(decisionOsRoot, 'cache', 'control-room-warm.json');
+  const taskProjection = {
+    ledger: {
+      cards: [{ id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z') }],
+      annotations: [], relationships: [],
+    },
+    conflicts: [],
+  };
+  const first = createControlRoomProjectionStore({
+    cacheFile,
+    taskProjectionForProject: () => taskProjection,
+    taskRootForProject: () => 'root-a',
+  });
+  first.get([project]);
+  let projectionReads = 0;
+  const restarted = createControlRoomProjectionStore({
+    cacheFile,
+    taskProjectionForProject: () => { projectionReads += 1; return taskProjection; },
+    taskRootForProject: () => 'root-a',
+  });
+
+  assert.equal((restarted.get([project]) as Record<string, any>).allTasks.length, 1);
+  assert.equal(projectionReads, 0);
+  assert.equal(restarted.diagnostics().projectBuilds, 0);
+});
+
 test('legacy card execution intent cannot place a task in Exec', (context) => {
   const { project } = fixture(context);
   const ledger = {
@@ -417,5 +445,5 @@ test('a 10,000-task incremental update yields the event loop before projection w
   assert.equal(after.done.some((task: Record<string, unknown>) => task.cardId === cards[5_000].id), true);
   assert.equal(completeCardCollectionReads, 0);
   assert.equal(store.diagnostics().largestIncrementalBatch, 1);
-  assert.equal(existsSync(join(decisionOsRoot, 'cache', 'control-room-10000.json')), false);
+  assert.equal(existsSync(join(decisionOsRoot, 'cache', 'control-room-10000.json')), true);
 });

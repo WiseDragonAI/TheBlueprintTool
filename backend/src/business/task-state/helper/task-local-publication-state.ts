@@ -26,6 +26,25 @@ export function createTaskLocalPublicationState(heldDirectory: string) {
     }
   };
 
+  const snapshot = (): HeldMarker[] => [...heldByTask]
+    .map(([taskId, keys]) => ({ version: 1 as const, taskId, entityKeys: [...keys].sort() }))
+    .sort((left, right) => left.taskId.localeCompare(right.taskId));
+
+  const installSnapshot = (markers: Array<{ taskId: string; entityKeys: string[] }>): void => {
+    heldByTask.clear();
+    heldEntityKeys.clear();
+    pendingWrites.clear();
+    pendingDeletes.clear();
+    for (const marker of markers) {
+      // WHAT: Reject duplicate held-task identities in one admitted checkpoint.
+      // WHY: Direct warm installation must preserve one marker authority per activation task.
+      if (heldByTask.has(marker.taskId)) throw new Error('invalid_local_publication_snapshot');
+      const keys = new Set(marker.entityKeys);
+      heldByTask.set(marker.taskId, keys);
+      for (const key of keys) heldEntityKeys.add(key);
+    }
+  };
+
   const hold = (taskId: string, key: string): void => {
     if (!taskId) throw new Error('held_task_requires_activation_identity');
     const keys = heldByTask.get(taskId) ?? new Set<string>();
@@ -59,6 +78,8 @@ export function createTaskLocalPublicationState(heldDirectory: string) {
 
   return {
     load,
+    snapshot,
+    installSnapshot,
     hold,
     activate,
     drain,
