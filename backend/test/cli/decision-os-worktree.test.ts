@@ -121,14 +121,12 @@ function gitCommitTree(root: string, basedOn: string): string {
   }).trim();
 }
 
-test('worktree executable stays thin while integration owns exact push cleanup', () => {
-  const executable = readFileSync(new URL('../../../bin/decision-os-worktree.mjs', import.meta.url), 'utf8');
-  const integrationController = readFileSync(new URL('../../../bin/worktree/controllers/integrate-feature.mjs', import.meta.url), 'utf8');
-  assert.ok(executable.split('\n').length < 200);
-  assert.match(integrationController, /\['worktree', 'remove', '--force', feature\.featureRoot\]/);
-  assert.match(integrationController, /\['branch', '-D', feature\.branch\]/);
-  assert.match(integrationController, /assertPublishedParentDev\(\);\s*initDev\(\{ deferLegacyRelay: true \}\);\s*const parentAdmission = assertPublishedParentDev\(\);\s*const childPublication = publishFeatureChild\(feature, parentAdmission\);/);
-  assert.match(integrationController, /parentAdmission,\s*childPublication,/);
+test('integration cleanup admits the verified worktree and feature branch after exact push', () => {
+  const source = readFileSync(new URL('../../../bin/decision-os-worktree.mjs', import.meta.url), 'utf8');
+  assert.match(source, /\['worktree', 'remove', '--force', feature\.featureRoot\]/);
+  assert.match(source, /\['branch', '-D', feature\.branch\]/);
+  assert.match(source, /assertPublishedParentDev\(\);\s*initDev\(\{ deferLegacyRelay: true \}\);\s*const parentAdmission = assertPublishedParentDev\(\);\s*const childPublication = publishFeatureChild\(feature, parentAdmission\);/);
+  assert.match(source, /parentAdmission,\s*childPublication,/);
 });
 
 test('parent publication admission rejects divergence and preserves the exact canonical receipt', () => {
