@@ -100,6 +100,9 @@ async function assertViewportLifecycle(
   await toggleWithPointer(page, true);
   await page.locator('.subtask-row').first().click();
   await page.waitForURL(new RegExp(`/cards/${fixture.runningChildId}$`));
+  // WHAT: Wait for the child card render to complete before traversing browser history.
+  // WHY: A pushed URL alone precedes the retained-view route load that clears the departed master's disclosure identity.
+  await page.waitForFunction((title) => document.querySelector('#card-title')?.textContent === title, 'Child 1');
   await page.goBack({ waitUntil: 'domcontentloaded' });
   await waitForDisclosure(page);
   await assertCollapsed(page);
@@ -140,6 +143,7 @@ async function assertCollapsed(page: Page): Promise<void> {
   assert.equal(await panel.getAttribute('aria-hidden'), 'true');
   assert.equal(await panel.getAttribute('inert'), '');
   assert.equal(await page.locator('.master-subtask-disclosure').getAttribute('data-expanded'), 'false');
+  await page.waitForFunction(() => document.querySelector('.master-subtask-disclosure-panel')?.getBoundingClientRect().height === 0);
   assert.equal(await panel.evaluate((element) => element.getBoundingClientRect().height), 0);
   assert.equal(await panel.locator('.subtask-row').count(), 5);
   await toggle.focus();
@@ -184,20 +188,26 @@ async function toggleWithKeyboard(page: Page, key: string, expectedExpanded: boo
 
 async function preparePanelMotionObservation(page: Page): Promise<void> {
   await page.locator('.master-subtask-disclosure-panel').evaluate((element) => {
-    element.setAttribute('data-observed-transitions', '');
-    const record = (event: Event) => {
-      const current = element.getAttribute('data-observed-transitions') ?? '';
-      element.setAttribute('data-observed-transitions', `${current}${event.type},`);
+    element.setAttribute('data-observed-transitionrun', 'false');
+    element.setAttribute('data-observed-transitionend', 'false');
+    (element as HTMLElement).ontransitionrun = (event) => {
+      // WHAT: Record only the panel's own grid transition.
+      // WHY: Transition events from nested rows bubble through the panel and are not disclosure motion evidence.
+      if (event.target === element) element.setAttribute('data-observed-transitionrun', 'true');
     };
-    element.addEventListener('transitionrun', record, { once: true });
-    element.addEventListener('transitionend', record, { once: true });
+    (element as HTMLElement).ontransitionend = (event) => {
+      // WHAT: Record only completion of the panel's own grid transition.
+      // WHY: A descendant transition ending cannot prove that disclosure expansion or collapse settled.
+      if (event.target === element) element.setAttribute('data-observed-transitionend', 'true');
+    };
   });
 }
 
 async function assertPanelMotionObserved(page: Page): Promise<void> {
   const panel = page.locator('.master-subtask-disclosure-panel');
-  await page.waitForFunction(() => document.querySelector('.master-subtask-disclosure-panel')?.getAttribute('data-observed-transitions')?.includes('transitionend'));
-  assert.equal(await panel.getAttribute('data-observed-transitions'), 'transitionrun,transitionend,');
+  await page.waitForFunction(() => document.querySelector('.master-subtask-disclosure-panel')?.getAttribute('data-observed-transitionend') === 'true');
+  assert.equal(await panel.getAttribute('data-observed-transitionrun'), 'true');
+  assert.equal(await panel.getAttribute('data-observed-transitionend'), 'true');
 }
 
 async function assertExecutionDecoration(page: Page, runningId: string, queuedId: string): Promise<void> {

@@ -34,12 +34,11 @@ function browserWorkspaceRoot(): string {
 function materializeCommittedDecisionOsFixture(workspaceRoot: string): void {
   const fixtureRoot = resolve(workspaceRoot, '.decision-os');
   // WHAT: Materialize the exact Decision OS child commit recorded by this feature checkout.
-  // WHY: The configured child source owns committed objects even when this linked worktree's submodule is uninitialized or on another commit.
+  // WHY: Pre-integration verification must consume the reviewed local child object before the integration tool publishes it.
   const recordedCommit = execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD:.decision-os'], { encoding: 'utf8' }).trim();
-  const childSourceUrl = execFileSync('git', ['-C', repoRoot, 'config', '-f', '.gitmodules', '--get', 'submodule..decision-os.url'], { encoding: 'utf8' }).trim();
   // WHAT: Bound the in-memory archive above the committed fixture size while retaining synchronous setup ordering.
   // WHY: Node's 1 MiB default maxBuffer terminates a valid child archive before tar can receive it.
-  const archive = execFileSync('git', [`--git-dir=${fileURLToPath(childSourceUrl)}`, 'archive', '--format=tar', recordedCommit], {
+  const archive = execFileSync('git', ['-C', resolve(repoRoot, '.decision-os'), 'archive', '--format=tar', recordedCommit], {
     maxBuffer: 128 * 1024 * 1024,
   });
   mkdirSync(fixtureRoot, { recursive: true });

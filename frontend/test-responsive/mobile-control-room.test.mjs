@@ -48,7 +48,7 @@ test('renders master-detail rows and progress from the presentation-only visible
 });
 
 test('pins the accessible mounted master-subtask disclosure structure, motion, and detail order', () => {
-  assert.match(masterSubtaskDisclosureRenderer, /section\.className = 'master-subtask-disclosure'/);
+  assert.match(masterSubtaskDisclosureRenderer, /disclosure\.className = 'master-subtask-disclosure'/);
   assert.match(masterSubtaskDisclosureRenderer, /heading\.className = 'master-subtask-disclosure-heading'[\s\S]*heading\.append\(toggle\);/);
   assert.match(masterSubtaskDisclosureRenderer, /toggle\.className = 'master-subtask-disclosure-toggle'[\s\S]*toggle\.id = toggleId[\s\S]*toggle\.setAttribute\('aria-controls', panelId\)/);
   assert.match(masterSubtaskDisclosureRenderer, /panel\.className = 'master-subtask-disclosure-panel'[\s\S]*panel\.setAttribute\('role', 'region'\)[\s\S]*panel\.setAttribute\('aria-labelledby', toggleId\)/);
