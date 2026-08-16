@@ -18,21 +18,55 @@ type AnyRecord = Record<string, unknown>;
 
 function runnableExecutions(decisionOsRoot: string, runtime: AnyRecord) {
   const state = taskExecutionState(runtime);
+  // WHAT: Treat a project without installed task execution state as an empty queue.
+  // WHY: Scheduler ticks must remain safe while project runtime installation is incomplete.
   if (!state) return [];
+  const queued = state.executions.byPhase('queued')
+    .filter((record) => (
+      record.lifecycle.executorNodeId === taskExecutionNodeId(runtime)
+      && (
+        record.metadata.kind === 'thread'
+        || record.metadata.kind === 'continuation'
+        || record.metadata.kind === 'pipeline-skill'
+      )
+      && (!record.metadata.predecessorExecutionId
+        || state.executions.find(record.metadata.predecessorExecutionId)?.lifecycle.phase === 'succeeded')
+    ))
+    .sort((left, right) => (
+      left.metadata.requestedAt.localeCompare(right.metadata.requestedAt)
+      || left.metadata.executionId.localeCompare(right.metadata.executionId)
+    ));
+  // WHAT: Settle an empty in-memory queue without opening the project's pipeline store.
+  // WHY: The one-second safety poll must perform zero disk reads for idle projects.
+  if (queued.length === 0) return [];
+  // WHAT: Return queued direct work without opening pipeline-only durable state.
+  // WHY: Thread and continuation readiness is fully owned by replicated execution state.
+  if (!queued.some((record) => record.metadata.kind === 'pipeline-skill')) return queued;
+
   const normalized = readCodexPipelineStore({ decisionOsRoot });
   assertCodexPipelineStoreAvailable(normalized);
   const pipelineRuns = new Map(normalized.store.runs.map((run) => [run.id, run]));
   const contexts = new Map<string, ReturnType<typeof resolvePipelineLedgerContext>>();
   const pipelineReady = (record: ReturnType<typeof state.executions.find>): boolean => {
+    // WHAT: Admit non-pipeline work without pipeline topology checks.
+    // WHY: Only pipeline skills own run, step, and result-destination dependencies.
     if (!record || record.metadata.kind !== 'pipeline-skill') return true;
     const run = pipelineRuns.get(record.metadata.pipelineRunId ?? '');
     const member = run?.steps
       .flatMap((step) => step.skills.map((skill) => ({ step, skill })))
       .find(({ skill }) => skill.executionId === record.metadata.executionId);
+    // WHAT: Keep a pipeline execution queued when its immutable run membership is absent.
+    // WHY: Scheduling without exact topology would claim work without an authoritative step owner.
     if (!run || !member) return false;
+    // WHAT: Keep a federated pipeline execution queued until its remote dependencies are ready.
+    // WHY: The assigned executor cannot safely launch before federated predecessor state settles.
     if (run.executionMode === 'federated'
       && !federatedPipelineExecutionReady(runtime, record.metadata.executionId)) return false;
+    // WHAT: Admit a ready federated execution without resolving a local result destination.
+    // WHY: Its output owner is managed by the federated execution path.
     if (run.executionMode === 'federated') return true;
+    // WHAT: Resolve each local pipeline ledger context once per scheduler inspection.
+    // WHY: Multiple queued skills in one ledger must not repeat filesystem-backed context construction.
     if (!contexts.has(run.ledgerId)) {
       contexts.set(run.ledgerId, resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId: run.ledgerId }));
     }
@@ -46,22 +80,7 @@ function runnableExecutions(decisionOsRoot: string, runtime: AnyRecord) {
       step: member.step,
     }));
   };
-  return state.executions.byPhase('queued')
-    .filter((record) => (
-      record.lifecycle.executorNodeId === taskExecutionNodeId(runtime)
-      && (
-        record.metadata.kind === 'thread'
-        || record.metadata.kind === 'continuation'
-        || record.metadata.kind === 'pipeline-skill'
-      )
-      && (!record.metadata.predecessorExecutionId
-        || state.executions.find(record.metadata.predecessorExecutionId)?.lifecycle.phase === 'succeeded')
-      && pipelineReady(record)
-    ))
-    .sort((left, right) => (
-      left.metadata.requestedAt.localeCompare(right.metadata.requestedAt)
-      || left.metadata.executionId.localeCompare(right.metadata.executionId)
-    ));
+  return queued.filter(pipelineReady);
 }
 
 export function runningCodexProcessCount(runtime: AnyRecord): number {

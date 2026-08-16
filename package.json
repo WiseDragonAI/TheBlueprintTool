@@ -5,6 +5,7 @@
   "private": true,
   "bin": {
     "decision-os-dev-integration-check": "./bin/decision-os-dev-integration-check.mjs",
+    "decision-os-test-impact": "./bin/decision-os-test-impact.mjs",
     "decision-os-merge-dev": "./bin/decision-os-merge-dev.mjs",
     "decision-os-deploy-relay": "./bin/decision-os-deploy-relay.mjs",
     "decision-os-verify": "./bin/decision-os-verify.mjs",

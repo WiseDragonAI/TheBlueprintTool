@@ -335,7 +335,7 @@ test('task-state journal write failure preserves invalid bytes and pauses only i
   }
 });
 
-test('invalid project pipeline store pauses only its Codex runtime while global scheduling stays available', async () => {
+test('idle scheduler ticks do not inspect project pipeline stores', async () => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-pipeline-store-scheduler-containment-'));
   const frontendRoot = join(home, 'frontend');
   const projectRoots = [
@@ -385,125 +385,26 @@ test('invalid project pipeline store pauses only its Codex runtime while global 
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const invalidStore = join(projectRoots[1].root, '.decision-os', 'codex-pipelines.json');
   const projectIncidentFile = join(projectRoots[1].root, '.decision-os', 'runtime-incidents.json');
-  const invalidDecisionOsRoot = join(projectRoots[1].root, '.decision-os');
-  const stabilityDecisions = (): Array<Record<string, unknown>> => traces
-    .filter((trace) => trace.name === 'pipeline-store-stability-decision')
-    .map((trace) => trace.args as Record<string, unknown>)
-    .filter((args) => args.decisionOsRoot === invalidDecisionOsRoot);
-  const validStoreBytes = JSON.stringify({
-    version: 1,
-    pipelines: [],
-    steps: [],
-    runs: [],
-    skillLibrary: [],
-    authoredContent: [],
-    activeWorkspaceRun: null,
-  });
-
   try {
     writeFileSync(invalidStore, '{"version":1,"pipelines":[');
-    await waitUntil(() => {
-      const incidents = existsSync(projectIncidentFile)
-        ? JSON.parse(readFileSync(projectIncidentFile, 'utf8')) as {
-          incidents: Array<{ code: string; status: string }>;
-        }
-        : { incidents: [] };
-      return incidents.incidents.some((incident) => (
-        incident.code === 'codex_pipeline_store_corrupt' && incident.status === 'paused'
-      ));
-    });
-    const transientHealth = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
-      pausedBackgroundComponents: string[];
-    };
-    assert.equal(transientHealth.pausedBackgroundComponents.includes('codex-runtime:invalid-project'), false);
-
-    writeFileSync(invalidStore, validStoreBytes);
-    await waitUntil(() => {
-      const incidents = JSON.parse(readFileSync(projectIncidentFile, 'utf8')) as {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 1_200));
+    const incidents = existsSync(projectIncidentFile)
+      ? JSON.parse(readFileSync(projectIncidentFile, 'utf8')) as {
         incidents: Array<{ code: string; status: string }>;
-      };
-      return incidents.incidents.some((incident) => (
-        incident.code === 'codex_pipeline_store_corrupt' && incident.status === 'resolved'
-      ));
-    });
-    const recoveredTransientHealth = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
-      pausedBackgroundComponents: string[];
-    };
-    assert.equal(recoveredTransientHealth.pausedBackgroundComponents.includes('codex-runtime:invalid-project'), false);
-    await waitUntil(() => stabilityDecisions().some((decision) => decision.outcome === 'recovered'));
-    const recoveredDecision = stabilityDecisions().find((decision) => decision.outcome === 'recovered');
-    assert.equal(recoveredDecision?.projectId, 'invalid-project');
-    assert.equal(recoveredDecision?.scope, `codex-pipeline-store:${invalidStore}`);
-    assert.equal(typeof recoveredDecision?.incidentId, 'string');
-    assert.equal(recoveredDecision?.stabilityDelayMs, 1_000);
-    assert.deepEqual(recoveredDecision?.firstReadIssueCodes, ['invalid-store']);
-    assert.deepEqual(recoveredDecision?.rereadResult, { availability: 'available', issueCodes: [] });
-
-    writeFileSync(invalidStore, JSON.stringify({
-      version: 1,
-      pipelines: [],
-      steps: [],
-      runs: [],
-      skillLibrary: [],
-      authoredContent: [{ kind: 'skill', id: 'invalid id', name: 'Invalid' }],
-      activeWorkspaceRun: null,
-    }));
-    await waitUntil(async () => {
-      const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
-        pausedBackgroundComponents: string[];
-      };
-      return health.pausedBackgroundComponents.includes('codex-runtime:invalid-project');
-    }, 4_000);
-
+      }
+      : { incidents: [] };
+    assert.equal(incidents.incidents.some((incident) => (
+      incident.code === 'codex_pipeline_store_corrupt'
+    )), false);
     const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
       status: string;
       pausedBackgroundComponents: string[];
     };
-    assert.equal(health.status, 'degraded');
+    assert.equal(health.status, 'ready');
     assert.equal(health.pausedBackgroundComponents.includes('codex-process-scheduler'), false);
-    assert.equal(health.pausedBackgroundComponents.includes('codex-runtime:healthy-project'), false);
+    assert.equal(health.pausedBackgroundComponents.includes('codex-runtime:invalid-project'), false);
     assert.equal((await fetch(`${baseUrl}/`)).status, 200);
     assert.equal((await fetch(`${baseUrl}/api/federation/nodes`)).status, 200);
-    const pausedDecision = stabilityDecisions().find((decision) => decision.outcome === 'paused');
-    assert.equal(pausedDecision?.projectId, 'invalid-project');
-    assert.equal(pausedDecision?.scope, `codex-pipeline-store:${invalidStore}`);
-    assert.ok(Number(pausedDecision?.elapsedMs) >= 1_000);
-    assert.deepEqual(pausedDecision?.firstReadIssueCodes, ['invalid-authored-content-id']);
-    assert.deepEqual(pausedDecision?.rereadResult, {
-      availability: 'unavailable',
-      issueCodes: ['invalid-authored-content-id'],
-    });
-
-    const incidents = await fetch(`${baseUrl}/api/diagnostics/incidents`)
-      .then((response) => response.json()) as {
-        incidents: Array<{ scope: string; operation: string; context: Record<string, unknown> }>;
-      };
-    const contained = incidents.incidents.find((incident) => (
-      incident.scope === 'background:codex-runtime:invalid-project'
-      && incident.operation === 'inspect-project-codex-queue'
-    ));
-    assert.equal(contained?.context.projectId, 'invalid-project');
-    assert.equal(contained?.context.decisionOsRoot, join(projectRoots[1].root, '.decision-os'));
-    assert.equal(
-      contained?.context.upstreamScope,
-      `codex-pipeline-store:${join(projectRoots[1].root, '.decision-os', 'codex-pipelines.json')}`,
-    );
-
-    writeFileSync(invalidStore, validStoreBytes);
-    const resume = await fetch(`${baseUrl}/api/diagnostics/runtime/resume`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        scope: 'background:codex-runtime:invalid-project',
-        resolution: 'Pipeline store corrected and revalidated.',
-      }),
-    });
-    assert.equal(resume.status, 200);
-    const resumed = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
-      pausedBackgroundComponents: string[];
-    };
-    assert.equal(resumed.pausedBackgroundComponents.includes('codex-runtime:invalid-project'), false);
-    assert.equal(resumed.pausedBackgroundComponents.includes('codex-process-scheduler'), false);
   } finally {
     server.close();
     await once(server, 'close');
