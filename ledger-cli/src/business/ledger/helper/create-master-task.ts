@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import type { Result } from '../../../lib/types.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -21,6 +23,34 @@ function cardFile(cardId: string): string {
   return `.decision-os/cards/tasks/${cardId}.md`;
 }
 
+/**
+ * WHAT: Resolve the stable federation node identity from the nearest ancestor Decision OS settings.
+ * WHY: Task creation must assign new cards to the node represented by the command's working tree.
+ */
+function assignedNodeIdFromCwd(cwd: string): string {
+  let directory = resolve(cwd);
+  // WHAT: Search each ancestor until the settings owner for the launch directory is found.
+  // WHY: Project workspaces may have their own `.decision-os` directory below the catalog settings.
+  while (true) {
+    const settingsPath = join(directory, '.decision-os', '.settings.json');
+    // WHAT: Treat the first discovered settings file as authoritative for this working directory.
+    // WHY: Continuing above malformed or incomplete local settings could silently assign another node.
+    if (existsSync(settingsPath)) {
+      const settings = JSON.parse(readFileSync(settingsPath, 'utf8')) as { federationNodeId?: unknown };
+      const nodeId = String(settings.federationNodeId ?? '').trim();
+      // WHAT: Admit only the node-id alphabet accepted by task-state mutations.
+      // WHY: Invalid assignment identities must fail before any master-task state is created.
+      if (!/^[a-zA-Z0-9_-]+$/.test(nodeId)) throw new Error(`Invalid federationNodeId in ${settingsPath}`);
+      return nodeId;
+    }
+    const parent = dirname(directory);
+    // WHAT: Stop when ancestor traversal reaches the filesystem root without settings.
+    // WHY: Creating an unassigned task is invalid and the CLI must not invent a node identity.
+    if (parent === directory) throw new Error(`No .decision-os/.settings.json found from ${resolve(cwd)}`);
+    directory = parent;
+  }
+}
+
 export async function createMasterTask(input: { projectId?: string; title?: string; subtasks: string[] }): Promise<Result<string>> {
   const serverUrl = String(process.env.DECISION_OS_SERVER_URL ?? '').trim().replace(/\/$/, '');
   const projectId = String(input.projectId ?? '').trim();
@@ -29,6 +59,7 @@ export async function createMasterTask(input: { projectId?: string; title?: stri
   if (!serverUrl) return { ok: false, error: 'master-task-create requires DECISION_OS_SERVER_URL.' };
   if (!projectId || !title) return { ok: false, error: 'master-task-create requires --project and --title.' };
   try {
+    const assignedNodeId = assignedNodeIdFromCwd(process.cwd());
     const [catalogResponse, projectionResponse] = await Promise.all([
       fetch(`${serverUrl}/api/control-room?localOnly=1`),
       fetch(`${serverUrl}/api/task-state/projection?projectId=${encodeURIComponent(projectId)}`),
@@ -72,7 +103,7 @@ export async function createMasterTask(input: { projectId?: string; title?: stri
     const response = await fetch(`${serverUrl}/p/${encodeURIComponent(projectId)}/decision-os/tasks`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'create-master-task', annotation: zone, card: master, cards: createdSubtasks.map((entry) => entry.card), relationships: createdSubtasks.map((entry) => entry.relationship) }),
+      body: JSON.stringify({ action: 'create-master-task', assignedNodeId, annotation: zone, card: master, cards: createdSubtasks.map((entry) => entry.card), relationships: createdSubtasks.map((entry) => entry.relationship) }),
     });
     if (!response.ok) return { ok: false, error: `Master-task creation failed (${response.status}): ${await response.text()}` };
     const payload = await response.json() as { createdFiles?: CreatedFile[] };

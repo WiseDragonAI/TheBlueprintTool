@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { dispatchLedgerCliCommandController } from '../../src/business/command/controller/dispatch-ledger-cli-command.js';
 
@@ -22,9 +25,16 @@ test('projects lists ids and names without a format flag', async () => {
   }
 });
 
-test('master-task-create sends one Tasks mutation and prints every Markdown path', async () => {
+test('master-task-create sends one assigned Tasks mutation and prints every Markdown path', async () => {
   const previousServer = process.env.DECISION_OS_SERVER_URL;
   const previousFetch = globalThis.fetch;
+  const previousCwd = process.cwd();
+  const workspace = mkdtempSync(join(tmpdir(), 'ledger-cli-master-task-node-'));
+  const nestedCwd = join(workspace, 'project', 'nested');
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  mkdirSync(nestedCwd, { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', '.settings.json'), JSON.stringify({ federationNodeId: 'node-a' }));
+  process.chdir(nestedCwd);
   process.env.DECISION_OS_SERVER_URL = 'http://127.0.0.1:50150';
   let mutation: Record<string, unknown> = {};
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -53,6 +63,7 @@ test('master-task-create sends one Tasks mutation and prints every Markdown path
     ], { emit: (message) => messages.push(message) });
     assert.equal(result.ok, true);
     assert.equal(mutation.action, 'create-master-task');
+    assert.equal(mutation.assignedNodeId, 'node-a');
     assert.deepEqual(mutation.annotation, { id: (mutation.annotation as { id: string }).id, x: 10, y: 1040, width: 1200, height: 900, color: '#123456', label: 'Context metrics', comments: [] });
     assert.deepEqual((mutation.card as { labels: string[] }).labels, ['master-task']);
     assert.deepEqual((mutation.cards as Array<{ title: string; labels: string[] }>).map((card) => [card.title, card.labels]), [
@@ -71,6 +82,8 @@ test('master-task-create sends one Tasks mutation and prints every Markdown path
     assert.match(messages[0], /^master-task\tcard-.*\t\/workspace\/\.decision-os\/cards\/tasks\/card-.*\.md/);
   } finally {
     globalThis.fetch = previousFetch;
+    process.chdir(previousCwd);
+    rmSync(workspace, { recursive: true, force: true });
     if (previousServer === undefined) delete process.env.DECISION_OS_SERVER_URL;
     else process.env.DECISION_OS_SERVER_URL = previousServer;
   }
