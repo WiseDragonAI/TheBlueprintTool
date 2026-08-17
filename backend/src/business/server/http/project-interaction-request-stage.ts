@@ -13,6 +13,7 @@ import { handleCodexSkillRunRoutes } from '../../codex/http/skill-run-routes.js'
 import { handleTranscriptionRoutes } from '../../transcription/http/transcription-routes.js';
 import { handleThreadUploadRoutes } from '../../transcription/http/thread-upload-routes.js';
 import { handleLegacyLedgerRoutes } from '../../ledger/http/legacy-ledger-routes.js';
+import { handleTaskContentRoutes } from '../../task-state/http/task-content-routes.js';
 
 type OperationalInput = Parameters<typeof handleOperationalRoutes>[0];
 type PipelineInput = Parameters<typeof handleCodexPipelineRoutes>[0];
@@ -145,6 +146,17 @@ export async function handleProjectInteractionRequestStage(input: {
     url: input.url,
   });
   if (upload.handled) return;
+  const taskContent = await handleTaskContentRoutes({
+    decisionOsRoot: input.decisionOsRoot,
+    projectId: input.projectId,
+    request: input.request,
+    response: input.response,
+    taskLedger: input.taskLedger,
+    url: input.url,
+  });
+  // WHAT: stop route traversal after one task-content operation handles the request.
+  // WHY: a committed response cannot fall through to legacy ledger routing.
+  if (taskContent.handled) return;
   const legacy = await handleLegacyLedgerRoutes({
     activeExecutionPhase: input.activeExecutionPhase,
     advanceRevision: input.advanceRevision,

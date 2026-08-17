@@ -31,6 +31,15 @@ ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id <maste
 
 `card-read` accepts one to 30 repeated `--card-id` flags, discovers their local projects and ledgers with one catalog scan, and returns each selected card body plus its full thread as Markdown in argument order.
 
+## Author a task graph
+
+```sh
+ledger-cli subtask-create --master-card-id <master-task-id> --title <title>
+ledger-cli master-task-commit --master-card-id <master-task-id>
+```
+
+`subtask-create` discovers project and ledger context from the master card ID, creates a blank subtask Markdown document under that master, and prints its path. Edit that returned document directly; never pass a Markdown file to the command. After editing, `master-task-commit` discovers the master and relationship-backed subtasks and Git-commits exactly their versioned card Markdown files.
+
 ## Inspect prompts
 
 ```sh

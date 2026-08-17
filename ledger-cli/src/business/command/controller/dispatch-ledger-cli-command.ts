@@ -29,6 +29,8 @@ import { readCardMarkdown } from '../../ledger/helper/read-card-markdown.js';
 import { queryPipelinePrompts } from '../../prompt/helper/query-pipeline-prompts.js';
 import { mutatePipelinePrompt } from '../../prompt/helper/mutate-pipeline-prompt.js';
 import { queryCodexStatus } from '../../codex/effect/query-codex-status.js';
+import { createSubtask } from '../../ledger/helper/create-subtask.js';
+import { commitMasterTaskGraph } from '../../ledger/helper/commit-master-task-graph.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -104,6 +106,26 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'master-task-create') {
     const result = await createMasterTask(command.masterTaskCreateOperation ?? { subtasks: [] });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  // WHAT: create one blank subtask document through an ID-discovered scoped graph mutation.
+  // WHY: callers must not supply project, ledger, or Markdown-file inputs.
+  if (command.mode === 'subtask-create') {
+    const result = await createSubtask(command.taskGraphOperation ?? {});
+    // WHAT: emit only the server-confirmed canonical Markdown path.
+    // WHY: failed creation must leave stdout empty.
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  // WHAT: commit one ID-discovered master-task graph through the owning server repository.
+  // WHY: the server can protect the real index while selecting exact versioned graph files.
+  if (command.mode === 'master-task-commit') {
+    const result = await commitMasterTaskGraph(command.taskGraphOperation ?? {});
+    // WHAT: emit only complete Git revision evidence.
+    // WHY: callers must not mistake a rejected focused commit for success.
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

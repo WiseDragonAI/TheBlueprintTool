@@ -151,10 +151,14 @@ export function createLedgerPersistence(input: {
     );
     const annotationId = String(mutation.annotation?.id ?? mutation.region?.id ?? '');
     const relationshipId = String(mutation.relationship?.id ?? '');
+    // WHAT: expose canonical Markdown paths for complete graph creation and single-subtask creation.
+    // WHY: CLI callers must edit the exact server-materialized documents.
     const createdCards = mutation.action === 'create-master-task'
       ? [mutation.card, ...(mutation.cards ?? [])]
         .filter((card): card is AnyRecord => Boolean(card?.id))
-      : [];
+      : mutation.action === 'create-subtask' && mutation.card?.id
+        ? [mutation.card]
+        : [];
     const body = {
       ok: true,
       ledgerId,
@@ -199,7 +203,7 @@ export function createLedgerPersistence(input: {
         ) ?? null
         : null,
       createdFiles: createdCards.map((card, index) => ({
-        kind: index === 0 ? 'master-task' : 'subtask',
+        kind: mutation.action === 'create-subtask' || index > 0 ? 'subtask' : 'master-task',
         cardId: String(card.id ?? ''),
         path: resolveCardContentFile(
           input.decisionOsRoot,

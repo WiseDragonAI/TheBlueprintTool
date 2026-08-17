@@ -178,6 +178,38 @@ export function applyLedgerMutation(input: {
       for (const card of mutation.cards ?? []) delete card.assignment;
     }
   }
+  // WHAT: validate one atomic subtask card-and-relationship creation against its canonical master.
+  // WHY: the CLI operation must never leave a card without its graph edge.
+  if (mutation.action === 'create-subtask') {
+    const masterTaskId = String(mutation.masterTaskId ?? '');
+    const cardId = String(mutation.card?.id ?? '');
+    const relationship = mutation.relationship;
+    const master = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === masterTaskId);
+    const masterLabels = Array.isArray(master?.labels) ? master.labels.map(String) : [];
+    const cardExists = (ledger.cards ?? []).some((entry) => String(entry.id ?? '') === cardId);
+    const relationshipExists = (ledger.relationships ?? []).some((entry) => String(entry.id ?? '') === String(relationship?.id ?? ''));
+    const positionExists = (ledger.relationships ?? []).some((entry) => (
+      String(entry.from ?? '') === masterTaskId
+      && String(entry.label ?? '') === 'subtask'
+      && Number(entry.position) === Number(relationship?.position)
+    ));
+    // WHAT: reject an incomplete, mismatched, duplicate, or noncanonical graph addition.
+    // WHY: one accepted command must add exactly one new subtask beneath the requested master.
+    if (
+      !masterTaskId
+      || !masterLabels.includes('master-task')
+      || !cardId
+      || cardExists
+      || !relationship?.id
+      || relationshipExists
+      || positionExists
+      || String(relationship.from ?? '') !== masterTaskId
+      || String(relationship.to ?? '') !== cardId
+      || relationship.label !== 'subtask'
+      || !Number.isInteger(Number(relationship.position))
+      || Number(relationship.position) < 0
+    ) return result({ statusCode: 400, body: { ok: false, error: 'invalid_subtask_creation_payload' } });
+  }
   if (mutation.action === 'reassign-task') {
     const cardId = String(mutation.cardId ?? '');
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
@@ -227,6 +259,17 @@ export function applyLedgerMutation(input: {
     recordCardContent(mutation.card);
     recordThreadContent(`thread-${id}`);
     ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.card);
+  }
+  // WHAT: materialize one validated subtask card and its canonical relationship together.
+  // WHY: the task graph must not expose a partial creation state.
+  if (mutation.action === 'create-subtask' && mutation.card?.id && mutation.relationship?.id) {
+    const cardId = String(mutation.card.id);
+    externalizeCardContent({ decisionOsRoot, card: mutation.card, ledgerPath });
+    writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: `thread-${cardId}`, notes: [] });
+    recordCardContent(mutation.card);
+    recordThreadContent(`thread-${cardId}`);
+    ledger.cards = (ledger.cards ?? []).concat(mutation.card);
+    ledger.relationships = (ledger.relationships ?? []).concat(mutation.relationship);
   }
   if (mutation.action === 'create-master-task' && mutation.card?.id) {
     const cards = [mutation.card, ...(mutation.cards ?? [])];

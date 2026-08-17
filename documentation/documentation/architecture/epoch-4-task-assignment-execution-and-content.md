@@ -93,6 +93,8 @@
 4. **Unavailable remote content is deferred.** A remote-owned head whose bytes are absent remains an audited `deferredRemoteObjects` entry and resolves through normal exact-hash retrieval when its owner is available.
 5. **Local absence is fatal.** A missing Workstation-owned object fails migration admission because the node is responsible for those bytes.
 6. **No bulk transfer:** State synchronization replicates small content heads. Growing logs and binary payload inventories do not transfer during root convergence.
+7. **ID-only subtask authoring:** `ledger-cli subtask-create --master-card-id <id> --title <title>` resolves the local project and `tasks` ledger from Control Room state, then submits one active `create-subtask` mutation containing the new blank Markdown-backed card and canonical relationship. The command rejects Markdown-file input and returns the server-created document path.
+8. **Graph-scoped Git commit:** `ledger-cli master-task-commit --master-card-id <id>` resolves the same owner, then the project-scoped task-content route discovers the authoritative relationship-backed graph and commits exactly its card Markdown through the authored-file Git transaction. Graph-owner staged paths are rejected while unrelated index entries remain byte-identical.
 
 ---
 
