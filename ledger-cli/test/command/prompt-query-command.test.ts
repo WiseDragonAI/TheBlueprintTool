@@ -77,7 +77,7 @@ test('prompt query withholds output when any requested prompt fails', async () =
   }
 });
 
-test('prompt create and direct working-copy update use project-scoped authored transactions', async () => {
+test('prompt create and direct working-copy update use global server-owned transactions', async () => {
   const previousServer = process.env.DECISION_OS_SERVER_URL;
   const previousProject = process.env.DECISION_OS_PROJECT_ID;
   const previousFetch = globalThis.fetch;
@@ -85,7 +85,7 @@ test('prompt create and direct working-copy update use project-scoped authored t
   const markdownFile = join(root, 'ResearchPrompt.md');
   writeFileSync(markdownFile, '## A. objective\n');
   process.env.DECISION_OS_SERVER_URL = 'http://127.0.0.1:50150';
-  process.env.DECISION_OS_PROJECT_ID = 'project-a';
+  delete process.env.DECISION_OS_PROJECT_ID;
   const requests: Array<{ body: Record<string, unknown> | null; method: string; url: string }> = [];
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
@@ -113,7 +113,7 @@ test('prompt create and direct working-copy update use project-scoped authored t
       'prompt', 'create', '--name', 'ResearchPrompt', '--description', 'Research one source', '--markdown-file', markdownFile,
     ], { emit: (message) => messages.push(message) });
     const updated = await dispatchLedgerCliCommandController([
-      'prompt', 'update', '--project', 'project-a', '--name', 'ResearchPrompt',
+      'prompt', 'update', '--name', 'ResearchPrompt',
     ], { emit: (message) => messages.push(message) });
 
     assert.equal(created.ok, true);
@@ -121,17 +121,17 @@ test('prompt create and direct working-copy update use project-scoped authored t
     assert.deepEqual(requests, [
       {
         method: 'POST',
-        url: 'http://127.0.0.1:50150/p/project-a/api/codex/skill-library',
+        url: 'http://127.0.0.1:50150/api/codex/skill-library',
         body: { name: 'ResearchPrompt', description: 'Research one source', markdown: '## A. objective\n', contentKind: 'pipeline-prompt' },
       },
       {
         method: 'GET',
-        url: 'http://127.0.0.1:50150/p/project-a/api/codex/skill-library/ResearchPrompt',
+        url: 'http://127.0.0.1:50150/api/codex/server-skills/ResearchPrompt',
         body: null,
       },
       {
         method: 'POST',
-        url: 'http://127.0.0.1:50150/p/project-a/api/codex/skill-library/ResearchPrompt/revisions/commit',
+        url: 'http://127.0.0.1:50150/api/codex/server-skills/ResearchPrompt/revisions/commit',
         body: { revision: 'current-revision' },
       },
     ]);
@@ -146,8 +146,8 @@ test('prompt create and direct working-copy update use project-scoped authored t
     // WHY: later command tests must not inherit the mocked server.
     if (previousServer === undefined) delete process.env.DECISION_OS_SERVER_URL;
     else process.env.DECISION_OS_SERVER_URL = previousServer;
-    // WHAT: restore the caller-owned project identity after the mutation test.
-    // WHY: later command tests must not inherit project-scoped routing.
+    // WHAT: restore the caller-owned project identity after proving prompt mutations do not consume it.
+    // WHY: command tests must not leak their project-independent routing setup into later cases.
     if (previousProject === undefined) delete process.env.DECISION_OS_PROJECT_ID;
     else process.env.DECISION_OS_PROJECT_ID = previousProject;
   }

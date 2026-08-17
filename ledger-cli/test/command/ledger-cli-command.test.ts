@@ -24,8 +24,8 @@ test('ledger-cli command emits help without reading a ledger', async () => {
   assert.match(messages.join('\n'), /card-read --card-id <id> \[--card-id <id>\]\.\.\./);
   assert.match(messages.join('\n'), /codex-status \[--execution-id <id>\]/);
   assert.match(messages.join('\n'), /prompt query --name <name> \[--name <name>\]\.\.\./);
-  assert.match(messages.join('\n'), /prompt create --project <project-id> --name <name>/);
-  assert.match(messages.join('\n'), /prompt update --project <project-id> --name <name>/);
+  assert.match(messages.join('\n'), /prompt create --name <name>/);
+  assert.match(messages.join('\n'), /prompt update --name <name>/);
   assert.match(messages.join('\n'), /zone-cards --ledger <file> --zone-id <id> --json/);
   assert.match(messages.join('\n'), /answer --ledger <file> --thread-id <id>/);
   assert.match(messages.join('\n'), /--message-file <file>/);

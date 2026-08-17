@@ -14,8 +14,8 @@
 
 ## B. Skill And Prompt HTTP Contracts
 
-1. Every route below is project-scoped. `:projectId` selects the registered request context; shared `federated-skill` and `pipeline-prompt` storage remains server-owned.
-2. Create content with `POST /p/:projectId/api/codex/skill-library`:
+1. Workspace content routes are project-scoped because `:projectId` selects their registered owner. Shared `federated-skill` and `pipeline-prompt` storage remains server-owned and is available through the global server-content routes.
+2. Create project-scoped content with `POST /p/:projectId/api/codex/skill-library`:
 
    ```json
    {
@@ -26,7 +26,7 @@
    }
    ```
 
-3. `contentKind` is exactly `federated-skill`, `workspace-skill`, or `pipeline-prompt`. `markdown` may replace generated initial Markdown. A workspace skill requires an available project-scoped request.
+3. `contentKind` is exactly `federated-skill`, `workspace-skill`, or `pipeline-prompt`. `markdown` may replace generated initial Markdown. A workspace skill requires an available project-scoped request. Server-owned federated skills and pipeline prompts may use `POST /api/codex/skill-library` without project identity.
 4. HTTP `201` returns `{ok, statusCode, skill, publication}`. `skill` includes the path-free identity, `contentKind`, `executionVisibility`, `projectId`, `editable`, `readOnlyReason`, Markdown SHA-256 `revision`, `markdown`, defaults, tags, references, `gitRevision`, and initial `history`.
 5. Read the selected catalog identity with `GET /p/:projectId/api/codex/skill-library/:name`. Read the canonical server-skill owner explicitly with `GET /p/:projectId/api/codex/server-skills/:name`.
 6. Save Markdown with `PUT /p/:projectId/api/codex/skill-library/:name`; canonical server-skill saves may use `PUT /p/:projectId/api/codex/server-skills/:name`:
@@ -44,7 +44,7 @@
 8. Favorite and tag requests use the same `PUT` route with only `favorite` and `tags`. They mutate pipeline-store metadata and do not claim a Markdown save or Git content revision.
 9. A successful create returns only after its focused Git revision exists. A skill transaction contains only its `SKILL.md`; a prompt transaction contains its Markdown and `.decision-os/codex-pipelines.json`.
 10. A successful content save returns the reloaded path-free `skill` detail and advances repository `HEAD` exactly once. HTTP `422 content_not_changed` creates no commit.
-11. Agent-authored updates to an existing pipeline prompt use its registered working copy directly. After editing `.decision-os/pipeline-prompts/<name>.md`, load its current revision and submit `POST /p/:projectId/api/codex/skill-library/:name/revisions/commit` with `{revision}`.
+11. Agent-authored updates to an existing pipeline prompt use its registered working copy directly. After editing `.decision-os/pipeline-prompts/<name>.md`, load its current revision from `GET /api/codex/server-skills/:name` and submit `POST /api/codex/server-skills/:name/revisions/commit` with `{revision}`.
 12. The working-copy commit route accepts only registered pipeline prompts, validates current bytes and prompt references, rejects stale revisions and clean working copies, preserves staged-path protection, commits only the prompt Markdown, and returns the reloaded content plus Git revision.
 
 ---

@@ -120,11 +120,10 @@
 
    ```sh
    ledger-cli prompt update \
-     --project "$DECISION_OS_PROJECT_ID" \
      --name "$prompt_name"
    ```
 
-4. The command loads the edited working-copy revision and submits it to the project-scoped commit route without transmitting replacement Markdown.
+4. The command loads the edited working-copy revision and submits it to the global server-owned commit route without transmitting replacement Markdown.
 5. The transaction validates registered identity, prompt Markdown, template syntax, exact loaded revision, staged-path protection, focused commit ownership, and committed Git evidence.
 6. A clean working copy returns `content_not_changed` and creates no commit.
 7. Every authored commit has a concise subject plus non-empty `WHAT:` and `WHY:` paragraphs.

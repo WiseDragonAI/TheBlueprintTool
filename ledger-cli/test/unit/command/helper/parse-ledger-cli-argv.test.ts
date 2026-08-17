@@ -188,12 +188,10 @@ test('parse-ledger-cli-argv parses repeated prompt query names', () => {
   assert.deepEqual(command.promptOperation?.names, ['CLI_TOOLS', 'SYSTEM_PROMPT']);
 });
 
-test('parse-ledger-cli-argv parses prompt mutation inputs', () => {
+test('parse-ledger-cli-argv parses project-independent prompt mutation inputs', () => {
   const create = parseLedgerCliArgv([
     'prompt',
     'create',
-    '--project',
-    'project-a',
     '--name',
     'ResearchPrompt',
     '--description',
@@ -204,8 +202,6 @@ test('parse-ledger-cli-argv parses prompt mutation inputs', () => {
   const update = parseLedgerCliArgv([
     'prompt',
     'update',
-    '--project',
-    'project-a',
     '--name',
     'ResearchPrompt',
   ]);
@@ -216,7 +212,6 @@ test('parse-ledger-cli-argv parses prompt mutation inputs', () => {
     markdownFile: '/tmp/research.md',
     name: 'ResearchPrompt',
     names: ['ResearchPrompt'],
-    projectId: 'project-a',
   });
   assert.deepEqual(update.promptOperation, {
     action: 'update',
@@ -224,7 +219,6 @@ test('parse-ledger-cli-argv parses prompt mutation inputs', () => {
     markdownFile: undefined,
     name: 'ResearchPrompt',
     names: ['ResearchPrompt'],
-    projectId: 'project-a',
   });
 });
 
