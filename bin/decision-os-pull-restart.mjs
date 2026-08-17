@@ -61,6 +61,8 @@ async function main() {
   output('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']);
 
   const changes = output('git', ['status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=all']);
+  // WHAT: Reject a production update when the parent checkout contains authored changes.
+  // WHY: Pulling must never stash, overwrite, or carry direct main-checkout edits through a restart.
   if (changes) {
     throw new Error([
       'Refusing to pull or restart because the main checkout has local changes outside .decision-os.',
