@@ -21,7 +21,7 @@ export function formatLedgerCliHelp(): string {
     '      This command does not accept a Markdown file as input.',
     '',
     '  master-task-commit --master-card-id <id>',
-    '      Discover the master and subtasks, then Git-commit their versioned card Markdown files.',
+    '      Discover the master and subtasks, then Git-commit their versioned card and thread Markdown files.',
     '',
     '  queue-pipeline --pipeline <pipeline-id>',
     '      Queue one saved pipeline after the current eligible execution.',
