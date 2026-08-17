@@ -169,6 +169,18 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
   } else if ((action === 'create-zone' || action === 'create-group') && mutation.annotation?.id) {
     const id = String(mutation.annotation.id);
     changes.push(...entity('annotation', id, null, recordById(after, 'annotations', id)));
+  // WHAT: publish one subtask card, thread ownership, and canonical relationship as one active command.
+  // WHY: an existing master graph must never replicate a partially linked subtask.
+  } else if (action === 'create-subtask' && mutation.card?.id && mutation.relationship?.id && mutation.masterTaskId) {
+    const id = String(mutation.card.id);
+    const relationshipId = String(mutation.relationship.id);
+    activationTaskId = String(mutation.masterTaskId);
+    changes.push(...entity('card', id, null, recordById(after, 'cards', id)));
+    changes.push(...entity('relationship', relationshipId, null, recordById(after, 'relationships', relationshipId)));
+    const threadId = `thread-${id}`;
+    const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
+    const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};
+    changes.push(...ledgerField(`threadFiles/${threadId}`, beforeRefs[threadId], afterRefs[threadId]));
   } else if (action === 'create-card' && mutation.card?.id) {
     const id = String(mutation.card.id);
     activationTaskId = id;
