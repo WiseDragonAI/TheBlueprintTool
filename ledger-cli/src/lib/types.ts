@@ -6,7 +6,7 @@ import type { Stats } from 'node:fs';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export type LedgerCommand = 'answer' | 'card-context' | 'card-read' | 'codex-run-audit' | 'codex-run-events' | 'codex-status' | 'done' | 'execution-profile' | 'export' | 'help' | 'inspect' | 'master-task-apply' | 'master-task-complete' | 'master-task-create' | 'master-task-gate' | 'master-task-progress' | 'migrate-decision-os' | 'migrate-master-tasks' | 'mutate' | 'overview' | 'projects' | 'prompt' | 'queue-pipeline' | 'queue-skill' | 'session-context' | 'skills' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'zone-cards';
+export type LedgerCommand = 'answer' | 'card-context' | 'card-read' | 'codex-run-audit' | 'codex-run-events' | 'codex-status' | 'done' | 'execution-profile' | 'export' | 'help' | 'inspect' | 'master-task-apply' | 'master-task-commit' | 'master-task-complete' | 'master-task-create' | 'master-task-gate' | 'master-task-progress' | 'migrate-decision-os' | 'migrate-master-tasks' | 'mutate' | 'overview' | 'projects' | 'prompt' | 'queue-pipeline' | 'queue-skill' | 'session-context' | 'skills' | 'subtask-create' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'zone-cards';
 
 export type AssetCommand = 'apply-gc-plan' | 'gc' | 'list-orphans' | 'list-referenced' | 'prune-json' | 'stage-referenced';
 
@@ -73,6 +73,7 @@ export type LedgerCliCommand = {
   };
   masterTaskOperation?: { planStdin: boolean };
   masterTaskCreateOperation?: { projectId?: string; title?: string; subtasks: string[] };
+  taskGraphOperation?: { markdownFile?: string; masterCardId?: string; title?: string };
   runAuditOperation?: { root?: string; count: number; cutoff?: number; exclusions: string[] };
   runEventsOperation?: { root?: string; runId: string; itemType: string; limit?: number };
   queuePipelineOperation?: { pipelineId?: string };

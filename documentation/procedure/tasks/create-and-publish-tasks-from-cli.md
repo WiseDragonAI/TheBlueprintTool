@@ -227,38 +227,39 @@ curl -sS "$TASK_SERVER_URL/api/federation/replication-status"
 
 ---
 
-## F. Commit The Versioned Task Content
+## F. Add And Author A Subtask By Master ID
 
-1. Inspect the exact files created by the response and the worktree status.
-2. Do not stage `.decision-os/task-state/**`, `.decision-os/tasks.json`, voice uploads, run artifacts, caches, settings, or unrelated changes.
-3. Do not use `git add .`.
-4. Stage every intended master/subtask card Markdown and thread Markdown explicitly using the printed paths.
+1. Create one subtask without supplying project, ledger, geometry, relationship, card, or Markdown-file inputs.
 
 ```bash
-cd "$TASK_PROJECT_ROOT"
-git status --short
-git add -- \
-  .decision-os/cards/tasks/card-replace-with-master-id.md \
-  .decision-os/threads/tasks/thread-card-replace-with-master-id.md \
-  .decision-os/cards/tasks/card-replace-with-subtask-id.md \
-  .decision-os/threads/tasks/thread-card-replace-with-subtask-id.md
-git diff --cached --check
-git diff --cached --stat
+ledger-cli subtask-create \
+  --master-card-id "$TASK_MASTER_ID" \
+  --title "05 - Implementation: Deltas"
 ```
 
-5. Create a focused commit with the repository-required message body.
-
-```bash
-git commit \
-  -m 'Add replace-with-task-name master task' \
-  -m 'WHAT: Add the master-task documents, activated thread, and declared implementation subtasks.' \
-  -m 'WHY: Record the verified operator request and preserve its executable task breakdown.'
-git show -s --format=%B HEAD
-```
+2. The command discovers the local project and `tasks` ledger from the master card ID, atomically creates the card plus canonical `subtask` relationship, and prints the absolute path of the new blank Markdown document.
+3. Edit the printed document directly. `subtask-create` rejects `--markdown-file`; it never imports caller-authored Markdown during creation.
+4. The scoped `create-subtask` mutation is active immediately because the existing published master owns its activation boundary.
 
 ---
 
-## G. Push And Verify
+## G. Commit The Master-Task Graph Markdown
+
+1. After editing the new document, commit the master card and every relationship-backed subtask card by master ID.
+
+```bash
+ledger-cli master-task-commit \
+  --master-card-id "$TASK_MASTER_ID"
+```
+
+2. The command rediscovers the owning project and `tasks` ledger, then the server reads the authoritative task projection and commits exactly the graph's versioned card Markdown files.
+3. The focused authored-file transaction rejects any graph file that is already staged and preserves unrelated staged bytes.
+4. Successful JSON output includes the project ID, ledger ID, master card ID, exact Git commit, and committed file inventory.
+5. Do not stage `.decision-os/task-state/**`, `.decision-os/tasks.json`, voice uploads, run artifacts, caches, settings, or unrelated changes.
+
+---
+
+## H. Push And Verify
 
 1. Push the current branch with the required Wise SSH identity.
 
@@ -278,24 +279,28 @@ git status --short
 
 ---
 
-## H. Failure And Recovery
+## I. Failure And Recovery
 
 1. **Creation rejected:** preserve the response body, correct the payload, and retry only when no master ID was created.
 2. **Creation succeeded and activation failed:** reuse the printed master ID and submit only `append-note`; repeating creation produces a duplicate graph.
 3. **Held marker remains after `append-note`:** stop, preserve the marker and response, and diagnose task content contribution handling. Do not edit the marker directly.
 4. **Replication does not converge:** preserve replication diagnostics and pending delivery IDs. Do not restart the server or rewrite causal state as a recovery action.
-5. **Commit includes unrelated files:** unstage only the agent-added paths, rebuild the explicit file list, and preserve operator-staged hunks.
-6. **Push fails:** keep the verified local commit unchanged, report the SSH or remote error, and retry the same commit after credentials or connectivity recover.
+5. **Graph file is staged:** preserve the staged hunk and stop. `master-task-commit` returns `authored_owner_staged` without modifying it.
+6. **Graph is incomplete:** preserve the dangling relationship evidence and repair structural task state through the scoped API before retrying the commit.
+7. **Push fails:** keep the verified local commit unchanged, report the SSH or remote error, and retry the same commit after credentials or connectivity recover.
 
 ---
 
-## I. Primary Evidence
+## J. Primary Evidence
 
 1. `backend/src/business/server/application/create-decision-os-server.ts`
 2. `backend/src/business/ledger/helper/apply-ledger-mutation.ts`
 3. `backend/src/business/task-state/helper/task-mutation-command.ts`
 4. `backend/src/business/task-state/helper/project-task-state.ts`
 5. `backend/src/business/task-state/helper/task-local-publication-state.ts`
-6. `backend/test/server/master-task-create.integration.test.ts`
-7. `backend/test/unit/task-state/project-task-state.test.ts`
-8. `documentation/documentation/architecture/epoch-3-task-state-and-federation.md`
+6. `backend/src/business/task-state/http/task-content-routes.ts`
+7. `ledger-cli/src/business/ledger/helper/create-subtask.ts`
+8. `ledger-cli/src/business/ledger/helper/commit-master-task-graph.ts`
+9. `backend/test/server/master-task-content-commit.integration.test.ts`
+10. `ledger-cli/test/command/task-graph-authoring-command.test.ts`
+11. `documentation/documentation/architecture/epoch-4-task-assignment-execution-and-content.md`
