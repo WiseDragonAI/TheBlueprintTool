@@ -11,7 +11,6 @@ type PromptMutation = {
   description?: string;
   markdownFile?: string;
   name?: string;
-  projectId?: string;
 };
 
 const requestDeadlineMs = 30_000;
@@ -85,7 +84,6 @@ export async function mutatePipelinePrompt(input: PromptMutation): Promise<Resul
   }
   const name = text(input.name).trim();
   const markdownFile = text(input.markdownFile).trim();
-  const projectId = text(input.projectId ?? process.env.DECISION_OS_PROJECT_ID).trim();
   // WHAT: require one stable prompt identity.
   // WHY: authored-content routes cannot mutate an inferred catalog item.
   if (!name) return { ok: false, error: `prompt ${input.action} requires --name.` };
@@ -95,15 +93,12 @@ export async function mutatePipelinePrompt(input: PromptMutation): Promise<Resul
   // WHAT: reject replacement-file updates after the direct-edit workflow is selected.
   // WHY: update must commit the registered prompt bytes that the author inspected and edited in place.
   if (input.action === 'update' && markdownFile) return { ok: false, error: 'prompt update requires direct editing and does not accept --markdown-file.' };
-  // WHAT: require the project-scoped API routing identity.
-  // WHY: shared prompt ownership is resolved through a registered request context.
-  if (!projectId) return { ok: false, error: `prompt ${input.action} requires --project or DECISION_OS_PROJECT_ID.` };
   const server = configuredServerUrl();
   // WHAT: stop before file and network work when the server is unavailable.
   // WHY: no local fallback owns pipeline-prompt registration.
   if (!server.ok) return server;
 
-  const collectionUrl = `${server.value}/p/${encodeURIComponent(projectId)}/api/codex/skill-library`;
+  const collectionUrl = `${server.value}/api/codex/skill-library`;
   // WHAT: create a new registered pipeline prompt in one authored transaction.
   // WHY: creation must couple Markdown, registration metadata, and Git evidence.
   if (input.action === 'create') {
@@ -128,7 +123,7 @@ export async function mutatePipelinePrompt(input: PromptMutation): Promise<Resul
     return mutationReceipt(created.value, 'create', name);
   }
 
-  const itemUrl = `${collectionUrl}/${encodeURIComponent(name)}`;
+  const itemUrl = `${server.value}/api/codex/server-skills/${encodeURIComponent(name)}`;
   const current = await request({ url: itemUrl });
   // WHAT: stop when the current optimistic revision cannot be loaded.
   // WHY: update must never overwrite unseen prompt bytes.

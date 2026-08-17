@@ -63,7 +63,6 @@ export type LedgerCliCommand = {
     markdownFile?: string;
     name?: string;
     names: string[];
-    projectId?: string;
   };
   migrationOperation?: MigrationOperation;
   masterTaskMigrationOperation?: {

@@ -129,7 +129,6 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
         markdownFile: flagValue(argv, '--markdown-file'),
         name: flagValue(argv, '--name'),
         names: trailingValues(argv, '--name'),
-        projectId: flagValue(argv, '--project'),
       }
       : undefined,
     migrationOperation: normalizedMode === 'migrate-decision-os'

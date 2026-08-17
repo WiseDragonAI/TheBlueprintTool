@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * WHAT: Fast-forwards decision-os with an automatic stash, restarts its supervised
+ * WHAT: Fast-forwards a clean decision-os main checkout, restarts its supervised
  * service, and waits for the operator-facing route to become healthy.
  * WHY: Updating the running Termux instance should be one safe, repeatable command.
  */
@@ -29,15 +29,6 @@ function run(command, args, { capture = false, allowFailure = false } = {}) {
 
 function output(command, args) {
   return String(run(command, args, { capture: true }).stdout).trim();
-}
-
-function restoreStash(stashRef) {
-  if (!stashRef) return;
-  process.stdout.write(`Restoring local changes from ${stashRef}...\n`);
-  const result = run('git', ['stash', 'pop', '--index', stashRef], { allowFailure: true });
-  if (result.status !== 0) {
-    throw new Error(`Could not restore ${stashRef}. The stash was kept; resolve the reported conflicts before restarting.`);
-  }
 }
 
 async function waitForHealth() {
@@ -69,36 +60,18 @@ async function main() {
   }
   output('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']);
 
-  const dirty = output('git', ['status', '--porcelain=v1', '--untracked-files=all']).length > 0;
-  let stashRef = '';
-  if (dirty) {
-    const marker = `decision-os-pull-restart-${process.pid}-${Date.now()}`;
-    process.stdout.write('Stashing tracked and untracked local changes...\n');
-    run('git', ['stash', 'push', '--include-untracked', '--message', marker]);
-    const stashRecord = output('git', ['stash', 'list', '-1', '--format=%gd%x00%gs']).split('\0');
-    if (stashRecord.length !== 2 || !stashRecord[1].includes(marker)) {
-      throw new Error('Git created a stash, but its identity could not be verified. The server was not restarted.');
-    }
-    stashRef = stashRecord[0];
+  const changes = output('git', ['status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=all']);
+  // WHAT: Reject a production update when the parent checkout contains authored changes.
+  // WHY: Pulling must never stash, overwrite, or carry direct main-checkout edits through a restart.
+  if (changes) {
+    throw new Error([
+      'Refusing to pull or restart because the main checkout has local changes outside .decision-os.',
+      'Direct changes on main are forbidden. Move the work to a feature worktree, then restore main to a clean state.',
+      changes,
+    ].join('\n'));
   }
 
-  let pullError;
-  try {
-    run('git', ['pull', '--ff-only']);
-  } catch (error) {
-    pullError = error;
-  }
-
-  try {
-    restoreStash(stashRef);
-  } catch (restoreError) {
-    if (pullError) {
-      throw new AggregateError([pullError, restoreError], 'Pull and stash restoration both failed. The server was not restarted.');
-    }
-    throw restoreError;
-  }
-  if (pullError) throw pullError;
-
+  run('git', ['pull', '--ff-only', '--recurse-submodules=no']);
   run('sv', ['restart', service]);
   await waitForHealth();
   run('sv', ['status', service]);
