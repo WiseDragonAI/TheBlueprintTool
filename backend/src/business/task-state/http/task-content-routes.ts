@@ -1,11 +1,12 @@
 /**
- * WHAT: Commits the exact versioned card Markdown owned by one canonical master-task graph.
+ * WHAT: Commits the exact versioned card and thread Markdown owned by one canonical master-task graph.
  * WHY: ID-only CLI callers need an index-safe Git transaction inside the owning project repository.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { relative } from 'node:path';
 import { resolveCardContentFile } from '../../ledger/helper/card-content-file.js';
+import { resolveThreadContentFile } from '../../ledger/helper/thread-content-file.js';
 import {
   AuthoredFileGitError,
   commitAuthoredFileRevision,
@@ -78,15 +79,24 @@ export async function handleTaskContentRoutes(input: {
     graphCards.push(subtask);
   }
   const files: string[] = [];
+  const threadFiles = ledger.threadFiles && typeof ledger.threadFiles === 'object' && !Array.isArray(ledger.threadFiles)
+    ? ledger.threadFiles as AnyRecord
+    : {};
   for (const card of graphCards) {
+    const cardId = String(card.id ?? '');
     const comment = card.comment && typeof card.comment === 'object' && !Array.isArray(card.comment)
       ? card.comment as AnyRecord
       : {};
-    const file = resolveCardContentFile(input.decisionOsRoot, comment.contentFile);
+    const cardFile = resolveCardContentFile(input.decisionOsRoot, comment.contentFile);
     // WHAT: reject a card without a present canonical Markdown file.
-    // WHY: every graph owner must contribute exact bytes to the focused commit.
-    if (!file || !existsSync(file)) return json(input.response, 409, { ok: false, error: 'task_markdown_missing', cardId: String(card.id ?? '') });
-    files.push(file);
+    // WHY: every graph owner must contribute its card bytes to the focused commit.
+    if (!cardFile || !existsSync(cardFile)) return json(input.response, 409, { ok: false, error: 'task_markdown_missing', cardId });
+    const threadId = `thread-${cardId}`;
+    const threadFile = resolveThreadContentFile(input.decisionOsRoot, threadFiles[threadId]);
+    // WHAT: reject a graph owner without its present canonical thread Markdown.
+    // WHY: generated activation and conversation documents must not remain untracked after the graph commit.
+    if (!threadFile || !existsSync(threadFile)) return json(input.response, 409, { ok: false, error: 'task_thread_markdown_missing', cardId, threadId });
+    files.push(cardFile, threadFile);
   }
   try {
     const revision = await commitAuthoredFileRevision({

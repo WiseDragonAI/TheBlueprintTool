@@ -52,6 +52,15 @@ test('master-task content commit discovers the canonical graph and preserves unr
     }),
   });
   assert.equal(creationResponse.status, 200, await creationResponse.clone().text());
+  const activationResponse = await fetch(`${baseUrl}/p/${projectId}/decision-os/tasks`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      action: 'append-note',
+      note: { id: 'note-activation', threadId: 'thread-card-master', role: 'agent', body: 'Activate the task graph.' },
+    }),
+  });
+  assert.equal(activationResponse.status, 200, await activationResponse.clone().text());
   git(decisionOsRoot, ['add', 'cards/tasks/card-master.md', 'cards/tasks/card-subtask.md']);
   execFileSync('git', ['-C', decisionOsRoot, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'Add initial task graph']);
   writeFileSync(join(decisionOsRoot, 'operator.md'), 'protected staged bytes\n');
@@ -68,11 +77,23 @@ test('master-task content commit discovers the canonical graph and preserves unr
   assert.equal(response.status, 200, await response.clone().text());
   const receipt = await response.json() as { commit: string; files: string[] };
   assert.match(receipt.commit, /^[a-f0-9]{40,64}$/);
-  assert.deepEqual(receipt.files, ['cards/tasks/card-master.md', 'cards/tasks/card-subtask.md']);
+  assert.deepEqual(receipt.files, [
+    'cards/tasks/card-master.md',
+    'threads/tasks/thread-card-master.md',
+    'cards/tasks/card-subtask.md',
+    'threads/tasks/thread-card-subtask.md',
+  ]);
   assert.deepEqual(
     git(decisionOsRoot, ['show', '--format=', '--name-only', receipt.commit]).split('\n').filter(Boolean).sort(),
-    ['cards/tasks/card-master.md', 'cards/tasks/card-subtask.md'],
+    [
+      'cards/tasks/card-master.md',
+      'cards/tasks/card-subtask.md',
+      'threads/tasks/thread-card-master.md',
+      'threads/tasks/thread-card-subtask.md',
+    ],
   );
   assert.equal(readFileSync(join(cardsRoot, 'card-master.md'), 'utf8'), 'Edited master.\n');
+  assert.match(readFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-card-master.md'), 'utf8'), /Activate the task graph\./);
+  assert.equal(git(decisionOsRoot, ['status', '--short', '--', 'cards/tasks', 'threads/tasks']), '');
   assert.equal(git(decisionOsRoot, ['diff', '--cached', '--binary']), stagedBefore);
 });
