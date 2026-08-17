@@ -245,14 +245,14 @@ ledger-cli subtask-create \
 
 ## G. Commit The Master-Task Graph Markdown
 
-1. After editing the new document, commit the master card and every relationship-backed subtask card by master ID.
+1. After editing the new document, commit the master and every relationship-backed subtask card plus their canonical thread documents by master ID.
 
 ```bash
 ledger-cli master-task-commit \
   --master-card-id "$TASK_MASTER_ID"
 ```
 
-2. The command rediscovers the owning project and `tasks` ledger, then the server reads the authoritative task projection and commits exactly the graph's versioned card Markdown files.
+2. The command rediscovers the owning project and `tasks` ledger, then the server reads the authoritative task projection and commits exactly the graph's versioned card and thread Markdown files.
 3. The focused authored-file transaction rejects any graph file that is already staged and preserves unrelated staged bytes.
 4. Successful JSON output includes the project ID, ledger ID, master card ID, exact Git commit, and committed file inventory.
 5. Do not stage `.decision-os/task-state/**`, `.decision-os/tasks.json`, voice uploads, run artifacts, caches, settings, or unrelated changes.
@@ -286,7 +286,7 @@ git status --short
 3. **Held marker remains after `append-note`:** stop, preserve the marker and response, and diagnose task content contribution handling. Do not edit the marker directly.
 4. **Replication does not converge:** preserve replication diagnostics and pending delivery IDs. Do not restart the server or rewrite causal state as a recovery action.
 5. **Graph file is staged:** preserve the staged hunk and stop. `master-task-commit` returns `authored_owner_staged` without modifying it.
-6. **Graph is incomplete:** preserve the dangling relationship evidence and repair structural task state through the scoped API before retrying the commit.
+6. **Graph is incomplete:** preserve dangling relationship evidence and any missing card or thread Markdown path, then repair structural task state through the scoped API before retrying the commit.
 7. **Push fails:** keep the verified local commit unchanged, report the SSH or remote error, and retry the same commit after credentials or connectivity recover.
 
 ---
