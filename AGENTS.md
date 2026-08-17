@@ -394,7 +394,8 @@ GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 ## CLI Task Creation
 
 - Follow [`documentation/procedure/tasks/create-and-publish-tasks-from-cli.md`](documentation/procedure/tasks/create-and-publish-tasks-from-cli.md) for every CLI-created task or master-task graph.
-- Create Tasks through the project-scoped `PATCH /p/:projectId/decision-os/tasks` command API. Never edit `.decision-os/tasks.json`, `.decision-os/task-state/**`, or task-state object files directly.
+- Create every master task exclusively with `ledger-cli master-task-create`. Never create a master task with a handwritten HTTP request, ad hoc script, direct API call, or direct state-file edit.
+- Create other Tasks through the project-scoped `PATCH /p/:projectId/decision-os/tasks` command API. Never edit `.decision-os/tasks.json`, `.decision-os/task-state/**`, or task-state object files directly.
 - Treat creation and publication as two separate required steps. `create-card`, `create-task-intake`, and `create-master-task` are locally held until an `append-note` content contribution activates the task identity.
 - After creation, append one truthful `agent` note to the new task thread, verify that `.decision-os/task-state/<projectId>/local/held/<taskId>.json` is absent, and inspect federation replication status before reporting the task synchronized.
 - Commit only the intended versioned task card/thread Markdown and related source changes. Do not stage runtime task-state, voice uploads, run artifacts, caches, settings, or unrelated operator changes.
