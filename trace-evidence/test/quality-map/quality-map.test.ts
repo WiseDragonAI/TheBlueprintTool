@@ -7,7 +7,6 @@ import test from 'node:test';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { parseSourceFile } from '../../src/business/quality-map/helper/parse-source-file.js';
 import { buildQualityMap } from '../../src/business/quality-map/controller/build-quality-map.js';
 import { projectStack } from '../../src/business/quality-map/helper/project-stack.js';
@@ -39,26 +38,22 @@ test('AST parsing returns function and branch WHAT/WHY rationale', () => {
   ]);
 });
 
-test('repository map joins Graphify, LCOV, quality roles, and stack control flow', async () => {
+test('non-Git filesystem map joins Graphify, LCOV, quality roles, and stack control flow', async () => {
   const root = await mkdtemp(join(tmpdir(), 'quality-map-fixture-'));
   await mkdir(join(root, 'src/example/controller'), { recursive: true });
   await mkdir(join(root, 'src/example/helper'), { recursive: true });
   await writeFile(join(root, 'src/example/controller/decide.ts'), source);
   await writeFile(join(root, 'src/example/helper/result.ts'), `/**\n * WHAT: Returns a result.\n * WHY: The controller needs a bounded derivation.\n */\nexport function result(): string { return 'ok'; }\n`);
   await writeFile(join(root, 'README.md'), '# Fixture\n');
-  execFileSync('git', ['init'], { cwd: root });
-  execFileSync('git', ['config', 'user.email', 'fixture@example.test'], { cwd: root });
-  execFileSync('git', ['config', 'user.name', 'Fixture'], { cwd: root });
-  execFileSync('git', ['add', '.'], { cwd: root });
-  execFileSync('git', ['commit', '-m', 'fixture'], { cwd: root });
-  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   const graphPath = join(root, 'graph.json');
   await writeFile(graphPath, JSON.stringify({ nodes: [{ id: 'decide', source_file: 'src/example/controller/decide.ts', name: 'decide' }, { id: 'result', source_file: 'src/example/helper/result.ts', name: 'result' }], edges: [{ source: 'decide', target: 'result' }] }));
   const lcovPath = join(root, 'coverage.lcov');
   await writeFile(lcovPath, 'SF:src/example/controller/decide.ts\nFN:5,decide\nFNDA:1,decide\nDA:5,1\nDA:8,1\nend_of_record\n');
-  const report = buildQualityMap({ repository: root, snapshot: root, commit, graphPath, lcovPath });
+  const report = buildQualityMap({ root, graphPath, lcovPath });
   const controller = report.files.find((file) => file.path.endsWith('decide.ts'))!;
   const helper = report.files.find((file) => file.path.endsWith('result.ts'))!;
+  assert.equal(report.scope, 'filesystem');
+  assert.equal(report.root, root);
   assert.equal(controller.role, 'controller');
   assert.deepEqual(controller.dependencies, [helper.path]);
   assert.deepEqual(controller.functions[0]?.callees, [helper.functions[0]?.id]);
