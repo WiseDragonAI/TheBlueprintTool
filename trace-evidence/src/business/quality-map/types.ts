@@ -43,6 +43,7 @@ export type QualityFileRole = 'input' | 'action' | 'controller' | 'helper' | 'ef
 
 export type QualityFile = {
   path: string;
+  contentHash: string | null;
   language: string;
   loc: number;
   applicable: boolean;
@@ -59,9 +60,10 @@ export type QualityFile = {
 
 export type QualityMap = {
   version: 1;
-  repository: string;
-  commit: string;
+  root: string;
+  scope: 'filesystem';
   generatedAt: string;
+  excludedDirectories: string[];
   graphify: { package: 'graphifyy'; version: '0.9.22'; license: 'MIT'; graphPath: string };
   files: QualityFile[];
   findings: QualityFinding[];

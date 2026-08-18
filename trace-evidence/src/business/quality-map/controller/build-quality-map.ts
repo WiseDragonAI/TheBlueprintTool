@@ -1,12 +1,13 @@
 /**
- * WHAT: Builds one repository-wide static quality map from a pinned snapshot, Graphify graph, and optional LCOV.
- * WHY: Agents need one queryable artifact joining architecture, control-flow rationale, size, and coverage evidence.
+ * WHAT: Builds one codebase-wide static quality map from the current filesystem, Graphify graph, and optional LCOV.
+ * WHY: Agents need one queryable artifact for the code that actually exists, independent of Git history.
  */
-import { execFileSync } from 'node:child_process';
-import { lstatSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { applyGraphify } from '../helper/normalize-graphify.js';
 import { applyLcov } from '../helper/apply-lcov.js';
+import { inventoryFiles } from '../helper/inventory-files.js';
 import { parseSourceFile } from '../helper/parse-source-file.js';
 import type { QualityFile, QualityFileRole, QualityFinding, QualityMap } from '../types.js';
 
@@ -61,13 +62,10 @@ function languageFor(path: string): string {
   return names[extension] ?? 'unknown';
 }
 
-function exclusionFor(path: string, snapshot: string): string | null {
-  // WHAT: Mark Git submodules and directory gitlinks as explicit inventory boundaries.
-  // WHY: Their contents belong to a separately pinned repository.
-  if (lstatSync(resolve(snapshot, path)).isDirectory()) return 'submodule';
+function exclusionFor(path: string): string | null {
   // WHAT: Keep generated and vendored code visible without applying authored-source gates.
   // WHY: Generated outputs must be inventoried but corrected at their source owner.
-  if (/(?:^|\/)(?:node_modules|dist|generated|vendor)\//i.test(path)) return 'generated-or-vendor';
+  if (/(?:^|\/)(?:generated|vendor)\//i.test(path)) return 'generated-or-vendor';
   // WHAT: Keep non-JavaScript languages visible as unsupported adapter scope.
   // WHY: This first adapter must not pretend TypeScript AST rules parsed another language.
   if (!SOURCE_PATTERN.test(path)) return 'unsupported-language';
@@ -78,16 +76,19 @@ function finding(code: string, path: string, line: number | null, symbolId: stri
   return { code, path, line, symbolId, message };
 }
 
-export function buildQualityMap(input: { repository: string; snapshot: string; commit: string; graphPath: string; lcovPath?: string }): QualityMap {
-  const tracked = execFileSync('git', ['-C', input.repository, 'ls-tree', '-r', '--name-only', '-z', input.commit], { encoding: 'utf8', maxBuffer: 100 * 1024 * 1024 }).split('\0').filter(Boolean).sort();
+export function buildQualityMap(input: { root: string; graphPath: string; lcovPath?: string; exclusions?: string[] }): QualityMap {
+  const root = resolve(input.root);
+  const inventory = inventoryFiles(root, input.exclusions);
   const files: QualityFile[] = [];
-  for (const path of tracked) {
-    const absolute = resolve(input.snapshot, path);
-    const exclusion = exclusionFor(path, input.snapshot);
+  for (const inventoryPath of inventory.files) {
+    const path = inventoryPath.path;
+    const absolute = resolve(root, path);
+    const exclusion = inventoryPath.exclusion ?? exclusionFor(path);
     // WHAT: Inventory non-applicable paths without attempting text parsing.
     // WHY: Whole-codebase coverage requires explicit entries for submodules and unsupported files.
     if (exclusion) {
-      files.push({ path, language: languageFor(path), loc: 0, applicable: false, exclusion, role: null, header: { what: null, why: null, raw: [] }, decomposition: null, functions: [], dependencies: [], dependents: [], lineCoverage: null, findings: [] });
+      const contentHash = /* WHAT: Avoid reading an external symbolic-link target. WHY: Symlinks are inventory boundaries, while local excluded files retain byte identity. */ inventoryPath.exclusion === 'symlink' ? null : createHash('sha256').update(readFileSync(absolute)).digest('hex');
+      files.push({ path, contentHash, language: languageFor(path), loc: 0, applicable: false, exclusion, role: null, header: { what: null, why: null, raw: [] }, decomposition: null, functions: [], dependencies: [], dependents: [], lineCoverage: null, findings: [] });
       continue;
     }
     const source = readFileSync(absolute, 'utf8');
@@ -114,7 +115,8 @@ export function buildQualityMap(input: { repository: string; snapshot: string; c
         if (!branch.compliant) findings.push(finding('branch_what_why_missing', path, branch.range.startLine, callable.id, `${branch.kind} branch requires WHAT and WHY comments.`));
       }
     }
-    files.push({ path, language: languageFor(path), loc, applicable: true, exclusion: null, role, header: parsed.header, decomposition: parsed.decomposition, functions: parsed.functions, dependencies: [], dependents: [], lineCoverage: null, findings });
+    const contentHash = createHash('sha256').update(source).digest('hex');
+    files.push({ path, contentHash, language: languageFor(path), loc, applicable: true, exclusion: null, role, header: parsed.header, decomposition: parsed.decomposition, functions: parsed.functions, dependencies: [], dependents: [], lineCoverage: null, findings });
   }
   const graph = JSON.parse(readFileSync(input.graphPath, 'utf8')) as unknown;
   applyGraphify(graph, files);
@@ -122,5 +124,5 @@ export function buildQualityMap(input: { repository: string; snapshot: string; c
   // WHY: Missing coverage remains unknown instead of becoming false zero coverage.
   if (input.lcovPath) applyLcov(readFileSync(input.lcovPath, 'utf8'), files);
   const findings = files.flatMap((file) => file.findings);
-  return { version: 1, repository: resolve(input.repository), commit: input.commit, generatedAt: new Date().toISOString(), graphify: { package: 'graphifyy', version: '0.9.22', license: 'MIT', graphPath: relative(input.repository, input.graphPath).replaceAll('\\', '/') }, files, findings };
+  return { version: 1, root, scope: 'filesystem', generatedAt: new Date().toISOString(), excludedDirectories: inventory.excludedDirectories, graphify: { package: 'graphifyy', version: '0.9.22', license: 'MIT', graphPath: relative(root, input.graphPath).replaceAll('\\', '/') }, files, findings };
 }

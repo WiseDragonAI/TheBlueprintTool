@@ -1,22 +1,22 @@
 /**
- * WHAT: Runs pinned Graphify against an immutable repository snapshot with a bounded process lifetime.
- * WHY: Static dependencies must correspond to the same commit parsed by the quality mapper.
+ * WHAT: Runs pinned Graphify against an isolated copy of the current codebase source with a bounded process lifetime.
+ * WHY: Dependency extraction must match the filesystem bytes parsed by the quality mapper without ingesting unrelated data.
  */
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-export async function runQualityGraphify(snapshot: string, output: string, timeoutMs: number): Promise<string> {
+export async function runQualityGraphify(corpus: string, output: string, timeoutMs: number): Promise<string> {
   const configured = process.env.QUALITY_MAP_GRAPHIFY_COMMAND?.trim();
   const command = /* WHAT: Honor explicit direct argv before the pinned default. WHY: CI may provide a preinstalled Graphify executable. */ configured ? JSON.parse(configured) as string[] : ['uvx', '--from', 'graphifyy==0.9.22', 'graphify'];
   // WHAT: Reject malformed configured executable argv before process creation.
   // WHY: A shell string cannot preserve the pinned Graphify execution boundary.
   if (!Array.isArray(command) || command.length === 0 || command.some((part) => typeof part !== 'string' || !part)) throw new Error('invalid_quality_map_graphify_command');
-  const argv = [...command, 'extract', snapshot, '--output', output, '--force', '--code-only', '--no-cluster', '--no-gitignore'];
+  const argv = [...command, 'extract', corpus, '--output', output, '--force', '--code-only', '--no-cluster', '--no-gitignore'];
   const ownsGroup = process.platform !== 'win32';
   const environment = Object.fromEntries(['PATH', 'HOME', 'XDG_CACHE_HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'NO_COLOR'].flatMap((name) => /* WHAT: Include only configured allowlisted variables. WHY: Graphify must not receive repository credentials. */ process.env[name] === undefined ? [] : [[name, process.env[name] as string]]));
-  const child = spawn(argv[0], argv.slice(1), { cwd: snapshot, detached: ownsGroup, stdio: ['ignore', 'pipe', 'pipe'], env: environment });
+  const child = spawn(argv[0], argv.slice(1), { cwd: corpus, detached: ownsGroup, stdio: ['ignore', 'pipe', 'pipe'], env: environment });
   let stderr = '';
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
   let timedOut = false;

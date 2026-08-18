@@ -30,12 +30,12 @@ Graphify receives no telemetry arguments, raw stacks, logs, prompts, transcripts
 
 ## Static code quality map
 
-`codebase-quality-map` is the static companion to Trace Evidence. It inventories every tracked path at an exact commit, runs pinned Graphify, parses JavaScript and TypeScript ASTs, counts functions and LOC, classifies each applicable file, validates file and branch `WHAT`/`WHY` comments, validates `DECOMPOSITION_ANALYSIS` above 300 LOC, joins LCOV, and records callers and callees.
+`codebase-quality-map` is the static companion to Trace Evidence. It inventories the current codebase filesystem without requiring Git, runs pinned Graphify against an isolated source corpus, parses JavaScript and TypeScript ASTs, counts functions and LOC, classifies each applicable file, validates file and branch `WHAT`/`WHY` comments, validates `DECOMPOSITION_ANALYSIS` above 300 LOC, joins LCOV, and records callers and callees.
 
 ```text
 npm --prefix trace-evidence run build
-node bin/codebase-quality-map.mjs analyze --repo <path> --commit HEAD --lcov <coverage.lcov>
-node bin/codebase-quality-map.mjs file --report <quality-map.json> --path <repository-path>
+node bin/codebase-quality-map.mjs analyze --root <path> --lcov <coverage.lcov>
+node bin/codebase-quality-map.mjs file --report <quality-map.json> --path <codebase-relative-path>
 node bin/codebase-quality-map.mjs stack --report <quality-map.json> --stack-file <stack.txt>
 ```
 
