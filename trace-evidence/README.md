@@ -28,6 +28,19 @@ TRACE_EVIDENCE_GRAPHIFY_COMMAND='["uvx","--from","graphifyy==0.9.22","graphify"]
 
 Graphify receives no telemetry arguments, raw stacks, logs, prompts, transcripts, tokens, or unrestricted environment. Successful extraction writes `graph.json`, `graph.html`, and `GRAPH_REPORT.md` beneath the job directory.
 
+## Static code quality map
+
+`codebase-quality-map` is the static companion to Trace Evidence. It inventories the current codebase filesystem without requiring Git, runs pinned Graphify against an isolated source corpus, parses JavaScript and TypeScript ASTs, counts functions and LOC, classifies each applicable file, validates file and branch `WHAT`/`WHY` comments, validates `DECOMPOSITION_ANALYSIS` above 300 LOC, joins LCOV, and records callers and callees.
+
+```text
+npm --prefix trace-evidence run build
+node bin/codebase-quality-map.mjs analyze --root <path> --lcov <coverage.lcov>
+node bin/codebase-quality-map.mjs file --report <quality-map.json> --path <codebase-relative-path>
+node bin/codebase-quality-map.mjs stack --report <quality-map.json> --stack-file <stack.txt>
+```
+
+The `stack` projection returns the matched file role, file comments, function comments, active branches, every function-owned branch with its parsed `WHAT` and `WHY`, static callers and callees, coverage, and exact quality findings. `QUALITY_MAP_GRAPHIFY_COMMAND` may provide pinned direct argv as JSON; the default is `uvx --from graphifyy==0.9.22 graphify`.
+
 ## Examples
 
 ```text

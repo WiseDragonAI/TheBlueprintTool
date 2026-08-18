@@ -9,24 +9,17 @@ import { WorktreeCliError } from '../worktree-cli-error.mjs';
 import { assertFeatureReady } from '../helpers/assert-feature-ready.mjs';
 import { assertPublishedParentDev } from '../helpers/assert-published-parent-dev.mjs';
 import { git } from '../helpers/git.mjs';
+import { mergeFeatureKeepingDevChild } from '../helpers/merge-feature-keeping-dev-child.mjs';
 import { parseJsonOutput } from '../helpers/parse-json-output.mjs';
 import { run } from '../helpers/run.mjs';
 import { initDev } from './init-dev.mjs';
-import { publishFeatureChild } from './publish-feature-child.mjs';
 
 export function integrateFeature(name) {
   const feature = assertFeatureReady(name);
   assertPublishedParentDev();
   initDev({ deferLegacyRelay: true });
   const parentAdmission = assertPublishedParentDev();
-  const childPublication = publishFeatureChild(feature, parentAdmission);
-  const mergeMessage = `Merge ${feature.slug}`;
-  git(devRoot, [
-    'merge', '--no-ff', feature.featureSha,
-    '-m', mergeMessage,
-    '-m', `WHAT: Merge the exact reviewed ${feature.branch} feature into canonical dev.`,
-    '-m', 'WHY: Deliver the verified feature through the repository-owned worktree lifecycle.',
-  ], { timeout: 180_000 });
+  const decisionOsResolution = mergeFeatureKeepingDevChild(devRoot, feature, parentAdmission.decisionOsGitlink);
   initDev();
   const check = run(process.execPath, [resolve(devRoot, 'bin', 'decision-os-dev-integration-check.mjs'), '--feature', feature.featureSha, '--json'], {
     cwd: devRoot,
@@ -55,7 +48,7 @@ export function integrateFeature(name) {
     devSha: admission.devSha,
     decisionOsGitlink: admission.decisionOsGitlink,
     parentAdmission,
-    childPublication,
+    decisionOsResolution,
     pushedRef: 'refs/heads/dev',
     cleanedWorktree: feature.featureRoot,
     deletedBranch: feature.branch,

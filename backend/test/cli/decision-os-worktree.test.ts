@@ -13,6 +13,7 @@ import {
   assertReviewedFeatureChild,
   admitPublishedParentDev,
   installRealDependencies,
+  mergeFeatureKeepingDevChild,
   publishFeatureChild,
   repairKnownGeneratedSearchIgnore,
   worktreeFailureReceipt,
@@ -127,8 +128,48 @@ test('worktree executable stays thin while integration owns exact push cleanup',
   assert.ok(executable.split('\n').length < 200);
   assert.match(integrationController, /\['worktree', 'remove', '--force', feature\.featureRoot\]/);
   assert.match(integrationController, /\['branch', '-D', feature\.branch\]/);
-  assert.match(integrationController, /assertPublishedParentDev\(\);\s*initDev\(\{ deferLegacyRelay: true \}\);\s*const parentAdmission = assertPublishedParentDev\(\);\s*const childPublication = publishFeatureChild\(feature, parentAdmission\);/);
-  assert.match(integrationController, /parentAdmission,\s*childPublication,/);
+  assert.match(integrationController, /assertPublishedParentDev\(\);\s*initDev\(\{ deferLegacyRelay: true \}\);\s*const parentAdmission = assertPublishedParentDev\(\);\s*const decisionOsResolution = mergeFeatureKeepingDevChild\(devRoot, feature, parentAdmission\.decisionOsGitlink\);/);
+  assert.match(integrationController, /parentAdmission,\s*decisionOsResolution,/);
+  assert.doesNotMatch(integrationController, /publishFeatureChild/);
+});
+
+
+test('feature merge always retains canonical dev Decision OS gitlink', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-keep-dev-child-'));
+  const childRoot = join(root, 'child');
+  const parentRoot = join(root, 'parent');
+  try {
+    mkdirSync(childRoot);
+    git(childRoot, ['init', '-b', 'dev']);
+    configureGitIdentity(childRoot);
+    const devGitlink = commitFixtureFile(childRoot, 'dev.md', 'dev\n');
+    const incomingGitlink = commitFixtureFile(childRoot, 'feature.md', 'feature\n');
+    mkdirSync(parentRoot);
+    git(parentRoot, ['init', '-b', 'dev']);
+    configureGitIdentity(parentRoot);
+    writeFileSync(join(parentRoot, '.gitmodules'), '[submodule ".decision-os"]\n\tpath = .decision-os\n\turl = ignored\n');
+    git(parentRoot, ['add', '.gitmodules']);
+    git(parentRoot, ['update-index', '--add', '--cacheinfo', '160000', devGitlink, '.decision-os']);
+    git(parentRoot, ['commit', '-m', 'Create dev baseline', '-m', 'WHAT: Record the canonical dev child.\n\nWHY: Exercise feature gitlink discard.']);
+    git(parentRoot, ['switch', '-c', 'feature/keep-dev-child']);
+    writeFileSync(join(parentRoot, 'feature.txt'), 'delivered\n');
+    git(parentRoot, ['add', 'feature.txt']);
+    git(parentRoot, ['update-index', '--cacheinfo', '160000', incomingGitlink, '.decision-os']);
+    git(parentRoot, ['commit', '-m', 'Create feature', '-m', 'WHAT: Add source and an incoming child pointer.\n\nWHY: Prove only source is integrated.']);
+    const featureSha = git(parentRoot, ['rev-parse', 'HEAD']);
+    git(parentRoot, ['switch', 'dev']);
+
+    const receipt = mergeFeatureKeepingDevChild(parentRoot, { slug: 'keep-dev-child', branch: 'feature/keep-dev-child', featureSha, incomingGitlink }, devGitlink);
+
+    assert.equal(git(parentRoot, ['rev-parse', 'HEAD:.decision-os']), devGitlink);
+    assert.equal(readFileSync(join(parentRoot, 'feature.txt'), 'utf8'), 'delivered\n');
+    assert.equal(git(parentRoot, ['show', '-s', '--format=%P', 'HEAD']).split(' ').length, 2);
+    assert.equal(receipt.strategy, 'keep-dev');
+    assert.equal(receipt.incomingGitlink, incomingGitlink);
+    assert.equal(receipt.retainedGitlink, devGitlink);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('parent publication admission rejects divergence and preserves the exact canonical receipt', () => {
