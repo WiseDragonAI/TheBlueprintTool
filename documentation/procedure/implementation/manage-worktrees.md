@@ -32,7 +32,7 @@
    node bin/decision-os-worktree.mjs create <feature-name> --json
    ```
 
-2. The command initializes canonical dev first, creates `feature/<feature-name>` at `.worktrees/<feature-name>` from the exact local dev SHA, initializes the Decision OS child, and creates the matching child feature branch.
+2. The command initializes canonical dev first, creates `feature/<feature-name>` at `.worktrees/<feature-name>` from the exact local dev SHA, and initializes a disposable Decision OS child checkout for local task visibility.
 3. Feature dependencies link only to canonical dev dependencies. Repository ignore rules cover the dependency symlink paths without treating them as directories.
 4. A successful receipt proves the exact parent SHA, child gitlink, branch, worktree path, dependency targets, and clean parent plus child state.
 5. Existing branches, paths, noncanonical dependencies, and dirty state are rejected. The command never adopts them.
@@ -59,13 +59,14 @@
    node .worktrees/<feature-name>/bin/decision-os-worktree.mjs integrate <feature-name> --json
    ```
 
-2. The command requires committed and clean feature parent plus child state, verifies that the reviewed parent gitlink equals the exact child `HEAD`, then admits local canonical `dev` only when it equals fetched `origin/dev` before any child-source mutation.
-3. It completes canonical dev initialization and cleanliness admission, re-fetches and revalidates the exact published parent SHA, then resolves `.decision-os` source from the reviewed parent `.gitmodules` blob.
-4. It rejects a child `origin` override, requires both canonical-child and observed-source-`dev` ancestry, and publishes the exact reviewed child SHA through a lease on the observed source `dev` tip.
-5. It refetches the configured child source and requires exact equality with the reviewed child SHA before it merges the exact feature SHA, installs the merged child gitlink, and runs the fixed dev integration check.
-6. The receipt includes parent admission, reviewed parent SHA and gitlink, canonical child gitlink, source, observed source tip, lease, refetched source tip, admitted dev SHA, and pushed parent ref.
-7. It pushes only `<admitted-dev-sha>:refs/heads/dev` with the Wise SSH identity, then removes the completed feature worktree and deletes the merged feature branch.
-8. A pre-merge child-publication rejection preserves the feature recovery boundary without a parent merge. A post-merge parent-admission failure preserves the local merge plus feature recovery boundary; repair the named condition, rerun the command, and never publish, clean, or delete manually.
+2. The command requires committed and clean feature parent source state, ignores feature-child dirt and origin configuration, then admits local canonical `dev` only when it equals fetched `origin/dev`.
+3. It completes canonical dev initialization and cleanliness admission, re-fetches and revalidates the exact published parent SHA, and records the exact pre-merge dev `.decision-os` gitlink.
+4. It merges the exact feature SHA without committing, automatically resolves the `.decision-os` path to the pre-merge dev gitlink, and rejects every unresolved conflict outside that path.
+5. It creates the merge commit only after proving the staged `.decision-os` gitlink equals canonical dev's retained gitlink, then runs the fixed dev integration check against that exact feature SHA.
+6. The receipt includes parent admission, incoming feature gitlink, retained dev gitlink, discarded `.decision-os` conflict paths, admitted dev SHA, and pushed parent ref.
+7. It never publishes, fetches, or validates the feature child repository. Feature-worktree Decision OS state is disposable by contract.
+8. It pushes only `<admitted-dev-sha>:refs/heads/dev` with the Wise SSH identity, then removes the completed feature worktree and deletes the merged feature branch.
+9. A pre-merge parent-admission rejection preserves the feature recovery boundary without a parent merge. A post-merge parent-admission failure preserves the local merge plus feature recovery boundary; repair the named condition, rerun the command, and never clean or delete manually.
 
 ---
 
@@ -78,7 +79,7 @@
    ```
 
 2. The command requires the exact feature branch to be fully contained by canonical dev.
-3. A registered parent and child checkout must both be clean before removal.
+3. The registered parent checkout must be clean before removal; feature-child state is disposable.
 4. The command removes the initialized-submodule worktree, deletes the exact merged branch, and refuses every unmerged or dirty recovery boundary.
 
 ---
@@ -96,7 +97,7 @@
 ## H. Internal Architecture
 
 1. `bin/decision-os-worktree.mjs` is the thin executable and public export boundary.
-2. `bin/worktree/controllers/` owns command dispatch and operation lifecycles for dev initialization, feature creation, child publication, integration, cleanup, and status.
+2. `bin/worktree/controllers/` owns command dispatch and operation lifecycles for dev initialization, feature creation, dev-owned child retention, integration, cleanup, and status.
 3. `bin/worktree/helpers/` owns focused validation, Git and process IO, parsing, locking, dependency setup, and receipt derivation.
 4. `bin/worktree/config.mjs` owns immutable repository paths and dependency proofs; `bin/worktree/worktree-cli-error.mjs` owns the stable error contract.
 5. Keep the executable below `200` LOC and preserve the controller/helper ownership boundary when extending the lifecycle.

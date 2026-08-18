@@ -1,6 +1,6 @@
 /**
- * WHAT: Exercises the dev integration cleanup gate against real parent and child Git repositories.
- * WHY: Child publication, ancestry, and checkout installation cannot be proven with mocked Git output.
+ * WHAT: Exercises dev-owned child retention and cleanup admission against real parent and child Git repositories.
+ * WHY: Gitlink preservation, publication, and checkout installation cannot be proven with mocked Git output.
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -42,7 +42,7 @@ type Fixture = {
   previousDevSha: string;
 };
 
-function createFixture(options: { parallelChild?: boolean; publishChild?: boolean } = {}): Fixture {
+function createFixture(): Fixture {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'decision-os-dev-integration-check-'));
   const childSource = join(fixtureRoot, 'child-source');
   const childBare = join(fixtureRoot, 'child.git');
@@ -60,31 +60,20 @@ function createFixture(options: { parallelChild?: boolean; publishChild?: boolea
   const previousDevSha = git(parentRoot, ['rev-parse', 'HEAD']);
   git(parentRoot, ['switch', '-c', 'feature/integration']);
   configureIdentity(join(parentRoot, '.decision-os'));
-  // WHAT: Create a published but parallel child history only for the ancestry regression.
-  // WHY: A source can provide both histories while the new gitlink still discards prior dev state.
-  if (options.parallelChild === true) {
-    git(join(parentRoot, '.decision-os'), ['switch', '--orphan', 'parallel']);
-    git(join(parentRoot, '.decision-os'), ['rm', '-r', '--ignore-unmatch', '.']);
-  }
-  const childSha = commitFile(join(parentRoot, '.decision-os'), 'iteration.md', 'iteration docs\n', 'Record iteration docs');
-  // WHAT: Publish the child commit for the admitted fixture unless the test requests the incident state.
-  // WHY: The unpublished regression must differ only at the configured child-source boundary.
-  if (options.publishChild !== false) {
-    // WHAT: Select the advertised ref that owns the fixture's chosen child history.
-    // WHY: The ancestry regression must publish its parallel object without moving the baseline main ref.
-    const childBranch = options.parallelChild === true ? 'parallel' : 'dev';
-    git(join(parentRoot, '.decision-os'), ['push', 'origin', `${childSha}:refs/heads/${childBranch}`]);
-  }
+  const childSha = commitFile(join(parentRoot, '.decision-os'), 'iteration.md', 'iteration docs\n', 'Record disposable iteration docs');
   commitFile(parentRoot, 'feature.txt', 'feature\n', 'Add feature source');
   git(parentRoot, ['add', '.decision-os']);
   git(parentRoot, ['commit', '-m', 'Record feature Decision OS state']);
   const featureSha = git(parentRoot, ['rev-parse', 'HEAD']);
   git(parentRoot, ['switch', 'dev']);
-  git(parentRoot, ['merge', '--no-ff', 'feature/integration', '-m', 'Merge feature into dev', '-m', 'WHAT: Integrate the tested feature.\n\nWHY: The iteration passed its verification gates.']);
+  git(parentRoot, ['merge', '--no-commit', '--no-ff', 'feature/integration']);
+  git(parentRoot, ['checkout', 'HEAD', '--', '.decision-os']);
+  git(parentRoot, ['commit', '-m', 'Merge feature into dev', '-m', 'WHAT: Integrate feature source while retaining dev Decision OS state.\n\nWHY: Feature child pointers are disposable.']);
+  git(parentRoot, ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--checkout', '--', '.decision-os']);
   return { childRoot: join(parentRoot, '.decision-os'), childSource, featureSha, parentRoot, previousDevSha };
 }
 
-test('accepts the reviewed merge only after its child history is published and installed', () => {
+test('accepts the reviewed merge only after dev child state is retained and installed', () => {
   const fixture = createFixture();
   const parentBefore = git(fixture.parentRoot, ['status', '--porcelain=v2', '--branch']);
   const childBefore = git(fixture.childRoot, ['status', '--porcelain=v2', '--branch']);
@@ -109,12 +98,15 @@ test('accepts the reviewed merge only after its child history is published and i
   assert.equal(git(fixture.parentRoot, ['show-ref']), refsBefore);
 });
 
-test('rejects a merged gitlink absent from the configured child source', () => {
-  const fixture = createFixture({ publishChild: false });
+test('rejects a merge commit that replaces canonical dev Decision OS gitlink', () => {
+  const fixture = createFixture();
+  const incomingGitlink = git(fixture.parentRoot, ['rev-parse', `${fixture.featureSha}:.decision-os`]);
+  git(fixture.parentRoot, ['update-index', '--cacheinfo', '160000', incomingGitlink, '.decision-os']);
+  git(fixture.parentRoot, ['commit', '--amend', '--no-edit']);
 
   assert.throws(
     () => checkDevIntegration(fixture.parentRoot, fixture.featureSha),
-    (error: unknown) => error instanceof DevIntegrationCheckError && error.code === 'dev_integration_gitlink_unpublished',
+    (error: unknown) => error instanceof DevIntegrationCheckError && error.code === 'dev_integration_child_replaced',
   );
 });
 
@@ -128,18 +120,9 @@ test('rejects an uninitialized persistent dev child checkout', () => {
   );
 });
 
-test('rejects a published child commit from parallel history', () => {
-  const fixture = createFixture({ parallelChild: true });
-
-  assert.throws(
-    () => checkDevIntegration(fixture.parentRoot, fixture.featureSha),
-    (error: unknown) => error instanceof DevIntegrationCheckError && error.code === 'dev_integration_child_history_diverged',
-  );
-});
-
 test('rejects a persistent child checkout at a different commit', () => {
   const fixture = createFixture();
-  git(fixture.childRoot, ['checkout', 'HEAD^']);
+  git(fixture.childRoot, ['checkout', 'main']);
 
   assert.throws(
     () => checkDevIntegration(fixture.parentRoot, fixture.featureSha),

@@ -1,9 +1,7 @@
 /**
  * WHAT: Controls safe cleanup of one feature already contained by canonical dev.
- * WHY: Interrupted delivery cleanup must preserve every unmerged or dirty recovery boundary.
+ * WHY: Interrupted delivery cleanup preserves parent source while treating feature-child state as disposable.
  */
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { devRoot, primaryRoot } from '../config.mjs';
 import { WorktreeCliError } from '../worktree-cli-error.mjs';
 import { assertFeatureName } from '../helpers/assert-feature-name.mjs';
@@ -34,11 +32,9 @@ export function cleanupMergedFeature(name) {
   if (owners.length === 1) {
     const featureRoot = owners[0].path;
     const parentStatus = exactStatus(featureRoot, true);
-    const childRoot = resolve(featureRoot, '.decision-os');
-    const childStatus = existsSync(resolve(childRoot, '.git')) ? exactStatus(childRoot, false) : '';
-    // WHAT: Preserve every dirty parent or child feature checkout.
-    // WHY: Cleanup authority extends only to fully committed state already contained by dev.
-    if (parentStatus || childStatus) throw new WorktreeCliError('worktree_cleanup_dirty', `Feature cleanup is dirty: ${parentStatus || childStatus}.`);
+    // WHAT: Preserve dirty parent source while ignoring disposable feature-child state.
+    // WHY: Only parent source is delivered; the feature Decision OS checkout is never an integration recovery boundary.
+    if (parentStatus) throw new WorktreeCliError('worktree_cleanup_dirty', `Feature cleanup is dirty: ${parentStatus}.`);
     git(primaryRoot, ['worktree', 'remove', '--force', featureRoot], { timeout: 180_000 });
     removedWorktree = featureRoot;
   }

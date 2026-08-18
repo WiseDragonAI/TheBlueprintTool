@@ -1,6 +1,6 @@
 /**
- * WHAT: Proves a completed feature merge left dev with one continuous, published, installed Decision OS child history.
- * WHY: A parent gitlink alone previously admitted a parallel child history and an unavailable runtime checkout.
+ * WHAT: Proves a completed feature merge retained dev's exact published and installed Decision OS child.
+ * WHY: Feature Decision OS pointers are disposable and must never alter canonical dev child state.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
@@ -192,6 +192,11 @@ export function checkDevIntegration(repositoryRoot: string, expectedFeature: str
   const { devSha, featureSha, previousDevSha } = assertParentBoundary(root, expectedFeature);
   const decisionOsGitlink = gitText(root, ['rev-parse', `${devSha}:.decision-os`]);
   const previousDecisionOsGitlink = gitText(root, ['rev-parse', `${previousDevSha}:.decision-os`]);
+  // WHAT: Require the merge tree to retain the exact first-parent dev gitlink.
+  // WHY: Feature Decision OS state is disposable and has no integration authority.
+  if (decisionOsGitlink !== previousDecisionOsGitlink) {
+    throw new DevIntegrationCheckError('dev_integration_child_replaced', `Merged gitlink ${decisionOsGitlink} differs from retained dev gitlink ${previousDecisionOsGitlink}.`);
+  }
   assertInstalledChild(root, decisionOsGitlink);
   const childSource = git(root, ['config', '-f', '.gitmodules', '--get', 'submodule..decision-os.url'], [0, 1]).stdout.trim();
   // WHAT: Require the parent-authored child source used by fresh submodule initialization.
