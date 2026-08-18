@@ -16,6 +16,7 @@ export { createFeature } from './worktree/controllers/create-feature.mjs';
 export { assertFeatureReady } from './worktree/helpers/assert-feature-ready.mjs';
 export { assertReviewedFeatureChild } from './worktree/helpers/assert-reviewed-feature-child.mjs';
 export { admitPublishedParentDev } from './worktree/helpers/admit-published-parent-dev.mjs';
+export { mergeFeatureKeepingDevChild } from './worktree/helpers/merge-feature-keeping-dev-child.mjs';
 export { publishFeatureChild } from './worktree/controllers/publish-feature-child.mjs';
 export { integrateFeature } from './worktree/controllers/integrate-feature.mjs';
 export { cleanupMergedFeature } from './worktree/controllers/cleanup-merged-feature.mjs';
