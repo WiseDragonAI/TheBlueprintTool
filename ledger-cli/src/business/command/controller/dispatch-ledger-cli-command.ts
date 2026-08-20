@@ -3,6 +3,7 @@
  * WHY: the ledger editing executable must route only ledger inspection and mutation commands.
  */
 import type { FileSystemPort, Result } from '../../../lib/types.js';
+import { readFile } from 'node:fs/promises';
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { parseLedgerCliArgv } from '../helper/parse-ledger-cli-argv.js';
 import { formatLedgerCliHelp } from '../helper/format-ledger-cli-help.js';
@@ -96,7 +97,9 @@ export async function dispatchLedgerCliCommandController(
   }
   if (command.mode === 'iteration-finish') {
     if (!command.programOperation?.summaryStdin) return { ok: false, error: 'iteration-finish requires --summary-stdin.' };
-    let summary = ''; for await (const chunk of process.stdin) summary += String(chunk);
+    // WHAT: consume descriptor zero as one finite input document.
+    // WHY: leaving the async stdin stream referenced can keep wrapper processes alive after durable completion.
+    const summary = await readFile('/dev/stdin', 'utf8');
     const result = await finishIteration({ ...command.programOperation, summary });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
