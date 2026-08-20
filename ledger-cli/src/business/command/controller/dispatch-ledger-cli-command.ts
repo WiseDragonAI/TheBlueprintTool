@@ -32,6 +32,7 @@ import { queryCodexStatus } from '../../codex/effect/query-codex-status.js';
 import { createSubtask } from '../../ledger/helper/create-subtask.js';
 import { commitMasterTaskGraph } from '../../ledger/helper/commit-master-task-graph.js';
 import { buildWorkPackage } from '../../ledger/helper/build-work-package.js';
+import { startPhase } from '../../ledger/helper/start-phase.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -67,6 +68,12 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'work-package') {
     const result = await buildWorkPackage(command.workPackageOperation ?? { cardIds: [] });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'phase-start') {
+    const result = await startPhase(command.phaseStartOperation ?? {});
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }
