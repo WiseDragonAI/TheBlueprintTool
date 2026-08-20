@@ -158,7 +158,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       ? { masterCardId: flagValue(argv, '--master-card-id'), phase: flagValue(argv, '--phase') }
       : undefined,
     programOperation: normalizedMode === 'program-create' || normalizedMode === 'program-context' || normalizedMode === 'program-amend' || normalizedMode === 'iteration-start' || normalizedMode === 'iteration-finish'
-      ? { attemptId: flagValue(argv, '--attempt-id'), phaseId: flagValue(argv, '--phase-id'), planFile: flagValue(argv, '--plan-file'), programId: flagValue(argv, '--program-id'), summaryStdin: argv.includes('--summary-stdin') }
+      ? { attemptId: flagValue(argv, '--attempt-id'), manifestFile: flagValue(argv, '--manifest-file'), phaseId: flagValue(argv, '--phase-id'), planFile: flagValue(argv, '--plan-file'), programId: flagValue(argv, '--program-id'), summaryStdin: argv.includes('--summary-stdin') }
       : undefined,
     // WHAT: parse ID-only task-graph authoring inputs only for the two owning commands.
     // WHY: unrelated commands must not acquire master-task or Markdown-import arguments.

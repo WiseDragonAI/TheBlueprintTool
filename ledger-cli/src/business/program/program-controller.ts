@@ -21,6 +21,8 @@ type ProgramState = {
   planPath: string;
   planRevision: number;
   planSha256: string;
+  executionManifestPath?: string;
+  executionManifestSha256?: string;
   title: string;
   createdAt: string;
   updatedAt: string;
@@ -76,7 +78,7 @@ export function parseApprovedPlan(markdown: string): Result<{ title: string; pha
     const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
     if (cells.length !== header.length) return { ok: false, error: 'Every Plan matrix row must contain exactly seven columns.' };
     const [phaseId, phaseTitle, intent, dependencies, acceptance, constraints, excluded] = cells;
-    if (!/^P\d{2,}$/.test(phaseId) || !phaseTitle || !intent || !acceptance) return { ok: false, error: `Invalid Plan phase row: ${phaseId || '<empty>'}.` };
+    if (!/^[A-Z]\d{2,}$/.test(phaseId) || !phaseTitle || !intent || !acceptance) return { ok: false, error: `Invalid Plan phase row: ${phaseId || '<empty>'}.` };
     phases.push({ phaseId, title: phaseTitle, intent, dependsOn: dependencies === 'None' ? [] : dependencies.split(',').map((value) => value.trim()).filter(Boolean), acceptance, constraints, excluded });
   }
   if (phases.length === 0) return { ok: false, error: 'Plan phase matrix is empty.' };
@@ -87,6 +89,25 @@ export function parseApprovedPlan(markdown: string): Result<{ title: string; pha
   const visit = (id: string): boolean => { if (visiting.has(id)) return false; if (visited.has(id)) return true; visiting.add(id); const phase = phases.find((entry) => entry.phaseId === id)!; if (!phase.dependsOn.every(visit)) return false; visiting.delete(id); visited.add(id); return true; };
   if (!phases.every((phase) => visit(phase.phaseId))) return { ok: false, error: 'Plan phase dependencies must be acyclic.' };
   return { ok: true, value: { title, phases } };
+}
+async function readPlanContract(input: { manifestFile?: string; planFile?: string }): Promise<Result<{ manifest: string; manifestPath: string; manifestSha256: string; plan: string; planPath: string; planSha256: string; phases: PlanPhase[]; title: string }>> {
+  const planPath = resolve(text(input.planFile));
+  if (!text(input.planFile)) return { ok: false, error: 'Program operation requires --plan-file.' };
+  let plan: string; try { plan = await readFile(planPath, 'utf8'); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Plan read failed.' }; }
+  const manifestPath = text(input.manifestFile) ? resolve(text(input.manifestFile)) : planPath;
+  let manifest: string; try { manifest = manifestPath === planPath ? plan : await readFile(manifestPath, 'utf8'); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Execution manifest read failed.' }; }
+  const parsed = parseApprovedPlan(manifest); if (!parsed.ok) return { ok: false, error: text(input.manifestFile) ? parsed.error.replace('Plan ', 'Execution manifest ') : `${parsed.error} Supply a separately derived matrix with --manifest-file; do not modify the approved Plan.` };
+  return { ok: true, value: { manifest, manifestPath, manifestSha256: sha256(manifest), plan, planPath, planSha256: sha256(plan), phases: parsed.value.phases, title: plan.match(/^#\s+(.+)$/m)?.[1]?.trim() || basename(planPath, '.md') } };
+}
+async function verifyProgramSources(state: ProgramState): Promise<Result<true>> {
+  try {
+    const plan = await readFile(state.planPath, 'utf8');
+    if (sha256(plan) !== state.planSha256) return { ok: false, error: 'Approved Plan digest changed; use program-amend before continuing.' };
+    const manifestPath = state.executionManifestPath ?? state.planPath;
+    const manifest = manifestPath === state.planPath ? plan : await readFile(manifestPath, 'utf8');
+    if (sha256(manifest) !== (state.executionManifestSha256 ?? state.planSha256)) return { ok: false, error: 'Execution manifest digest changed; use program-amend before continuing.' };
+    return { ok: true, value: true };
+  } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Program source verification failed.' }; }
 }
 function phaseMarkdown(state: Pick<ProgramState, 'programId' | 'planRevision' | 'planSha256'>, phase: PlanPhase): string {
   return `## Program Identity\n\n- Program ID: \`${state.programId}\`\n- Plan revision: \`${state.planRevision}\`\n- Plan digest: \`${state.planSha256}\`\n- Phase: \`${phase.phaseId}\`\n\n## Intent\n\n${phase.intent}\n\n## Dependencies\n\n${phase.dependsOn.join(', ') || 'None'}\n\n## Acceptance\n\n${phase.acceptance}\n\n## Constraints\n\n${phase.constraints || 'None'}\n\n## Excluded\n\n${phase.excluded || 'None'}\n`;
@@ -103,26 +124,24 @@ function samePhaseContract(left: PlanPhase, right: PlanPhase): boolean {
     === JSON.stringify({ phaseId: right.phaseId, title: right.title, intent: right.intent, dependsOn: right.dependsOn, acceptance: right.acceptance, constraints: right.constraints, excluded: right.excluded });
 }
 
-export async function createProgram(input: { planFile?: string }): Promise<Result<string>> {
-  const planPath = resolve(text(input.planFile));
+export async function createProgram(input: { manifestFile?: string; planFile?: string }): Promise<Result<string>> {
   if (!text(input.planFile)) return { ok: false, error: 'program-create requires --plan-file.' };
   const projectId = text(process.env.DECISION_OS_PROJECT_ID);
   if (!projectId) return { ok: false, error: 'program-create requires DECISION_OS_PROJECT_ID.' };
-  let markdown: string; try { markdown = await readFile(planPath, 'utf8'); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Plan read failed.' }; }
-  const parsed = parseApprovedPlan(markdown); if (!parsed.ok) return parsed;
-  const digest = sha256(markdown); const programId = `program-${sha256(`${projectId}\0${planPath}`).slice(0, 16)}`;
+  const contract = await readPlanContract(input); if (!contract.ok) return contract; const { manifest, manifestPath, manifestSha256, plan: markdown, planPath, planSha256: digest, phases, title } = contract.value;
+  const programId = `program-${sha256(`${projectId}\0${planPath}`).slice(0, 16)}`;
   const existing = await readState(programId);
-  if (existing.ok) return existing.value.planSha256 === digest ? { ok: true, value: JSON.stringify({ version: 1, operation: 'program-create', created: false, programId, planSha256: digest, phases: existing.value.phases.map((phase) => ({ phaseId: phase.phaseId, masterCardId: phase.masterCardId })) }, null, 2) } : { ok: false, error: `Plan changed for ${programId}; use program-amend.` };
+  if (existing.ok) return existing.value.planSha256 === digest && (existing.value.executionManifestSha256 ?? existing.value.planSha256) === manifestSha256 ? { ok: true, value: JSON.stringify({ version: 1, operation: 'program-create', created: false, programId, planSha256: digest, executionManifestSha256: manifestSha256, phases: existing.value.phases.map((phase) => ({ phaseId: phase.phaseId, masterCardId: phase.masterCardId })) }, null, 2) } : { ok: false, error: `Plan or execution manifest changed for ${programId}; use program-amend.` };
   if (!existing.error.startsWith('Program not found:')) return existing;
-  const controller = await createMasterTask({ title: `Program - ${parsed.value.title}`, subtasks: ['00 - Program Execution', '01 - Program Decision Ledger', '02 - Approved Plan'] });
+  const controller = await createMasterTask({ title: `Program - ${title}`, subtasks: ['00 - Program Execution', '01 - Program Decision Ledger', '02 - Approved Plan'] });
   if (!controller.ok) return controller;
   const controllerReceipt = receipt(controller.value); const files = controllerReceipt.files as Array<{ kind: string; cardId: string }>;
   const controllerMasterCardId = files.find((file) => file.kind === 'master-task')?.cardId ?? '';
   const subcards = files.filter((file) => file.kind === 'subtask');
   const now = new Date().toISOString();
-  const state: ProgramState = { version: 1, programId, projectId, planPath, planRevision: 1, planSha256: digest, title: parsed.value.title, createdAt: now, updatedAt: now, controllerMasterCardId, controllerCards: { execution: subcards[0]?.cardId ?? '', decisions: subcards[1]?.cardId ?? '', plan: subcards[2]?.cardId ?? '' }, active: null, phases: [], amendments: [], latestHandoff: '' };
+  const state: ProgramState = { version: 1, programId, projectId, planPath, planRevision: 1, planSha256: digest, executionManifestPath: manifestPath, executionManifestSha256: manifestSha256, title, createdAt: now, updatedAt: now, controllerMasterCardId, controllerCards: { execution: subcards[0]?.cardId ?? '', decisions: subcards[1]?.cardId ?? '', plan: subcards[2]?.cardId ?? '' }, active: null, phases: [], amendments: [], latestHandoff: '' };
   await writeState(state);
-  for (const planPhase of parsed.value.phases) {
+  for (const planPhase of phases) {
     const created = await createMasterTask({ title: `${planPhase.phaseId} - ${planPhase.title}`, subtasks: [] });
     if (!created.ok) return created;
     const masterCardId = (receipt(created.value).files as Array<{ kind: string; cardId: string }>).find((file) => file.kind === 'master-task')?.cardId ?? '';
@@ -132,10 +151,10 @@ export async function createProgram(input: { planFile?: string }): Promise<Resul
     await writeState({ ...state, updatedAt: new Date().toISOString() });
   }
   for (const phase of state.phases) phase.state = phaseState(state.phases, phase);
-  const updates = await Promise.all([patchCard(state.controllerCards.execution, matrix(state)), patchCard(state.controllerCards.plan, `## Approved Plan\n\n- Path: \`${planPath}\`\n- Revision: \`1\`\n- SHA-256: \`${digest}\`\n\n${markdown}`)]);
+  const updates = await Promise.all([patchCard(state.controllerCards.execution, matrix(state)), patchCard(state.controllerCards.plan, `## Approved Plan\n\n- Path: \`${planPath}\`\n- Revision: \`1\`\n- SHA-256: \`${digest}\`\n\n${markdown}\n\n## Derived Execution Manifest\n\n- Path: \`${manifestPath}\`\n- SHA-256: \`${manifestSha256}\`\n\n${manifest}`)]);
   const failed = updates.find((result) => !result.ok); if (failed && !failed.ok) return failed;
   await writeState({ ...state, updatedAt: new Date().toISOString() });
-  return { ok: true, value: JSON.stringify({ version: 1, operation: 'program-create', created: true, programId, planSha256: digest, controllerCards: state.controllerCards, phases: state.phases.map((phase) => ({ phaseId: phase.phaseId, masterCardId: phase.masterCardId, state: phase.state })) }, null, 2) };
+  return { ok: true, value: JSON.stringify({ version: 1, operation: 'program-create', created: true, programId, planSha256: digest, executionManifestSha256: manifestSha256, controllerCards: state.controllerCards, phases: state.phases.map((phase) => ({ phaseId: phase.phaseId, masterCardId: phase.masterCardId, state: phase.state })) }, null, 2) };
 }
 
 export async function programContext(input: { programId?: string }): Promise<Result<string>> {
@@ -145,7 +164,7 @@ export async function programContext(input: { programId?: string }): Promise<Res
 
 export async function startIteration(input: { programId?: string; phaseId?: string }): Promise<Result<string>> {
   const loaded = await readState(input.programId); if (!loaded.ok) return loaded; const state = loaded.value;
-  const currentBytes = await readFile(state.planPath, 'utf8'); if (sha256(currentBytes) !== state.planSha256) return { ok: false, error: 'Plan digest changed; use program-amend before iteration-start.' };
+  const verified = await verifyProgramSources(state); if (!verified.ok) return verified;
   const phase = state.phases.find((candidate) => candidate.phaseId === text(input.phaseId));
   if (!phase) return { ok: false, error: `Program phase not found: ${text(input.phaseId)}` };
   if (state.active) return { ok: false, error: `Program already has an active phase: ${state.active.phaseId}.` };
@@ -164,7 +183,7 @@ function summaryField(summary: string, name: string): string { return summary.ma
 export async function finishIteration(input: { attemptId?: string; phaseId?: string; programId?: string; summary?: string }): Promise<Result<string>> {
   const loaded = await readState(input.programId); if (!loaded.ok) return loaded; const state = loaded.value;
   if (!state.active || state.active.phaseId !== text(input.phaseId) || state.active.attemptId !== text(input.attemptId)) return { ok: false, error: 'iteration-finish attempt does not own the active phase.' };
-  const currentBytes = await readFile(state.planPath, 'utf8'); if (sha256(currentBytes) !== state.planSha256) return { ok: false, error: 'Plan digest changed; use program-amend before iteration-finish.' };
+  const verified = await verifyProgramSources(state); if (!verified.ok) return verified;
   const summary = text(input.summary); const status = summaryField(summary, 'STATUS'); const evidence = summaryField(summary, 'EVIDENCE');
   if (!['COMPLETED', 'FAILED', 'BLOCKED'].includes(status)) return { ok: false, error: 'Iteration summary requires STATUS: COMPLETED | FAILED | BLOCKED.' };
   if (status === 'COMPLETED' && (!evidence || evidence.toLowerCase() === 'none')) return { ok: false, error: 'A completed iteration requires non-empty EVIDENCE.' };
@@ -176,27 +195,29 @@ export async function finishIteration(input: { attemptId?: string; phaseId?: str
   return { ok: true, value: JSON.stringify({ version: 1, operation: 'iteration-finish', programId: state.programId, phaseId: phase.phaseId, state: phase.state, ready: state.phases.filter((candidate) => candidate.state === 'READY').map((candidate) => candidate.phaseId) }, null, 2) };
 }
 
-export async function amendProgram(input: { planFile?: string; programId?: string }): Promise<Result<string>> {
+export async function amendProgram(input: { manifestFile?: string; planFile?: string; programId?: string }): Promise<Result<string>> {
   const loaded = await readState(input.programId); if (!loaded.ok) return loaded; const state = loaded.value;
   if (state.active) return { ok: false, error: 'program-amend requires no active iteration.' };
-  const planPath = resolve(text(input.planFile)); if (!text(input.planFile)) return { ok: false, error: 'program-amend requires --plan-file.' };
-  let markdown: string; try { markdown = await readFile(planPath, 'utf8'); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Plan read failed.' }; }
-  const parsed = parseApprovedPlan(markdown); if (!parsed.ok) return parsed; const digest = sha256(markdown); if (digest === state.planSha256) return { ok: false, error: 'Revised Plan is byte-identical to the accepted Plan.' };
-  const incoming = new Map(parsed.value.phases.map((phase) => [phase.phaseId, phase]));
+  if (!text(input.planFile)) return { ok: false, error: 'program-amend requires --plan-file.' };
+  const retainedManifest = state.executionManifestPath && state.executionManifestPath !== state.planPath ? state.executionManifestPath : undefined;
+  const contract = await readPlanContract({ planFile: input.planFile, manifestFile: input.manifestFile ?? retainedManifest }); if (!contract.ok) return contract;
+  const { manifest, manifestPath, manifestSha256, plan: markdown, planPath, planSha256: digest, phases, title } = contract.value;
+  if (digest === state.planSha256 && manifestSha256 === (state.executionManifestSha256 ?? state.planSha256)) return { ok: false, error: 'Approved Plan and execution manifest are byte-identical to the accepted sources.' };
+  const incoming = new Map(phases.map((phase) => [phase.phaseId, phase]));
   for (const phase of state.phases.filter((candidate) => candidate.state === 'COMPLETED')) {
     const next = incoming.get(phase.phaseId); if (!next || !samePhaseContract(phase, next)) return { ok: false, error: `Completed phase contract cannot change: ${phase.phaseId}.` };
   }
   const oldSha = state.planSha256; const changed: string[] = [];
-  for (const planPhase of parsed.value.phases) {
+  for (const planPhase of phases) {
     const phase = state.phases.find((candidate) => candidate.phaseId === planPhase.phaseId);
     if (phase) { if (!samePhaseContract(phase, planPhase)) changed.push(phase.phaseId); Object.assign(phase, planPhase); }
     else { const created = await createMasterTask({ title: `${planPhase.phaseId} - ${planPhase.title}`, subtasks: [] }); if (!created.ok) return created; const masterCardId = (receipt(created.value).files as Array<{ kind: string; cardId: string }>).find((file) => file.kind === 'master-task')?.cardId ?? ''; state.phases.push({ ...planPhase, masterCardId, state: 'PLANNED', resultSummary: '', evidence: [], startedAt: null, endedAt: null }); changed.push(planPhase.phaseId); }
   }
   for (const phase of state.phases) if (!incoming.has(phase.phaseId) && phase.state !== 'COMPLETED') { phase.state = 'SUPERSEDED'; changed.push(phase.phaseId); }
-  state.planRevision += 1; state.planSha256 = digest; state.planPath = planPath; state.title = parsed.value.title; for (const phase of state.phases) if (!['COMPLETED', 'SUPERSEDED'].includes(phase.state)) phase.state = phaseState(state.phases, phase);
+  state.planRevision += 1; state.planSha256 = digest; state.planPath = planPath; state.executionManifestPath = manifestPath; state.executionManifestSha256 = manifestSha256; state.title = title; for (const phase of state.phases) if (!['COMPLETED', 'SUPERSEDED'].includes(phase.state)) phase.state = phaseState(state.phases, phase);
   const amendment = { id: `A${String(state.amendments.length + 1).padStart(2, '0')}`, fromRevision: state.planRevision - 1, toRevision: state.planRevision, oldSha256: oldSha, newSha256: digest, changedPhaseIds: [...new Set(changed)], createdAt: new Date().toISOString() }; state.amendments.push(amendment); state.updatedAt = amendment.createdAt;
   for (const phase of state.phases.filter((candidate) => candidate.state !== 'SUPERSEDED')) { const patched = await patchCard(phase.masterCardId, phaseMarkdown(state, phase)); if (!patched.ok) return patched; }
   const decision = await appendNote(state.controllerCards.decisions, `${amendment.id} | revision ${amendment.fromRevision} -> ${amendment.toRevision} | ${amendment.changedPhaseIds.join(', ')} | ${oldSha} -> ${digest}`); if (!decision.ok) return decision;
-  const planUpdate = await patchCard(state.controllerCards.plan, `## Approved Plan\n\n- Path: \`${planPath}\`\n- Revision: \`${state.planRevision}\`\n- SHA-256: \`${digest}\`\n\n${markdown}`); if (!planUpdate.ok) return planUpdate; await writeState(state);
+  const planUpdate = await patchCard(state.controllerCards.plan, `## Approved Plan\n\n- Path: \`${planPath}\`\n- Revision: \`${state.planRevision}\`\n- SHA-256: \`${digest}\`\n\n${markdown}\n\n## Derived Execution Manifest\n\n- Path: \`${manifestPath}\`\n- SHA-256: \`${manifestSha256}\`\n\n${manifest}`); if (!planUpdate.ok) return planUpdate; await writeState(state);
   return { ok: true, value: JSON.stringify({ version: 1, operation: 'program-amend', programId: state.programId, amendment, ready: state.phases.filter((phase) => phase.state === 'READY').map((phase) => phase.phaseId) }, null, 2) };
 }
