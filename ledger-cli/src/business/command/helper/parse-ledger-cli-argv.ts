@@ -79,7 +79,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const normalizedMode: LedgerCommand | 'assets' = argv.length === 0 || argv.includes('--help') || argv.includes('-h') || mode === 'help'
     ? 'help'
     : mode === 'assets' ? 'assets'
-    : mode === 'answer' || mode === 'card-context' || mode === 'card-read' || mode === 'codex-run-audit' || mode === 'codex-run-events' || mode === 'codex-status' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'iteration-finish' || mode === 'iteration-start' || mode === 'master-task-apply' || mode === 'master-task-commit' || mode === 'master-task-complete' || mode === 'master-task-create' || mode === 'master-task-gate' || mode === 'master-task-progress' || mode === 'migrate-decision-os' || mode === 'migrate-master-tasks' || mode === 'mutate' || mode === 'overview' || mode === 'phase-start' || mode === 'program-amend' || mode === 'program-context' || mode === 'program-create' || mode === 'projects' || mode === 'prompt' || mode === 'queue-pipeline' || mode === 'queue-skill' || mode === 'session-context' || mode === 'skills' || mode === 'subtask-create' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'work-package' || mode === 'zone-cards' ? mode : 'inspect';
+    : mode === 'answer' || mode === 'card-context' || mode === 'card-read' || mode === 'codex-run-audit' || mode === 'codex-run-events' || mode === 'codex-status' || mode === 'codex-tree-monitor' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'iteration-finish' || mode === 'iteration-start' || mode === 'master-task-apply' || mode === 'master-task-commit' || mode === 'master-task-complete' || mode === 'master-task-create' || mode === 'master-task-gate' || mode === 'master-task-progress' || mode === 'migrate-decision-os' || mode === 'migrate-master-tasks' || mode === 'mutate' || mode === 'overview' || mode === 'phase-start' || mode === 'program-amend' || mode === 'program-context' || mode === 'program-create' || mode === 'projects' || mode === 'prompt' || mode === 'queue-pipeline' || mode === 'queue-skill' || mode === 'session-context' || mode === 'skills' || mode === 'subtask-create' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'work-package' || mode === 'zone-cards' ? mode : 'inspect';
   const assetAction = (argv[1] === 'apply-gc-plan' || argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
     ? argv[1]
     : 'gc') as AssetCommand;
@@ -104,6 +104,9 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     json: argv.includes('--json'),
     codexStatusOperation: normalizedMode === 'codex-status'
       ? { executionId: flagValue(argv, '--execution-id'), elapsed: argv.includes('--elapsed'), context: argv.includes('--context'), limits: argv.includes('--limits') }
+      : undefined,
+    codexTreeMonitorOperation: normalizedMode === 'codex-tree-monitor'
+      ? { intervalSeconds: flagNumber(argv, '--interval-seconds') ?? 60, once: argv.includes('--once'), output: flagValue(argv, '--output'), samples: flagNumber(argv, '--samples') ?? 0, sessionId: flagValue(argv, '--session-id') ?? process.env.CODEX_SESSION_ID, sessionsRoot: flagValue(argv, '--sessions-root') }
       : undefined,
     exportOperation: {
       outputFile: flagValue(argv, '--output') ?? flagValue(argv, '--out'),

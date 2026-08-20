@@ -35,6 +35,7 @@ import { commitMasterTaskGraph } from '../../ledger/helper/commit-master-task-gr
 import { buildWorkPackage } from '../../ledger/helper/build-work-package.js';
 import { startPhase } from '../../ledger/helper/start-phase.js';
 import { amendProgram, createProgram, finishIteration, programContext, startIteration } from '../../program/program-controller.js';
+import { monitorCodexSessionTree } from '../../codex/helper/monitor-codex-session-tree.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -283,6 +284,10 @@ export async function dispatchLedgerCliCommandController(
     const result = auditCodexRuns(command.runAuditOperation ?? { count: 10, exclusions: [] });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
+  }
+
+  if (command.mode === 'codex-tree-monitor') {
+    return monitorCodexSessionTree({ ...(command.codexTreeMonitorOperation ?? { intervalSeconds: 60, once: false, samples: 0 }), ledgerFile: command.ledgerJsonFile }, ports.emit);
   }
 
   if (command.mode === 'codex-run-events') {
