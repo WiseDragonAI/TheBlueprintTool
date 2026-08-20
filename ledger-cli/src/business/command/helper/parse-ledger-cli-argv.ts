@@ -85,10 +85,10 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     : 'gc') as AssetCommand;
   return {
     mode: normalizedMode,
-    ledgerJsonFile: flagValue(argv, '--ledger') ?? (normalizedMode === 'card-read'
+    ledgerJsonFile: flagValue(argv, '--ledger') ?? process.env.DECISION_OS_LEDGER_FILE ?? (normalizedMode === 'card-read'
       ? ''
       : normalizedMode === 'master-task-complete'
-      ? process.env.DECISION_OS_LEDGER_FILE ?? ''
+      ? ''
       : argv[1] ?? '../.decision-os/specs.json'),
     answerOperation: {
       message: flagValue(argv, '--message'),

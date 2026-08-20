@@ -4,6 +4,20 @@ import { dispatchLedgerCliCommandController } from '../../src/business/command/c
 import { writeLedgerJson } from '../../src/business/ledger/effect/write-ledger-json.js';
 import { readLedgerJson } from '../../src/business/ledger/helper/read-ledger-json.js';
 import { manageLedgerJsonController } from '../../src/business/ledger/controller/manage-ledger-json.js';
+import { parseLedgerCliArgv } from '../../src/business/command/helper/parse-ledger-cli-argv.js';
+
+test('project wrappers inject the default ledger without repeating --ledger', () => {
+  const previousLedger = process.env.DECISION_OS_LEDGER_FILE;
+  process.env.DECISION_OS_LEDGER_FILE = '/workspace/.decision-os/tasks.json';
+  try {
+    const command = parseLedgerCliArgv(['answer', '--thread-id', 'thread-card-a', '--message', 'Done.']);
+    assert.equal(command.ledgerJsonFile, '/workspace/.decision-os/tasks.json');
+    assert.equal(command.answerOperation.threadId, 'thread-card-a');
+  } finally {
+    if (previousLedger === undefined) delete process.env.DECISION_OS_LEDGER_FILE;
+    else process.env.DECISION_OS_LEDGER_FILE = previousLedger;
+  }
+});
 
 test('tasks.json aggregate mutations fail closed', async () => {
   await assert.rejects(
