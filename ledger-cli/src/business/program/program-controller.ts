@@ -14,6 +14,7 @@ import { submitTaskMutation } from '../ledger/effect/submit-task-mutation.js';
 type PhaseState = 'PLANNED' | 'READY' | 'ACTIVE' | 'COMPLETED' | 'FAILED' | 'BLOCKED' | 'SUPERSEDED';
 type PlanPhase = { phaseId: string; title: string; intent: string; dependsOn: string[]; acceptance: string; constraints: string; excluded: string };
 type ProgramPhase = PlanPhase & { masterCardId: string; state: PhaseState; resultSummary: string; evidence: string[]; startedAt: string | null; endedAt: string | null };
+type ReconciliationDecision = { phaseId: string; state: 'COMPLETED' | 'FAILED' | 'BLOCKED'; summary: string; evidence: string[] };
 type ProgramState = {
   version: 1;
   programId: string;
@@ -160,6 +161,46 @@ export async function createProgram(input: { manifestFile?: string; planFile?: s
 export async function programContext(input: { programId?: string }): Promise<Result<string>> {
   const loaded = await readState(input.programId); if (!loaded.ok) return loaded; const state = loaded.value;
   return { ok: true, value: [`PROGRAM: ${state.programId}`, `PLAN: revision ${state.planRevision} / sha256:${state.planSha256}`, `COMPLETED: ${state.phases.filter((p) => p.state === 'COMPLETED').map((p) => p.phaseId).join(', ') || 'none'}`, `ACTIVE: ${state.active ? `${state.active.phaseId} / ${state.active.masterCardId} / ${state.active.attemptId} / ${state.active.startedAt}` : 'none'}`, `BLOCKED: ${state.phases.filter((p) => p.state === 'BLOCKED').map((p) => `${p.phaseId}: ${p.resultSummary}`).join('; ') || 'none'}`, `READY: ${state.phases.filter((p) => p.state === 'READY').map((p) => p.phaseId).join(', ') || 'none'}`, `LATEST_HANDOFF: ${state.latestHandoff || 'none'}`, `PENDING_DECISIONS: none`].join('\n') };
+}
+
+export function parseProgramReconciliation(source: string): Result<ReconciliationDecision[]> {
+  let value: unknown; try { value = JSON.parse(source); } catch { return { ok: false, error: 'Program reconciliation must be valid JSON.' }; }
+  const phases = value && typeof value === 'object' && !Array.isArray(value) ? (value as { phases?: unknown }).phases : undefined;
+  if (!Array.isArray(phases) || phases.length === 0) return { ok: false, error: 'Program reconciliation requires a non-empty phases array.' };
+  const decisions: ReconciliationDecision[] = [];
+  for (const candidate of phases) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return { ok: false, error: 'Every reconciliation decision must be an object.' };
+    const record = candidate as Record<string, unknown>; const phaseId = text(record.phaseId); const state = text(record.state); const summary = text(record.summary); const evidence = Array.isArray(record.evidence) ? record.evidence.map(text).filter(Boolean) : [];
+    if (!/^[A-Z]\d{2,}$/.test(phaseId) || !['COMPLETED', 'FAILED', 'BLOCKED'].includes(state) || !summary) return { ok: false, error: `Invalid reconciliation decision: ${phaseId || '<empty>'}.` };
+    if (state === 'COMPLETED' && evidence.length === 0) return { ok: false, error: `Completed reconciliation requires evidence: ${phaseId}.` };
+    decisions.push({ phaseId, state: state as ReconciliationDecision['state'], summary, evidence });
+  }
+  if (new Set(decisions.map((decision) => decision.phaseId)).size !== decisions.length) return { ok: false, error: 'Program reconciliation phase ids must be unique.' };
+  return { ok: true, value: decisions };
+}
+
+export async function reconcileProgram(input: { programId?: string; reconciliation?: string }): Promise<Result<string>> {
+  const loaded = await readState(input.programId); if (!loaded.ok) return loaded; const state = loaded.value;
+  if (state.active) return { ok: false, error: 'program-reconcile requires no active iteration.' };
+  const verified = await verifyProgramSources(state); if (!verified.ok) return verified;
+  const parsed = parseProgramReconciliation(text(input.reconciliation)); if (!parsed.ok) return parsed;
+  const incoming = new Map(parsed.value.map((decision) => [decision.phaseId, decision]));
+  for (const decision of parsed.value) if (!state.phases.some((phase) => phase.phaseId === decision.phaseId)) return { ok: false, error: `Program phase not found: ${decision.phaseId}` };
+  for (const decision of parsed.value.filter((candidate) => candidate.state === 'COMPLETED')) {
+    const phase = state.phases.find((candidate) => candidate.phaseId === decision.phaseId)!;
+    const incomplete = phase.dependsOn.filter((id) => state.phases.find((candidate) => candidate.phaseId === id)?.state !== 'COMPLETED' && incoming.get(id)?.state !== 'COMPLETED');
+    if (incomplete.length) return { ok: false, error: `Reconciled completion ${phase.phaseId} has incomplete dependencies: ${incomplete.join(', ')}.` };
+  }
+  const reconciledAt = new Date().toISOString();
+  for (const decision of parsed.value) {
+    const phase = state.phases.find((candidate) => candidate.phaseId === decision.phaseId)!; phase.state = decision.state; phase.resultSummary = decision.summary; phase.evidence = decision.evidence; phase.endedAt = reconciledAt;
+  }
+  for (const phase of state.phases) if (phase.state === 'PLANNED' || phase.state === 'READY') phase.state = phaseState(state.phases, phase);
+  state.updatedAt = reconciledAt; state.latestHandoff = `Reconciled existing Plan evidence: ${parsed.value.map((decision) => `${decision.phaseId}=${decision.state}`).join(', ')}`;
+  const decisionNote = await appendNote(state.controllerCards.decisions, [`${reconciledAt} | PROGRAM RECONCILIATION`, ...parsed.value.map((decision) => `${decision.phaseId} | ${decision.state} | ${decision.summary} | ${decision.evidence.join('; ') || 'no evidence claimed'}`)].join('\n')); if (!decisionNote.ok) return decisionNote;
+  const executionNote = await appendNote(state.controllerCards.execution, `${reconciledAt} | RECONCILED | ${parsed.value.map((decision) => `${decision.phaseId}=${decision.state}`).join(', ')}`); if (!executionNote.ok) return executionNote;
+  const matrixUpdate = await patchCard(state.controllerCards.execution, matrix(state)); if (!matrixUpdate.ok) return matrixUpdate; await writeState(state);
+  return { ok: true, value: JSON.stringify({ version: 1, operation: 'program-reconcile', programId: state.programId, reconciled: parsed.value.map((decision) => ({ phaseId: decision.phaseId, state: decision.state })), ready: state.phases.filter((phase) => phase.state === 'READY').map((phase) => phase.phaseId) }, null, 2) };
 }
 
 export async function startIteration(input: { programId?: string; phaseId?: string }): Promise<Result<string>> {

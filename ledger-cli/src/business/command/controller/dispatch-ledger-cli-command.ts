@@ -34,7 +34,7 @@ import { createSubtask } from '../../ledger/helper/create-subtask.js';
 import { commitMasterTaskGraph } from '../../ledger/helper/commit-master-task-graph.js';
 import { buildWorkPackage } from '../../ledger/helper/build-work-package.js';
 import { startPhase } from '../../ledger/helper/start-phase.js';
-import { amendProgram, createProgram, finishIteration, programContext, startIteration } from '../../program/program-controller.js';
+import { amendProgram, createProgram, finishIteration, programContext, reconcileProgram, startIteration } from '../../program/program-controller.js';
 import { monitorCodexSessionTree } from '../../codex/helper/monitor-codex-session-tree.js';
 
 export async function dispatchLedgerCliCommandController(
@@ -88,6 +88,13 @@ export async function dispatchLedgerCliCommandController(
   }
   if (command.mode === 'program-context') {
     const result = await programContext(command.programOperation ?? { summaryStdin: false });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+  if (command.mode === 'program-reconcile') {
+    if (!command.programOperation?.reconciliationStdin) return { ok: false, error: 'program-reconcile requires --reconciliation-stdin.' };
+    const reconciliation = await readFile('/dev/stdin', 'utf8');
+    const result = await reconcileProgram({ ...command.programOperation, reconciliation });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

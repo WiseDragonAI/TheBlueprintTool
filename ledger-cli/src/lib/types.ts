@@ -6,7 +6,7 @@ import type { Stats } from 'node:fs';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export type LedgerCommand = 'answer' | 'card-context' | 'card-read' | 'codex-run-audit' | 'codex-run-events' | 'codex-status' | 'codex-tree-monitor' | 'done' | 'execution-profile' | 'export' | 'help' | 'inspect' | 'iteration-finish' | 'iteration-start' | 'master-task-apply' | 'master-task-commit' | 'master-task-complete' | 'master-task-create' | 'master-task-gate' | 'master-task-progress' | 'migrate-decision-os' | 'migrate-master-tasks' | 'mutate' | 'overview' | 'phase-start' | 'program-amend' | 'program-context' | 'program-create' | 'projects' | 'prompt' | 'queue-pipeline' | 'queue-skill' | 'session-context' | 'skills' | 'subtask-create' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'work-package' | 'zone-cards';
+export type LedgerCommand = 'answer' | 'card-context' | 'card-read' | 'codex-run-audit' | 'codex-run-events' | 'codex-status' | 'codex-tree-monitor' | 'done' | 'execution-profile' | 'export' | 'help' | 'inspect' | 'iteration-finish' | 'iteration-start' | 'master-task-apply' | 'master-task-commit' | 'master-task-complete' | 'master-task-create' | 'master-task-gate' | 'master-task-progress' | 'migrate-decision-os' | 'migrate-master-tasks' | 'mutate' | 'overview' | 'phase-start' | 'program-amend' | 'program-context' | 'program-create' | 'program-reconcile' | 'projects' | 'prompt' | 'queue-pipeline' | 'queue-skill' | 'session-context' | 'skills' | 'subtask-create' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'work-package' | 'zone-cards';
 
 export type AssetCommand = 'apply-gc-plan' | 'gc' | 'list-orphans' | 'list-referenced' | 'prune-json' | 'stage-referenced';
 
@@ -76,7 +76,7 @@ export type LedgerCliCommand = {
   masterTaskOperation?: { planStdin: boolean };
   masterTaskCreateOperation?: { projectId?: string; title?: string; subtasks: string[] };
   phaseStartOperation?: { masterCardId?: string; phase?: string };
-  programOperation?: { attemptId?: string; manifestFile?: string; phaseId?: string; planFile?: string; programId?: string; summaryStdin: boolean };
+  programOperation?: { attemptId?: string; manifestFile?: string; phaseId?: string; planFile?: string; programId?: string; reconciliationStdin?: boolean; summaryStdin: boolean };
   taskGraphOperation?: { markdownFile?: string; masterCardId?: string; purpose?: string; title?: string };
   workPackageOperation?: { cardIds: string[]; outputCardId?: string; outputPath?: string; promptName?: string };
   runAuditOperation?: { root?: string; count: number; cutoff?: number; exclusions: string[] };
