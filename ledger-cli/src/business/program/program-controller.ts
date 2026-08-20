@@ -14,7 +14,7 @@ import { submitTaskMutation } from '../ledger/effect/submit-task-mutation.js';
 type PhaseState = 'PLANNED' | 'READY' | 'ACTIVE' | 'COMPLETED' | 'FAILED' | 'BLOCKED' | 'SUPERSEDED';
 type PlanPhase = { phaseId: string; title: string; intent: string; dependsOn: string[]; acceptance: string; constraints: string; excluded: string };
 type ProgramPhase = PlanPhase & { masterCardId: string; state: PhaseState; resultSummary: string; evidence: string[]; startedAt: string | null; endedAt: string | null };
-type ReconciliationDecision = { phaseId: string; state: 'COMPLETED' | 'FAILED' | 'BLOCKED'; summary: string; evidence: string[] };
+type ReconciliationDecision = { phaseId: string; state: Exclude<PhaseState, 'ACTIVE'>; summary: string; evidence: string[] };
 type ProgramState = {
   version: 1;
   programId: string;
@@ -171,8 +171,7 @@ export function parseProgramReconciliation(source: string): Result<Reconciliatio
   for (const candidate of phases) {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return { ok: false, error: 'Every reconciliation decision must be an object.' };
     const record = candidate as Record<string, unknown>; const phaseId = text(record.phaseId); const state = text(record.state); const summary = text(record.summary); const evidence = Array.isArray(record.evidence) ? record.evidence.map(text).filter(Boolean) : [];
-    if (!/^[A-Z]\d{2,}$/.test(phaseId) || !['COMPLETED', 'FAILED', 'BLOCKED'].includes(state) || !summary) return { ok: false, error: `Invalid reconciliation decision: ${phaseId || '<empty>'}.` };
-    if (state === 'COMPLETED' && evidence.length === 0) return { ok: false, error: `Completed reconciliation requires evidence: ${phaseId}.` };
+    if (!/^[A-Z]\d{2,}$/.test(phaseId) || !['PLANNED', 'READY', 'COMPLETED', 'FAILED', 'BLOCKED', 'SUPERSEDED'].includes(state) || !summary) return { ok: false, error: `Invalid reconciliation decision: ${phaseId || '<empty>'}.` };
     decisions.push({ phaseId, state: state as ReconciliationDecision['state'], summary, evidence });
   }
   if (new Set(decisions.map((decision) => decision.phaseId)).size !== decisions.length) return { ok: false, error: 'Program reconciliation phase ids must be unique.' };
@@ -181,21 +180,14 @@ export function parseProgramReconciliation(source: string): Result<Reconciliatio
 
 export async function reconcileProgram(input: { programId?: string; reconciliation?: string }): Promise<Result<string>> {
   const loaded = await readState(input.programId); if (!loaded.ok) return loaded; const state = loaded.value;
-  if (state.active) return { ok: false, error: 'program-reconcile requires no active iteration.' };
   const verified = await verifyProgramSources(state); if (!verified.ok) return verified;
   const parsed = parseProgramReconciliation(text(input.reconciliation)); if (!parsed.ok) return parsed;
-  const incoming = new Map(parsed.value.map((decision) => [decision.phaseId, decision]));
   for (const decision of parsed.value) if (!state.phases.some((phase) => phase.phaseId === decision.phaseId)) return { ok: false, error: `Program phase not found: ${decision.phaseId}` };
-  for (const decision of parsed.value.filter((candidate) => candidate.state === 'COMPLETED')) {
-    const phase = state.phases.find((candidate) => candidate.phaseId === decision.phaseId)!;
-    const incomplete = phase.dependsOn.filter((id) => state.phases.find((candidate) => candidate.phaseId === id)?.state !== 'COMPLETED' && incoming.get(id)?.state !== 'COMPLETED');
-    if (incomplete.length) return { ok: false, error: `Reconciled completion ${phase.phaseId} has incomplete dependencies: ${incomplete.join(', ')}.` };
-  }
   const reconciledAt = new Date().toISOString();
   for (const decision of parsed.value) {
     const phase = state.phases.find((candidate) => candidate.phaseId === decision.phaseId)!; phase.state = decision.state; phase.resultSummary = decision.summary; phase.evidence = decision.evidence; phase.endedAt = reconciledAt;
   }
-  for (const phase of state.phases) if (phase.state === 'PLANNED' || phase.state === 'READY') phase.state = phaseState(state.phases, phase);
+  if (state.active && parsed.value.some((decision) => decision.phaseId === state.active?.phaseId)) state.active = null;
   state.updatedAt = reconciledAt; state.latestHandoff = `Reconciled existing Plan evidence: ${parsed.value.map((decision) => `${decision.phaseId}=${decision.state}`).join(', ')}`;
   const decisionNote = await appendNote(state.controllerCards.decisions, [`${reconciledAt} | PROGRAM RECONCILIATION`, ...parsed.value.map((decision) => `${decision.phaseId} | ${decision.state} | ${decision.summary} | ${decision.evidence.join('; ') || 'no evidence claimed'}`)].join('\n')); if (!decisionNote.ok) return decisionNote;
   const executionNote = await appendNote(state.controllerCards.execution, `${reconciledAt} | RECONCILED | ${parsed.value.map((decision) => `${decision.phaseId}=${decision.state}`).join(', ')}`); if (!executionNote.ok) return executionNote;
@@ -209,7 +201,6 @@ export async function startIteration(input: { programId?: string; phaseId?: stri
   const phase = state.phases.find((candidate) => candidate.phaseId === text(input.phaseId));
   if (!phase) return { ok: false, error: `Program phase not found: ${text(input.phaseId)}` };
   if (state.active) return { ok: false, error: `Program already has an active phase: ${state.active.phaseId}.` };
-  if (phase.state !== 'READY' && phase.state !== 'FAILED' && phase.state !== 'BLOCKED') return { ok: false, error: `Phase ${phase.phaseId} is not startable from ${phase.state}.` };
   const prompt = await queryPipelinePrompts({ action: 'query', names: ['GateAgent', 'Software-Iteration-Graph', 'CLI_TOOLS', 'GIT_HYGIENE'] }); if (!prompt.ok) return prompt;
   const chronology = await createSubtask({ masterCardId: phase.masterCardId, title: '00 - Chronologic Execution', purpose: '## Execution\n\n| PHASE | STATE | STARTED | ENDED |\n|---|---|---|---|\n' }); if (!chronology.ok) return chronology;
   const decisions = await createSubtask({ masterCardId: phase.masterCardId, title: '01 - Decision Ledger', purpose: '## Decisions\n\nNo decisions recorded.\n' }); if (!decisions.ok) return decisions;
@@ -245,9 +236,6 @@ export async function amendProgram(input: { manifestFile?: string; planFile?: st
   const { manifest, manifestPath, manifestSha256, plan: markdown, planPath, planSha256: digest, phases, title } = contract.value;
   if (digest === state.planSha256 && manifestSha256 === (state.executionManifestSha256 ?? state.planSha256)) return { ok: false, error: 'Approved Plan and execution manifest are byte-identical to the accepted sources.' };
   const incoming = new Map(phases.map((phase) => [phase.phaseId, phase]));
-  for (const phase of state.phases.filter((candidate) => candidate.state === 'COMPLETED')) {
-    const next = incoming.get(phase.phaseId); if (!next || !samePhaseContract(phase, next)) return { ok: false, error: `Completed phase contract cannot change: ${phase.phaseId}.` };
-  }
   const oldSha = state.planSha256; const changed: string[] = [];
   for (const planPhase of phases) {
     const phase = state.phases.find((candidate) => candidate.phaseId === planPhase.phaseId);

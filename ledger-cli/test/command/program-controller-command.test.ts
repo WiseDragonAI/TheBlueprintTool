@@ -50,8 +50,9 @@ test('program commands parse only their bounded identities', () => {
   assert.equal(parseLedgerCliArgv(['program-reconcile', '--program-id', 'program-a', '--reconciliation-stdin']).programOperation?.reconciliationStdin, true);
 });
 
-test('program reconciliation preserves agent-decided terminal states and requires evidence for completion', () => {
+test('program reconciliation preserves agent-decided states without imposing workflow policy', () => {
   const parsed = parseProgramReconciliation(JSON.stringify({ phases: [{ phaseId: 'T02', state: 'COMPLETED', summary: 'Existing qualification remains valid.', evidence: ['plan:T02-status'] }, { phaseId: 'T09', state: 'BLOCKED', summary: 'Candidate evidence was invalidated.', evidence: [] }] }));
   assert.equal(parsed.ok, true);
-  assert.deepEqual(parseProgramReconciliation(JSON.stringify({ phases: [{ phaseId: 'T02', state: 'COMPLETED', summary: 'Claim', evidence: [] }] })), { ok: false, error: 'Completed reconciliation requires evidence: T02.' });
+  const free = parseProgramReconciliation(JSON.stringify({ phases: [{ phaseId: 'T02', state: 'COMPLETED', summary: 'Agent decision.', evidence: [] }, { phaseId: 'T09', state: 'READY', summary: 'Agent selected this phase.', evidence: [] }] }));
+  assert.equal(free.ok, true);
 });
