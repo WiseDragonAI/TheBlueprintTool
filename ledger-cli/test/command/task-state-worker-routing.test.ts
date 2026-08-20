@@ -12,7 +12,7 @@ test('project wrappers inject the default ledger without repeating --ledger', ()
   try {
     const command = parseLedgerCliArgv(['answer', '--thread-id', 'thread-card-a', '--message', 'Done.']);
     assert.equal(command.ledgerJsonFile, '/workspace/.decision-os/tasks.json');
-    assert.equal(command.answerOperation.threadId, 'thread-card-a');
+    assert.equal(command.answerOperation?.threadId, 'thread-card-a');
   } finally {
     if (previousLedger === undefined) delete process.env.DECISION_OS_LEDGER_FILE;
     else process.env.DECISION_OS_LEDGER_FILE = previousLedger;
