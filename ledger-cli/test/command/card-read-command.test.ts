@@ -140,6 +140,41 @@ test('card-read rejects an id owned by multiple ledgers', async () => {
   }
 });
 
+test('card-read body-only omits the thread request and section', async () => {
+  const previousServer = process.env.DECISION_OS_SERVER_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.DECISION_OS_SERVER_URL = 'http://127.0.0.1:50150';
+  const requested: string[] = [];
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    const requestUrl = String(url);
+    requested.push(requestUrl);
+    if (requestUrl.endsWith('/api/control-room?localOnly=1')) {
+      return response({ projects: [{ id: 'project-a', name: 'Alpha', ledgers: [{ id: 'tasks', title: 'Tasks' }] }] });
+    }
+    if (requestUrl.endsWith('/api/ledgers/tasks/navigation')) return response({ cards: [{ id: 'card-a' }] });
+    if (requestUrl.endsWith('/api/ledgers/tasks/cards/card-a')) {
+      return response({ id: 'card-a', title: 'Input', comment: { what: 'Only this body.' } });
+    }
+    return response('unexpected', 500);
+  }) as typeof fetch;
+  const messages: string[] = [];
+
+  try {
+    const result = await dispatchLedgerCliCommandController(
+      ['card-read', '--card-id', 'card-a', '--body-only'],
+      { emit: (message) => messages.push(message) },
+    );
+    assert.equal(result.ok, true);
+    assert.match(messages[0], /## Body\n\nOnly this body\./);
+    assert.doesNotMatch(messages[0], /## Full thread/);
+    assert.equal(requested.some((url) => url.includes('/threads/')), false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousServer === undefined) delete process.env.DECISION_OS_SERVER_URL;
+    else process.env.DECISION_OS_SERVER_URL = previousServer;
+  }
+});
+
 test('card-read rejects more than 30 card ids before discovery', async () => {
   const cardArgs = Array.from({ length: 31 }, (_, index) => ['--card-id', `card-${index}`]).flat();
   const result = await dispatchLedgerCliCommandController(['card-read', ...cardArgs]);

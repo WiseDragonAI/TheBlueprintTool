@@ -31,6 +31,7 @@ import { mutatePipelinePrompt } from '../../prompt/helper/mutate-pipeline-prompt
 import { queryCodexStatus } from '../../codex/effect/query-codex-status.js';
 import { createSubtask } from '../../ledger/helper/create-subtask.js';
 import { commitMasterTaskGraph } from '../../ledger/helper/commit-master-task-graph.js';
+import { buildWorkPackage } from '../../ledger/helper/build-work-package.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -59,7 +60,13 @@ export async function dispatchLedgerCliCommandController(
   }
 
   if (command.mode === 'card-read') {
-    const result = await readCardMarkdown({ cardIds: command.cardOperation?.cardIds });
+    const result = await readCardMarkdown({ cardIds: command.cardOperation?.cardIds, includeThreads: !command.cardOperation?.bodyOnly });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'work-package') {
+    const result = await buildWorkPackage(command.workPackageOperation ?? { cardIds: [] });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

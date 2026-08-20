@@ -163,6 +163,7 @@ function threadMarkdown(value: unknown, threadId: string): string {
 function cardMarkdown(input: {
   card: JsonObject;
   cardId: string;
+  includeThread: boolean;
   owner: CardOwner;
   thread: unknown;
 }): string {
@@ -170,7 +171,7 @@ function cardMarkdown(input: {
   const title = oneLine(input.card.title) || input.cardId;
   const body = text(comment.what).trim() || '_No card body._';
   const threadId = `thread-${input.cardId}`;
-  return [
+  const lines = [
     `# Card: ${title}`,
     '',
     `- Card ID: \`${input.cardId}\``,
@@ -180,18 +181,14 @@ function cardMarkdown(input: {
     '## Body',
     '',
     body,
-    '',
-    '---',
-    '',
-    '## Full thread',
-    '',
-    threadMarkdown(input.thread, threadId),
-    '',
-  ].join('\n');
+  ];
+  if (input.includeThread) lines.push('', '---', '', '## Full thread', '', threadMarkdown(input.thread, threadId), '');
+  return lines.join('\n');
 }
 
 async function readOwnedCardMarkdown(input: {
   cardId: string;
+  includeThread: boolean;
   owner: CardOwner;
   server: string;
 }): Promise<Result<string>> {
@@ -199,10 +196,10 @@ async function readOwnedCardMarkdown(input: {
   const ledger = encodeURIComponent(input.owner.ledger.id);
   const encodedCard = encodeURIComponent(input.cardId);
   const threadId = `thread-${input.cardId}`;
-  const [card, thread] = await Promise.all([
-    fetchJson(`${input.server}/p/${project}/api/ledgers/${ledger}/cards/${encodedCard}`),
-    fetchJson(`${input.server}/p/${project}/api/ledgers/${ledger}/threads/${encodeURIComponent(threadId)}`, true),
-  ]);
+  const card = await fetchJson(`${input.server}/p/${project}/api/ledgers/${ledger}/cards/${encodedCard}`);
+  const thread = input.includeThread
+    ? await fetchJson(`${input.server}/p/${project}/api/ledgers/${ledger}/threads/${encodeURIComponent(threadId)}`, true)
+    : { ok: true as const, value: null };
   // WHAT: fail the owned read when the card request fails.
   // WHY: a thread without its authoritative card body is not a valid document.
   if (!card.ok) return card;
@@ -214,11 +211,11 @@ async function readOwnedCardMarkdown(input: {
   if (!thread.ok) return thread;
   return {
     ok: true,
-    value: cardMarkdown({ card: card.value, cardId: input.cardId, owner: input.owner, thread: thread.value }),
+    value: cardMarkdown({ card: card.value, cardId: input.cardId, includeThread: input.includeThread, owner: input.owner, thread: thread.value }),
   };
 }
 
-export async function readCardMarkdown(input: { cardIds?: string[] }): Promise<Result<string>> {
+export async function readCardMarkdown(input: { cardIds?: string[]; includeThreads?: boolean }): Promise<Result<string>> {
   const cardIds = (input.cardIds ?? []).map((cardId) => text(cardId).trim()).filter(Boolean);
   // WHAT: require at least one concrete card identity.
   // WHY: discovery without a target has no bounded result.
@@ -238,6 +235,7 @@ export async function readCardMarkdown(input: { cardIds?: string[] }): Promise<R
   if (!owners.ok) return owners;
   const documents = await boundedMap(cardIds, (cardId, index) => readOwnedCardMarkdown({
     cardId,
+    includeThread: input.includeThreads !== false,
     owner: owners.value[index],
     server: server.value,
   }));

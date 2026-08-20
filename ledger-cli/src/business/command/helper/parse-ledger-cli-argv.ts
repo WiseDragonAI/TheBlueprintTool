@@ -79,7 +79,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const normalizedMode: LedgerCommand | 'assets' = argv.length === 0 || argv.includes('--help') || argv.includes('-h') || mode === 'help'
     ? 'help'
     : mode === 'assets' ? 'assets'
-    : mode === 'answer' || mode === 'card-context' || mode === 'card-read' || mode === 'codex-run-audit' || mode === 'codex-run-events' || mode === 'codex-status' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'master-task-apply' || mode === 'master-task-commit' || mode === 'master-task-complete' || mode === 'master-task-create' || mode === 'master-task-gate' || mode === 'master-task-progress' || mode === 'migrate-decision-os' || mode === 'migrate-master-tasks' || mode === 'mutate' || mode === 'overview' || mode === 'projects' || mode === 'prompt' || mode === 'queue-pipeline' || mode === 'queue-skill' || mode === 'session-context' || mode === 'skills' || mode === 'subtask-create' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'zone-cards' ? mode : 'inspect';
+    : mode === 'answer' || mode === 'card-context' || mode === 'card-read' || mode === 'codex-run-audit' || mode === 'codex-run-events' || mode === 'codex-status' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'master-task-apply' || mode === 'master-task-commit' || mode === 'master-task-complete' || mode === 'master-task-create' || mode === 'master-task-gate' || mode === 'master-task-progress' || mode === 'migrate-decision-os' || mode === 'migrate-master-tasks' || mode === 'mutate' || mode === 'overview' || mode === 'projects' || mode === 'prompt' || mode === 'queue-pipeline' || mode === 'queue-skill' || mode === 'session-context' || mode === 'skills' || mode === 'subtask-create' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'work-package' || mode === 'zone-cards' ? mode : 'inspect';
   const assetAction = (argv[1] === 'apply-gc-plan' || argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
     ? argv[1]
     : 'gc') as AssetCommand;
@@ -98,7 +98,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     },
     cardOperation: normalizedMode === 'card-context' || normalizedMode === 'card-read' || normalizedMode === 'session-context' || normalizedMode === 'master-task-complete' || normalizedMode === 'master-task-gate' || normalizedMode === 'validate-master-tasks'
       ? normalizedMode === 'card-read'
-        ? { cardIds: trailingValues(argv, '--card-id') }
+        ? { cardIds: trailingValues(argv, '--card-id'), bodyOnly: argv.includes('--body-only') }
         : { cardId: flagValue(argv, '--card-id') }
       : undefined,
     json: argv.includes('--json'),
@@ -160,8 +160,12 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       ? {
         markdownFile: flagValue(argv, '--markdown-file'),
         masterCardId: flagValue(argv, '--master-card-id'),
+        purpose: flagValue(argv, '--purpose'),
         title: flagValue(argv, '--title'),
       }
+      : undefined,
+    workPackageOperation: normalizedMode === 'work-package'
+      ? { cardIds: trailingValues(argv, '--input-card-id'), outputCardId: flagValue(argv, '--output-card-id'), outputPath: flagValue(argv, '--output-path'), promptName: flagValue(argv, '--prompt') }
       : undefined,
     runAuditOperation: normalizedMode === 'codex-run-audit'
       ? { root: flagValue(argv, '--root'), count: flagNumber(argv, '--count') ?? 10, cutoff: flagNumber(argv, '--cutoff'), exclusions: flagValues(argv, '--exclude') }

@@ -30,7 +30,7 @@ test('master-task-create sends one Tasks mutation and prints every Markdown path
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     const requestUrl = String(url);
     if (requestUrl.endsWith('/api/control-room?localOnly=1')) {
-      return new Response(JSON.stringify({ projects: [{ id: 'project-a', name: 'Alpha', color: '#123456' }] }), { status: 200 });
+      return new Response(JSON.stringify({ projects: [{ id: 'project-a', name: 'Alpha', color: '#123456', ownerNodeId: 'node-a' }] }), { status: 200 });
     }
     if (requestUrl.includes('/api/task-state/projection?')) {
       return new Response(JSON.stringify({ ledger: { annotations: [{ id: 'zone-old', color: '#ffffff', x: 10, y: 20, width: 1200, height: 900 }] } }), { status: 200 });
@@ -53,6 +53,7 @@ test('master-task-create sends one Tasks mutation and prints every Markdown path
     ], { emit: (message) => messages.push(message) });
     assert.equal(result.ok, true);
     assert.equal(mutation.action, 'create-master-task');
+    assert.equal(mutation.assignedNodeId, 'node-a');
     assert.deepEqual(mutation.annotation, { id: (mutation.annotation as { id: string }).id, x: 10, y: 1040, width: 1200, height: 900, color: '#123456', label: 'Context metrics', comments: [] });
     assert.deepEqual((mutation.card as { labels: string[] }).labels, ['master-task']);
     assert.deepEqual((mutation.cards as Array<{ title: string; labels: string[] }>).map((card) => [card.title, card.labels]), [
@@ -67,8 +68,10 @@ test('master-task-create sends one Tasks mutation and prints every Markdown path
       (mutation.card as { createdAt: string }).createdAt,
       (mutation.card as { createdAt: string }).createdAt,
     ]);
-    assert.equal(messages.join('\n').split('\n').length, 3);
-    assert.match(messages[0], /^master-task\tcard-.*\t\/workspace\/\.decision-os\/cards\/tasks\/card-.*\.md/);
+    const receipt = JSON.parse(messages[0]);
+    assert.equal(receipt.operation, 'master-task-create');
+    assert.equal(receipt.assignedNodeId, 'node-a');
+    assert.equal(receipt.files.length, 3);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousServer === undefined) delete process.env.DECISION_OS_SERVER_URL;
