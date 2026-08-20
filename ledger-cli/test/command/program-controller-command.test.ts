@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseLedgerCliArgv } from '../../src/business/command/helper/parse-ledger-cli-argv.js';
-import { parseApprovedPlan } from '../../src/business/program/program-controller.js';
+import { parseApprovedPlan, parseProgramReconciliation } from '../../src/business/program/program-controller.js';
 
 const plan = `# Program
 
@@ -42,9 +42,16 @@ test('execution manifest accepts stable task-prefixed phase ids', () => {
 
 test('program commands parse only their bounded identities', () => {
   assert.deepEqual(parseLedgerCliArgv(['program-create', '--plan-file', '/workspace/plan.md', '--manifest-file', '/workspace/manifest.md']).programOperation, {
-    attemptId: undefined, manifestFile: '/workspace/manifest.md', phaseId: undefined, planFile: '/workspace/plan.md', programId: undefined, summaryStdin: false,
+    attemptId: undefined, manifestFile: '/workspace/manifest.md', phaseId: undefined, planFile: '/workspace/plan.md', programId: undefined, reconciliationStdin: false, summaryStdin: false,
   });
   assert.deepEqual(parseLedgerCliArgv(['iteration-finish', '--program-id', 'program-a', '--phase-id', 'P02', '--attempt-id', 'attempt-a', '--summary-stdin']).programOperation, {
-    attemptId: 'attempt-a', manifestFile: undefined, phaseId: 'P02', planFile: undefined, programId: 'program-a', summaryStdin: true,
+    attemptId: 'attempt-a', manifestFile: undefined, phaseId: 'P02', planFile: undefined, programId: 'program-a', reconciliationStdin: false, summaryStdin: true,
   });
+  assert.equal(parseLedgerCliArgv(['program-reconcile', '--program-id', 'program-a', '--reconciliation-stdin']).programOperation?.reconciliationStdin, true);
+});
+
+test('program reconciliation preserves agent-decided terminal states and requires evidence for completion', () => {
+  const parsed = parseProgramReconciliation(JSON.stringify({ phases: [{ phaseId: 'T02', state: 'COMPLETED', summary: 'Existing qualification remains valid.', evidence: ['plan:T02-status'] }, { phaseId: 'T09', state: 'BLOCKED', summary: 'Candidate evidence was invalidated.', evidence: [] }] }));
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parseProgramReconciliation(JSON.stringify({ phases: [{ phaseId: 'T02', state: 'COMPLETED', summary: 'Claim', evidence: [] }] })), { ok: false, error: 'Completed reconciliation requires evidence: T02.' });
 });
