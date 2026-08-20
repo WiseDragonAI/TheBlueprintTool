@@ -98,6 +98,10 @@ async function patchCard(id: string, description: string): Promise<Result<Record
 async function appendNote(cardId: string, body: string): Promise<Result<Record<string, unknown>>> { return submitTaskMutation({ action: 'append-note', note: { id: `note-agent-${Date.now()}-${randomUUID().slice(0, 12)}`, threadId: `thread-${cardId}`, role: 'agent', body } }); }
 function receipt(value: unknown): Record<string, unknown> { return JSON.parse(String(value)) as Record<string, unknown>; }
 function phaseState(phases: ProgramPhase[], phase: ProgramPhase): PhaseState { return phase.dependsOn.every((id) => phases.find((candidate) => candidate.phaseId === id)?.state === 'COMPLETED') ? 'READY' : 'PLANNED'; }
+function samePhaseContract(left: PlanPhase, right: PlanPhase): boolean {
+  return JSON.stringify({ phaseId: left.phaseId, title: left.title, intent: left.intent, dependsOn: left.dependsOn, acceptance: left.acceptance, constraints: left.constraints, excluded: left.excluded })
+    === JSON.stringify({ phaseId: right.phaseId, title: right.title, intent: right.intent, dependsOn: right.dependsOn, acceptance: right.acceptance, constraints: right.constraints, excluded: right.excluded });
+}
 
 export async function createProgram(input: { planFile?: string }): Promise<Result<string>> {
   const planPath = resolve(text(input.planFile));
@@ -180,12 +184,12 @@ export async function amendProgram(input: { planFile?: string; programId?: strin
   const parsed = parseApprovedPlan(markdown); if (!parsed.ok) return parsed; const digest = sha256(markdown); if (digest === state.planSha256) return { ok: false, error: 'Revised Plan is byte-identical to the accepted Plan.' };
   const incoming = new Map(parsed.value.phases.map((phase) => [phase.phaseId, phase]));
   for (const phase of state.phases.filter((candidate) => candidate.state === 'COMPLETED')) {
-    const next = incoming.get(phase.phaseId); if (!next || JSON.stringify({ ...phase, masterCardId: '', state: '', resultSummary: '', evidence: [], startedAt: null, endedAt: null }) !== JSON.stringify({ ...next, masterCardId: '', state: '', resultSummary: '', evidence: [], startedAt: null, endedAt: null })) return { ok: false, error: `Completed phase contract cannot change: ${phase.phaseId}.` };
+    const next = incoming.get(phase.phaseId); if (!next || !samePhaseContract(phase, next)) return { ok: false, error: `Completed phase contract cannot change: ${phase.phaseId}.` };
   }
   const oldSha = state.planSha256; const changed: string[] = [];
   for (const planPhase of parsed.value.phases) {
     const phase = state.phases.find((candidate) => candidate.phaseId === planPhase.phaseId);
-    if (phase) { if (JSON.stringify({ title: phase.title, intent: phase.intent, dependsOn: phase.dependsOn, acceptance: phase.acceptance, constraints: phase.constraints, excluded: phase.excluded }) !== JSON.stringify(planPhase)) changed.push(phase.phaseId); Object.assign(phase, planPhase); }
+    if (phase) { if (!samePhaseContract(phase, planPhase)) changed.push(phase.phaseId); Object.assign(phase, planPhase); }
     else { const created = await createMasterTask({ title: `${planPhase.phaseId} - ${planPhase.title}`, subtasks: [] }); if (!created.ok) return created; const masterCardId = (receipt(created.value).files as Array<{ kind: string; cardId: string }>).find((file) => file.kind === 'master-task')?.cardId ?? ''; state.phases.push({ ...planPhase, masterCardId, state: 'PLANNED', resultSummary: '', evidence: [], startedAt: null, endedAt: null }); changed.push(planPhase.phaseId); }
   }
   for (const phase of state.phases) if (!incoming.has(phase.phaseId) && phase.state !== 'COMPLETED') { phase.state = 'SUPERSEDED'; changed.push(phase.phaseId); }
