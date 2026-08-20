@@ -97,6 +97,19 @@ export async function startPhase(input: { masterCardId?: string; phase?: string 
       if (!card) return { ok: false, error: `phase-start ${phase} requires the subcard: ${requiredTitle}.` };
       contextCards.push(card);
     }
+    // WHAT: preflight the exact live prompt and every bounded context card before graph mutation.
+    // WHY: an unavailable assignment must not create a card or record a dispatch that no subagent can execute.
+    const [prompt, ...contextResults] = await Promise.all([
+      queryPipelinePrompts({ action: 'query', names: [definition.promptName] }),
+      ...contextCards.map((card) => fetchCard({ cardId: String(card.id ?? ''), ledgerId: owner.value.ledgerId, projectId: owner.value.projectId, serverUrl: owner.value.serverUrl })),
+    ]);
+    if (!prompt.ok) return prompt;
+    const contextDocuments: string[] = [];
+    for (const result of contextResults) {
+      if (!result.ok) return result;
+      const comment = record(result.value.comment) ? result.value.comment : {};
+      contextDocuments.push([`# Context Card: ${String(result.value.title ?? result.value.id ?? '')}`, '', String(comment.what ?? '').trim() || '_No card body._'].join('\n'));
+    }
     const existing = linkedCards.find((card) => titleSuffix(card.title) === definition.title);
     const nextPosition = relationships.filter((relationship) => String(relationship.from ?? '') === owner.value.masterCardId && String(relationship.label ?? '') === 'subtask').reduce((maximum, relationship) => Math.max(maximum, Number(relationship.position) || 0), -1) + 1;
     const title = existing ? String(existing.title) : `${String(nextPosition).padStart(2, '0')} - ${definition.title}`;
@@ -121,17 +134,6 @@ export async function startPhase(input: { masterCardId?: string; phase?: string 
       },
     });
     if (!note.ok) return { ok: false, error: `phase-chronology-dispatch: ${note.error}` };
-    const [prompt, ...contextResults] = await Promise.all([
-      queryPipelinePrompts({ action: 'query', names: [definition.promptName] }),
-      ...contextCards.map((card) => fetchCard({ cardId: String(card.id ?? ''), ledgerId: owner.value.ledgerId, projectId: owner.value.projectId, serverUrl: owner.value.serverUrl })),
-    ]);
-    if (!prompt.ok) return prompt;
-    const contextDocuments: string[] = [];
-    for (const result of contextResults) {
-      if (!result.ok) return result;
-      const comment = record(result.value.comment) ? result.value.comment : {};
-      contextDocuments.push([`# Context Card: ${String(result.value.title ?? result.value.id ?? '')}`, '', String(comment.what ?? '').trim() || '_No card body._'].join('\n'));
-    }
     return { ok: true, value: [
       '# Phase Assignment',
       '',
