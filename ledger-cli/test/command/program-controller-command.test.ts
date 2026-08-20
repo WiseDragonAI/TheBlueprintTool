@@ -17,7 +17,7 @@ const plan = `# Program
 | P02 | Owner | Introduce the owner | P01 | Consumers use it | Preserve behavior | Cleanup |
 `;
 
-test('approved Plan parser preserves ordered phase contracts and dependencies', () => {
+test('execution manifest parser preserves ordered phase contracts and dependencies', () => {
   const parsed = parseApprovedPlan(plan);
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
@@ -35,11 +35,16 @@ test('approved Plan parser rejects unknown and cyclic dependencies', () => {
   assert.deepEqual(cyclic, { ok: false, error: 'Plan phase dependencies must be acyclic.' });
 });
 
+test('execution manifest accepts stable task-prefixed phase ids', () => {
+  const parsed = parseApprovedPlan(plan.replaceAll('P01', 'T01').replaceAll('P02', 'T02'));
+  assert.equal(parsed.ok, true);
+});
+
 test('program commands parse only their bounded identities', () => {
-  assert.deepEqual(parseLedgerCliArgv(['program-create', '--plan-file', '/workspace/plan.md']).programOperation, {
-    attemptId: undefined, phaseId: undefined, planFile: '/workspace/plan.md', programId: undefined, summaryStdin: false,
+  assert.deepEqual(parseLedgerCliArgv(['program-create', '--plan-file', '/workspace/plan.md', '--manifest-file', '/workspace/manifest.md']).programOperation, {
+    attemptId: undefined, manifestFile: '/workspace/manifest.md', phaseId: undefined, planFile: '/workspace/plan.md', programId: undefined, summaryStdin: false,
   });
   assert.deepEqual(parseLedgerCliArgv(['iteration-finish', '--program-id', 'program-a', '--phase-id', 'P02', '--attempt-id', 'attempt-a', '--summary-stdin']).programOperation, {
-    attemptId: 'attempt-a', phaseId: 'P02', planFile: undefined, programId: 'program-a', summaryStdin: true,
+    attemptId: 'attempt-a', manifestFile: undefined, phaseId: 'P02', planFile: undefined, programId: 'program-a', summaryStdin: true,
   });
 });

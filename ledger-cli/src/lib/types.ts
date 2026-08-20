@@ -75,7 +75,7 @@ export type LedgerCliCommand = {
   masterTaskOperation?: { planStdin: boolean };
   masterTaskCreateOperation?: { projectId?: string; title?: string; subtasks: string[] };
   phaseStartOperation?: { masterCardId?: string; phase?: string };
-  programOperation?: { attemptId?: string; phaseId?: string; planFile?: string; programId?: string; summaryStdin: boolean };
+  programOperation?: { attemptId?: string; manifestFile?: string; phaseId?: string; planFile?: string; programId?: string; summaryStdin: boolean };
   taskGraphOperation?: { markdownFile?: string; masterCardId?: string; purpose?: string; title?: string };
   workPackageOperation?: { cardIds: string[]; outputCardId?: string; outputPath?: string; promptName?: string };
   runAuditOperation?: { root?: string; count: number; cutoff?: number; exclusions: string[] };
