@@ -33,6 +33,7 @@ import { createSubtask } from '../../ledger/helper/create-subtask.js';
 import { commitMasterTaskGraph } from '../../ledger/helper/commit-master-task-graph.js';
 import { buildWorkPackage } from '../../ledger/helper/build-work-package.js';
 import { startPhase } from '../../ledger/helper/start-phase.js';
+import { amendProgram, createProgram, finishIteration, programContext, startIteration } from '../../program/program-controller.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -74,6 +75,34 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'phase-start') {
     const result = await startPhase(command.phaseStartOperation ?? {});
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'program-create') {
+    const result = await createProgram(command.programOperation ?? { summaryStdin: false });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+  if (command.mode === 'program-context') {
+    const result = await programContext(command.programOperation ?? { summaryStdin: false });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+  if (command.mode === 'iteration-start') {
+    const result = await startIteration(command.programOperation ?? { summaryStdin: false });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+  if (command.mode === 'iteration-finish') {
+    if (!command.programOperation?.summaryStdin) return { ok: false, error: 'iteration-finish requires --summary-stdin.' };
+    let summary = ''; for await (const chunk of process.stdin) summary += String(chunk);
+    const result = await finishIteration({ ...command.programOperation, summary });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+  if (command.mode === 'program-amend') {
+    const result = await amendProgram(command.programOperation ?? { summaryStdin: false });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }
