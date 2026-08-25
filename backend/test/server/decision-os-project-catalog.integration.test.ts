@@ -43,6 +43,7 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
   let server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
@@ -245,6 +246,7 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     });
     server = restartedRuntime.server as Server;
     await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
     for (const [decisionOsRoot, head] of headsBeforeRestart) {
       assert.equal(git(decisionOsRoot, ['rev-parse', 'HEAD']), head, decisionOsRoot);
     }

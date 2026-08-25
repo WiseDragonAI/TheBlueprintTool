@@ -32,6 +32,7 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
   const endpoint = `http://127.0.0.1:${address.port}/decision-os/specs`;
   const assetEndpoint = `http://127.0.0.1:${address.port}/.decision-os/ui-mockups/mock.png`;
@@ -397,6 +398,7 @@ test('decision-os note mutations normalize legacy notes arrays and persist from 
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
   const endpoint = `http://127.0.0.1:${address.port}/decision-os/game-design`;
 

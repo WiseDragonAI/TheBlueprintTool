@@ -71,6 +71,7 @@ test('serves the catalog without Git while protecting fixed repository status an
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: resolve(process.cwd(), 'frontend') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const gitSentinelRoot = join(home, 'catalog-git-sentinel');

@@ -21,6 +21,7 @@ test('master-task creation persists the complete graph and returns absolute Mark
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   context.after(async () => {
     server.close();
     await once(server, 'close');

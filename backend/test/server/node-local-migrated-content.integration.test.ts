@@ -80,6 +80,7 @@ test('hosted project card read demands an empty phone-owned migrated object by e
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: catalogRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   context.after(async () => {
     if (server.listening) { server.close(); await once(server, 'close'); }
     relay.close();
@@ -143,6 +144,7 @@ test('content-object serves a migrated local media reference without an object-s
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: catalogRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   context.after(async () => {
     if (server.listening) { server.close(); await once(server, 'close'); }
     [catalogRoot, backupRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true }));

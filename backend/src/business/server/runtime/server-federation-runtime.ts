@@ -43,17 +43,21 @@ export function createServerFederationRuntime(input: {
   const projectCatalog = () => projectCatalogStore.projects();
   const localWorkspaceRoots = (): string[] => [
     input.masterRoot,
-    ...projectCatalog().filter((project) => project.available).map((project) => project.root),
+    ...projectCatalog()
+      .filter((project) => project.available)
+      .map((project) => project.root),
   ];
   const localDecisionOsRoots = (): string[] => [
     input.masterDecisionOsRoot,
-    ...projectCatalog().filter((project) => project.available)
+    ...projectCatalog()
+      .filter((project) => project.available)
       .map((project) => project.decisionOsRoot),
   ];
   const migrateProjectPipelines = (): void => {
     migrateLegacyProjectPipelines({
       serverDecisionOsRoot: input.masterDecisionOsRoot,
-      projectDecisionOsRoots: projectCatalog().filter((project) => project.available)
+      projectDecisionOsRoots: projectCatalog()
+        .filter((project) => project.available)
         .map((project) => project.decisionOsRoot),
     });
   };
@@ -61,7 +65,9 @@ export function createServerFederationRuntime(input: {
   // WHY: prompt bootstrap requires a clean registration boundary so its focused Git commit cannot absorb migration writes.
   if (!pausedBackgroundComponents.has('pipeline-catalog')) {
     try {
-      ensureMandatoryPipelinePrompts({ serverDecisionOsRoot: input.masterDecisionOsRoot });
+      ensureMandatoryPipelinePrompts({
+        serverDecisionOsRoot: input.masterDecisionOsRoot,
+      });
     } catch (error) {
       recordBackgroundFailure('pipeline-catalog', 'initialize-mandatory-pipeline-prompts', error);
     }
@@ -101,10 +107,8 @@ export function createServerFederationRuntime(input: {
     federatedProjectStates: executionRuntime.federatedTaskRuntime.projectStates,
     federation: () => connections.federation,
     globalClients,
-    invalidateProject: (projectId, entities) => connections.controlRoom?.invalidate(
-      projectId,
-      entities ? [...entities] : undefined,
-    ),
+    invalidateProject: (projectId, entities) =>
+      connections.controlRoom?.invalidate(projectId, entities ? [...entities] : undefined),
     localTaskRuntime: executionRuntime.localTaskRuntime,
     pausedFederationRepairs: incidentSupervisor.pausedFederationRepairs,
     pausedTaskProjects,
@@ -132,21 +136,23 @@ export function createServerFederationRuntime(input: {
     void readCodexPipelineRunController({
       action_payload: { runId: pipelineRunId },
       runtime_state: runtime,
-    }).then((result) => {
-      if (result.ok !== true) return;
-      connections.federation?.publishExecutionObservation(projectId, {
-        executionId,
-        pipeline: { runId: pipelineRunId, result },
+    })
+      .then((result) => {
+        if (result.ok !== true) return;
+        connections.federation?.publishExecutionObservation(projectId, {
+          executionId,
+          pipeline: { runId: pipelineRunId, result },
+        });
+      })
+      .catch((error: unknown) => {
+        recordStoppedOperation({
+          scope: `pipeline-presentation-publish:${projectId}:${pipelineRunId}`,
+          component: 'codex-pipeline-presentation',
+          operation: 'publish-pipeline-presentation-snapshot',
+          error,
+          context: { projectId, pipelineRunId, executionId },
+        });
       });
-    }).catch((error: unknown) => {
-      recordStoppedOperation({
-        scope: `pipeline-presentation-publish:${projectId}:${pipelineRunId}`,
-        component: 'codex-pipeline-presentation',
-        operation: 'publish-pipeline-presentation-snapshot',
-        error,
-        context: { projectId, pipelineRunId, executionId },
-      });
-    });
   };
   const federation = createFederationConnectionRuntime({
     catalogFile: resolve(input.masterDecisionOsRoot, 'cache', 'federation-project-catalog.json'),
@@ -172,9 +178,6 @@ export function createServerFederationRuntime(input: {
     tryTaskStateForProject: executionRuntime.localTaskRuntime.tryStateForProject,
   });
   connections.federation = federation;
-  for (const project of projectCatalog().filter((entry) => entry.available)) {
-    executionRuntime.localTaskRuntime.tryStateForProject(project);
-  }
   return {
     federation,
     federatedLibrary,

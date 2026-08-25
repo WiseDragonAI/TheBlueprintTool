@@ -67,6 +67,7 @@ test('normal health reports the active release identity', async (context) => {
   });
   server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const health = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/health`)
     .then((response) => response.json()) as Record<string, unknown>;
   assert.equal(health.status, 'ready');
@@ -121,6 +122,7 @@ test('periodically centralizes runtime incidents only in the Decision OS project
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const cards = async (projectId: string): Promise<Array<Record<string, unknown>>> => {
@@ -202,6 +204,7 @@ test('keeps the catalog and diagnostics online when one project has colliding re
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
   let server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as Record<string, any>;
@@ -243,6 +246,7 @@ test('keeps the catalog and diagnostics online when one project has colliding re
     createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: restartedRuntime });
     server = restartedRuntime.server as Server;
     await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
     const restartedUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     const restartedHealth = await fetch(`${restartedUrl}/api/health`).then((response) => response.json()) as Record<string, any>;
     assert.deepEqual(restartedHealth.pausedTaskProjectIds, [projectId]);
@@ -292,6 +296,7 @@ test('task-state journal write failure preserves invalid bytes and pauses only i
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const failingJournal = join(failingRoot, 'task-state', 'project-a', 'journal');
   const invalidBytes = '{invalid-journal-boundary';
@@ -382,6 +387,7 @@ test('idle scheduler ticks do not inspect project pipeline stores', async () => 
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const invalidStore = join(projectRoots[1].root, '.decision-os', 'codex-pipelines.json');
   const projectIncidentFile = join(projectRoots[1].root, '.decision-os', 'runtime-incidents.json');
@@ -436,6 +442,7 @@ test('keeps diagnostics online and pauses task admission for an interrupted epoc
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as { status: string; pausedTaskProjectIds: string[] };
@@ -518,6 +525,7 @@ test('recovers compatible hosted task state automatically without restarting the
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${address.port}`;
   try {

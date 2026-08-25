@@ -31,6 +31,56 @@ test('create-http-server executes implemented behavior and records telemetry', a
   assert.ok(result === undefined || typeof result === 'object');
 });
 
+test('listener serves health static application and stale Control Room before project bootstrap settles', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-listener-first-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(join(decisionOsRoot, 'cache'), { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(decisionOsRoot, 'cache', 'control-room-v3.json'), JSON.stringify({
+    schemaVersion: 9,
+    projectorVersion: 'control-room-v18-replicated-execution',
+    fingerprint: 'cached-before-bootstrap',
+    allTasks: [{ cardId: 'cached-task' }],
+    projectSlices: [{ projectId: 'private-slice' }],
+    dependencies: [{ path: 'private-dependency' }],
+  }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html><title>listener-first</title>');
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({
+    action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot },
+    runtime_state: runtime,
+  });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const runtimeReady = (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
+  let settled = false;
+  void runtimeReady.then(() => { settled = true; });
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    assert.equal(settled, false);
+    const [health, application, controlRoom] = await Promise.all([
+      fetch(`${baseUrl}/api/health`),
+      fetch(`${baseUrl}/`),
+      fetch(`${baseUrl}/api/control-room`),
+    ]);
+    assert.equal(health.status, 200);
+    assert.match(await application.text(), /listener-first/);
+    const projection = await controlRoom.json() as Record<string, unknown>;
+    assert.equal(projection.stale, true);
+    assert.equal(projection.startupPhase, 'loading');
+    assert.equal(Object.hasOwn(projection, 'projectSlices'), false);
+    assert.equal(Object.hasOwn(projection, 'dependencies'), false);
+  } finally {
+    await runtimeReady;
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test('create-http-server installs mandatory prompts into a fresh server-owned root', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-server-mandatory-prompts-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
@@ -46,6 +96,7 @@ test('create-http-server installs mandatory prompts into a fresh server-owned ro
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
 
   try {
     const store = readCodexPipelineStore({ decisionOsRoot }).store;
@@ -79,6 +130,7 @@ test('create-http-server serves shared TypeScript modules through their browser 
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
@@ -109,6 +161,7 @@ test('create-http-server serves System status and stateful skill application rou
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
 
   try {
     const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/status`);
@@ -139,6 +192,7 @@ test('create-http-server acknowledges a manual restart before invoking the super
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
 
   try {
     const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/server/restart`, { method: 'POST' });
@@ -174,6 +228,7 @@ test('create-http-server resolves the retained launcher incident only after list
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
 
   try {
     assert.deepEqual(incidents.active('server-launcher'), []);
@@ -207,6 +262,7 @@ test('create-http-server keeps health ready for unresolved evidence that owns no
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
 
   try {
     const health = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/health`)
@@ -265,6 +321,7 @@ test('create-http-server resolves retained transient task bootstrap incidents at
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
 
   try {
     const health = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/health`).then((response) => response.json()) as { status: string; activeIncidentCount: number };
@@ -321,6 +378,7 @@ test('startup revalidates durable task state before clearing a retired federatio
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
@@ -384,6 +442,7 @@ test('failed frame-pause revalidation preserves invalid durable bytes and keeps 
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
@@ -452,6 +511,7 @@ test('server admits local assigned execution while its configured relay is unrea
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const releaseCapacity = await (runtime.acquireProjectSyncCodexSlot as () => Promise<() => void>)();
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const eventAbort = new AbortController();
@@ -653,6 +713,7 @@ test('server close cancels project-owned Codex retry timers', async () => {
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   let server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const releaseCapacity = await (runtime.acquireProjectSyncCodexSlot as () => Promise<() => void>)();
   let disconnectedStatus = 0;
   let disconnectedBody = '';
@@ -712,6 +773,7 @@ test('server close cancels project-owned Codex retry timers', async () => {
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: restartedRuntime });
   server = restartedRuntime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const recovered = (restartedRuntime.taskExecutionState as typeof durableState).executions.find('execution-retained-on-close');
   assert.equal(recovered?.lifecycle.phase, 'queued');
   server.close();
@@ -731,6 +793,7 @@ test('Codex background failure pauses only project Codex work and remains diagno
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
@@ -799,6 +862,7 @@ test('execution timeout settles as an execution-scoped diagnostic without pausin
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
@@ -842,6 +906,7 @@ test('retired Codex process queue is inert and byte-identical while the server r
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
@@ -875,6 +940,7 @@ test('corrupt project synchronization store pauses only synchronization routes',
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {

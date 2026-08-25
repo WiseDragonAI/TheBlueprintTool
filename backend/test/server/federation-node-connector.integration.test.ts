@@ -942,6 +942,10 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
   const serverA = runtimeA.server as Server;
   const serverB = runtimeB.server as Server;
   await Promise.all([once(serverA, 'listening'), once(serverB, 'listening')]);
+  await Promise.all([
+    (serverA as unknown as { runtimeReady: Promise<void> }).runtimeReady,
+    (serverB as unknown as { runtimeReady: Promise<void> }).runtimeReady,
+  ]);
   const baseA = `http://127.0.0.1:${(serverA.address() as AddressInfo).port}`;
   const baseB = `http://127.0.0.1:${(serverB.address() as AddressInfo).port}`;
 

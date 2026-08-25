@@ -34,6 +34,7 @@ test('decision-os-node lists targets and prints the answer returned by a node me
   });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const cli = resolve(process.cwd(), '..', 'bin', 'decision-os-node.mjs');
   try {
