@@ -503,7 +503,12 @@ Markdown image assets can be referenced from the active workspace `.decision-os`
 
 The backend serves image files from `/.decision-os/...` for the active workspace only. Adjacent standalone images, including image-only lines separated by blank lines, render as a carousel. Image frames resize by width, derive height from the loaded image aspect ratio, and persist dimensions in the card JSON under `imageSizes`, keyed by the markdown image URL.
 
-### Guardian Agent State Machine — Highest Priority
+## Guardian Resource Admission — Superseding Policy
+
+All CPU-, RAM-, disk-, GPU-, or VRAM-intensive local work must enter the workstation-wide queue
+through `~/.local/bin/guardian`. Preserve the documented Decision OS command shape and concurrency
+limits inside the Guardian command. Use detached mode for agent work; never directly launch an
+equivalent heavy command while its ticket exists.
 
 After a detached submission, read the JSON receipt once. Follow exactly one path:
 
