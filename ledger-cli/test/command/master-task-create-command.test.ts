@@ -40,7 +40,7 @@ test('master-task-create sends one assigned Tasks mutation and prints every Mark
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     const requestUrl = String(url);
     if (requestUrl.endsWith('/api/control-room?localOnly=1')) {
-      return new Response(JSON.stringify({ projects: [{ id: 'project-a', name: 'Alpha', color: '#123456', ownerNodeId: 'node-a' }] }), { status: 200 });
+      return new Response(JSON.stringify({ projects: [{ id: 'project-a', name: 'Alpha', color: '#123456', ownerNodeId: 'remote-node' }] }), { status: 200 });
     }
     if (requestUrl.includes('/api/task-state/projection?')) {
       return new Response(JSON.stringify({ ledger: { annotations: [{ id: 'zone-old', color: '#ffffff', x: 10, y: 20, width: 1200, height: 900 }] } }), { status: 200 });

@@ -66,11 +66,9 @@ export async function createMasterTask(input: { projectId?: string; title?: stri
     ]);
     if (!catalogResponse.ok) return { ok: false, error: `Project query failed (${catalogResponse.status}): ${await catalogResponse.text()}` };
     if (!projectionResponse.ok) return { ok: false, error: `Task projection failed (${projectionResponse.status}): ${await projectionResponse.text()}` };
-    const catalog = await catalogResponse.json() as { projects?: Array<{ id?: unknown; color?: unknown; ownerNodeId?: unknown }> };
+    const catalog = await catalogResponse.json() as { projects?: Array<{ id?: unknown; color?: unknown }> };
     const project = (catalog.projects ?? []).find((entry) => String(entry.id ?? '') === projectId);
     if (!project) return { ok: false, error: `Project not found: ${projectId}` };
-    const assignedNodeId = String(project.ownerNodeId ?? '').trim();
-    if (!assignedNodeId) return { ok: false, error: `Project has no assigned owner node: ${projectId}` };
     const projection = await projectionResponse.json() as { ledger?: AnyRecord };
     if (!projection.ledger) return { ok: false, error: 'Task projection has no ledger.' };
 
