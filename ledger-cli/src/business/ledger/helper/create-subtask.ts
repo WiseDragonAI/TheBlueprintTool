@@ -15,9 +15,11 @@ function record(value: unknown): value is AnyRecord {
 export async function createSubtask(input: {
   markdownFile?: string;
   masterCardId?: string;
+  purpose?: string;
   title?: string;
 }): Promise<Result<string>> {
   const title = String(input.title ?? '').trim();
+  const purpose = String(input.purpose ?? '').trim();
   // WHAT: reject every Markdown-file input for subtask creation.
   // WHY: the command must create and return the canonical blank document instead of importing caller bytes.
   if (input.markdownFile !== undefined) return { ok: false, error: 'subtask-create does not accept --markdown-file.' };
@@ -44,6 +46,18 @@ export async function createSubtask(input: {
     // WHY: ownership may have changed between catalog discovery and mutation preparation.
     if (!master) return { ok: false, error: `Master task not found: ${owner.value.masterCardId}` };
     const relationships = Array.isArray(ledger.relationships) ? ledger.relationships.filter(record) : [];
+    const existingRelationship = relationships.find((relationship) => {
+      if (String(relationship.from ?? '') !== owner.value.masterCardId || String(relationship.label ?? '') !== 'subtask') return false;
+      const linked = cards.find((card) => String(card.id ?? '') === String(relationship.to ?? ''));
+      return String(linked?.title ?? '').trim() === title;
+    });
+    if (existingRelationship) {
+      const existing = cards.find((card) => String(card.id ?? '') === String(existingRelationship.to ?? ''));
+      const cardId = String(existing?.id ?? '').trim();
+      const contentFile = record(existing?.comment) ? String(existing.comment.contentFile ?? '').trim() : '';
+      if (!cardId || !contentFile) return { ok: false, error: `Existing subtask has no canonical document: ${title}` };
+      return { ok: true, value: JSON.stringify({ version: 1, operation: 'subtask-create', projectId: owner.value.projectId, ledgerId: owner.value.ledgerId, masterCardId: owner.value.masterCardId, assignedNodeId: owner.value.assignedNodeId, cardId, relationshipId: String(existingRelationship.id ?? ''), title, path: contentFile, created: false }, null, 2) };
+    }
     const positions = relationships
       .filter((relationship) => String(relationship.from ?? '') === owner.value.masterCardId && String(relationship.label ?? '') === 'subtask')
       .map((relationship) => Number(relationship.position))
@@ -62,6 +76,7 @@ export async function createSubtask(input: {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           action: 'create-subtask',
+          assignedNodeId: owner.value.assignedNodeId,
           masterTaskId: owner.value.masterCardId,
           card: {
             id: cardId,
@@ -76,7 +91,7 @@ export async function createSubtask(input: {
             y: Number(master.y ?? 0) + row * 220,
             w: 310,
             h: 180,
-            comment: { what: '', contentFile },
+            comment: { what: purpose, contentFile },
             facts: [],
             fields: [],
           },
@@ -100,7 +115,7 @@ export async function createSubtask(input: {
     // WHAT: reject success without the canonical Markdown document path.
     // WHY: the caller must edit the exact server-created subtask document.
     if (!path) return { ok: false, error: 'Subtask creation returned no Markdown document.' };
-    return { ok: true, value: path };
+    return { ok: true, value: JSON.stringify({ version: 1, operation: 'subtask-create', projectId: owner.value.projectId, ledgerId: owner.value.ledgerId, masterCardId: owner.value.masterCardId, assignedNodeId: owner.value.assignedNodeId, cardId, relationshipId, title, path, created: true }, null, 2) };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Subtask creation failed.' };
   }

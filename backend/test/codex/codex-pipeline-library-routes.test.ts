@@ -38,6 +38,7 @@ test('pipeline library routes expose empty, create, invalid-reference, conflict,
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
@@ -154,6 +155,7 @@ test('server pipeline routes persist explicit server provenance', async () => {
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const response = await fetch(`${baseUrl}/api/codex/server-pipelines`, {

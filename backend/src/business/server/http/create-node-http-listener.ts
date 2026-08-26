@@ -29,7 +29,6 @@ export function createNodeHttpListener(input: {
     error: unknown;
     context: Record<string, unknown>;
   }) => string;
-  startupTasks: readonly Promise<void>[];
 }) {
   const server = createServer((request, response) => {
     void input.handleRequest(request, response).catch((error: unknown) => {
@@ -77,16 +76,18 @@ export function createNodeHttpListener(input: {
       response.statusCode = paused || bootstrapIncomplete ? 503 : 500;
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({
-        ok: false,
-        error: paused
-          ? 'runtime-scope-paused'
-          : bootstrapIncomplete
-            ? 'task-state-bootstrap-incomplete'
-            : 'internal-runtime-error',
-        incidentId,
-        scope: paused ? error.scope : scope,
-      }));
+      response.end(
+        JSON.stringify({
+          ok: false,
+          error: paused
+            ? 'runtime-scope-paused'
+            : bootstrapIncomplete
+              ? 'task-state-bootstrap-incomplete'
+              : 'internal-runtime-error',
+          incidentId,
+          scope: paused ? error.scope : scope,
+        }),
+      );
     });
   });
 
@@ -106,8 +107,8 @@ export function createNodeHttpListener(input: {
       context: { host: input.host, port: input.port },
     });
   });
-  // WHAT: Open HTTP after synchronous local-state construction without awaiting project recovery tasks.
-  // WHY: Execution recovery is project-scoped background work and must not gate cards, health, or diagnostics.
+  // WHAT: Open HTTP after global admission without requiring any project runtime construction.
+  // WHY: Project hydration, watchers, execution recovery, catalogs, and relay work are independently contained bootstrap scopes.
   try {
     server.listen(input.port, input.host);
   } catch (error) {

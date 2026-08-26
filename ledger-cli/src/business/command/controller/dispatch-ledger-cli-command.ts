@@ -3,6 +3,7 @@
  * WHY: the ledger editing executable must route only ledger inspection and mutation commands.
  */
 import type { FileSystemPort, Result } from '../../../lib/types.js';
+import { readFile } from 'node:fs/promises';
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { parseLedgerCliArgv } from '../helper/parse-ledger-cli-argv.js';
 import { formatLedgerCliHelp } from '../helper/format-ledger-cli-help.js';
@@ -31,6 +32,10 @@ import { mutatePipelinePrompt } from '../../prompt/helper/mutate-pipeline-prompt
 import { queryCodexStatus } from '../../codex/effect/query-codex-status.js';
 import { createSubtask } from '../../ledger/helper/create-subtask.js';
 import { commitMasterTaskGraph } from '../../ledger/helper/commit-master-task-graph.js';
+import { buildWorkPackage } from '../../ledger/helper/build-work-package.js';
+import { startPhase } from '../../ledger/helper/start-phase.js';
+import { amendProgram, createProgram, finishIteration, programContext, reconcileProgram, startIteration } from '../../program/program-controller.js';
+import { monitorCodexSessionTree } from '../../codex/helper/monitor-codex-session-tree.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -59,7 +64,56 @@ export async function dispatchLedgerCliCommandController(
   }
 
   if (command.mode === 'card-read') {
-    const result = await readCardMarkdown({ cardIds: command.cardOperation?.cardIds });
+    const result = await readCardMarkdown({ cardIds: command.cardOperation?.cardIds, includeThreads: !command.cardOperation?.bodyOnly });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'work-package') {
+    const result = await buildWorkPackage(command.workPackageOperation ?? { cardIds: [] });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'phase-start') {
+    const result = await startPhase(command.phaseStartOperation ?? {});
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'program-create') {
+    const result = await createProgram(command.programOperation ?? { summaryStdin: false });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+  if (command.mode === 'program-context') {
+    const result = await programContext(command.programOperation ?? { summaryStdin: false });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+  if (command.mode === 'program-reconcile') {
+    if (!command.programOperation?.reconciliationStdin) return { ok: false, error: 'program-reconcile requires --reconciliation-stdin.' };
+    const reconciliation = await readFile('/dev/stdin', 'utf8');
+    const result = await reconcileProgram({ ...command.programOperation, reconciliation });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+  if (command.mode === 'iteration-start') {
+    const result = await startIteration(command.programOperation ?? { summaryStdin: false });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+  if (command.mode === 'iteration-finish') {
+    if (!command.programOperation?.summaryStdin) return { ok: false, error: 'iteration-finish requires --summary-stdin.' };
+    // WHAT: consume descriptor zero as one finite input document.
+    // WHY: leaving the async stdin stream referenced can keep wrapper processes alive after durable completion.
+    const summary = await readFile('/dev/stdin', 'utf8');
+    const result = await finishIteration({ ...command.programOperation, summary });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+  if (command.mode === 'program-amend') {
+    const result = await amendProgram(command.programOperation ?? { summaryStdin: false });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }
@@ -237,6 +291,10 @@ export async function dispatchLedgerCliCommandController(
     const result = auditCodexRuns(command.runAuditOperation ?? { count: 10, exclusions: [] });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
+  }
+
+  if (command.mode === 'codex-tree-monitor') {
+    return monitorCodexSessionTree({ ...(command.codexTreeMonitorOperation ?? { intervalSeconds: 60, once: false, samples: 0 }), ledgerFile: command.ledgerJsonFile }, ports.emit);
   }
 
   if (command.mode === 'codex-run-events') {

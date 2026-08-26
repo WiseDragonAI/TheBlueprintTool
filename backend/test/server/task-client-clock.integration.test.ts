@@ -62,6 +62,7 @@ test('migration-sized durable clocks produce bounded task response headers witho
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const response = await fetch(`${baseUrl}/api/ledgers/tasks/cards/card-a`);

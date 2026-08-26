@@ -146,6 +146,7 @@ test('queued voice acceptance moves the card to transcribing-before-launch durin
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
 
   try {
@@ -200,6 +201,7 @@ test('normal voice transcription never marks the card as pending execution', asy
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
 
   try {
@@ -236,6 +238,7 @@ test('voice upload transcribes on the backend without requiring a card id', asyn
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
 
   try {
@@ -282,6 +285,7 @@ test('voice upload preserves audio when ledger metadata is missing', async () =>
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
 
   try {
@@ -343,6 +347,7 @@ test('voice upload transcribes on the backend and starts Codex when the card has
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
 
   try {
@@ -534,6 +539,7 @@ test('voice Pipeline mode starts the pipeline configured in Settings', async () 
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   try {
     const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/voice-upload`, {
       method: 'POST',
@@ -620,6 +626,7 @@ test('voice upload continues the existing Codex session when the card has a run 
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
 
   try {

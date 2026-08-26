@@ -83,7 +83,11 @@ export function migrateLegacyProjectRegistry(input: {
 
 export type ProjectCatalogStore = ReturnType<typeof createProjectCatalogStore>;
 
-export function createProjectCatalogStore(input: { masterRoot: string; masterDecisionOsRoot: string }) {
+export function createProjectCatalogStore(input: {
+  masterRoot: string;
+  masterDecisionOsRoot: string;
+  preparedProjects?: readonly DecisionOsProject[];
+}) {
   const masterRoot = realpathSync(input.masterRoot);
   let registry = readProjectRegistry(input.masterDecisionOsRoot);
   // WHAT: Seed the authoritative registry once when upgrading a legacy workspace.
@@ -92,7 +96,13 @@ export function createProjectCatalogStore(input: { masterRoot: string; masterDec
     registry = migrateLegacyProjectRegistry({ masterRoot, masterDecisionOsRoot: input.masterDecisionOsRoot, apply: true }).registry;
   }
 
-  let projects: DecisionOsProject[] = [];
+  // WHAT: Clone a supplied worker snapshot while retaining ordinary reload when no receipt exists.
+  // WHY: Runtime catalog mutations must not alias startup receipt objects across the worker boundary.
+  const preparedProjects = input.preparedProjects?.map((project) => ({
+    ...project,
+    ledgers: project.ledgers.map((ledger) => ({ ...ledger })),
+  })) ?? null;
+  let projects: DecisionOsProject[] = preparedProjects ?? [];
   const reload = (): DecisionOsProject[] => {
     projects = Object.values(registry.projects).map((entry) => projectFromRegisteredPath({ masterRoot, entry }));
     projects.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
@@ -102,7 +112,9 @@ export function createProjectCatalogStore(input: { masterRoot: string; masterDec
     writeProjectRegistry(input.masterDecisionOsRoot, registry);
     reload();
   };
-  reload();
+  // WHAT: Reuse the worker-owned project snapshot when startup supplied one.
+  // WHY: Main-thread project path, identity, state, and ledger reads would duplicate the global preparation pass.
+  if (!preparedProjects) reload();
 
   return {
     projects(): DecisionOsProject[] {

@@ -123,6 +123,7 @@ test('skill library routes save editable Markdown and defaults without exposing 
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
@@ -571,6 +572,7 @@ test('server startup initializes a child repository and pipeline-prompt save nev
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   try {
     assert.equal(existsSync(join(workspace, '.git')), false);
     assert.equal(existsSync(join(decisionOsRoot, '.git')), true);
@@ -941,6 +943,7 @@ test('a Git add failure preserves authored bytes and returns scoped recovery evi
     createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: workspace }, runtime_state: runtime });
     const server = runtime.server as Server;
     await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
     try {
       const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
       const response = await fetch(`${baseUrl}/api/codex/skill-library/recoverable-skill/revisions/retry`, {
@@ -1068,6 +1071,7 @@ test('committed federated create and save routes respond before observed relay p
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: serverRoot }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   try {
     const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     const initialManifest = await fetch(`${baseUrl}/api/federation/skills-manifest`).then((manifestResponse) => manifestResponse.json()) as Record<string, any>;
@@ -1204,6 +1208,7 @@ test('server and project skill views share migrated server-owned favorite metada
   assert.equal(runtime.decisionOsRoot, masterDecisionOsRoot);
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {

@@ -79,16 +79,16 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const normalizedMode: LedgerCommand | 'assets' = argv.length === 0 || argv.includes('--help') || argv.includes('-h') || mode === 'help'
     ? 'help'
     : mode === 'assets' ? 'assets'
-    : mode === 'answer' || mode === 'card-context' || mode === 'card-read' || mode === 'codex-run-audit' || mode === 'codex-run-events' || mode === 'codex-status' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'master-task-apply' || mode === 'master-task-commit' || mode === 'master-task-complete' || mode === 'master-task-create' || mode === 'master-task-gate' || mode === 'master-task-progress' || mode === 'migrate-decision-os' || mode === 'migrate-master-tasks' || mode === 'mutate' || mode === 'overview' || mode === 'projects' || mode === 'prompt' || mode === 'queue-pipeline' || mode === 'queue-skill' || mode === 'session-context' || mode === 'skills' || mode === 'subtask-create' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'zone-cards' ? mode : 'inspect';
+    : mode === 'answer' || mode === 'card-context' || mode === 'card-read' || mode === 'codex-run-audit' || mode === 'codex-run-events' || mode === 'codex-status' || mode === 'codex-tree-monitor' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'iteration-finish' || mode === 'iteration-start' || mode === 'master-task-apply' || mode === 'master-task-commit' || mode === 'master-task-complete' || mode === 'master-task-create' || mode === 'master-task-gate' || mode === 'master-task-progress' || mode === 'migrate-decision-os' || mode === 'migrate-master-tasks' || mode === 'mutate' || mode === 'overview' || mode === 'phase-start' || mode === 'program-amend' || mode === 'program-context' || mode === 'program-create' || mode === 'program-reconcile' || mode === 'projects' || mode === 'prompt' || mode === 'queue-pipeline' || mode === 'queue-skill' || mode === 'session-context' || mode === 'skills' || mode === 'subtask-create' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'work-package' || mode === 'zone-cards' ? mode : 'inspect';
   const assetAction = (argv[1] === 'apply-gc-plan' || argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
     ? argv[1]
     : 'gc') as AssetCommand;
   return {
     mode: normalizedMode,
-    ledgerJsonFile: flagValue(argv, '--ledger') ?? (normalizedMode === 'card-read'
+    ledgerJsonFile: flagValue(argv, '--ledger') ?? process.env.DECISION_OS_LEDGER_FILE ?? (normalizedMode === 'card-read'
       ? ''
       : normalizedMode === 'master-task-complete'
-      ? process.env.DECISION_OS_LEDGER_FILE ?? ''
+      ? ''
       : argv[1] ?? '../.decision-os/specs.json'),
     answerOperation: {
       message: flagValue(argv, '--message'),
@@ -98,12 +98,15 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     },
     cardOperation: normalizedMode === 'card-context' || normalizedMode === 'card-read' || normalizedMode === 'session-context' || normalizedMode === 'master-task-complete' || normalizedMode === 'master-task-gate' || normalizedMode === 'validate-master-tasks'
       ? normalizedMode === 'card-read'
-        ? { cardIds: trailingValues(argv, '--card-id') }
+        ? { cardIds: trailingValues(argv, '--card-id'), bodyOnly: argv.includes('--body-only') }
         : { cardId: flagValue(argv, '--card-id') }
       : undefined,
     json: argv.includes('--json'),
     codexStatusOperation: normalizedMode === 'codex-status'
       ? { executionId: flagValue(argv, '--execution-id'), elapsed: argv.includes('--elapsed'), context: argv.includes('--context'), limits: argv.includes('--limits') }
+      : undefined,
+    codexTreeMonitorOperation: normalizedMode === 'codex-tree-monitor'
+      ? { intervalSeconds: flagNumber(argv, '--interval-seconds') ?? 60, once: argv.includes('--once'), output: flagValue(argv, '--output'), samples: flagNumber(argv, '--samples') ?? 0, sessionId: flagValue(argv, '--session-id') ?? process.env.CODEX_SESSION_ID, sessionsRoot: flagValue(argv, '--sessions-root') }
       : undefined,
     exportOperation: {
       outputFile: flagValue(argv, '--output') ?? flagValue(argv, '--out'),
@@ -154,14 +157,24 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     masterTaskCreateOperation: normalizedMode === 'master-task-create'
       ? { projectId: flagValue(argv, '--project'), title: flagValue(argv, '--title'), subtasks: trailingValues(argv, '--subtask') }
       : undefined,
+    phaseStartOperation: normalizedMode === 'phase-start'
+      ? { masterCardId: flagValue(argv, '--master-card-id'), phase: flagValue(argv, '--phase') }
+      : undefined,
+    programOperation: normalizedMode === 'program-create' || normalizedMode === 'program-context' || normalizedMode === 'program-amend' || normalizedMode === 'program-reconcile' || normalizedMode === 'iteration-start' || normalizedMode === 'iteration-finish'
+      ? { attemptId: flagValue(argv, '--attempt-id'), manifestFile: flagValue(argv, '--manifest-file'), phaseId: flagValue(argv, '--phase-id'), planFile: flagValue(argv, '--plan-file'), programId: flagValue(argv, '--program-id'), reconciliationStdin: argv.includes('--reconciliation-stdin'), summaryStdin: argv.includes('--summary-stdin') }
+      : undefined,
     // WHAT: parse ID-only task-graph authoring inputs only for the two owning commands.
     // WHY: unrelated commands must not acquire master-task or Markdown-import arguments.
     taskGraphOperation: normalizedMode === 'subtask-create' || normalizedMode === 'master-task-commit'
       ? {
         markdownFile: flagValue(argv, '--markdown-file'),
         masterCardId: flagValue(argv, '--master-card-id'),
+        purpose: flagValue(argv, '--purpose'),
         title: flagValue(argv, '--title'),
       }
+      : undefined,
+    workPackageOperation: normalizedMode === 'work-package'
+      ? { cardIds: trailingValues(argv, '--input-card-id'), outputCardId: flagValue(argv, '--output-card-id'), outputPath: flagValue(argv, '--output-path'), promptName: flagValue(argv, '--prompt') }
       : undefined,
     runAuditOperation: normalizedMode === 'codex-run-audit'
       ? { root: flagValue(argv, '--root'), count: flagNumber(argv, '--count') ?? 10, cutoff: flagNumber(argv, '--cutoff'), exclusions: flagValues(argv, '--exclude') }

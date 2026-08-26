@@ -53,7 +53,7 @@ function assignedNodeIdFromCwd(cwd: string): string {
 
 export async function createMasterTask(input: { projectId?: string; title?: string; subtasks: string[] }): Promise<Result<string>> {
   const serverUrl = String(process.env.DECISION_OS_SERVER_URL ?? '').trim().replace(/\/$/, '');
-  const projectId = String(input.projectId ?? '').trim();
+  const projectId = String(input.projectId ?? process.env.DECISION_OS_PROJECT_ID ?? '').trim();
   const title = String(input.title ?? '').trim();
   const subtasks = input.subtasks.map((value) => value.trim()).filter(Boolean);
   if (!serverUrl) return { ok: false, error: 'master-task-create requires DECISION_OS_SERVER_URL.' };
@@ -66,9 +66,11 @@ export async function createMasterTask(input: { projectId?: string; title?: stri
     ]);
     if (!catalogResponse.ok) return { ok: false, error: `Project query failed (${catalogResponse.status}): ${await catalogResponse.text()}` };
     if (!projectionResponse.ok) return { ok: false, error: `Task projection failed (${projectionResponse.status}): ${await projectionResponse.text()}` };
-    const catalog = await catalogResponse.json() as { projects?: Array<{ id?: unknown; color?: unknown }> };
+    const catalog = await catalogResponse.json() as { projects?: Array<{ id?: unknown; color?: unknown; ownerNodeId?: unknown }> };
     const project = (catalog.projects ?? []).find((entry) => String(entry.id ?? '') === projectId);
     if (!project) return { ok: false, error: `Project not found: ${projectId}` };
+    const assignedNodeId = String(project.ownerNodeId ?? '').trim();
+    if (!assignedNodeId) return { ok: false, error: `Project has no assigned owner node: ${projectId}` };
     const projection = await projectionResponse.json() as { ledger?: AnyRecord };
     if (!projection.ledger) return { ok: false, error: 'Task projection has no ledger.' };
 
@@ -109,7 +111,7 @@ export async function createMasterTask(input: { projectId?: string; title?: stri
     const payload = await response.json() as { createdFiles?: CreatedFile[] };
     const files = (payload.createdFiles ?? []).map((entry) => ({ kind: String(entry.kind ?? ''), cardId: String(entry.cardId ?? ''), path: String(entry.path ?? '') }));
     if (files.length !== subtasks.length + 1 || files.some((entry) => !entry.kind || !entry.cardId || !entry.path)) return { ok: false, error: 'Master-task creation returned incomplete file paths.' };
-    return { ok: true, value: files.map((entry) => `${entry.kind}\t${entry.cardId}\t${entry.path}`).join('\n') };
+    return { ok: true, value: JSON.stringify({ version: 1, operation: 'master-task-create', projectId, assignedNodeId, files }, null, 2) };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Master-task creation failed.' };
   }

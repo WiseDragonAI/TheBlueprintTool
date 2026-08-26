@@ -40,6 +40,7 @@ test('serves one compact multi-project Control Room projection and refreshes one
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const firstResponse = await fetch(`${baseUrl}/api/control-room`);
@@ -72,9 +73,26 @@ test('serves one compact multi-project Control Room projection and refreshes one
     const secondResponse = await fetch(`${baseUrl}/api/control-room`);
     const warmElapsedMs = performance.now() - warmStartedAt;
     const second = await secondResponse.json() as Record<string, any>;
-    assert.equal(second.revision, first.revision);
+    assert.ok(second.revision >= first.revision);
     assert.ok(warmElapsedMs < 100, `warm Control Room response took ${warmElapsedMs.toFixed(1)}ms`);
-    const notModified = await fetch(`${baseUrl}/api/control-room`, { headers: { 'if-none-match': firstResponse.headers.get('etag') ?? '' } });
+    let settledResponse = secondResponse;
+    let settled = second;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await new Promise((resolveSettled) => setTimeout(resolveSettled, 10));
+      const candidateResponse = await fetch(`${baseUrl}/api/control-room`);
+      const candidate = await candidateResponse.json() as Record<string, any>;
+      // WHAT: Stop after two consecutive reads observe the same asynchronously refreshed projection.
+      // WHY: Startup recovery may publish multiple bounded invalidation batches before the cache becomes stable.
+      if (candidate.revision === settled.revision) {
+        settledResponse = candidateResponse;
+        settled = candidate;
+        break;
+      }
+      settledResponse = candidateResponse;
+      settled = candidate;
+    }
+    assert.ok(settled.revision >= second.revision);
+    const notModified = await fetch(`${baseUrl}/api/control-room`, { headers: { 'if-none-match': settledResponse.headers.get('etag') ?? '' } });
     assert.equal(notModified.status, 304);
     const compactText = await fetch(`${baseUrl}/api/codex/skills/runs/codex-skill-test/status?ledgerId=tasks&cardId=worker`).then((response) => response.text());
     const compact = JSON.parse(compactText) as Record<string, any>;
@@ -116,6 +134,7 @@ test('canvas and thread read models exclude each other while preserving card bod
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const canvasResponse = await fetch(`${baseUrl}/api/ledgers/tasks/canvas`);
@@ -160,6 +179,7 @@ test('held task creation and deletion invalidate the local Control Room without 
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const mutationUrl = `${baseUrl}/p/held-project/decision-os/tasks`;
   const controlRoom = async (): Promise<Record<string, any>> => fetch(`${baseUrl}/api/control-room`, { cache: 'no-store' }).then((response) => response.json());

@@ -7,6 +7,7 @@ function response(body: unknown, status = 200): Response {
 }
 
 const controlRoom = {
+  projects: [{ id: 'project-a', ownerNodeId: 'node-a' }],
   allTasks: [{
     masterTask: true,
     cardId: 'card-master',
@@ -47,12 +48,16 @@ test('subtask-create discovers owner context, creates one atomic graph addition,
     ], { emit: (message) => messages.push(message) });
     assert.equal(result.ok, true);
     assert.equal(mutation.action, 'create-subtask');
+    assert.equal(mutation.assignedNodeId, 'node-a');
     assert.equal(mutation.masterTaskId, 'card-master');
     assert.equal((mutation.card as { title: string }).title, '05 - Implementation: Deltas');
     assert.equal((mutation.card as { comment: { what: string } }).comment.what, '');
     assert.equal((mutation.relationship as { from: string }).from, 'card-master');
     assert.equal((mutation.relationship as { position: number }).position, 1);
-    assert.match(messages[0], /^\/workspace\/\.decision-os\/cards\/tasks\/card-.*\.md$/);
+    const receipt = JSON.parse(messages[0]);
+    assert.equal(receipt.created, true);
+    assert.equal(receipt.assignedNodeId, 'node-a');
+    assert.match(receipt.path, /^\/workspace\/\.decision-os\/cards\/tasks\/card-.*\.md$/);
 
     const rejected = await dispatchLedgerCliCommandController([
       'subtask-create', '--master-card-id', 'card-master', '--title', 'Rejected', '--markdown-file', '/tmp/input.md',

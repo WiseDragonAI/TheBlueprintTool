@@ -138,3 +138,21 @@ test('refreshes one registered project after its ledger registry changes', () =>
   assert.deepEqual(refreshed.ledgers, [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }]);
   assert.deepEqual(store.projects().find((project) => project.id === 'project-id')?.ledgers, refreshed.ledgers);
 });
+
+test('installs a prepared project snapshot without repeating per-project state reads', (context) => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-registry-prepared-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const masterDecisionOsRoot = join(root, '.decision-os');
+  createProject(root, 'project', 'project-id');
+  const preparedProjects = createProjectCatalogStore({ masterRoot: root, masterDecisionOsRoot }).projects();
+  const projectState = join(root, 'project', '.decision-os', 'state.json');
+  const changedBytes = '{changed-after-preparation';
+  writeFileSync(projectState, changedBytes);
+
+  const installed = createProjectCatalogStore({ masterRoot: root, masterDecisionOsRoot, preparedProjects });
+
+  assert.equal(installed.projects()[0]?.id, 'project-id');
+  assert.equal(installed.projects()[0]?.available, true);
+  assert.equal(readFileSync(projectState, 'utf8'), changedBytes);
+  assert.throws(() => installed.refresh('project-id'));
+});

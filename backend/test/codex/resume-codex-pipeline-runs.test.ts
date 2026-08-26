@@ -122,6 +122,7 @@ test('cancellation stops downstream work and restart preserves prior artifacts i
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const startResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
@@ -332,6 +333,7 @@ test('server startup schedules the queued replicated successor without mutating 
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   try {
     const completed = await waitFor(() => {
       const execution = taskExecutionState(runtime)?.executions.find(secondExecutionId);

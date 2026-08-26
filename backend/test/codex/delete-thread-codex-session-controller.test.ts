@@ -64,6 +64,7 @@ test('DELETE session route removes a terminal owned run and rejects stale owners
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
   try {
     const mismatch = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/stale-run`, {

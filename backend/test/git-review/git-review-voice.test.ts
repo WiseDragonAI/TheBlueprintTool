@@ -80,6 +80,7 @@ test('serves Git review transcription on its dedicated endpoint without touching
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
   const form = new FormData();
   form.append('audio', new Blob(['audio'], { type: 'audio/webm' }), 'review.webm');

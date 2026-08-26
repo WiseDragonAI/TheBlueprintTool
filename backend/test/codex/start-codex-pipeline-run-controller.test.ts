@@ -403,6 +403,7 @@ test('direct card processing admits a pipeline prompt as a temporary one-step ru
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const response = await fetch(`${baseUrl}/api/codex/skills/process`, {
@@ -636,6 +637,7 @@ test('a running pipeline prompt queues one worker then returns with the latest t
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
@@ -919,6 +921,7 @@ test('pipeline execution completes when automatic step-card generation is config
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const response = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
@@ -1011,6 +1014,7 @@ test('saved pipeline is idempotent while active and runs five isolated skills st
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const startResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
@@ -1130,6 +1134,7 @@ test('saved pipeline failure cancels every dependent execution without launching
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const response = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
@@ -1203,6 +1208,7 @@ test('saved pipeline restart creates linked immutable run and execution history'
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const firstResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
@@ -1280,6 +1286,7 @@ test('direct temporary runs inherit skill defaults, preserve snapshots, and hono
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     const inheritedResponse = await fetch(`${baseUrl}/api/codex/skills/process`, {
@@ -1369,6 +1376,7 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
     assert.equal((runtime.decisionOsSettings as Record<string, unknown>).maxConcurrentCodexProcesses, 2);
@@ -1467,6 +1475,7 @@ test('one catalog-level server skill executes directly and in saved pipelines fr
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const catalog = discoverDecisionOsProjects({ masterRoot, masterDecisionOsRoot }).filter((project) => projects.includes(project.root));
   try {

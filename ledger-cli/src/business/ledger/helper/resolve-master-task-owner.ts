@@ -6,6 +6,7 @@ import type { Result } from '../../../lib/types.js';
 
 type AnyRecord = Record<string, unknown>;
 export type MasterTaskOwner = {
+  assignedNodeId: string;
   ledgerId: string;
   masterCardId: string;
   projectId: string;
@@ -52,9 +53,14 @@ export async function resolveMasterTaskOwner(masterCardIdInput: string | undefin
     // WHAT: reject an incomplete owner projection.
     // WHY: both route segments are required for a scoped task operation.
     if (!projectId || !ledgerId) return { ok: false, error: `Master task owner is incomplete: ${masterCardId}` };
+    const projects = Array.isArray(payload.projects) ? payload.projects.filter(record) : [];
+    const project = projects.find((entry) => text(entry.id) === projectId);
+    const assignedNodeId = text(task.assignedNodeId) || text(project?.ownerNodeId);
+    if (!assignedNodeId) return { ok: false, error: `Master task assignment is unavailable: ${masterCardId}` };
     return {
       ok: true,
       value: {
+        assignedNodeId,
         ledgerId,
         masterCardId,
         projectId,

@@ -8,21 +8,25 @@ import type { DecisionOsProject } from '../helper/project-catalog.js';
 import { ensureDecisionOsGitRepository } from '../helper/ensure-decision-os-git-repository.js';
 import { createProjectCatalogStore } from '../helper/project-catalog-store.js';
 import { createControlRoomProjectionStore } from '../helper/control-room-projection-store.js';
-import { createRuntimeIncidentLedger } from '../helper/runtime-incident-ledger.js';
+import { createRuntimeIncidentLedger, type RuntimeIncidentLedger } from '../helper/runtime-incident-ledger.js';
 import { createTaskExecutionPresentationRegistry } from '../../codex/runtime/task-execution-presentation-registry.js';
 import { createFederationContentReplicaStore } from '../../federation/helper/federation-content-replica-store.js';
 import type { createFederationContentScheduler } from '../../federation/helper/federation-content-scheduler.js';
 import type { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
 import type { createFederationTaskStateReplicator } from '../../federation/helper/federation-task-state-replicator.js';
-import { createIncidentSupervisor } from './incident-supervisor.js';
+import { createIncidentSupervisor, type IncidentSupervisor } from './incident-supervisor.js';
 import { createServerExecutionRuntime } from './server-execution-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 
 export function createServerFoundationRuntime(input: {
+  incidentLedger?: RuntimeIncidentLedger;
+  incidentSupervisor?: IncidentSupervisor;
   masterDecisionOsRoot: string;
   masterRoot: string;
   migrationAdmissionForProject: (projectId: string) => AnyRecord | null;
+  preparedProjects?: readonly DecisionOsProject[];
+  repositoriesPrepared?: boolean;
   runtime: AnyRecord;
 }) {
   const pendingAutomaticRecoveries = new Map<string, DecisionOsProject>();
@@ -46,26 +50,38 @@ export function createServerFoundationRuntime(input: {
     serverClosing: false,
   };
   let protectedScopes = (): Iterable<string> => [];
-  const incidentLedger = createRuntimeIncidentLedger({
-    decisionOsRoot: input.masterDecisionOsRoot,
-    protectedScopes: () => protectedScopes(),
-  });
-  const incidentSupervisor = createIncidentSupervisor({ incidentLedger });
+  const incidentLedger =
+    input.incidentLedger ??
+    createRuntimeIncidentLedger({
+      decisionOsRoot: input.masterDecisionOsRoot,
+      protectedScopes: () => protectedScopes(),
+    });
+  const incidentSupervisor = input.incidentSupervisor ?? createIncidentSupervisor({ incidentLedger });
   protectedScopes = incidentSupervisor.protectedScopes;
   const globalClients = new Set<ServerResponse>();
   const federatedSchedulerContexts = new Map<string, { root: string; runtime: AnyRecord }>();
+  // WHAT: Install a prepared project snapshot only when the startup worker supplied one.
+  // WHY: Non-server construction retains its original catalog loading contract.
   const projectCatalogStore = createProjectCatalogStore({
     masterRoot: input.masterRoot,
     masterDecisionOsRoot: input.masterDecisionOsRoot,
+    ...(input.preparedProjects ? { preparedProjects: input.preparedProjects } : {}),
   });
   const authoredRoots = new Set([
     input.masterDecisionOsRoot,
-    ...projectCatalogStore.projects()
+    ...projectCatalogStore
+      .projects()
       .filter((project) => project.available)
       .map((project) => project.decisionOsRoot),
   ]);
-  for (const decisionOsRoot of [...authoredRoots].sort()) {
-    ensureDecisionOsGitRepository(decisionOsRoot);
+  // WHAT: Skip repository admission only after the startup worker completed the same exact root inventory.
+  // WHY: Main-thread repetition would restore the listener stall and duplicate every Git subprocess.
+  if (!input.repositoriesPrepared) {
+    // WHAT: Admit each distinct authored root for non-worker construction.
+    // WHY: Direct foundation callers still require the full repository invariant.
+    for (const decisionOsRoot of [...authoredRoots].sort()) {
+      ensureDecisionOsGitRepository(decisionOsRoot);
+    }
   }
   const contentStore = createFederationContentReplicaStore({
     decisionOsRoot: input.masterDecisionOsRoot,
@@ -87,10 +103,8 @@ export function createServerFoundationRuntime(input: {
     globalClients,
     incidentLedger,
     incidentSupervisor,
-    invalidateProject: (projectId, entities) => connections.controlRoom?.invalidate(
-      projectId,
-      entities ? [...entities] : undefined,
-    ),
+    invalidateProject: (projectId, entities) =>
+      connections.controlRoom?.invalidate(projectId, entities ? [...entities] : undefined),
     masterDecisionOsRoot: input.masterDecisionOsRoot,
     migrationAdmissionForProject: input.migrationAdmissionForProject,
     presentations: executionPresentations,

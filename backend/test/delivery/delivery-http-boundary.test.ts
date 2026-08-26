@@ -76,6 +76,7 @@ test('actual HTTP delivery dispatch rejects authority before waiting for the req
   });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   context.after(async () => await new Promise<void>((resolveClose) => server.close(() => resolveClose())));
   const address = server.address() as AddressInfo;
   const response = await new Promise<{ statusCode: number; body: string }>((resolveResponse, reject) => {

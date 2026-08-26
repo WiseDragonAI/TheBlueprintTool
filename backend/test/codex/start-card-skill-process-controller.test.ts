@@ -328,6 +328,7 @@ test('card skill process route creates a linked output card and launches codex',
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
 
   try {
@@ -572,6 +573,7 @@ test('thread codex process route anchors the run widget on the source card and s
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${address.port}`;
   let eventCollector: Awaited<ReturnType<typeof startContentEventCollector>> | undefined;
@@ -842,6 +844,7 @@ test('thread codex process resumes a capacity-interrupted session after five sec
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
 
   try {
@@ -1008,6 +1011,7 @@ test('card skill run cancel route terminates the active codex process', async ()
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
 
   try {
@@ -1161,6 +1165,7 @@ test('card skill run continue route resumes the captured session after its card 
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
   const address = server.address() as AddressInfo;
 
   try {

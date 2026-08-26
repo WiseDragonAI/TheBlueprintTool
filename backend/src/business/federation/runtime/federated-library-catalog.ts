@@ -20,6 +20,7 @@ export function createFederatedLibraryCatalog(input: {
   localWorkspaceRoots: () => string[];
   masterDecisionOsRoot: string;
   masterRoot: string;
+  preparedCatalog?: { availableSkillNames: string[] };
   runtime: AnyRecord;
 }): {
   applyOwnedDetail: (result: AnyRecord) => AnyRecord;
@@ -32,6 +33,11 @@ export function createFederatedLibraryCatalog(input: {
   let exportIndex: FederatedSkillExportIndex | null = null;
   let exportIndexPromise: Promise<FederatedSkillExportIndex> | null = null;
   let generation = 0;
+  // WHAT: Clone an optional worker-owned startup catalog for one main-thread installation.
+  // WHY: Later invalidation must not mutate the structured-clone receipt retained by startup diagnostics.
+  let preparedCatalog = input.preparedCatalog
+    ? { availableSkillNames: [...input.preparedCatalog.availableSkillNames] }
+    : null;
   const invalidate = (): void => {
     generation += 1;
     exportIndex = null;
@@ -53,6 +59,13 @@ export function createFederatedLibraryCatalog(input: {
   };
   const initialize = (): void => {
     invalidate();
+    // WHAT: Install the one-shot catalog receipt produced by the startup worker.
+    // WHY: Main must not repeat prompt validation, skill scans, pipeline writes, or metadata migration.
+    if (preparedCatalog) {
+      availableSkillNames = preparedCatalog.availableSkillNames;
+      preparedCatalog = null;
+      return;
+    }
     ensureMandatoryPipelinePrompts({ serverDecisionOsRoot: input.masterDecisionOsRoot });
     const available = availablePipelineContent({
       decisionOsRoot: input.masterDecisionOsRoot,
