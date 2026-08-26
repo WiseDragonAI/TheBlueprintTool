@@ -25,6 +25,8 @@ export function createServerFoundationRuntime(input: {
   masterDecisionOsRoot: string;
   masterRoot: string;
   migrationAdmissionForProject: (projectId: string) => AnyRecord | null;
+  preparedProjects?: readonly DecisionOsProject[];
+  repositoriesPrepared?: boolean;
   runtime: AnyRecord;
 }) {
   const pendingAutomaticRecoveries = new Map<string, DecisionOsProject>();
@@ -58,9 +60,12 @@ export function createServerFoundationRuntime(input: {
   protectedScopes = incidentSupervisor.protectedScopes;
   const globalClients = new Set<ServerResponse>();
   const federatedSchedulerContexts = new Map<string, { root: string; runtime: AnyRecord }>();
+  // WHAT: Install a prepared project snapshot only when the startup worker supplied one.
+  // WHY: Non-server construction retains its original catalog loading contract.
   const projectCatalogStore = createProjectCatalogStore({
     masterRoot: input.masterRoot,
     masterDecisionOsRoot: input.masterDecisionOsRoot,
+    ...(input.preparedProjects ? { preparedProjects: input.preparedProjects } : {}),
   });
   const authoredRoots = new Set([
     input.masterDecisionOsRoot,
@@ -69,8 +74,14 @@ export function createServerFoundationRuntime(input: {
       .filter((project) => project.available)
       .map((project) => project.decisionOsRoot),
   ]);
-  for (const decisionOsRoot of [...authoredRoots].sort()) {
-    ensureDecisionOsGitRepository(decisionOsRoot);
+  // WHAT: Skip repository admission only after the startup worker completed the same exact root inventory.
+  // WHY: Main-thread repetition would restore the listener stall and duplicate every Git subprocess.
+  if (!input.repositoriesPrepared) {
+    // WHAT: Admit each distinct authored root for non-worker construction.
+    // WHY: Direct foundation callers still require the full repository invariant.
+    for (const decisionOsRoot of [...authoredRoots].sort()) {
+      ensureDecisionOsGitRepository(decisionOsRoot);
+    }
   }
   const contentStore = createFederationContentReplicaStore({
     decisionOsRoot: input.masterDecisionOsRoot,

@@ -4,11 +4,11 @@
  */
 import { resolve } from 'node:path';
 import { readCodexPipelineRunController } from '../../codex/controller/read-codex-pipeline-run-controller.js';
-import { ensureMandatoryPipelinePrompts } from '../../codex/helper/mandatory-pipeline-prompts.js';
 import { migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
 import { createFederatedLibraryRuntime } from '../../federation/runtime/federated-library-runtime.js';
 import { createFederationConnectionRuntime } from '../../federation/runtime/federation-connection-runtime.js';
 import { createFederationStateRuntime } from '../../federation/runtime/federation-state-runtime.js';
+import type { ServerRuntimePreparationReceipt } from './prepare-server-runtime.js';
 import type { createServerFoundationRuntime } from './server-foundation-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -18,6 +18,7 @@ export function createServerFederationRuntime(input: {
   masterDecisionOsRoot: string;
   masterRoot: string;
   port: number;
+  preparation: ServerRuntimePreparationReceipt;
   runtime: AnyRecord;
 }) {
   const {
@@ -40,6 +41,13 @@ export function createServerFederationRuntime(input: {
     recordIncident,
     recordStoppedOperation,
   } = incidentSupervisor;
+  // WHAT: Restore every worker-contained failure into its owning main-thread pause and incident ledger.
+  // WHY: Moving catalog preparation off-thread must retain durable diagnostics and runtime containment.
+  for (const failure of input.preparation.failures) {
+    const error = new Error(failure.error);
+    error.stack = failure.stack || error.stack;
+    recordBackgroundFailure(failure.component, failure.operation, error);
+  }
   const projectCatalog = () => projectCatalogStore.projects();
   const localWorkspaceRoots = (): string[] => [
     input.masterRoot,
@@ -61,26 +69,6 @@ export function createServerFederationRuntime(input: {
         .map((project) => project.decisionOsRoot),
     });
   };
-  // WHAT: install and validate mandatory server prompts before legacy migration can dirty the shared registration store.
-  // WHY: prompt bootstrap requires a clean registration boundary so its focused Git commit cannot absorb migration writes.
-  if (!pausedBackgroundComponents.has('pipeline-catalog')) {
-    try {
-      ensureMandatoryPipelinePrompts({
-        serverDecisionOsRoot: input.masterDecisionOsRoot,
-      });
-    } catch (error) {
-      recordBackgroundFailure('pipeline-catalog', 'initialize-mandatory-pipeline-prompts', error);
-    }
-  }
-  // WHAT: run legacy pipeline migration only while its owning background component is available.
-  // WHY: a retained migration incident must continue to contain mutations to that scope.
-  if (!pausedBackgroundComponents.has('pipeline-migration')) {
-    try {
-      migrateProjectPipelines();
-    } catch (error) {
-      recordBackgroundFailure('pipeline-migration', 'migrate-legacy-project-pipelines', error);
-    }
-  }
   const federatedLibrary = createFederatedLibraryRuntime({
     clearPaused: (component) => pausedBackgroundComponents.delete(component),
     federation: () => connections.federation,
@@ -89,6 +77,7 @@ export function createServerFederationRuntime(input: {
     localWorkspaceRoots,
     masterDecisionOsRoot: input.masterDecisionOsRoot,
     masterRoot: input.masterRoot,
+    preparedCatalog: { availableSkillNames: input.preparation.availableSkillNames },
     paused: (component) => pausedBackgroundComponents.has(component),
     recordBackgroundFailure,
     recordIncident,

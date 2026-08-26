@@ -5,6 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { TaskEntityChange, TaskStateDelta } from '../helper/task-current-state-types.js';
+import type { TaskStateBootstrapReceipt } from '../helper/task-current-state-checkpoint.js';
 import { createProjectTaskState, type ProjectTaskState } from '../helper/project-task-state.js';
 import { commitTaskContentMutation, taskContentAutoCommitEnabled } from '../helper/commit-task-content-mutation.js';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
@@ -86,11 +87,13 @@ export function createLocalTaskRuntime(input: {
       });
   };
 
-  const openStateForProject = (project: DecisionOsProject): ProjectTaskState => {
+  const stateConfigurationForProject = (project: DecisionOsProject) => {
     const ledger = tasksLedgerForProject(project);
     const tasksLedgerFile = resolve(project.decisionOsRoot, ledger.ledgerFile.replace(/^\.decision-os\//, ''));
     const stateRoot = resolve(project.decisionOsRoot, 'task-state', project.id);
     let initialize = !existsSync(stateRoot) && !existsSync(tasksLedgerFile);
+    // WHAT: Inspect the legacy ledger only when no causal state directory exists.
+    // WHY: Empty legacy state may initialize directly while authored legacy entities require migration containment.
     if (!existsSync(stateRoot) && existsSync(tasksLedgerFile)) {
       const document = JSON.parse(readFileSync(tasksLedgerFile, 'utf8')) as AnyRecord;
       initialize = ['cards', 'annotations', 'relationships'].every(
@@ -101,16 +104,27 @@ export function createLocalTaskRuntime(input: {
       action_payload: { decisionOsRoot: project.decisionOsRoot },
       runtime_state: {},
     }).settings;
+    return { initialize, settings, tasksLedgerFile };
+  };
+
+  const openStateForProject = (
+    project: DecisionOsProject,
+    bootstrapReceipt?: TaskStateBootstrapReceipt,
+    configuration = stateConfigurationForProject(project),
+  ): ProjectTaskState => {
+    // WHAT: Install worker authority only when bootstrap supplied its validated receipt.
+    // WHY: Synchronous recovery callers retain canonical store construction while startup avoids duplicate reads.
     const state = createProjectTaskState({
       projectId: project.id,
       writerId: input.federationNodeId(),
       decisionOsRoot: project.decisionOsRoot,
-      tasksLedgerFile,
+      tasksLedgerFile: configuration.tasksLedgerFile,
+      ...(bootstrapReceipt ? { bootstrapReceipt } : {}),
       publish: input.publishDelta,
       publishContent: input.publishContentChange,
       commitContent: ({ mutation, changedContentFiles }) =>
         commitTaskContentMutation({
-          enabled: taskContentAutoCommitEnabled(settings),
+          enabled: taskContentAutoCommitEnabled(configuration.settings),
           projectId: project.id,
           decisionOsRoot: project.decisionOsRoot,
           mutation,
@@ -121,7 +135,7 @@ export function createLocalTaskRuntime(input: {
       onPersistenceError: (error) => {
         input.incidentSupervisor.pauseTaskProject(project, error, 'materialize-local-task-state');
       },
-      initialize,
+      initialize: configuration.initialize,
     });
     if (input.replicationAvailable()) scheduleContentHeadRepair(project.id, state);
     return state;
@@ -191,30 +205,33 @@ export function createLocalTaskRuntime(input: {
     // WHAT: Reuse the one active preparation for this project.
     // WHY: Concurrent Control Room and startup demand must not duplicate cold filesystem reconstruction.
     if (pending) return pending;
-    const ledger = tasksLedgerForProject(project);
-    const tasksLedgerFile = resolve(project.decisionOsRoot, ledger.ledgerFile.replace(/^\.decision-os\//, ''));
-    const stateRoot = resolve(project.decisionOsRoot, 'task-state', project.id);
-    let initialize = !existsSync(stateRoot) && !existsSync(tasksLedgerFile);
-    // WHAT: Inspect the legacy ledger only when no causal state directory exists.
-    // WHY: Empty legacy state may initialize directly while authored legacy entities require migration containment.
-    if (!existsSync(stateRoot) && existsSync(tasksLedgerFile)) {
-      const document = JSON.parse(readFileSync(tasksLedgerFile, 'utf8')) as AnyRecord;
-      initialize = ['cards', 'annotations', 'relationships'].every(
-        (key) => !Array.isArray(document[key]) || document[key].length === 0,
-      );
-    }
+    const configuration = stateConfigurationForProject(project);
+    const forceCanonicalValidation = input.incidentSupervisor
+      .taskProjectsPendingFrameIncidentRevalidation.has(project.id);
     const preparation = prepareLocalTaskState({
       decisionOsRoot: project.decisionOsRoot,
-      initialize,
+      forceCanonicalValidation,
+      initialize: configuration.initialize,
       projectId: project.id,
       signal: input.serverCloseSignal,
-      tasksLedgerFile,
+      tasksLedgerFile: configuration.tasksLedgerFile,
       writerId: input.federationNodeId(),
     })
-      .then(() => {
+      .then((receipt) => {
         preparations.delete(project.id);
-        const state = openStateForProject(project);
+        const state = openStateForProject(project, receipt, configuration);
         states.set(project.id, state);
+        console.log(JSON.stringify({
+          server: 'backend-startup',
+          phase: 'project-state-ready',
+          projectId: project.id,
+          snapshotSource: receipt.sourceDiagnostics.status,
+          snapshotPersistent: receipt.persistent,
+          workerCheckpointReads: receipt.sourceDiagnostics.reads,
+          workerShardReads: receipt.sourceDiagnostics.shardReads,
+          mainCheckpointReads: state.store.diagnostics().checkpoint.reads,
+          mainShardReads: state.store.diagnostics().checkpoint.shardReads,
+        }));
         // WHAT: Resolve a retired frame incident only after off-thread durable reconstruction succeeds.
         // WHY: Moving cold preparation out of the listener thread must preserve the existing revalidation gate.
         if (input.incidentSupervisor.taskProjectsPendingFrameIncidentRevalidation.delete(project.id)) {

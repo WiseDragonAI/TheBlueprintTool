@@ -20,9 +20,14 @@ import { taskCurrentBaselineChanges } from './task-current-state-baseline.js';
 import { taskCurrentStateDiagnostics } from './task-current-state-diagnostics.js';
 import { createTaskCurrentStatePersistence } from './task-current-state-persistence.js';
 import {
+  createTaskStateBootstrapReceipt,
   encodeTaskStateCheckpoint,
+  encodeTaskStateGeneration,
   readTaskStateCheckpoint,
   taskStateCheckpointWitness,
+  validateTaskStateBootstrapReceipt,
+  type LegacyTaskStateCheckpointPayload,
+  type TaskStateBootstrapReceipt,
   type TaskStateCheckpointPayload,
 } from './task-current-state-checkpoint.js';
 import {
@@ -54,9 +59,11 @@ const maximumRepairWalPayloadBytes = 16 * 1024 * 1024;
 type StoreOptions = {
   decisionOsRoot: string;
   projectId: string;
+  bootstrapReceipt?: TaskStateBootstrapReceipt;
   initializeLedger?: Record<string, unknown>;
   initializeReplica?: { replicaId: string; counter: number };
   deferFormat?: boolean;
+  forceCanonicalValidation?: boolean;
   onPersistenceError?: (error: Error) => void;
 };
 
@@ -167,6 +174,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   const heldDirectory = resolve(root, 'local', 'held');
   const currentDirectory = resolve(root, 'current');
   const checkpointFile = resolve(root, 'cache', 'checkpoint.json');
+  const generationFile = resolve(root, 'generation.json');
   const entities = new Map<string, TaskCurrentEntity>();
   const publication = createTaskLocalPublicationState(heldDirectory);
   const bucketEntries = new Map<string, Map<string, TaskCurrentEntity>>();
@@ -189,6 +197,10 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   let shardReadCount = 0;
   let markerReadCount = 0;
   let projectionMaterializationCount = 0;
+  let checkpointGeneration = '';
+  let checkpointSnapshotCurrent = false;
+  let currentBootstrapReceipt: TaskStateBootstrapReceipt | null = null;
+  let generationTail = Promise.resolve();
   const checkpointPaths = { current: currentDirectory, held: heldDirectory, journal: journalDirectory };
   const mergeTiming = { count: 0, entities: 0, prepareMs: 0, journalMs: 0, journalEncodeMs: 0, journalOpenMs: 0, journalQueueWaitMs: 0, journalWriteMs: 0, journalFileSyncMs: 0, journalRenameMs: 0, journalDirectorySyncMs: 0, installMs: 0, resultCloneMs: 0 };
 
@@ -415,28 +427,76 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     canonicalizeTaskProjectionClock(projection);
   };
 
-  const checkpointPayload = (): TaskStateCheckpointPayload => ({
-    version: 1,
+  const checkpointDiagnostics = (): TaskStateBootstrapReceipt['sourceDiagnostics'] => ({
+    status: checkpointStatus,
+    error: checkpointError,
+    reads: checkpointReadCount,
+    shardReads: shardReadCount,
+    markerReads: markerReadCount,
+    projectionMaterializations: projectionMaterializationCount,
+  });
+
+  const checkpointPayload = (generation: string): TaskStateCheckpointPayload => ({
+    version: 2,
     projectId: options.projectId,
     entities: [...entities.values()].map((entity) => structuredClone(entity)),
     projection: structuredClone(projection),
     clock: structuredClone(clock),
     buckets: bucketManifest(),
     publication: publication.snapshot(),
-    witness: taskStateCheckpointWitness(checkpointPaths),
+    generation,
   });
+
+  const installGeneration = (generation: string): Promise<void> => {
+    const operation = generationTail.then(async () => {
+      await persistence.atomicWrite(
+        generationFile,
+        encodeTaskStateGeneration({ projectId: options.projectId, generation }),
+      );
+      checkpointGeneration = generation;
+    });
+    generationTail = operation.then(() => undefined, () => undefined);
+    return operation;
+  };
+
+  const publishRestartSnapshot = async (persist: boolean): Promise<TaskStateBootstrapReceipt> => {
+    const sourceDiagnostics = checkpointDiagnostics();
+    let generation = checkpointGeneration;
+    // WHAT: Create one compact witness when this store has not yet owned a restart generation.
+    // WHY: Cold and legacy reconstruction need a constant-work identity before their state can cross the worker boundary.
+    if (!generation) {
+      generation = randomUUID();
+      await installGeneration(generation);
+    }
+    const payload = checkpointPayload(generation);
+    let persistent = false;
+    // WHAT: Publish checkpoint bytes only for a cache-admissible canonical state.
+    // WHY: Invalid retained cache evidence and recovery journals may still use an ephemeral worker receipt without rewriting durable evidence.
+    if (persist) {
+      try {
+        await persistence.atomicWrite(checkpointFile, encodeTaskStateCheckpoint(payload));
+        persistent = true;
+        checkpointStatus = 'warm';
+        checkpointError = '';
+      } catch (error) {
+        checkpointError = error instanceof Error ? error.message : String(error);
+      }
+    }
+    const receipt = createTaskStateBootstrapReceipt({ payload, persistent, sourceDiagnostics });
+    // WHAT: Retain the receipt only while no concurrent mutation advanced its generation.
+    // WHY: A checkpoint write racing a new journal may finish, but its older marker cannot become in-memory restart authority.
+    if (checkpointGeneration === generation) {
+      checkpointSnapshotCurrent = true;
+      currentBootstrapReceipt = receipt;
+    }
+    return receipt;
+  };
 
   const persistCheckpoint = async (): Promise<void> => {
     // WHAT: Skip cache publication for migration shadows, invalid retained cache bytes, and retained recovery evidence.
     // WHY: Optimization state must not alter migration or collision-recovery authority.
     if (checkpointWritesDisabled || (existsSync(journalDirectory) && readdirSync(journalDirectory).length > 0)) return;
-    try {
-      await persistence.atomicWrite(checkpointFile, encodeTaskStateCheckpoint(checkpointPayload()));
-      checkpointStatus = 'warm';
-      checkpointError = '';
-    } catch (error) {
-      checkpointError = error instanceof Error ? error.message : String(error);
-    }
+    await publishRestartSnapshot(true);
   };
 
   const runMaterializer = async (): Promise<void> => {
@@ -481,6 +541,13 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   const deferredMaterialization = new Map<string, { entities: Map<string, TaskCurrentEntity>; journals: Set<string> }>();
   const repairWalFiles = new Map<string, string>();
 
+  const invalidateRestartSnapshot = async (): Promise<void> => {
+    const generation = randomUUID();
+    await installGeneration(generation);
+    checkpointSnapshotCurrent = false;
+    currentBootstrapReceipt = null;
+  };
+
   const resumeMaterialization = (authority: string): void => {
     const deferred = deferredMaterialization.get(authority);
     // WHAT: Ignore release of an attempt that retained no deferred shard work.
@@ -496,6 +563,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   const journal = async (document: JournalDocument, id: string): Promise<string> => {
     const file = resolve(journalDirectory, `${encodeURIComponent(id)}.json`);
     try {
+      await invalidateRestartSnapshot();
       const encodeStartedAt = performance.now();
       const bytes = `${JSON.stringify(document)}\n`;
       mergeTiming.journalEncodeMs += performance.now() - encodeStartedAt;
@@ -517,6 +585,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   const repairJournal = async (document: JournalDocument, authority: string): Promise<string> => {
     const file = repairWalFiles.get(authority) ?? resolve(journalDirectory, `repair-${randomUUID()}.wal`);
     repairWalFiles.set(authority, file);
+    await invalidateRestartSnapshot();
     const encodeStartedAt = performance.now();
     const payload = Buffer.from(JSON.stringify(document), 'utf8');
     if (payload.length < 1 || payload.length > maximumRepairWalPayloadBytes) throw new Error('task_current_repair_wal_payload_limit');
@@ -543,43 +612,91 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     return file;
   };
 
+  const installCheckpointPayload = (
+    payload: LegacyTaskStateCheckpointPayload | TaskStateCheckpointPayload,
+  ): void => {
+    publication.installSnapshot(payload.publication);
+    // WHAT: Install every validated cached entity into its stable identity map.
+    // WHY: Worker receipt validation has already rejected duplicates and cross-project entries.
+    for (const entity of payload.entities) entities.set(taskCurrentEntityKey(entity), entity);
+    Object.assign(projection, structuredClone(payload.projection));
+    clock = structuredClone(payload.clock);
+    // WHAT: Restore every validated bucket summary carried by the same snapshot.
+    // WHY: Root and manifest reads must remain consistent with transferred entity authority.
+    for (const summary of payload.buckets) bucketSummaries.set(summary.bucket, { ...summary });
+    // WHAT: Rebuild active bucket membership from the admitted cached entities.
+    // WHY: Bucket entity maps are process-local indexes and are not serialized independently.
+    for (const [key, entity] of entities) {
+      // WHAT: Exclude locally held entities from the active replication bucket map.
+      // WHY: Checkpoint restore must preserve the same publication visibility as marker reconstruction.
+      if (publication.isHeld(key)) continue;
+      const bucket = taskCurrentBucketForEntityKey(key);
+      const entries = bucketEntries.get(bucket) ?? new Map<string, TaskCurrentEntity>();
+      entries.set(key, entity);
+      bucketEntries.set(bucket, entries);
+    }
+  };
+
   validateFormat();
   let restoredCheckpoint = false;
-  // WHAT: Attempt checkpoint admission only for a committed normal task-state format.
-  // WHY: Migration shadow stores must remain outside runtime cache ownership.
-  if (!options.deferFormat) {
+  // WHAT: Install the worker-validated snapshot without reopening its checkpoint or canonical shards.
+  // WHY: One project bootstrap has exactly one filesystem reconstruction owner.
+  if (options.bootstrapReceipt) {
+    const payload = validateTaskStateBootstrapReceipt({
+      receipt: options.bootstrapReceipt,
+      generationFile,
+      projectId: options.projectId,
+    });
+    installCheckpointPayload(payload);
+    checkpointGeneration = payload.generation;
+    checkpointSnapshotCurrent = true;
+    currentBootstrapReceipt = options.bootstrapReceipt;
+    checkpointStatus = 'warm';
+    restoredCheckpoint = true;
+  }
+  // WHAT: Attempt checkpoint admission only for ordinary committed task-state startup.
+  // WHY: Migration shadows, worker-installed authority, and explicit incident recovery require a different validation boundary.
+  else if (!options.deferFormat && !options.forceCanonicalValidation) {
     checkpointReadCount += 1;
     const retained = readTaskStateCheckpoint({
       file: checkpointFile,
+      generationFile,
       projectId: options.projectId,
-      witness: taskStateCheckpointWitness(checkpointPaths),
+      legacyWitness: () => taskStateCheckpointWitness(checkpointPaths),
     });
     // WHAT: Install one current checkpoint only when no retained recovery journal exists.
     // WHY: Collision evidence and post-checkpoint mutations require canonical replay.
     if (retained.status === 'valid' && (!existsSync(journalDirectory) || readdirSync(journalDirectory).length === 0)) {
-      publication.installSnapshot(retained.payload.publication);
-      for (const entity of retained.payload.entities) entities.set(taskCurrentEntityKey(entity), entity);
-      Object.assign(projection, structuredClone(retained.payload.projection));
-      clock = structuredClone(retained.payload.clock);
-      for (const summary of retained.payload.buckets) bucketSummaries.set(summary.bucket, { ...summary });
-      for (const [key, entity] of entities) {
-        // WHAT: Exclude locally held entities from the active replication bucket map.
-        // WHY: Checkpoint restore must preserve the same publication visibility as marker reconstruction.
-        if (publication.isHeld(key)) continue;
-        const bucket = taskCurrentBucketForEntityKey(key);
-        const entries = bucketEntries.get(bucket) ?? new Map<string, TaskCurrentEntity>();
-        entries.set(key, entity);
-        bucketEntries.set(bucket, entries);
-      }
+      installCheckpointPayload(retained.payload);
+      // WHAT: Retain compact generation authority only for the version-2 checkpoint schema.
+      // WHY: A legacy witness must be replaced before it can cross the worker boundary.
+      checkpointGeneration = retained.payload.version === 2 ? retained.payload.generation : '';
+      checkpointSnapshotCurrent = retained.payload.version === 2;
       checkpointStatus = 'warm';
+      // WHAT: Reuse the already parsed version-2 payload as the worker handoff receipt.
+      // WHY: A warm worker must not rewrite or reread an identical persistent checkpoint.
+      if (retained.payload.version === 2) {
+        currentBootstrapReceipt = createTaskStateBootstrapReceipt({
+          payload: retained.payload,
+          persistent: true,
+          sourceDiagnostics: checkpointDiagnostics(),
+        });
+      }
       restoredCheckpoint = true;
     } else {
+      // WHAT: Classify a structurally valid checkpoint as stale when retained journals block admission.
+      // WHY: An externally restored journal must remain visible even when its generation marker was not advanced by this process.
+      if (retained.status === 'valid') {
+        checkpointStatus = 'invalid';
+        checkpointError = 'stale_task_state_checkpoint';
+      }
       // WHAT: Preserve and disable only a checkpoint whose own bytes or canonical witness are invalid.
       // WHY: A valid checkpoint blocked by retained journals may be safely replaced after canonical recovery settles.
       if (retained.status === 'invalid') {
         checkpointStatus = 'invalid';
         checkpointError = retained.error;
-        checkpointWritesDisabled = true;
+        checkpointWritesDisabled = retained.preserve;
+        checkpointGeneration = retained.generation ?? '';
       }
     }
   }
@@ -983,6 +1100,32 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       mergeTiming.resultCloneMs += performance.now() - resultCloneStartedAt;
       return result;
       });
+    },
+    async prepareRestartReceipt(): Promise<TaskStateBootstrapReceipt> {
+      // WHAT: Wait until every journal, entity, and publication mutation reaches its canonical settlement.
+      // WHY: A restart receipt cannot represent work still owned by the asynchronous materializer.
+      while (materializer || pendingEntities.size > 0 || publication.hasPending() || pendingJournals.size > 0) {
+        // WHAT: Restart a missing materializer while durable canonical work remains queued.
+        // WHY: A worker receipt cannot precede settlement of the state it carries.
+        if (!materializer) scheduleMaterializer();
+        await materializer;
+        // WHAT: Propagate the original materialization failure before publishing worker authority.
+        // WHY: A receipt must never conceal a failed canonical write.
+        if (materializerError) throw materializerError;
+      }
+      // WHAT: Reuse an already current snapshot without another marker or checkpoint write.
+      // WHY: Warm startup should transfer the admitted payload, not republish identical cache bytes.
+      if (checkpointSnapshotCurrent && currentBootstrapReceipt) return currentBootstrapReceipt;
+      // WHAT: Reject worker handoff when invalid retained cache bytes include no valid generation witness.
+      // WHY: Preserving corrupt evidence forbids rewriting it, while main cannot safely install an unwitnessed snapshot.
+      if (checkpointWritesDisabled && !checkpointGeneration) {
+        throw new Error(checkpointError || 'task_state_restart_generation_unavailable');
+      }
+      // WHAT: Persist the worker snapshot only while invalid cache evidence and recovery journals permit replacement.
+      // WHY: Ephemeral receipt transfer must not rewrite preserved bytes or retained collision authority.
+      const persistent = !checkpointWritesDisabled
+        && (!existsSync(journalDirectory) || readdirSync(journalDirectory).length === 0);
+      return await publishRestartSnapshot(persistent);
     },
     async flush(): Promise<void> {
       for (const authority of [...deferredMaterialization.keys()]) resumeMaterialization(authority);

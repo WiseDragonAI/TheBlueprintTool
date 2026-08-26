@@ -7,6 +7,7 @@ import { createProjectTaskState } from "../helper/project-task-state.js";
 
 type BootstrapRequest = {
   decisionOsRoot: string;
+  forceCanonicalValidation: boolean;
   initialize: boolean;
   projectId: string;
   tasksLedgerFile: string;
@@ -22,14 +23,17 @@ parentPort.once("message", (request: BootstrapRequest) => {
   void (async () => {
     const state = createProjectTaskState({
       decisionOsRoot: request.decisionOsRoot,
+      forceCanonicalValidation: request.forceCanonicalValidation,
       initialize: request.initialize,
       projectId: request.projectId,
       tasksLedgerFile: request.tasksLedgerFile,
       writerId: request.writerId,
     });
     await state.flush();
+    const receipt = await state.store.prepareRestartReceipt();
     parentPort!.postMessage({
       ok: true,
+      receipt,
       diagnostics: state.store.diagnostics(),
     });
   })().catch((error: unknown) => {

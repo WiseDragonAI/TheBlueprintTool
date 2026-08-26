@@ -51,6 +51,7 @@ export function createFederatedLibraryRuntime(input: {
   localWorkspaceRoots: () => string[];
   masterDecisionOsRoot: string;
   masterRoot: string;
+  preparedCatalog?: { availableSkillNames: string[] };
   paused: (component: string) => boolean;
   recordBackgroundFailure: (component: string, operation: string, error: unknown, context?: AnyRecord) => unknown;
   recordIncident: (input: AnyRecord) => { id: string };
@@ -66,11 +67,14 @@ export function createFederatedLibraryRuntime(input: {
   stop: () => void;
   synchronize: (forceRefresh?: boolean) => Promise<void>;
 } {
+  // WHAT: Transfer the prepared catalog only when startup supplied its one-shot receipt.
+  // WHY: Ordinary construction still owns full catalog initialization for non-server callers.
   const catalog = createFederatedLibraryCatalog({
     localDecisionOsRoots: input.localDecisionOsRoots,
     localWorkspaceRoots: input.localWorkspaceRoots,
     masterDecisionOsRoot: input.masterDecisionOsRoot,
     masterRoot: input.masterRoot,
+    ...(input.preparedCatalog ? { preparedCatalog: input.preparedCatalog } : {}),
     runtime: input.runtime,
   });
   let requested = false;

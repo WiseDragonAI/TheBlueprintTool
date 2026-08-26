@@ -9,7 +9,6 @@ import { dirname, resolve } from 'node:path';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { resolveDecisionOsRoot } from '../helper/resolve-decision-os-root.js';
 import { readDecisionOsSettings } from '../helper/read-decision-os-settings.js';
-import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
 import { NodeReleaseError } from '../../delivery/helper/node-release-store.js';
 import { RuntimeScopePausedError } from '../helper/runtime-incident-ledger.js';
 import { createRuntimeIncidentLedger } from '../helper/runtime-incident-ledger.js';
@@ -24,6 +23,7 @@ import { createDeliveryNodeRuntime } from '../../delivery/runtime/delivery-node-
 import { createServerFederationRuntime } from '../runtime/server-federation-runtime.js';
 import { createServerFoundationRuntime } from '../runtime/server-foundation-runtime.js';
 import { createServerProjectRuntime } from '../runtime/server-project-runtime.js';
+import { prepareServerRuntime } from '../runtime/prepare-server-runtime.js';
 import { createGlobalRequestHandler } from '../http/create-global-request-handler.js';
 import { createProjectRequestHandler } from '../http/create-project-request-handler.js';
 import { createIncidentSupervisor } from '../runtime/incident-supervisor.js';
@@ -43,6 +43,7 @@ export function createDecisionOsServer(
     role: 'helper',
     action: 'create-http-server',
   });
+  const startupStartedAt = performance.now();
   const envelope = input as {
     action_payload?: AnyRecord;
     runtime_state?: AnyRecord;
@@ -88,11 +89,6 @@ export function createDecisionOsServer(
   runtime.decisionOsRoot = masterDecisionOsRoot;
   runtime.serverRoot = masterRoot;
   runtime.port = port;
-  runtime.ledgerCliShimDirectory = ensureLedgerCliShim({
-    masterDecisionOsRoot,
-    launcher: resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../bin/ledger-cli.mjs'),
-    webpageLauncher: resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../bin/download-webpage.mjs'),
-  });
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };
   }
@@ -124,6 +120,7 @@ export function createDecisionOsServer(
   let activeHandleRequest = startupHandleRequest;
   let projectBootstrapSettled = false;
   let serverClosed = false;
+  const startupAbort = new AbortController();
   let resolveRuntimeReady!: () => void;
   let rejectRuntimeReady!: (error: unknown) => void;
   const serverRuntimeReady = new Promise<void>((resolveReady, rejectReady) => {
@@ -139,12 +136,33 @@ export function createDecisionOsServer(
   let closeInitializedRuntime = (): void => undefined;
   let server: ReturnType<typeof createNodeHttpListener>;
   const initializeRuntime = async (): Promise<void> => {
+    const preparation = await prepareServerRuntime({
+      ledgerLauncher: resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../bin/ledger-cli.mjs'),
+      masterDecisionOsRoot,
+      masterRoot,
+      nodeExecutable: process.execPath,
+      pausedBackgroundComponents: [...incidentSupervisor.pausedBackgroundComponents],
+      signal: startupAbort.signal,
+      webpageLauncher: resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../bin/download-webpage.mjs'),
+    });
+    runtime.ledgerCliShimDirectory = preparation.ledgerCliShimDirectory;
+    console.log(JSON.stringify({
+      server: 'backend-startup',
+      phase: 'global-preparation-ready',
+      elapsedMs: Number((performance.now() - startupStartedAt).toFixed(2)),
+      projectCount: preparation.projectCount,
+      repositoryCount: preparation.repositoryCount,
+      skillCount: preparation.availableSkillNames.length,
+      containedFailures: preparation.failures.length,
+    }));
     const foundation = createServerFoundationRuntime({
       incidentLedger,
       incidentSupervisor,
       masterDecisionOsRoot,
       masterRoot,
       migrationAdmissionForProject,
+      preparedProjects: preparation.projects,
+      repositoriesPrepared: true,
       runtime,
     });
     const {
@@ -177,6 +195,7 @@ export function createDecisionOsServer(
       masterDecisionOsRoot,
       masterRoot,
       port,
+      preparation,
       runtime,
     });
     const {
@@ -362,11 +381,17 @@ export function createDecisionOsServer(
     host: String(payload.host ?? '127.0.0.1'),
     onClose: () => {
       serverClosed = true;
+      startupAbort.abort(new Error('server_closed'));
       closeInitializedRuntime();
       process.off('uncaughtException', onUncaughtException);
       process.off('unhandledRejection', onUnhandledRejection);
     },
     onListening: () => {
+      console.log(JSON.stringify({
+        server: 'backend-startup',
+        phase: 'listener-ready',
+        elapsedMs: Number((performance.now() - startupStartedAt).toFixed(2)),
+      }));
       incidentLedger.resolveScope(
         'server-launcher',
         'The server child started and opened its HTTP listener successfully.',
@@ -382,6 +407,11 @@ export function createDecisionOsServer(
         }
         void initializeRuntime()
           .then(() => {
+            console.log(JSON.stringify({
+              server: 'backend-startup',
+              phase: 'runtime-ready',
+              elapsedMs: Number((performance.now() - startupStartedAt).toFixed(2)),
+            }));
             incidentLedger.resolveScope(
               'server-runtime',
               'The complete server runtime initialized behind the active HTTP listener.',

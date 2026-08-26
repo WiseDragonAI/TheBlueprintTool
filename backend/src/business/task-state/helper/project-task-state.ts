@@ -9,6 +9,7 @@ import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.j
 import { parseThreadMarkdown } from '../../ledger/helper/thread-content-file.js';
 import { captureTaskExecutionArtifact } from './capture-task-execution-artifact.js';
 import { createTaskCurrentStateStore } from './task-current-state-store.js';
+import type { TaskStateBootstrapReceipt } from './task-current-state-checkpoint.js';
 import { taskCurrentStateVersion, type TaskEntityChange, type TaskStateDelta } from './task-current-state-types.js';
 import { createTaskContentObjectStore, type TaskContentHead } from './task-content-object-store.js';
 import { taskContentReferences } from './task-content-resources.js';
@@ -78,17 +79,23 @@ export function createProjectTaskState(input: {
   writerId: string;
   decisionOsRoot: string;
   tasksLedgerFile: string;
+  bootstrapReceipt?: TaskStateBootstrapReceipt;
   publish?: (delta: TaskStateDelta) => void | Promise<void>;
   publishContent?: (resourceId: string) => void | Promise<void>;
   commitContent?: (change: { mutation: LedgerMutation; changedContentFiles: readonly string[] }) => Promise<AnyRecord | null>;
   initialize?: boolean;
+  forceCanonicalValidation?: boolean;
   canWrite?: () => boolean;
   onPersistenceError?: (error: Error) => void;
   onExecutionChange?: (change: { executionId: string; record: ReturnType<ReturnType<typeof createTaskExecutionRepository>['find']> }) => void;
 }) {
+  // WHAT: Transfer optional worker authority and explicit recovery policy into the causal store.
+  // WHY: Main-thread startup must neither reconstruct a worker snapshot nor bypass forced durable validation.
   const store = createTaskCurrentStateStore({
     decisionOsRoot: input.decisionOsRoot,
     projectId: input.projectId,
+    ...(input.bootstrapReceipt ? { bootstrapReceipt: input.bootstrapReceipt } : {}),
+    forceCanonicalValidation: input.forceCanonicalValidation,
     onPersistenceError: input.onPersistenceError,
     ...(input.initialize ? { initializeLedger: readableLedger(input.tasksLedgerFile) } : {}),
   });

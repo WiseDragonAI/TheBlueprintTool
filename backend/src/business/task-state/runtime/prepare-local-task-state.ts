@@ -3,9 +3,12 @@
  * WHY: Project bootstrap must preserve the synchronous store API without running cold reconstruction on the listener thread.
  */
 import { Worker } from "node:worker_threads";
+import { fileURLToPath } from "node:url";
+import type { TaskStateBootstrapReceipt } from "../helper/task-current-state-checkpoint.js";
 
 type BootstrapInput = {
   decisionOsRoot: string;
+  forceCanonicalValidation: boolean;
   initialize: boolean;
   projectId: string;
   signal: AbortSignal;
@@ -15,22 +18,25 @@ type BootstrapInput = {
 
 const bootstrapDeadlineMs = 120_000;
 
-export function prepareLocalTaskState(input: BootstrapInput): Promise<void> {
+export function prepareLocalTaskState(input: BootstrapInput): Promise<TaskStateBootstrapReceipt> {
   return new Promise((resolveBootstrap, rejectBootstrap) => {
     const workerModule = new URL(
       "./local-task-state-bootstrap-worker.ts",
       import.meta.url,
     ).href;
     const tsxApi = import.meta.resolve("tsx/esm/api");
+    const tsconfig = fileURLToPath(
+      new URL("../../../../tsconfig.json", import.meta.url),
+    );
     const worker = new Worker(
-      `import(${JSON.stringify(tsxApi)}).then(({ register }) => { register(); return import(${JSON.stringify(workerModule)}); })`,
+      `import(${JSON.stringify(tsxApi)}).then(({ register }) => { register({ tsconfig: ${JSON.stringify(tsconfig)} }); return import(${JSON.stringify(workerModule)}); })`,
       {
         eval: true,
         execArgv: [],
       },
     );
     let settled = false;
-    const settle = (error?: Error): void => {
+    const settle = (error?: Error, receipt?: TaskStateBootstrapReceipt): void => {
       // WHAT: Ignore duplicate worker, timeout, and cancellation settlement.
       // WHY: Exactly one owner may resolve project bootstrap and release its resources.
       if (settled) return;
@@ -38,8 +44,18 @@ export function prepareLocalTaskState(input: BootstrapInput): Promise<void> {
       clearTimeout(deadline);
       input.signal.removeEventListener("abort", abort);
       void worker.terminate().catch(() => undefined);
+      // WHAT: Reject every failed settlement before considering its optional receipt.
+      // WHY: Worker errors cannot transfer project authority.
       if (error) rejectBootstrap(error);
-      else resolveBootstrap();
+      else {
+        // WHAT: Require the explicit receipt on every successful settlement.
+        // WHY: A bare worker success recreates the duplicate main-thread store admission being removed.
+        if (!receipt) {
+          rejectBootstrap(new Error("task_state_bootstrap_receipt_missing"));
+          return;
+        }
+        resolveBootstrap(receipt);
+      }
     };
     const abort = (): void =>
       settle(
@@ -53,10 +69,10 @@ export function prepareLocalTaskState(input: BootstrapInput): Promise<void> {
     deadline.unref?.();
     worker.once(
       "message",
-      (message: { ok?: boolean; error?: string; stack?: string }) => {
+      (message: { ok?: boolean; receipt?: TaskStateBootstrapReceipt; error?: string; stack?: string }) => {
         // WHAT: Admit only an explicit successful worker receipt.
         // WHY: Worker exit and malformed responses cannot establish a locally ready project.
-        if (message.ok === true) settle();
+        if (message.ok === true) settle(undefined, message.receipt);
         else {
           const error = new Error(
             message.error || "task_state_bootstrap_worker_failed",
@@ -86,6 +102,7 @@ export function prepareLocalTaskState(input: BootstrapInput): Promise<void> {
     input.signal.addEventListener("abort", abort, { once: true });
     worker.postMessage({
       decisionOsRoot: input.decisionOsRoot,
+      forceCanonicalValidation: input.forceCanonicalValidation,
       initialize: input.initialize,
       projectId: input.projectId,
       tasksLedgerFile: input.tasksLedgerFile,

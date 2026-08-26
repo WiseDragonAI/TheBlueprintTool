@@ -63,21 +63,19 @@ function assertExistingRepository(decisionOsRoot: string): void {
   let topLevel = '';
   let head = '';
   try {
-    topLevel = git({
+    const identity = git({
       decisionOsRoot,
-      args: ['rev-parse', '--show-toplevel'],
-      operation: 'validate-root',
+      args: ['rev-parse', '--show-toplevel', '--verify', 'HEAD'],
+      operation: 'validate-root-and-head',
     });
-    head = git({
-      decisionOsRoot,
-      args: ['rev-parse', '--verify', 'HEAD'],
-      operation: 'validate-head',
-    });
+    [topLevel = '', head = ''] = identity.split('\n');
   } catch (error) {
     throw new Error(
       `Incomplete Decision OS Git metadata at ${resolve(decisionOsRoot, '.git')}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+  // WHAT: Reject an existing repository whose root or committed HEAD does not match the authored-content boundary.
+  // WHY: One combined Git query removes duplicate startup subprocesses without weakening either admission check.
   if (
     realpathSync(topLevel) !== realpathSync(decisionOsRoot)
     || !/^[a-f0-9]{40,64}$/.test(head)
