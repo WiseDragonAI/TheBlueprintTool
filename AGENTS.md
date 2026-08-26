@@ -503,3 +503,28 @@ Markdown image assets can be referenced from the active workspace `.decision-os`
 ```
 
 The backend serves image files from `/.decision-os/...` for the active workspace only. Adjacent standalone images, including image-only lines separated by blank lines, render as a carousel. Image frames resize by width, derive height from the loaded image aspect ratio, and persist dimensions in the card JSON under `imageSizes`, keyed by the markdown image URL.
+
+## Guardian Resource Admission — Superseding Policy
+
+All CPU-, RAM-, disk-, GPU-, or VRAM-intensive local work must enter the workstation-wide queue
+through `~/.local/bin/guardian`. Preserve the documented Decision OS command shape and concurrency
+limits inside the Guardian command. Use detached mode for agent work; never directly launch an
+equivalent heavy command while its ticket exists.
+
+After a detached submission, read the JSON receipt once. Follow exactly one path:
+
+1. `notify_state=pending` with non-null `notify_tab_key` and `notify_panel`: send a final chat
+   message immediately and end the turn. Do not sleep, poll, call `guardian wait`, or resubmit.
+   Guardian owns the waiter and will wake this agent with terminal status and output.
+2. `notify_state=polling`: run one real `sleep 120`, then make exactly one
+   `guardian --json status TICKET` query. If non-terminal, repeat that delayed cycle. Never make
+   consecutive status queries. If sleep cannot survive the end of a turn, send a final message
+   naming the ticket and required check after 120 seconds; do not busy-poll.
+3. `waiting` is normal backlog, not an error or bad loop. Estimates are advisory. Never cancel,
+   retry, bypass, or directly run the queued command. A duplicate receipt names the same ticket.
+
+MultiTerm normally provides `MULTIWEZTERM_TAB_KEY`, `MULTIWEZTERM_PANEL`, and a runtime file.
+Standalone mwez/WezTerm is wakeable only if `MWEZ_TAB_KEY` and `MWEZ_PANEL`, or equivalent launcher
+coordinates, were captured. Never infer this from the visible terminal: the receipt fields are
+authoritative. Exit `75` applies only to explicit `--no-wait`; claim that ticket once with
+`guardian wait TICKET`.
