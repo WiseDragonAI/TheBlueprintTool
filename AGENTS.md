@@ -527,3 +527,10 @@ Standalone mwez/WezTerm is wakeable only if `MWEZ_TAB_KEY` and `MWEZ_PANEL`, or 
 coordinates, were captured. Never infer this from the visible terminal: the receipt fields are
 authoritative. Exit `75` applies only to explicit `--no-wait`; claim that ticket once with
 `guardian wait TICKET`.
+
+Guardian owns one aggregate 80% builder budget. Learned CPU demand is admission accounting, not
+a per-ticket core limit. Keep intentional lower concurrency in the existing CLI flags; Guardian
+preserves it and caps only missing, unbounded, or excessive known-builder concurrency to its
+adaptive capacity. Callers submit once and send their final chat message; they do not decide how
+the scheduler runs the ticket. Use `guardian --json history TICKET` for submitted/effective argv,
+resource usage, admission decisions, terminal summary, and output hash.
