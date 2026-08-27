@@ -54,6 +54,25 @@ test('newer journal witness rejects an older checkpoint and replays canonical st
   assert.equal(restarted.projectedEntity('card', 'card-a')?.status, 'todo');
 });
 
+test('stale atomic-write temp files do not block cold reconstruction from publishing a checkpoint', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-checkpoint-temp-artifact-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  await populatedStore(root);
+  const stateRoot = resolve(root, 'task-state', 'project-a');
+  const checkpoint = resolve(stateRoot, 'cache', 'checkpoint.json');
+  const temporaryJournal = resolve(stateRoot, 'journal', 'desktop-batch.json.tmp-stale');
+  rmSync(checkpoint);
+  writeFileSync(temporaryJournal, '');
+
+  const restarted = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' });
+  assert.equal(restarted.diagnostics().checkpoint.status, 'cold');
+  assert.ok(restarted.diagnostics().checkpoint.shardReads > 0);
+  const receipt = await restarted.prepareRestartReceipt();
+  assert.equal(receipt.persistent, true);
+  assert.equal(existsSync(checkpoint), true);
+  assert.equal(readFileSync(temporaryJournal, 'utf8'), '');
+});
+
 test('invalid checkpoint bytes remain unchanged while canonical shards stay available', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-checkpoint-invalid-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));
