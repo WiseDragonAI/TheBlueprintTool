@@ -202,6 +202,10 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   let currentBootstrapReceipt: TaskStateBootstrapReceipt | null = null;
   let generationTail = Promise.resolve();
   const checkpointPaths = { current: currentDirectory, held: heldDirectory, journal: journalDirectory };
+  // WHAT: Recognize only canonical mutation journals and repair WALs as retained recovery evidence.
+  // WHY: An abandoned atomic-write temp artifact is not replayable authority and must not disable restart checkpoints forever.
+  const hasRetainedJournalEvidence = (): boolean => existsSync(journalDirectory)
+    && readdirSync(journalDirectory).some((name) => name.endsWith('.json') || name.endsWith('.wal'));
   const mergeTiming = { count: 0, entities: 0, prepareMs: 0, journalMs: 0, journalEncodeMs: 0, journalOpenMs: 0, journalQueueWaitMs: 0, journalWriteMs: 0, journalFileSyncMs: 0, journalRenameMs: 0, journalDirectorySyncMs: 0, installMs: 0, resultCloneMs: 0 };
 
   const serializeTransition = <Result>(operation: () => Promise<Result>): Promise<Result> => {
@@ -495,7 +499,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   const persistCheckpoint = async (): Promise<void> => {
     // WHAT: Skip cache publication for migration shadows, invalid retained cache bytes, and retained recovery evidence.
     // WHY: Optimization state must not alter migration or collision-recovery authority.
-    if (checkpointWritesDisabled || (existsSync(journalDirectory) && readdirSync(journalDirectory).length > 0)) return;
+    if (checkpointWritesDisabled || hasRetainedJournalEvidence()) return;
     await publishRestartSnapshot(true);
   };
 
@@ -666,7 +670,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     });
     // WHAT: Install one current checkpoint only when no retained recovery journal exists.
     // WHY: Collision evidence and post-checkpoint mutations require canonical replay.
-    if (retained.status === 'valid' && (!existsSync(journalDirectory) || readdirSync(journalDirectory).length === 0)) {
+    if (retained.status === 'valid' && !hasRetainedJournalEvidence()) {
       installCheckpointPayload(retained.payload);
       // WHAT: Retain compact generation authority only for the version-2 checkpoint schema.
       // WHY: A legacy witness must be replaced before it can cross the worker boundary.
@@ -1124,7 +1128,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       // WHAT: Persist the worker snapshot only while invalid cache evidence and recovery journals permit replacement.
       // WHY: Ephemeral receipt transfer must not rewrite preserved bytes or retained collision authority.
       const persistent = !checkpointWritesDisabled
-        && (!existsSync(journalDirectory) || readdirSync(journalDirectory).length === 0);
+        && !hasRetainedJournalEvidence();
       return await publishRestartSnapshot(persistent);
     },
     async flush(): Promise<void> {
