@@ -30,10 +30,16 @@ export async function readCodexPipelineRunController(
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
   const runId = text(payload.runId ?? payload.pipelineRunId);
   if (!runId) return { ok: false, statusCode: 400, error: 'Missing pipeline run id.' };
-  const storedStore = readCodexPipelineStore({ decisionOsRoot }).store;
+  const storedRead = readCodexPipelineStore({ decisionOsRoot });
+  const storedStore = storedRead.store;
   const storedRun = storedStore.runs.find((entry) => entry.id === runId);
   if (!storedRun) return { ok: false, statusCode: 404, error: 'Pipeline run not found.', runId };
-  const run = reassessPipelineAfterSkill({ decisionOsRoot, runtime, pipelineRunId: runId });
+  const run = reassessPipelineAfterSkill({
+    decisionOsRoot,
+    runtime,
+    pipelineRunId: runId,
+    storeRead: storedRead,
+  });
   if (!run) return { ok: false, statusCode: 404, error: 'Pipeline executions not found.', runId };
   const context = resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId: run.ledgerId });
   const cardsById = new Map((context?.ledger.cards ?? []).map((card) => [String(card.id ?? ''), card]));
@@ -81,7 +87,7 @@ export async function readCodexPipelineRunController(
           : ['restart', 'open-log'],
     } : null;
   const pipeline = run.pipelineId
-    ? readCodexPipelineStore({ decisionOsRoot }).store.pipelines.find((entry) => entry.id === run.pipelineId) ?? null
+    ? storedStore.pipelines.find((entry) => entry.id === run.pipelineId) ?? null
     : null;
   const terminal = run.status === 'complete' || run.status === 'failed' || run.status === 'cancelled';
   return {
