@@ -22,6 +22,7 @@ export function createRuntimeIncidentReviewScheduler(input: {
   let inFlight = false;
   let synchronizedDigest = '';
   let recordedBootstrapDigest = '';
+  let timer: NodeJS.Timeout | null = null;
 
   const run = async (): Promise<void> => {
     // WHAT: Serialize periodic passes and respect an explicitly paused scheduler scope.
@@ -84,7 +85,26 @@ export function createRuntimeIncidentReviewScheduler(input: {
     }
   };
 
-  const timer = setInterval(() => void run(), Math.max(10, input.intervalMs));
-  timer.unref?.();
-  return { run, stop: () => clearInterval(timer) };
+  const start = (): void => {
+    // WHAT: Start one periodic incident-review timer only after project bootstrap admits task authority.
+    // WHY: Construction occurs before worker snapshot installation and must not hydrate a project on the main thread.
+    if (timer) return;
+    timer = setInterval(() => {
+      // WHAT: Observe an unexpected rejection escaping the scheduler's own containment boundary.
+      // WHY: Timer callbacks must never create an unhandled rejection that can terminate the server.
+      void run().catch((error: unknown) => input.onFailure(error, {
+        projectId: input.targetProject()?.id ?? '',
+        cardId: runtimeIncidentReviewCardId,
+      }));
+    }, Math.max(10, input.intervalMs));
+    timer.unref?.();
+  };
+  const stop = (): void => {
+    // WHAT: Treat stopping an unstarted scheduler as an already-settled lifecycle.
+    // WHY: Server close can race project bootstrap before the periodic timer is admitted.
+    if (!timer) return;
+    clearInterval(timer);
+    timer = null;
+  };
+  return { run, start, stop };
 }

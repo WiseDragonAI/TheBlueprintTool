@@ -13,6 +13,7 @@ import { cancelCardSkillRunController } from '@backend/business/codex/controller
 import { cancelCodexPipelineRunController } from '@backend/business/codex/controller/cancel-codex-pipeline-run-controller.js';
 import { registerTaskExecutionProcess } from '@backend/business/codex/helper/task-execution-runtime.js';
 import { writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
+import { reassessPipelineAfterSkill } from '@backend/business/codex/helper/codex-pipeline-runner.js';
 import { createTaskCurrentStateStore } from '@backend/business/task-state/helper/task-current-state-store.js';
 import { createTaskExecutionRepository } from '@backend/business/task-state/helper/task-execution-repository.js';
 import type { TaskExecutionMetadata } from '@backend/business/task-state/helper/task-current-state-types.js';
@@ -133,6 +134,60 @@ test('rejects mismatched canonical ownership before cancelling queued work', asy
     assert.equal(result.ok, false);
     assert.equal(result.statusCode, 409);
     assert.equal(context.executions.find(executionId)?.lifecycle.phase, 'queued');
+  } finally {
+    await context.store.flush();
+    rmSync(context.workspace, { recursive: true, force: true });
+  }
+});
+
+test('reassesses replicated pipeline state without hydrating unrelated ledger card files', async () => {
+  const context = fixture();
+  const now = '2026-07-23T10:00:00.000Z';
+  const pipelineRunId = 'pipeline-reassessment';
+  const executionId = 'pipeline-reassessment-execution';
+  const skillRunId = 'pipeline-reassessment-skill';
+  mkdirSync(join(context.decisionOsRoot, 'cards', 'specs', 'unrelated.md'), { recursive: true });
+  writeFileSync(join(context.decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }],
+  }));
+  writeFileSync(join(context.decisionOsRoot, 'specs.json'), JSON.stringify({
+    cards: [{ id: 'unrelated', comment: { contentFile: '.decision-os/cards/specs/unrelated.md' } }],
+    annotations: [], relationships: [],
+  }));
+  writeCodexPipelineStore({
+    decisionOsRoot: context.decisionOsRoot,
+    store: {
+      version: 1,
+      pipelines: [], steps: [], skillLibrary: [], activeWorkspaceRun: pipelineRunId,
+      runs: [{
+        id: pipelineRunId, pipelineId: 'pipeline-a', pipelineName: 'Pipeline A', temporary: false,
+        executionMode: 'local', ledgerId: 'specs', sourceCardId: 'source', sourceCardTitle: 'Source',
+        status: 'pending', createdAt: now, updatedAt: now, startedAt: null, finishedAt: null, resumedAt: null, error: '',
+        steps: [{
+          id: 'pipeline-reassessment-step', stepId: 'step-a', name: 'Step A', purpose: '', outputCardId: 'output',
+          status: 'pending', startedAt: null, finishedAt: null, error: '',
+          skills: [{
+            id: 'pipeline-reassessment-run-skill', pipelineSkillId: 'skill-a', skillName: 'analysis',
+            runId: skillRunId, executionId, status: 'pending', codexModel: 'gpt-5.6-sol', codexEffort: 'medium',
+            stdoutFile: '', stderrFile: '', startedAt: null, finishedAt: null, error: '',
+          }],
+        }],
+      }],
+    },
+  });
+  await context.executions.admit({
+    metadata: metadata({ executionId, runId: skillRunId, cardId: 'source', pipelineRunId }),
+    executorNodeId: 'workstation',
+  });
+  await context.executions.transition(executionId, { phase: 'queued' });
+  try {
+    const run = reassessPipelineAfterSkill({
+      decisionOsRoot: context.decisionOsRoot,
+      runtime: context.runtime,
+      pipelineRunId,
+    });
+    assert.equal(run?.id, pipelineRunId);
+    assert.equal(run?.status, 'pending');
   } finally {
     await context.store.flush();
     rmSync(context.workspace, { recursive: true, force: true });
