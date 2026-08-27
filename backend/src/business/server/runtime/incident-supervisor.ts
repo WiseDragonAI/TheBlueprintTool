@@ -12,6 +12,10 @@ import {
 import { isTaskStateBootstrapGate } from '../../task-state/helper/is-task-state-bootstrap-gate.js';
 
 type AnyRecord = Record<string, unknown>;
+const frontendTelemetryStoppedOperations = new Set([
+  'frontend-telemetry-client',
+  'persist-frontend-telemetry',
+]);
 
 export function isExecutionScopedCodexFailure(operation: string): boolean {
   return operation === 'codex-execution-timeout'
@@ -36,6 +40,19 @@ export function createIncidentSupervisor(input: {
   let fatalExitScheduled = false;
 
   for (const incident of input.incidentLedger.active()) {
+    // WHAT: Resolve a retained frontend telemetry pause only when its complete active scope contains known stopped operations.
+    // WHY: Client and append failures do not invalidate runtime admission, while any unknown shared failure must remain paused.
+    if (
+      incident.scope === 'background:frontend-telemetry'
+      && input.incidentLedger.active(incident.scope)
+        .every((candidate) => frontendTelemetryStoppedOperations.has(candidate.operation))
+    ) {
+      input.incidentLedger.resolveScope(
+        incident.scope,
+        'Frontend telemetry client and append failures are contained stopped operations, not runtime component pauses.',
+      );
+      continue;
+    }
     // WHAT: Convert a legacy repair timeout into non-pausing history when it is the scope's only failure class.
     // WHY: Relay delay terminates one repair attempt and does not invalidate otherwise writable local task state.
     if (incident.code === 'federation_state_no_progress' && incident.scope.startsWith('project-task-state:')) {

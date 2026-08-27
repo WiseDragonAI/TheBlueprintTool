@@ -365,7 +365,13 @@ export function createDecisionOsServer(
       decisionOsRoot: masterDecisionOsRoot,
       enabled: (runtime.decisionOsSettings as AnyRecord | undefined)?.frontendTelemetryWebSocketEnabled === true,
       server,
-      recordFailure: (operation, error) => recordBackgroundFailure('frontend-telemetry', operation, error),
+      recordFailure: (operation, error) => recordStoppedOperation({
+        scope: `frontend-telemetry:${operation}`,
+        component: 'frontend-telemetry',
+        operation,
+        error,
+        context: {},
+      }),
     });
     server.on('close', telemetrySocket.close);
     const address = server.address();

@@ -80,6 +80,53 @@ test('rejects cross-origin browser telemetry handshakes', async (context) => {
   assert.equal(outcome, 'rejected');
 });
 
+test('contains an oversized browser message to its telemetry client socket', async (context) => {
+  const decisionOsRoot = await mkdtemp(join(tmpdir(), 'decision-os-frontend-telemetry-oversized-'));
+  const server = createServer();
+  const failures: Array<{ operation: string; error: unknown }> = [];
+  const transport = installFrontendTelemetryWebSocket({
+    decisionOsRoot,
+    enabled: true,
+    server,
+    recordFailure: (operation, error) => failures.push({ operation, error }),
+  });
+  context.after(async () => {
+    transport.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rm(decisionOsRoot, { recursive: true, force: true });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === 'object');
+  const origin = `http://127.0.0.1:${address.port}`;
+  const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/diagnostics/frontend-telemetry`, { origin });
+  await new Promise<void>((resolve, reject) => {
+    socket.once('open', resolve);
+    socket.once('error', reject);
+  });
+  socket.send('x'.repeat(65 * 1024));
+  const closeCode = await new Promise<number>((resolve) => socket.once('close', resolve));
+  const secondSocket = new WebSocket(`ws://127.0.0.1:${address.port}/api/diagnostics/frontend-telemetry`, { origin });
+  await new Promise<void>((resolve, reject) => {
+    secondSocket.once('open', resolve);
+    secondSocket.once('error', reject);
+  });
+  secondSocket.send(JSON.stringify([{
+    name: 'telemetry-after-oversized-message',
+    at: '2026-08-27T15:30:00.000Z',
+    browserSessionId: 'browser-session-after-oversized-message',
+    route: '/',
+  }]));
+  await waitFor(async () => (await readFile(transport.file, 'utf8').catch(() => ''))
+    .includes('telemetry-after-oversized-message'));
+
+  assert.equal(closeCode, 1009);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0]?.operation, 'frontend-telemetry-client');
+  assert.equal(server.listening, true);
+  secondSocket.close();
+});
+
 test('exposes only the telemetry opt-in through the global diagnostic configuration route', () => {
   const headers = new Map<string, string>();
   let body = '';
