@@ -17,6 +17,7 @@
 5. [Voice delivery scope and gate deviation](./voice-delivery-scope-and-gate-deviation-2026-07-31.md) records the delivered voice correction, the unrelated suite-repair scope leak, and the gate rules that prevent recurrence.
 6. [Epoch-4 replication incident](./epoch-4-replication-incident-2026-08-09.md) records the `rel-0.4.2` through `rel-0.4.8` failure chain, architectural corrections, recovery boundary, and restart-proven closure.
 7. [Skill editor close-control ownership](./skill-editor-close-control-ownership-2026-08-14.md) records the duplicated close-control invariant, failed cross-dialog CSS premise, lifecycle-owned repair, browser-proof corrections, and delivery boundary.
+8. [Frontend telemetry oversized message runtime pause](./frontend-telemetry-oversized-message-runtime-pause-2026-08-27.md) records the misclassified client rejection, false durable component pause, stopped-operation correction, legacy-scope normalization, and production recovery evidence.
 
 ---
 
