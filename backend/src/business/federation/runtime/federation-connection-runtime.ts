@@ -3,6 +3,7 @@
  * WHY: Peer lifecycle, presentation publication, and replication triggers form one transport boundary.
  */
 import type { ServerResponse } from 'node:http';
+import { performance } from 'node:perf_hooks';
 import type { TaskExecutionObservation } from '../../../../../shared/schemas/task-execution-types.js';
 import type { ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
@@ -14,6 +15,140 @@ import type { createTaskExecutionPresentationRegistry } from '../../codex/runtim
 
 type AnyRecord = Record<string, unknown>;
 type ExecutionState = Pick<ProjectTaskState, 'executions' | 'finalizeExecutionArtifacts'>;
+type PipelinePresentationExecutionState = {
+  executions: {
+    all: () => Array<{
+      metadata: {
+        executionId: string;
+        pipelineRunId?: string | null;
+        requestedAt: string;
+      };
+    }>;
+  };
+};
+type PipelinePresentationSnapshotIdentity = {
+  projectId: string;
+  pipelineRunId: string;
+  executionId: string;
+};
+
+export function pipelinePresentationSnapshotIdentities(
+  states: Iterable<readonly [string, PipelinePresentationExecutionState]>,
+): PipelinePresentationSnapshotIdentity[] {
+  const pipelineRuns = new Map<string, PipelinePresentationSnapshotIdentity & { requestedAt: string }>();
+  for (const [projectId, state] of states) {
+    for (const record of state.executions.all()) {
+      const pipelineRunId = record.metadata.pipelineRunId;
+      // WHAT: Exclude direct skill executions from the historical pipeline presentation queue.
+      // WHY: Only executions owned by a durable pipeline run can reconstruct a pipeline presentation.
+      if (!pipelineRunId) continue;
+      const key = `${projectId}\0${pipelineRunId}`;
+      const prior = pipelineRuns.get(key);
+      // WHAT: Retain the newest durable execution identity for each project-scoped pipeline run.
+      // WHY: Repository order is not part of this selector's contract and project-local run IDs may collide.
+      if (!prior
+        || record.metadata.requestedAt > prior.requestedAt
+        || (record.metadata.requestedAt === prior.requestedAt
+          && record.metadata.executionId > prior.executionId)) {
+        pipelineRuns.set(key, {
+          projectId,
+          pipelineRunId,
+          executionId: record.metadata.executionId,
+          requestedAt: record.metadata.requestedAt,
+        });
+      }
+    }
+  }
+  return [...pipelineRuns.values()].map(({ requestedAt: _requestedAt, ...identity }) => identity);
+}
+
+export function createPipelinePresentationAudienceReplay(input: {
+  cancel: () => void;
+  publish: () => void;
+}) {
+  let onlineOwners = new Set<string>();
+  return {
+    onCatalog: (projects: readonly Pick<RemoteDecisionOsProject, 'online' | 'ownerNodeId'>[]): void => {
+      // WHAT: Build the current audience from online owners only.
+      // WHY: Retained offline catalog entries cannot receive a presentation replay.
+      const currentOwners = new Set(projects.flatMap((project) => (
+        project.online ? [project.ownerNodeId] : []
+      )));
+      // WHAT: Detect admission by comparing the current online set with the immediately preceding set.
+      // WHY: Removals and duplicate catalogs require no replay, while re-admission after empty must replay.
+      const hasNewAdmission = [...currentOwners].some((ownerNodeId) => !onlineOwners.has(ownerNodeId));
+      onlineOwners = currentOwners;
+      // WHAT: Cancel unfinished replay work when no remote consumer remains online.
+      // WHY: Historical presentation reads have no recipient after the audience becomes empty.
+      if (onlineOwners.size === 0) {
+        input.cancel();
+        return;
+      }
+      // WHAT: Replay once when at least one online owner has just been admitted.
+      // WHY: Existing owners already received the retained presentation set represented by their prior catalog.
+      if (hasNewAdmission) input.publish();
+    },
+    onDisconnected: (): void => {
+      onlineOwners = new Set<string>();
+      input.cancel();
+    },
+  };
+}
+
+export function createPipelinePresentationDispatchQueue(input: {
+  publish: (identity: PipelinePresentationSnapshotIdentity) => void;
+  recordFailure: (error: unknown, identity: PipelinePresentationSnapshotIdentity) => void;
+}) {
+  let pending: NodeJS.Immediate | null = null;
+  let generation = 0;
+  const cancel = (): void => {
+    generation += 1;
+    // WHAT: Remove the one pending event-loop turn owned by the superseded replay.
+    // WHY: Disconnect and audience replacement must not continue reading historical pipeline state.
+    if (pending) clearImmediate(pending);
+    pending = null;
+  };
+  const dispatch = (identities: readonly PipelinePresentationSnapshotIdentity[]): void => {
+    cancel();
+    const activeGeneration = generation;
+    const startedAt = performance.now();
+    let index = 0;
+    console.log(JSON.stringify({
+      server: 'backend-federation',
+      phase: 'historical-pipeline-presentations-queued',
+      pipelineRunCount: identities.length,
+    }));
+    const runNext = (): void => {
+      pending = null;
+      // WHAT: Stop a replay superseded by disconnect or a newly admitted audience.
+      // WHY: Only the latest audience generation may spend work on historical presentations.
+      if (activeGeneration !== generation) return;
+      const identity = identities[index];
+      // WHAT: Record completion only after every selected pipeline received its own event-loop turn.
+      // WHY: The receipt distinguishes bounded dispatch from the earlier synchronous startup loop.
+      if (!identity) {
+        console.log(JSON.stringify({
+          server: 'backend-federation',
+          phase: 'historical-pipeline-presentations-dispatched',
+          pipelineRunCount: identities.length,
+          elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
+        }));
+        return;
+      }
+      try {
+        input.publish(identity);
+      } catch (error) {
+        // WHAT: Contain one synchronous presentation dispatch failure to its pipeline identity.
+        // WHY: A corrupt historical run must not stop later presentations or the federation connection.
+        input.recordFailure(error, identity);
+      }
+      index += 1;
+      pending = setImmediate(runNext);
+    };
+    pending = setImmediate(runNext);
+  };
+  return { cancel, dispatch };
+}
 
 export function relayRepairProjectIds(projects: Array<Pick<RemoteDecisionOsProject, 'localProjectId'>>): string[] {
   return [...new Set(projects.map((project) => project.localProjectId).filter(Boolean))].sort();
@@ -59,24 +194,32 @@ export function createFederationConnectionRuntime(input: {
 }) {
   let connector: ReturnType<typeof createFederationNodeConnector> | null = null;
   const publishLocalExecutionPresentationSnapshots = (): void => {
-    const pipelineRuns = new Map<string, { projectId: string; executionId: string }>();
-    for (const [projectId, state] of [
+    const pipelineRuns = pipelinePresentationSnapshotIdentities([
       ...input.projectStates,
       ...input.federatedExecutionStates,
-    ]) {
-      for (const record of state.executions.all()) {
-        if (record.metadata.pipelineRunId) {
-          pipelineRuns.set(record.metadata.pipelineRunId, {
-            projectId,
-            executionId: record.metadata.executionId,
-          });
-        }
-      }
-    }
-    for (const [pipelineRunId, identity] of pipelineRuns) {
-      input.publishPipelineSnapshot(identity.projectId, pipelineRunId, identity.executionId);
-    }
+    ]);
+    presentationDispatch.dispatch(pipelineRuns);
   };
+  const presentationDispatch = createPipelinePresentationDispatchQueue({
+    publish: (identity) => input.publishPipelineSnapshot(
+      identity.projectId,
+      identity.pipelineRunId,
+      identity.executionId,
+    ),
+    recordFailure: (error, identity) => {
+      input.recordStoppedOperation({
+        scope: `pipeline-presentation-dispatch:${identity.projectId}:${identity.pipelineRunId}`,
+        component: 'codex-pipeline-presentation',
+        operation: 'dispatch-historical-pipeline-presentation',
+        error,
+        context: identity,
+      });
+    },
+  });
+  const presentationAudience = createPipelinePresentationAudienceReplay({
+    cancel: presentationDispatch.cancel,
+    publish: publishLocalExecutionPresentationSnapshots,
+  });
   const handleExecutionObservation = createFederatedExecutionObservationHandler({
     clients: input.globalClients,
     executionObservations: input.executionObservations,
@@ -110,7 +253,7 @@ export function createFederationConnectionRuntime(input: {
         input.stateRuntime.replicator.reconcileProject('relay', projectId);
       }
       input.stateRuntime.prioritizeAvailableContent();
-      publishLocalExecutionPresentationSnapshots();
+      presentationAudience.onCatalog(connector?.remoteProjects() ?? []);
       if (!input.pausedBackgroundComponents.has('federated-library-sync')) {
         void input.federatedLibrary.synchronize().catch(() => undefined);
       }
@@ -170,12 +313,14 @@ export function createFederationConnectionRuntime(input: {
       for (const projectId of projectIds) {
         input.stateRuntime.replicator.reconcileProject('relay', projectId);
       }
-      publishLocalExecutionPresentationSnapshots();
+      // WHAT: Wait for the remote catalog before scheduling historical pipeline presentations.
+      // WHY: A connected relay alone identifies no admitted consumer and its catalog callback owns one replay.
       if (!input.pausedBackgroundComponents.has('federated-library-sync')) {
         void input.federatedLibrary.synchronize().catch(() => undefined);
       }
     },
     onStateDisconnected: () => {
+      presentationAudience.onDisconnected();
       input.stateRuntime.replicator.disconnectPeer('relay');
     },
     onError: (error, context) => {

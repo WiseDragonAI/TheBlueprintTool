@@ -370,11 +370,11 @@ export function createDecisionOsServer(
     server.on('close', telemetrySocket.close);
     const address = server.address();
     federationRuntime.setListeningPort(address && typeof address === 'object' ? address.port : port);
-    void runtimeIncidentReviewScheduler.run();
     activeHandleRequest = initializedHandleRequest;
     await bootstrapProjects();
     projectBootstrapSettled = true;
     federation.start();
+    runtimeIncidentReviewScheduler.start();
   };
   server = createNodeHttpListener({
     handleRequest: (request, response) => activeHandleRequest(request, response),

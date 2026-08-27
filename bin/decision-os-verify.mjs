@@ -4,7 +4,7 @@
  * WHY: A read-only admission check has a race in which several agents can all observe GO.
  */
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, symlinkSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 
@@ -122,18 +122,72 @@ function boundedNodeTestCommand(command) {
   return bounded;
 }
 
+function canonicalTsconfigPath(value, cwd, repoRoot) {
+  const candidate = resolve(cwd, value);
+  const repositoryRelative = relative(repoRoot, candidate);
+  // WHAT: Reject a tsx configuration outside the checkout that owns the verification command.
+  // WHY: An inherited absolute path into dev or main makes an isolated feature test load the wrong source aliases.
+  if (repositoryRelative === '..' || repositoryRelative.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) || isAbsolute(repositoryRelative)) {
+    throw new Error(`TSX_TSCONFIG_PATH must belong to the current checkout: ${candidate}`);
+  }
+  // WHAT: Reject a nonexistent tsx configuration before acquiring the repository verification lease.
+  // WHY: A child launched from a temporary cwd otherwise fails late and can retain the lease through an open handle.
+  if (!existsSync(candidate)) throw new Error(`TSX_TSCONFIG_PATH does not exist: ${candidate}`);
+  return candidate;
+}
+
+export function normalizeVerificationTsconfigCommand(command, cwd = process.cwd(), repoRoot = scriptRepoRoot) {
+  const normalized = [...command];
+  // WHAT: Leave commands without the env executable unchanged at the argument level.
+  // WHY: Their inherited environment is normalized separately without guessing a package configuration.
+  if (basename(normalized[0] ?? '') !== 'env') return normalized;
+  let effectiveCwd = cwd;
+  for (let index = 1; index < normalized.length; index += 1) {
+    const argument = normalized[index];
+    // WHAT: Resolve GNU env's inline chdir option before interpreting relative environment assignments.
+    // WHY: TSX_TSCONFIG_PATH is relative to the directory in which env starts its child command.
+    if (argument.startsWith('--chdir=')) {
+      effectiveCwd = resolve(cwd, argument.slice('--chdir='.length));
+      continue;
+    }
+    // WHAT: Resolve GNU env's split chdir option before interpreting relative environment assignments.
+    // WHY: Both supported spellings must produce the same absolute tsx configuration authority.
+    if (argument === '--chdir' || argument === '-C') {
+      effectiveCwd = resolve(cwd, normalized[index + 1] ?? '');
+      index += 1;
+      continue;
+    }
+    // WHAT: Canonicalize the explicit tsx configuration assignment passed through env.
+    // WHY: Descendant processes can change cwd, so they must inherit one absolute checkout-owned path.
+    if (argument.startsWith('TSX_TSCONFIG_PATH=')) {
+      const value = argument.slice('TSX_TSCONFIG_PATH='.length);
+      normalized[index] = `TSX_TSCONFIG_PATH=${canonicalTsconfigPath(value, effectiveCwd, repoRoot)}`;
+    }
+  }
+  return normalized;
+}
+
+export function normalizeVerificationEnvironment(env, cwd = process.cwd(), repoRoot = scriptRepoRoot) {
+  const normalized = { ...env };
+  // WHAT: Preserve an environment that does not select a tsx configuration.
+  // WHY: Non-tsx checks must not acquire an unrelated backend or frontend configuration.
+  if (!normalized.TSX_TSCONFIG_PATH) return normalized;
+  normalized.TSX_TSCONFIG_PATH = canonicalTsconfigPath(normalized.TSX_TSCONFIG_PATH, cwd, repoRoot);
+  return normalized;
+}
+
 export function verificationLockFile(env = process.env) {
   return resolve(env.DECISION_OS_VERIFICATION_LOCK || resolve(decisionOsRoot, '.decision-os', 'runtime', 'verification.lock'));
 }
 
-export function verificationCommand(argv) {
+export function verificationCommand(argv, cwd = process.cwd(), repoRoot = scriptRepoRoot) {
   const separator = argv[0] === '--' ? 1 : 0;
   const command = argv.slice(separator);
   if (command.length === 0) throw new Error('Usage: decision-os-verify -- <test-or-typecheck-command> [args...]');
   if (forbiddenShells.has(basename(command[0]))) {
     throw new Error('Verification lease accepts one direct command; shell wrappers are not allowed.');
   }
-  return boundedNodeTestCommand(command);
+  return boundedNodeTestCommand(normalizeVerificationTsconfigCommand(command, cwd, repoRoot));
 }
 
 export function verificationOwner(lockFile) {
@@ -158,8 +212,10 @@ export function formatVerificationWait(lockFile, owner) {
 
 export async function runVerification(argv = process.argv.slice(2), env = process.env) {
   let command;
+  let childEnvironment;
   try {
     command = verificationCommand(argv);
+    childEnvironment = normalizeVerificationEnvironment(env);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 64;
@@ -186,7 +242,7 @@ export async function runVerification(argv = process.argv.slice(2), env = proces
     command[0], ...command.slice(1),
   ], {
     env: {
-      ...env,
+      ...childEnvironment,
       DECISION_OS_VERIFICATION_LOCK_FILE: lockFile,
       DECISION_OS_VERIFICATION_OWNER_CWD: JSON.stringify(process.cwd()),
       DECISION_OS_VERIFICATION_OWNER_COMMAND: JSON.stringify(command.join(' ')),

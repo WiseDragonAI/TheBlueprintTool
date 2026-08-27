@@ -482,19 +482,14 @@ export function reassessPipelineAfterSkill(input: {
   error?: string;
   exitCode?: number | null;
   finishedAt?: string;
+  storeRead?: ReturnType<typeof readCodexPipelineStore>;
 }): CodexPipelineRun | null {
-  const before = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  const before = input.storeRead ?? readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
   assertCodexPipelineStoreAvailable(before);
   const prior = before.store.runs.find((run) => run.id === input.pipelineRunId);
   if (!prior) return null;
   const replicated = replicatedPipelineRun(prior, input.runtime);
   if (!replicated) return null;
-  const context = resolvePipelineLedgerContext({
-    decisionOsRoot: input.decisionOsRoot,
-    runtime: input.runtime,
-    ledgerId: replicated.ledgerId,
-  });
-  if (context) hydrateLedgerCardContent(context.ledger, input.decisionOsRoot);
   return replicated;
 }
 

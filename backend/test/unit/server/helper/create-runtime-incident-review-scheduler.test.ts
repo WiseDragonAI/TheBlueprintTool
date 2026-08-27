@@ -56,6 +56,45 @@ test('contains task-state lookup failures inside the periodic incident review bo
   }
 });
 
+test('does not start periodic incident review before project bootstrap admits it', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-runtime-review-admission-'));
+  try {
+    const incidentLedger = createRuntimeIncidentLedger({ decisionOsRoot: join(root, '.decision-os') });
+    incidentLedger.record({
+      scope: 'test-scope',
+      component: 'test-component',
+      operation: 'test-operation',
+      error: new Error('seed failure'),
+    });
+    let attempts = 0;
+    const scheduler = createRuntimeIncidentReviewScheduler({
+      incidentLedger,
+      intervalMs: 10,
+      assignedNodeId: () => 'workstation',
+      targetProject: () => project(root),
+      taskState: () => {
+        attempts += 1;
+        throw new Error('injected task-state lookup failure');
+      },
+      paused: () => false,
+      onChanged: () => assert.fail('A failed task-state lookup cannot change the projection.'),
+      onBootstrapGate: () => assert.fail('The injected error is not a bootstrap gate.'),
+      onFailure: () => undefined,
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      assert.equal(attempts, 0);
+      scheduler.start();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      assert.equal(attempts > 0, true);
+    } finally {
+      scheduler.stop();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('records one transient bootstrap rejection while continuing to retry the same snapshot', async () => {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-runtime-review-bootstrap-'));
   try {
