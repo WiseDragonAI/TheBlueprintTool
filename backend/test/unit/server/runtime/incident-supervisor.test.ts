@@ -16,6 +16,52 @@ function fixture() {
   return { root, incidentLedger };
 }
 
+test('startup resolves a retained frontend telemetry client rejection without pausing the writer', (context) => {
+  const { root, incidentLedger } = fixture();
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const scope = 'background:frontend-telemetry';
+  incidentLedger.record({
+    scope,
+    component: 'frontend-telemetry',
+    operation: 'frontend-telemetry-client',
+    code: 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH',
+    error: new RangeError('Max payload size exceeded'),
+  });
+
+  const supervisor = createIncidentSupervisor({ incidentLedger });
+
+  assert.equal(supervisor.pausedBackgroundComponents.has('frontend-telemetry'), false);
+  assert.equal(incidentLedger.active(scope).length, 0);
+  const retained = incidentLedger.snapshot().incidents.find((incident) => incident.scope === scope);
+  assert.equal(retained?.status, 'resolved');
+});
+
+test('startup preserves an unknown frontend telemetry failure sharing a legacy client scope', (context) => {
+  const { root, incidentLedger } = fixture();
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const scope = 'background:frontend-telemetry';
+  incidentLedger.record({
+    scope,
+    component: 'frontend-telemetry',
+    operation: 'frontend-telemetry-client',
+    code: 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH',
+    error: new RangeError('Max payload size exceeded'),
+  });
+  const unknown = incidentLedger.record({
+    scope,
+    component: 'frontend-telemetry',
+    operation: 'unknown-telemetry-runtime-failure',
+    code: 'unknown_telemetry_runtime_failure',
+    error: new Error('Unknown telemetry runtime failure.'),
+  });
+
+  const supervisor = createIncidentSupervisor({ incidentLedger });
+
+  assert.equal(supervisor.pausedBackgroundComponents.has('frontend-telemetry'), true);
+  assert.equal(incidentLedger.active(scope).length, 2);
+  assert.equal(incidentLedger.active(scope).some((incident) => incident.id === unknown.id), true);
+});
+
 test('startup converts a retained no-progress project incident into non-pausing history', (context) => {
   const { root, incidentLedger } = fixture();
   context.after(() => rmSync(root, { recursive: true, force: true }));

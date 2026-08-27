@@ -242,6 +242,50 @@ test('create-http-server resolves the retained launcher incident only after list
   }
 });
 
+test('create-http-server restores ready health from a retained frontend telemetry client rejection', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-telemetry-client-recovery-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  const incidents = createRuntimeIncidentLedger({ decisionOsRoot });
+  incidents.record({
+    scope: 'background:frontend-telemetry',
+    component: 'frontend-telemetry',
+    operation: 'frontend-telemetry-client',
+    code: 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH',
+    error: new RangeError('Max payload size exceeded'),
+  });
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  await (server as unknown as { runtimeReady: Promise<void> }).runtimeReady;
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    const health = await fetch(`${baseUrl}/api/health`).then((response) => response.json()) as {
+      status: string;
+      activeIncidentCount: number;
+      pausedBackgroundComponents: string[];
+    };
+    assert.equal(health.status, 'ready');
+    assert.equal(health.activeIncidentCount, 0);
+    assert.deepEqual(health.pausedBackgroundComponents, []);
+    const diagnostic = await fetch(`${baseUrl}/api/diagnostics/incidents`).then((response) => response.json()) as {
+      incidents: Array<{ operation: string; status: string }>;
+    };
+    const retained = diagnostic.incidents.find((incident) => incident.operation === 'frontend-telemetry-client');
+    assert.equal(retained?.status, 'resolved');
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test('create-http-server keeps health ready for unresolved evidence that owns no runtime pause', async () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-nonblocking-incident-health-'));
   const decisionOsRoot = join(projectRoot, '.decision-os');
