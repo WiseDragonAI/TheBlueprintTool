@@ -80,6 +80,40 @@ test('preserves a syntactically corrupt authoritative project registry', () => {
   }
 });
 
+test('contains one registered identity mismatch without blocking healthy projects', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-registry-identity-mismatch-'));
+  const masterDecisionOsRoot = join(root, '.decision-os');
+  try {
+    createProject(root, 'healthy', 'healthy-id');
+    createProject(root, 'drifted', 'actual-id');
+    mkdirSync(masterDecisionOsRoot, { recursive: true });
+    writeFileSync(join(masterDecisionOsRoot, 'projects.json'), JSON.stringify({
+      version: 2,
+      projects: {
+        'healthy-id': {
+          id: 'healthy-id', relativePath: 'healthy', name: 'Healthy', description: '', color: '#38d9e8',
+          registeredAt: '2026-09-06T00:00:00.000Z', cardId: 'project-card:healthy-id',
+        },
+        'registered-id': {
+          id: 'registered-id', relativePath: 'drifted', name: 'Drifted', description: '', color: '#fb7185',
+          registeredAt: '2026-09-06T00:00:00.000Z', cardId: 'project-card:registered-id',
+        },
+      },
+    }));
+
+    const projects = createProjectCatalogStore({ masterRoot: root, masterDecisionOsRoot }).projects();
+    const healthy = projects.find((project) => project.id === 'healthy-id');
+    const drifted = projects.find((project) => project.id === 'registered-id');
+
+    assert.equal(healthy?.available, true);
+    assert.equal(drifted?.available, false);
+    assert.equal(drifted?.diagnostic, 'Registered project identity mismatch: drifted');
+    assert.equal(readFileSync(join(root, 'drifted', '.decision-os', 'project.json'), 'utf8'), JSON.stringify({ id: 'actual-id' }));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('previews migration without writing identities or the registry', () => {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-registry-preview-'));
   const masterDecisionOsRoot = join(root, '.decision-os');

@@ -115,9 +115,22 @@ export function projectFromRegisteredPath(input: { masterRoot: string; entry: Pr
     };
   }
   const id = stableProjectId(decisionOsRoot, relativePath);
-  // WHAT: Reject identity drift instead of silently changing a registered URL.
-  // WHY: Project identity must remain stable across moves and server restarts.
-  if (input.entry.id && input.entry.id !== id) throw new Error(`Registered project identity mismatch: ${input.entry.relativePath}`);
+  // WHAT: Keep an identity-drifted project unavailable under its registered URL.
+  // WHY: One invalid project must retain its diagnostic without aborting every healthy project runtime.
+  if (input.entry.id && input.entry.id !== id) {
+    return {
+      id: input.entry.id,
+      name: input.entry.name,
+      description: input.entry.description,
+      relativePath,
+      root,
+      decisionOsRoot,
+      color: validColor(input.entry.color) ? input.entry.color.toLowerCase() : defaultColors[0],
+      ledgers: [],
+      available: false,
+      diagnostic: `Registered project identity mismatch: ${input.entry.relativePath}`,
+    };
+  }
   return {
     id,
     name: input.entry.name.trim() || basename(root),
